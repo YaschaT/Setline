@@ -1453,6 +1453,21 @@ function TrainingApp() {
     setPhotoDraft((current) => ({ ...current, capturedOn: today }));
     setHydrated(true);
 
+    // Identity and cloud sync are separate concerns. /api/auth/session exists
+    // on every deployment; /api/user-state only where D1 is bound. Reading
+    // identity from the sync endpoint meant a signed-in user on a
+    // sync-less host was reported as "not signed in".
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const payload = (await response.json()) as { user?: AccountUser };
+        return payload.user ?? null;
+      })
+      .catch(() => null)
+      .then((user) => {
+        if (user) setAccount(user);
+      });
+
     fetch("/api/user-state", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json() as {
@@ -1466,6 +1481,7 @@ function TrainingApp() {
           throw new Error(payload.message || "Cloudsync is niet beschikbaar.");
         }
         setAccount(payload.user);
+        setSyncStatus("saving");
         const localUpdatedAt = localState.updatedAt ? Date.parse(localState.updatedAt) : 0;
         const cloudUpdatedAt = payload.updatedAt ? Date.parse(payload.updatedAt) : 0;
         if (payload.state && cloudUpdatedAt >= localUpdatedAt) {
@@ -2902,10 +2918,10 @@ function TrainingApp() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="main-nav fixed inset-x-0 bottom-0 z-40 grid !h-[calc(70px+env(safe-area-inset-bottom))] !w-full max-w-none grid-cols-5 rounded-none px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:sticky lg:top-4 lg:mx-auto lg:mb-8 lg:!h-12 lg:!w-fit lg:grid-cols-5 lg:rounded-[18px] lg:p-1.5">
             <TabsTrigger value="training" className="nav-tab"><Dumbbell /> <span>Training</span></TabsTrigger>
-            <TabsTrigger value="account" className="nav-tab"><UserRound /> <span>Account</span></TabsTrigger>
             <TabsTrigger value="voeding" className="nav-tab"><Utensils /> <span>Voeding</span></TabsTrigger>
             <TabsTrigger value="progressie" className="nav-tab"><TrendingUp /> <span>Progressie</span></TabsTrigger>
             <TabsTrigger value="transformatie" className="nav-tab"><Images /> <span>Foto’s</span></TabsTrigger>
+            <TabsTrigger value="account" className="nav-tab"><UserRound /> <span>Account</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="training" className="training-stack">
@@ -2922,6 +2938,21 @@ function TrainingApp() {
                     </div>
                     <strong>{planMode === "personal" ? "Mijn plan" : activeSciencePlan.label}</strong>
                   </div>
+
+                  {/* Who is signed in, on the screen you actually open. */}
+                  <button
+                    type="button"
+                    className={`banner-identity banner-identity-${syncStatus}`}
+                    onClick={() => setActiveTab("account")}
+                    aria-label={account ? `Aangemeld als ${account.email}. Open account` : "Aanmelden"}
+                  >
+                    <span className="banner-identity-avatar">{accountInitials}</span>
+                    <span className="banner-identity-copy">
+                      <strong>{account?.email ?? "Niet aangemeld"}</strong>
+                      <small>{account ? syncLabel : "Tik om aan te melden"}</small>
+                    </span>
+                    <span className="banner-identity-dot" aria-hidden="true" />
+                  </button>
                   <div className="session-banner-copy">
                     <h2>
                       <span>{day.short}.</span>

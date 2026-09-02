@@ -3746,3 +3746,74 @@ textarea {
 }
 
 .account-action-quiet:hover { border-color: rgba(200, 255, 102, 0.22); background: rgba(200, 255, 102, 0.05); color: #eaf2ec; }
+
+/* ---------- signed-in strip on the training banner ---------- */
+
+.banner-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 46px;
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  padding: 6px 14px 6px 6px;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.banner-identity:hover { border-color: rgba(200, 255, 102, 0.24); background: rgba(200, 255, 102, 0.05); }
+.banner-identity:focus-visible { outline: 2px solid #72efd0; outline-offset: 3px; }
+
+.banner-identity-avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #d8ff95, #72efd0);
+  color: #08100b;
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: -0.03em;
+}
+
+.banner-identity-copy { display: grid; min-width: 0; gap: 1px; }
+
+.banner-identity-copy strong {
+  overflow: hidden;
+  color: #e4ede6;
+  font-size: 12px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+}
+
+.banner-identity-copy small {
+  color: #8c9890;
+  font-size: 10px;
+  font-weight: 560;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* State in shape and position as well as colour. */
+.banner-identity-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #72efd0;
+}
+
+.banner-identity-offline .banner-identity-dot { background: #f4c65b; }
+.banner-identity-connecting .banner-identity-dot,
+.banner-identity-saving .banner-identity-dot { background: #c8ff66; }
