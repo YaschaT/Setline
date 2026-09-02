@@ -1624,6 +1624,12 @@ function TrainingApp() {
   const monthDays = useMemo(() => datesInMonthGrid(weekAnchor), [weekAnchor]);
   const monthAnchor = useMemo(() => monthOfWeek(weekAnchor), [weekAnchor]);
   const monthLabel = monthAnchor.toLocaleDateString("nl-BE", { month: "long", year: "numeric" });
+  const weekLabel =
+    weekOffset === 0 ? "Deze week"
+      : weekOffset === -1 ? "Vorige week"
+      : weekOffset === 1 ? "Volgende week"
+      : weekOffset < 0 ? `${Math.abs(weekOffset)} weken geleden`
+      : `Over ${weekOffset} weken`;
   const todayKey = dateKey();
   const selectedDateLabel = parseDateKey(selectedDate).toLocaleDateString("nl-BE", {
     weekday: "short",
@@ -2979,7 +2985,7 @@ function TrainingApp() {
                 <div className="week-agenda-title">
                   <span className="week-agenda-icon"><CalendarDays /></span>
                   <div>
-                    <p className="eyebrow">{weekOffset === 0 ? "Deze week" : weekOffset === -1 ? "Vorige week" : weekOffset === 1 ? "Volgende week" : "Weekagenda"}</p>
+                    <p className="eyebrow">{weekLabel}</p>
                     <h2 id="week-agenda-title">{weekRangeLabel}</h2>
                   </div>
                 </div>
