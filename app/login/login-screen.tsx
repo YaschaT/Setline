@@ -45,8 +45,20 @@ async function postJson(url: string, body: unknown): Promise<Record<string, unkn
   return payload;
 }
 
-async function requestCode(email: string): Promise<void> {
-  await postJson("/api/auth/code/request", { email });
+type RequestOutcome = "code" | "link";
+
+/** Two backends: D1 stores a six-digit code; the serverless deployment sends
+ *  a signed magic link. The response says which happened. */
+async function requestCode(email: string): Promise<RequestOutcome> {
+  try {
+    const payload = await postJson("/api/auth/code/request", { email });
+    return payload.mode === "link" ? "link" : "code";
+  } catch (cause) {
+    // Fall through to the magic-link endpoint when the code route is absent.
+    const payload = await postJson("/api/auth/email/request", { email });
+    if (payload.mode === "link") return "link";
+    throw cause;
+  }
 }
 
 async function verifyCode(email: string, code: string): Promise<void> {
@@ -129,7 +141,7 @@ function GoogleMark() {
   );
 }
 
-type Step = "gate" | "email" | "code" | "enroll" | "done";
+type Step = "gate" | "email" | "code" | "sent" | "enroll" | "done";
 
 export function LoginScreen() {
   const [step, setStep] = useState<Step>("gate");
@@ -220,10 +232,10 @@ export function LoginScreen() {
     setError(null);
     setSending(true);
     try {
-      await requestCode(address.trim());
+      const outcome = await requestCode(address.trim());
       setDigits(Array(CODE_LENGTH).fill(""));
       setCooldown(RESEND_SECONDS);
-      setStep("code");
+      setStep(outcome === "link" ? "sent" : "code");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Versturen is mislukt.");
     } finally {
@@ -311,7 +323,8 @@ export function LoginScreen() {
   }, []);
 
   const headline =
-    step === "enroll" ? "Sneller de volgende keer?"
+    step === "sent" ? "Check je mail."
+      : step === "enroll" ? "Sneller de volgende keer?"
       : step === "done" ? "Je bent binnen."
       : step === "code" ? "Voer je code in."
       : step === "email" ? "Waar sturen we hem heen?"
@@ -341,7 +354,11 @@ export function LoginScreen() {
         <div className="gate-message">
           <h1 className="gate-headline">{headline}</h1>
 
-          {step === "enroll" ? (
+          {step === "sent" ? (
+            <p className="gate-sub">
+              We stuurden een aanmeldlink naar <b>{email}</b>. Hij blijft 15 minuten geldig.
+            </p>
+          ) : step === "enroll" ? (
             <p className="gate-sub">
               Zet Face ID aan op dit toestel, dan hoef je nooit meer een code op te vragen.
             </p>
@@ -366,7 +383,26 @@ export function LoginScreen() {
         </div>
 
         <div className="gate-actions">
-          {step === "enroll" ? (
+          {step === "sent" ? (
+            <div className="gate-alts">
+              <button
+                type="button"
+                className="gate-alt"
+                disabled={cooldown > 0 || sending}
+                onClick={() => void sendCode(email)}
+              >
+                {cooldown > 0 ? `Opnieuw over ${cooldown}s` : "Stuur opnieuw"}
+              </button>
+              <span className="gate-alt-rule" aria-hidden="true" />
+              <button
+                type="button"
+                className="gate-alt gate-alt-quiet"
+                onClick={() => { setStep("gate"); setError(null); }}
+              >
+                Ander adres
+              </button>
+            </div>
+          ) : step === "enroll" ? (
             <>
               <button
                 type="button"

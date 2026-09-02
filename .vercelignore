@@ -1,5 +1,9 @@
-# Never upload the private export. Deploy deploy/login-preview/dist only.
+# Never upload the private export.
 PRIVATE-DATA/
+
+# Local state and tooling that the build does not need.
 .wrangler/
 .sites-runtime/
+.claude/
 node_modules/
+deploy/web/dist/

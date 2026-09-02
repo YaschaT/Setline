@@ -15,7 +15,7 @@
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
     "db:migrate:local": "node scripts/migrate-local.mjs",
     "build:web": "vite build --config deploy/web/vite.config.ts",
-    "deploy:web": "npm run build:web && cd deploy/web && npx vercel@latest deploy --prod --yes"
+    "deploy:web": "npx vercel@latest deploy --prod --yes"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
