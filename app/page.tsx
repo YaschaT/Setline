@@ -2931,11 +2931,11 @@ function TrainingApp() {
 
           <TabsContent value="training" className="training-stack">
             <section className="training-overview" aria-label="Training en dagdoel">
-              {renderAppHeader(true)}
               <div className={`session-banner ${isRestDay ? "session-banner-rest" : ""}`}>
                 <div className="session-banner-line" aria-hidden="true"><span /><i /></div>
                 <div className="session-banner-mark" aria-hidden="true"><strong>{bannerSessionMark}</strong></div>
                 <div className="session-banner-content">
+                  {renderAppHeader(true)}
                   <div className="session-banner-topline">
                     <div className="session-banner-context">
                       <span>{selectedDate === todayKey ? "Vandaag" : selectedDateLabel}</span>
