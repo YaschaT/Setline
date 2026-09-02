@@ -32,6 +32,7 @@ import {
   Pencil,
   Play,
   Plus,
+  RefreshCw,
   PackageSearch,
   Save,
   Search,
@@ -2886,33 +2887,11 @@ function TrainingApp() {
         ? "Lokale modus"
         : "Account verbinden…";
 
-  function renderAppHeader(embedded = false) {
-    return (
-      <header className={`app-header flex items-center justify-between gap-4 ${embedded ? "session-app-header" : "mb-6"}`}>
-        <div className="flex items-center gap-3">
-          <div className="performance-logo" aria-label="Setline">
-            <img src="/yascha-mark.svg" alt="" aria-hidden="true" />
-          </div>
-        </div>
-        <button type="button" className={`account-control account-${syncStatus}`} onClick={() => setAccountDialog(true)} aria-label="Account en synchronisatie bekijken">
-          <span className="account-avatar">{accountInitials}</span>
-          <span className="account-copy">
-            <strong>{account?.displayName ?? "Niet aangemeld"}</strong>
-            <small>{syncLabel}</small>
-          </span>
-          <span className={`account-dot account-dot-${syncStatus}`} aria-hidden="true" />
-          {syncStatus === "offline" ? <CloudOff /> : syncStatus === "saving" || syncStatus === "connecting" ? <LoaderCircle className="account-spinner" /> : <Cloud />}
-        </button>
-      </header>
-    );
-  }
-
   return (
     <main className="app-shell min-h-screen text-[#f3f7f4] selection:bg-[#c8ff66] selection:text-[#071009]">
       <div className="performance-line" aria-hidden="true" />
       <div className="ambient-canvas" aria-hidden="true"><span /><span /><span /></div>
       <div className="app-frame mx-auto min-h-screen max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">
-        {activeTab !== "training" && renderAppHeader(false)}
 
         {banner && (
           <div className="fixed left-1/2 top-4 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#b9f45b]/30 bg-[#182018] px-4 py-2 text-sm font-medium shadow-2xl">
@@ -2923,7 +2902,7 @@ function TrainingApp() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="main-nav fixed inset-x-0 bottom-0 z-40 grid !h-[calc(70px+env(safe-area-inset-bottom))] !w-full max-w-none grid-cols-5 rounded-none px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:sticky lg:top-4 lg:mx-auto lg:mb-8 lg:!h-12 lg:!w-fit lg:grid-cols-5 lg:rounded-[18px] lg:p-1.5">
             <TabsTrigger value="training" className="nav-tab"><Dumbbell /> <span>Training</span></TabsTrigger>
-            <TabsTrigger value="coach" className="nav-tab"><BrainCircuit /> <span>Coach</span></TabsTrigger>
+            <TabsTrigger value="account" className="nav-tab"><UserRound /> <span>Account</span></TabsTrigger>
             <TabsTrigger value="voeding" className="nav-tab"><Utensils /> <span>Voeding</span></TabsTrigger>
             <TabsTrigger value="progressie" className="nav-tab"><TrendingUp /> <span>Progressie</span></TabsTrigger>
             <TabsTrigger value="transformatie" className="nav-tab"><Images /> <span>Foto’s</span></TabsTrigger>
@@ -2935,7 +2914,6 @@ function TrainingApp() {
                 <div className="session-banner-line" aria-hidden="true"><span /><i /></div>
                 <div className="session-banner-mark" aria-hidden="true"><strong>{bannerSessionMark}</strong></div>
                 <div className="session-banner-content">
-                  {renderAppHeader(true)}
                   <div className="session-banner-topline">
                     <div className="session-banner-context">
                       <span>{selectedDate === todayKey ? "Vandaag" : selectedDateLabel}</span>
@@ -3463,95 +3441,96 @@ function TrainingApp() {
             )}
           </TabsContent>
 
-          <TabsContent value="coach" className="space-y-5">
-            <section className="coach-workbench">
-              <div className="coach-workbench-copy">
-                <div className="coach-label-line"><span className="coach-mark">Y<span>/</span>C</span><span>Performance desk · dossier 01</span></div>
-                <h2>Vraag scherp.<br /><em>Krijg context.</em></h2>
-                <p>Je coach leest je sets, herstel, voeding en lichaamsmetingen samen. Geen automatische schemawissels: eerst de reden, daarna pas jouw keuze.</p>
-              </div>
-              <div className="coach-dossier" aria-label="Actuele coachdata">
-                <div className="coach-dossier-head"><span>Live dossier</span><Activity /></div>
-                <dl>
-                  <div><dt>Trainingen · 7 d</dt><dd>{coachDossier.recentWorkoutCount}</dd></div>
-                  <div><dt>Laatste gewicht</dt><dd>{coachDossier.latestWeight}</dd></div>
-                  <div><dt>Eiwit · vandaag</dt><dd>{coachDossier.proteinToday}</dd></div>
-                </dl>
-              </div>
-            </section>
-
-            <section className="chat-panel">
-              <div className="chat-header">
-                <div className="coach-thread-title">
-                  <span className="coach-thread-mark">C</span>
-                  <div><p className="eyebrow">Coach line</p><h3>Yascha × Coach</h3></div>
+          <TabsContent value="account" className="space-y-5">
+            <section className="account-page">
+              <header className="account-hero">
+                <div className="account-hero-id">
+                  <span className="account-hero-avatar">{accountInitials}</span>
+                  <div>
+                    <h2>{account?.displayName ?? "Nog niet aangemeld"}</h2>
+                    <p>{account ? "Persoonlijk account" : "Je data staat alleen op dit toestel"}</p>
+                  </div>
                 </div>
-                <span className={`ai-status ${aiReady === true ? "ai-online" : aiReady === false ? "ai-offline" : "ai-checking"}`}>
-                  <span /> {aiReady === true ? `GPT-5.6 Sol · ${aiConfig.mode === "pro" ? "Pro" : aiConfig.mode} ${aiConfig.effort === "max" ? "Max" : aiConfig.effort}` : aiReady === false ? "API-sleutel nog niet gekoppeld" : "Controleren…"}
+                <span className={`account-hero-state account-hero-state-${syncStatus}`}>
+                  {syncStatus === "offline" ? <CloudOff /> : syncStatus === "saving" || syncStatus === "connecting" ? <LoaderCircle className="account-spinner" /> : <Cloud />}
+                  {syncLabel}
                 </span>
+              </header>
+
+              <div className="account-stats">
+                <article>
+                  <span>Sessies gelogd</span>
+                  <strong>{sessions.length}</strong>
+                </article>
+                <article>
+                  <span>Metingen</span>
+                  <strong>{metrics.length}</strong>
+                </article>
+                <article>
+                  <span>Foto&rsquo;s</span>
+                  <strong>{photos.length}</strong>
+                </article>
               </div>
 
-              {aiReady === false && (
-                <div className="ai-setup-note">
-                  <BrainCircuit className="size-4" />
-                  <p>De beveiligde GPT‑5.6 Sol-koppeling staat klaar, maar de gegenereerde sleutel staat nog niet in de Site-omgeving. Voeg hem daar als secret <code>OPENAI_API_KEY</code> toe; plak hem nooit in deze chat of in de browsercode. <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">API-sleutels openen</a></p>
+              <div className="account-rows">
+                <div className="account-row">
+                  <span className="account-row-icon"><UserRound /></span>
+                  <div>
+                    <strong>E-mailadres</strong>
+                    <small>{account?.email ?? "Meld je aan om te synchroniseren"}</small>
+                  </div>
                 </div>
-              )}
-
-              <ScrollArea className="chat-scroll">
-                <div className="space-y-3 p-4 sm:p-5">
-                  {chatMessages.map((message) => (
-                    <div key={message.id} className={`chat-message ${message.role === "user" ? "chat-user" : "chat-assistant"}`}>
-                      <div className="chat-avatar">{message.role === "user" ? "Y" : "C"}</div>
-                      <div className="min-w-0 flex-1">
-                        <span className="chat-author">{message.role === "user" ? "Jij" : "Coach"}</span>
-                        <p>{message.content}</p>
-                        {message.changes && message.changes.length > 0 && (
-                          <div className="plan-changes">
-                            {message.changes.map((change, index) => {
-                              const exercise = plan.flatMap((workoutDay) => workoutDay.exercises).find((item) => item.id === change.exerciseId);
-                              return <div key={`${message.id}-${index}`}><strong>{exercise?.name ?? change.exerciseId}</strong><span>{change.field}: {change.value}</span><small>{change.reason}</small></div>;
-                            })}
-                            <Button disabled={message.applied} onClick={() => applyPlanChanges(message.id, message.changes ?? [])} className="mt-3 h-9 rounded-xl bg-[#b9f45b] text-[#0a0d0b] hover:bg-[#c7fa74]">{message.applied ? <><Check /> Toegepast</> : "Wijzigingen toepassen"}</Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {chatLoading && <div className="chat-message chat-assistant"><div className="chat-avatar">C</div><div className="chat-thinking"><LoaderCircle className="size-4 animate-spin" /> Je logboek wordt naast je vraag gelegd…</div></div>}
+                <div className="account-row">
+                  <span className="account-row-icon"><Cloud /></span>
+                  <div>
+                    <strong>Cloudback-up</strong>
+                    <small>
+                      {lastSyncedAt
+                        ? `Laatst gesynchroniseerd om ${new Date(lastSyncedAt).toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" })}`
+                        : "Nog niet gesynchroniseerd"}
+                    </small>
+                  </div>
                 </div>
-              </ScrollArea>
-
-              <div className="chat-composer">
-                <div className="coach-prompt-heading"><span>Open een onderwerp</span><small>of schrijf je eigen vraag</small></div>
-                <div className="quick-prompts">
-                  {COACH_PROMPTS.map((item) => <button key={item.code} onClick={() => sendChat(item.prompt)} disabled={chatLoading}><span>{item.code}</span><strong>{item.label}</strong><ChevronRight /></button>)}
+                <div className="account-row">
+                  <span className="account-row-icon"><ShieldCheck /></span>
+                  <div>
+                    <strong>Afgeschermd</strong>
+                    <small>Sessies, metingen en foto&rsquo;s worden per account bewaard.</small>
+                  </div>
                 </div>
-                <div className="coach-compose-row">
-                  <Textarea value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendChat(); } }} placeholder="Bijv. waarom blijft mijn RDL hangen?" className="chat-input" rows={2} />
-                  <Button onClick={() => void sendChat()} disabled={!chatDraft.trim() || chatLoading} size="icon" className="coach-send" aria-label="Vraag versturen">{chatLoading ? <LoaderCircle className="animate-spin" /> : <SendHorizontal />}</Button>
+                <div className="account-row">
+                  <span className="account-row-icon"><Dumbbell /></span>
+                  <div>
+                    <strong>Actief schema</strong>
+                    <small>{planMode === "personal" ? "Mijn plan" : activeSciencePlan.label}</small>
+                  </div>
                 </div>
-                <p className="coach-key-hint">Enter verstuurt · Shift+Enter maakt een nieuwe regel</p>
               </div>
-            </section>
 
-            <section className="coach-notes">
-              <div className="coach-notes-head"><div><p className="eyebrow">Uit je logboek</p><h3>Coach notes</h3></div><span>{coachCards.length} observaties</span></div>
-              <div className="coach-notes-grid">
-                {coachCards.map((card, index) => (
-                  <article key={card.title} className={`coach-card coach-${card.tone}`}>
-                    <span className="coach-note-index">{String(index + 1).padStart(2, "0")}</span>
-                    <div><h3>{card.title}</h3><p>{card.body}</p></div>
-                  </article>
-                ))}
+              <div className="account-actions">
+                {account ? (
+                  <button
+                    type="button"
+                    className="account-action account-action-quiet"
+                    onClick={() => {
+                      void fetch("/api/auth/signout", { method: "POST" }).finally(() => {
+                        window.location.href = "/login";
+                      });
+                    }}
+                  >
+                    <LogOut /> Uitloggen
+                  </button>
+                ) : (
+                  <a className="account-action account-action-primary" href="/login">
+                    <Cloud /> Aanmelden en synchroniseren
+                  </a>
+                )}
+                {syncStatus === "offline" && (
+                  <button type="button" className="account-action account-action-quiet" onClick={() => window.location.reload()}>
+                    <RefreshCw /> Opnieuw proberen
+                  </button>
+                )}
               </div>
-            </section>
-
-            <section className="coach-decision-panel">
-              <div><p className="eyebrow">Besluitregel · minimaal 2 metingen</p><h3>Calorieadvies</h3><p>Eiwit blijft {targets.protein} g. Een eventuele correctie komt hoofdzakelijk uit koolhydraten en wordt nooit na één losse weging gedaan.</p></div>
-              <div className="coach-decision-value"><strong>{targets.calories + calorieDelta}</strong><span>kcal / dag</span></div>
-              {calorieDelta !== 0 && <Button className="coach-apply-button" onClick={() => { setTargets((current) => ({ ...current, calories: current.calories + calorieDelta })); setBanner("Calorieadvies toegepast"); }}>Advies toepassen</Button>}
-              {calorieDelta === 0 && <span className="coach-hold-tag"><Check /> Behouden</span>}
             </section>
           </TabsContent>
 

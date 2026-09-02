@@ -333,7 +333,7 @@ textarea {
 
 .session-banner {
   position: relative;
-  min-height: 300px;
+  min-height: 340px;
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -584,7 +584,7 @@ textarea {
   }
 
   .session-banner {
-    min-height: clamp(360px, 52svh, 460px);
+    min-height: clamp(420px, 64svh, 620px);
   }
 
   .session-banner-mark {
@@ -611,8 +611,8 @@ textarea {
   }
 
   .session-banner-content {
-    min-height: clamp(360px, 52svh, 460px);
-    padding: 22px 22px 24px;
+    min-height: clamp(420px, 64svh, 620px);
+    padding: 26px 22px 26px;
   }
 
   .session-banner-line span { right: -25%; width: 72%; }
@@ -3609,3 +3609,140 @@ textarea {
   border-radius: 50%;
   background: #c8ff66;
 }
+
+/* ---------- account page ---------- */
+
+.account-page { display: grid; gap: 13px; }
+
+.account-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(200, 255, 102, 0.11), transparent 44%),
+    linear-gradient(150deg, rgba(19, 26, 22, 0.91), rgba(10, 14, 12, 0.94));
+  padding: 22px;
+}
+
+.account-hero-id { display: flex; min-width: 0; align-items: center; gap: 14px; }
+
+.account-hero-avatar {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  place-items: center;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #d8ff95, #72efd0);
+  color: #08100b;
+  font-size: 16px;
+  font-weight: 820;
+  letter-spacing: -0.03em;
+}
+
+.account-hero-id h2 {
+  margin: 0;
+  overflow: hidden;
+  color: #f1f8f1;
+  font-size: 1.125rem;
+  font-weight: 640;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+}
+
+.account-hero-id p { margin: 3px 0 0; color: #8c9890; font-size: 12.5px; }
+
+.account-hero-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(114, 239, 208, 0.2);
+  border-radius: 999px;
+  background: rgba(114, 239, 208, 0.06);
+  padding: 8px 13px;
+  color: #8bdccc;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.account-hero-state svg { width: 14px; height: 14px; }
+.account-hero-state-offline { border-color: rgba(244, 198, 91, 0.22); background: rgba(244, 198, 91, 0.07); color: #e7bd5b; }
+
+.account-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+
+.account-stats article {
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 22px;
+  background: rgba(0, 0, 0, 0.16);
+  padding: 15px;
+}
+
+.account-stats span { display: block; color: #7d8a82; font-size: 10.5px; font-weight: 660; }
+.account-stats strong {
+  display: block;
+  margin-top: 5px;
+  color: #eef5ef;
+  font-size: 1.5rem;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+}
+
+.account-rows {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 22px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.account-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 15px 16px; }
+.account-row + .account-row { border-top: 1px solid rgba(255, 255, 255, 0.055); }
+
+.account-row-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(114, 239, 208, 0.07);
+  color: #72efd0;
+}
+
+.account-row-icon svg { width: 16px; height: 16px; }
+.account-row strong { display: block; color: #dde6df; font-size: 13px; font-weight: 640; }
+.account-row small { display: block; margin-top: 3px; color: #8c9890; font-size: 11.5px; line-height: 1.45; }
+
+.account-actions { display: grid; gap: 9px; }
+
+.account-action {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 680;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.account-action svg { width: 16px; height: 16px; }
+.account-action:focus-visible { outline: 2px solid #72efd0; outline-offset: 3px; }
+
+.account-action-primary { background: #c8ff66; color: #08100b; }
+.account-action-primary:hover { background: #d6ff8c; }
+
+.account-action-quiet {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #c2ccc5;
+}
+
+.account-action-quiet:hover { border-color: rgba(200, 255, 102, 0.22); background: rgba(200, 255, 102, 0.05); color: #eaf2ec; }
