@@ -349,7 +349,7 @@ export function LoginScreen() {
       </svg>
 
       <div className="gate-inner">
-        <span className="gate-wordmark">Yascha Training</span>
+        <span className="gate-wordmark">Setline</span>
 
         <div className="gate-message">
           <h1 className="gate-headline">{headline}</h1>

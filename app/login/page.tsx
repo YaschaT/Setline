@@ -4,7 +4,7 @@ import { LoginScreen } from "./login-screen";
 import "./login.css";
 
 export const metadata: Metadata = {
-  title: "Aanmelden — Yascha Training",
+  title: "Aanmelden — Setline",
   description: "Meld je aan om je trainingsdata op elk toestel te synchroniseren.",
 };
 

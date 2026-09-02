@@ -1,6 +1,6 @@
 {
-  "name": "Yascha Training",
-  "short_name": "Yascha",
+  "name": "Setline",
+  "short_name": "Setline",
   "description": "Persoonlijk trainings-, voedings- en progressiedashboard.",
   "id": "/",
   "start_url": "/",
@@ -9,7 +9,11 @@
   "orientation": "portrait-primary",
   "background_color": "#060908",
   "theme_color": "#060908",
-  "categories": ["fitness", "health", "lifestyle"],
+  "categories": [
+    "fitness",
+    "health",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "/icons/app-icon-192.png",

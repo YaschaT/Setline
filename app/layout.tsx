@@ -2,14 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Yascha Training",
+  title: "Setline",
   description: "Persoonlijk trainings-, voedings- en progressiedashboard.",
-  applicationName: "Yascha Training",
+  applicationName: "Setline",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Yascha",
+    title: "Setline",
   },
   formatDetection: {
     telephone: false,

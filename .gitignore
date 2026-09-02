@@ -48,3 +48,5 @@ next-env.d.ts
 deploy/*/dist
 deploy/*/.vercel
 *.tsbuildinfo
+# Vendored agent skills (installed via npx, not project source)
+.agents/

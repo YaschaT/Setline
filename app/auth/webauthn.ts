@@ -17,7 +17,7 @@ export async function getRelyingParty() {
   return {
     rpID: host.split(":")[0],
     origin: `${proto}://${host}`,
-    rpName: "Yascha Training",
+    rpName: "Setline",
   };
 }
 

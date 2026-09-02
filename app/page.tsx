@@ -2890,7 +2890,7 @@ function TrainingApp() {
     return (
       <header className={`app-header flex items-center justify-between gap-4 ${embedded ? "session-app-header" : "mb-6"}`}>
         <div className="flex items-center gap-3">
-          <div className="performance-logo" aria-label="Yascha Training">
+          <div className="performance-logo" aria-label="Setline">
             <img src="/yascha-mark.svg" alt="" aria-hidden="true" />
           </div>
         </div>

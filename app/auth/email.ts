@@ -28,7 +28,7 @@ export async function sendLoginCode(email: string, code: string): Promise<void> 
     body: JSON.stringify({
       from,
       to: [email],
-      subject: `${code} is je Yascha Training code`,
+      subject: `${code} is je Setline-code`,
       text:
         `Je code is ${code}.\n\n` +
         `Hij blijft 10 minuten geldig en werkt één keer.\n` +

@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Third-party tooling vendored into the repo, not Site code.
     ".claude/**",
+    ".agents/**",
     "deploy/*/dist/**",
   ]),
   {

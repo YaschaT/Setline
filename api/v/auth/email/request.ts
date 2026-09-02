@@ -42,7 +42,7 @@ export default async function handler(request: Request) {
       body: JSON.stringify({
         from,
         to: [email],
-        subject: "Je aanmeldlink voor Yascha Training",
+        subject: "Je aanmeldlink voor Setline",
         text:
           `Klik om aan te melden:\n\n${link}\n\n` +
           `De link blijft 15 minuten geldig.\n` +
