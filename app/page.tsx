@@ -1185,6 +1185,27 @@ function datesInWeek(date = new Date()) {
   });
 }
 
+/** Six weeks of Mondays-to-Sundays covering the month the anchor week sits in.
+ *  A week belongs to the month containing its Thursday (ISO 8601), so the week
+ *  of 31 Aug - 6 Sep shows September, not August. */
+function monthOfWeek(anchor: Date) {
+  const thursday = new Date(anchor);
+  thursday.setDate(thursday.getDate() + 3);
+  return thursday;
+}
+
+function datesInMonthGrid(anchor = new Date()) {
+  const first = monthOfWeek(anchor);
+  first.setDate(1);
+  first.setHours(12, 0, 0, 0);
+  const start = startOfWeek(first);
+  return Array.from({ length: 42 }, (_, index) => {
+    const result = new Date(start);
+    result.setDate(start.getDate() + index);
+    return result;
+  });
+}
+
 function sciencePlanFromId(value: SciencePlanId) {
   return SCIENCE_PLANS[value] ?? SCIENCE_PLANS[DEFAULT_SCIENCE_PLAN_ID];
 }
@@ -1592,7 +1613,17 @@ function TrainingApp() {
     ? WORKOUT_CHOICES
     : [...activeSciencePlan.slots, "rest" as const];
   const activeProgramKey = programKey(planMode, sciencePlanId);
-  const weekDays = useMemo(() => datesInWeek(), []);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const weekAnchor = useMemo(() => {
+    const anchor = startOfWeek();
+    anchor.setDate(anchor.getDate() + weekOffset * 7);
+    return anchor;
+  }, [weekOffset]);
+  const weekDays = useMemo(() => datesInWeek(weekAnchor), [weekAnchor]);
+  const monthDays = useMemo(() => datesInMonthGrid(weekAnchor), [weekAnchor]);
+  const monthAnchor = useMemo(() => monthOfWeek(weekAnchor), [weekAnchor]);
+  const monthLabel = monthAnchor.toLocaleDateString("nl-BE", { month: "long", year: "numeric" });
   const todayKey = dateKey();
   const selectedDateLabel = parseDateKey(selectedDate).toLocaleDateString("nl-BE", {
     weekday: "short",
@@ -2853,17 +2884,17 @@ function TrainingApp() {
     return (
       <header className={`app-header flex items-center justify-between gap-4 ${embedded ? "session-app-header" : "mb-6"}`}>
         <div className="flex items-center gap-3">
-          <div className="performance-logo" aria-label="Yascha Performance">
+          <div className="performance-logo" aria-label="Yascha Training">
             <img src="/yascha-mark.svg" alt="" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="brand-kicker">Yascha / Performance</p>
-            <h1 className="brand-title">Recomp protocol</h1>
           </div>
         </div>
         <button type="button" className={`account-control account-${syncStatus}`} onClick={() => setAccountDialog(true)} aria-label="Account en synchronisatie bekijken">
           <span className="account-avatar">{accountInitials}</span>
-          <span className="account-copy"><strong>{account?.displayName ?? "Jouw account"}</strong><small>{syncLabel}</small></span>
+          <span className="account-copy">
+            <strong>{account?.displayName ?? "Niet aangemeld"}</strong>
+            <small>{syncLabel}</small>
+          </span>
+          <span className={`account-dot account-dot-${syncStatus}`} aria-hidden="true" />
           {syncStatus === "offline" ? <CloudOff /> : syncStatus === "saving" || syncStatus === "connecting" ? <LoaderCircle className="account-spinner" /> : <Cloud />}
         </button>
       </header>
@@ -2947,10 +2978,83 @@ function TrainingApp() {
               <div className="week-agenda-head">
                 <div className="week-agenda-title">
                   <span className="week-agenda-icon"><CalendarDays /></span>
-                  <div><p className="eyebrow">Weekagenda</p><h2 id="week-agenda-title">{weekRangeLabel}</h2></div>
+                  <div>
+                    <p className="eyebrow">{weekOffset === 0 ? "Deze week" : weekOffset === -1 ? "Vorige week" : weekOffset === 1 ? "Volgende week" : "Weekagenda"}</p>
+                    <h2 id="week-agenda-title">{weekRangeLabel}</h2>
+                  </div>
                 </div>
                 <span className="week-agenda-count"><Check /> {completedWeekDays}/7</span>
               </div>
+
+              <div className="agenda-nav">
+                <button
+                  type="button"
+                  className="agenda-nav-step"
+                  onClick={() => setWeekOffset((value) => value - 1)}
+                  aria-label="Vorige week"
+                >
+                  <ChevronLeft />
+                </button>
+                <div className="agenda-nav-mid">
+                  {weekOffset !== 0 && (
+                    <button type="button" className="agenda-nav-today" onClick={() => setWeekOffset(0)}>
+                      Naar deze week
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`agenda-nav-month ${monthOpen ? "agenda-nav-month-open" : ""}`}
+                    onClick={() => setMonthOpen((value) => !value)}
+                    aria-expanded={monthOpen}
+                  >
+                    <CalendarDays /> {monthOpen ? "Week tonen" : "Hele maand"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="agenda-nav-step"
+                  onClick={() => setWeekOffset((value) => value + 1)}
+                  aria-label="Volgende week"
+                >
+                  <ChevronRight />
+                </button>
+              </div>
+
+              {monthOpen && (
+                <div className="agenda-month" role="group" aria-label={`Maandoverzicht ${monthLabel}`}>
+                  <p className="agenda-month-label">{monthLabel}</p>
+                  <div className="agenda-month-weekdays" aria-hidden="true">
+                    {["ma", "di", "wo", "do", "vr", "za", "zo"].map((label) => <span key={label}>{label}</span>)}
+                  </div>
+                  <div className="agenda-month-grid">
+                    {monthDays.map((calendarDate) => {
+                      const iso = dateKey(calendarDate);
+                      const inMonth = calendarDate.getMonth() === monthAnchor.getMonth();
+                      const isToday = iso === todayKey;
+                      const isSelected = iso === selectedDate;
+                      const isDone = sessions.some((entry) => entry.date === iso);
+                      return (
+                        <button
+                          key={iso}
+                          type="button"
+                          className={`agenda-month-day ${inMonth ? "" : "agenda-month-day-muted"} ${isSelected ? "agenda-month-day-selected" : ""} ${isToday ? "agenda-month-day-today" : ""}`}
+                          onClick={() => {
+                            setSelectedDate(iso);
+                            const diff = Math.round((startOfWeek(calendarDate).getTime() - startOfWeek().getTime()) / (7 * 24 * 60 * 60 * 1000));
+                            setWeekOffset(diff);
+                            setMonthOpen(false);
+                          }}
+                          aria-label={`${calendarDate.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long" })}${isDone ? ", sessie gelogd" : ""}`}
+                          aria-current={isToday ? "date" : undefined}
+                        >
+                          <span>{calendarDate.getDate()}</span>
+                          {isDone && <i aria-hidden="true" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="plan-selector agenda-plan-selector" aria-label="Trainingsplan kiezen">
                 <div className="plan-selector-primary">
                   <div className="plan-selector-copy">

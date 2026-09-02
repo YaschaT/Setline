@@ -333,7 +333,7 @@ textarea {
 
 .session-banner {
   position: relative;
-  min-height: 210px;
+  min-height: 248px;
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -416,6 +416,7 @@ textarea {
 
 .session-banner-copy {
   margin-top: auto;
+  padding-top: 18px;
 }
 
 .session-banner-copy h2 {
@@ -3204,7 +3205,9 @@ textarea {
   .performance-logo img { width: 29px; height: 29px; }
   .account-control { border-radius: 14px; padding: 5px; }
   .account-avatar { width: 32px; height: 32px; flex-basis: 32px; }
-  .account-copy { display: none; }
+  .account-copy { display: grid; }
+  .account-copy strong { max-width: 96px; }
+  .account-copy small { font-size: 9.5px; }
   .account-control > svg { width: 13px; height: 13px; margin: 0 3px 0 0; }
   .account-dialog-actions { align-items: stretch; flex-direction: column-reverse; }
   .account-signout,
@@ -3452,4 +3455,156 @@ textarea {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* ---------- account state ---------- */
+
+/* State is carried by text and shape as well as colour, so it does not
+   depend on colour perception alone. */
+.account-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #72efd0;
+}
+
+.account-dot-offline { background: #f4c65b; }
+.account-dot-saving,
+.account-dot-connecting { background: #c8ff66; }
+
+/* ---------- agenda navigation ---------- */
+
+.agenda-nav {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 11px;
+}
+
+.agenda-nav-step {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #c2ccc5;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.agenda-nav-step:hover { border-color: rgba(200, 255, 102, 0.24); background: rgba(200, 255, 102, 0.05); }
+.agenda-nav-step:focus-visible { outline: 2px solid #72efd0; outline-offset: 2px; }
+.agenda-nav-step svg { width: 18px; height: 18px; }
+
+.agenda-nav-mid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agenda-nav-today,
+.agenda-nav-month {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0 13px;
+  color: #c2ccc5;
+  font-size: 12.5px;
+  font-weight: 640;
+  white-space: nowrap;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.agenda-nav-today:hover,
+.agenda-nav-month:hover { border-color: rgba(200, 255, 102, 0.24); background: rgba(200, 255, 102, 0.05); color: #eaf2ec; }
+.agenda-nav-today:focus-visible,
+.agenda-nav-month:focus-visible { outline: 2px solid #72efd0; outline-offset: 2px; }
+.agenda-nav-month svg { width: 15px; height: 15px; }
+
+.agenda-nav-month-open {
+  border-color: rgba(200, 255, 102, 0.28);
+  background: rgba(200, 255, 102, 0.09);
+  color: #e8ffc0;
+}
+
+/* ---------- month overview ---------- */
+
+.agenda-month {
+  margin-bottom: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 22px;
+  background: rgba(0, 0, 0, 0.16);
+  padding: 15px;
+}
+
+.agenda-month-label {
+  margin: 0 0 11px;
+  color: #dde6df;
+  font-size: 13px;
+  font-weight: 680;
+  text-transform: capitalize;
+}
+
+.agenda-month-weekdays,
+.agenda-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.agenda-month-weekdays {
+  margin-bottom: 6px;
+  color: #6f7c74;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.agenda-month-day {
+  position: relative;
+  display: grid;
+  min-height: 44px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.028);
+  color: #c2ccc5;
+  font-size: 13px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.agenda-month-day:hover { border-color: rgba(200, 255, 102, 0.22); background: rgba(200, 255, 102, 0.05); }
+.agenda-month-day:focus-visible { outline: 2px solid #72efd0; outline-offset: 2px; }
+.agenda-month-day-muted { color: #56635b; background: transparent; }
+
+.agenda-month-day-today {
+  border-color: rgba(114, 239, 208, 0.4);
+  color: #eaf2ec;
+}
+
+.agenda-month-day-selected {
+  border-color: rgba(200, 255, 102, 0.5);
+  background: rgba(200, 255, 102, 0.12);
+  color: #e8ffc0;
+}
+
+/* A logged session, marked by a dot rather than colour alone. */
+.agenda-month-day i {
+  position: absolute;
+  bottom: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c8ff66;
 }
