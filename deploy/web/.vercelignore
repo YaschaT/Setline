@@ -1,0 +1,10 @@
+# Source files for the local build; only dist/ is served.
+# Leading slash anchors to this directory so dist/index.html is NOT excluded.
+/main.tsx
+/app.css
+/preview-auth.ts
+/vite.config.ts
+/index.html
+/README.md
+/.sites-runtime
+/.env.local

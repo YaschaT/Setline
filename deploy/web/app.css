@@ -1,0 +1,9 @@
+/* Tailwind v4 detects sources relative to this file. The Vite root for this
+   build is deploy/web, so the app's own directories must be named explicitly
+   or every utility class is tree-shaken away. */
+@import "../../app/globals.css";
+
+@source "../../app";
+@source "../../components";
+@source "../../hooks";
+@source "../../lib";

@@ -1,0 +1,5 @@
+# Never upload the private export. Deploy deploy/login-preview/dist only.
+PRIVATE-DATA/
+.wrangler/
+.sites-runtime/
+node_modules/

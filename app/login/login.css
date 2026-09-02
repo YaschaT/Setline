@@ -1,0 +1,456 @@
+/* Login gate — "Duimzone" direction.
+   No card: the page is the surface and the action is anchored in the
+   thumb zone. Tokens mirror app/globals.css. */
+
+.gate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 50% -18%, rgba(200, 255, 102, 0.085), transparent 35%),
+    linear-gradient(180deg, #080c0a 0%, #050706 68%);
+  padding:
+    max(40px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right))
+    max(34px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+}
+
+.gate-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+/* ---------- ambient field ---------- */
+
+.gate-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.gate-ambient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 0.55px, transparent 0.55px);
+  background-size: 7px 7px;
+  mask-image: linear-gradient(to bottom, black, transparent 68%);
+}
+
+.gate-ambient span {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(90px);
+  opacity: 0.12;
+}
+
+.gate-ambient span:nth-child(1) { width: 380px; height: 380px; top: 2%; left: -230px; background: #c8ff66; }
+.gate-ambient span:nth-child(2) { width: 440px; height: 440px; top: 34%; right: -320px; background: #72efd0; }
+.gate-ambient span:nth-child(3) { width: 320px; height: 320px; bottom: -240px; left: 32%; background: #9b72ff; opacity: 0.05; }
+
+.gate-hairline {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 60;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c8ff66 28%, #72efd0 68%, transparent);
+  opacity: 0.75;
+}
+
+/* The mark is the composition, not a badge: oversized, cropped by the frame. */
+.gate-mark {
+  position: absolute;
+  top: -34px;
+  right: -96px;
+  z-index: 1;
+  width: 300px;
+  height: 300px;
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .gate-mark { right: max(-96px, calc(50vw - 336px)); }
+}
+
+/* ---------- identity ---------- */
+
+.gate-wordmark {
+  position: relative;
+  z-index: 2;
+  color: #7d8a82;
+  font-size: 13px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- the message ---------- */
+
+.gate-message {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  justify-content: flex-end;
+  gap: 16px;
+  padding-bottom: 30px;
+}
+
+.gate-headline {
+  max-width: 11ch;
+  margin: 0;
+  font-size: 2.75rem;
+  font-weight: 600;
+  line-height: 0.98;
+  letter-spacing: -0.038em;
+  text-wrap: balance;
+}
+
+@media (min-width: 420px) {
+  .gate-headline { font-size: 3rem; }
+}
+
+.gate-sub {
+  max-width: 28ch;
+  margin: 0;
+  color: #8c9890;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.gate-sub b { color: #dde6df; font-weight: 640; }
+
+/* ---------- the action zone ---------- */
+
+.gate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gate-passkey {
+  position: relative;
+  display: grid;
+  min-height: 112px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  border: 0;
+  border-radius: 26px;
+  background: #c8ff66;
+  padding: 20px 22px;
+  color: #08100b;
+  cursor: pointer;
+  text-align: left;
+  transition: background 180ms ease;
+}
+
+.gate-passkey:hover:not(:disabled) { background: #d6ff8c; }
+.gate-passkey:active:not(:disabled) { background: #bdf551; }
+.gate-passkey:disabled { cursor: progress; }
+
+.gate-passkey:focus-visible {
+  outline: 2px solid #72efd0;
+  outline-offset: 3px;
+}
+
+.gate-scanner {
+  position: relative;
+  display: grid;
+  width: 60px;
+  height: 60px;
+  flex: 0 0 60px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(8, 16, 11, 0.16);
+  border-radius: 20px;
+  background: rgba(8, 16, 11, 0.09);
+  color: #08100b;
+}
+
+.gate-scanner svg { width: 31px; height: 31px; }
+
+/* Motion here reports state: it runs only while authenticating. */
+.gate-scanner::before {
+  content: "";
+  position: absolute;
+  inset-inline: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: #08100b;
+  opacity: 0;
+}
+
+.gate-passkey[data-scanning="true"] .gate-scanner::before {
+  opacity: 1;
+  animation: gate-scan 900ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes gate-scan {
+  0%, 100% { transform: translateY(-22px); }
+  50% { transform: translateY(22px); }
+}
+
+.gate-passkey-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.gate-passkey-copy strong {
+  font-size: 1.25rem;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+}
+
+.gate-passkey-copy small {
+  color: rgba(8, 16, 11, 0.72);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+/* ---------- secondary options ---------- */
+
+.gate-alts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.gate-alt {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  color: #c2ccc5;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 620;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.gate-alt-quiet { color: #8c9890; }
+.gate-alt:hover { color: #eaf2ec; }
+.gate-alt:focus-visible { outline: 2px solid #72efd0; outline-offset: 3px; }
+.gate-alt:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gate-alt-rule { width: 1px; height: 14px; background: rgba(255, 255, 255, 0.12); }
+
+/* ---------- Google ---------- */
+
+.gate-google {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: #ffffff;
+  color: #1f1f1f;
+  cursor: pointer;
+  font-size: 14.5px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition: background 180ms ease;
+}
+
+.gate-google:hover { background: #f1f3f4; }
+.gate-google:focus-visible { outline: 2px solid #72efd0; outline-offset: 3px; }
+
+/* ---------- email + code ---------- */
+
+.gate-form { display: flex; flex-direction: column; gap: 12px; }
+
+.gate-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 12px 16px;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.gate-field:focus-within {
+  border-color: rgba(114, 239, 208, 0.4);
+  background: rgba(114, 239, 208, 0.035);
+}
+
+.gate-field label {
+  color: #8c9890;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.gate-field input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #f1f8f1;
+  font-size: 16px; /* 16px avoids iOS zoom-on-focus */
+  outline: none;
+}
+
+.gate-field input::placeholder { color: #5d6a62; }
+
+.gate-submit {
+  display: inline-flex;
+  min-height: 56px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 18px;
+  background: #c8ff66;
+  color: #08100b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  transition: background 180ms ease;
+}
+
+.gate-submit:hover:not(:disabled) { background: #d6ff8c; }
+.gate-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+.gate-submit:focus-visible { outline: 2px solid #72efd0; outline-offset: 3px; }
+.gate-submit svg { width: 17px; height: 17px; }
+
+.gate-code {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.gate-code input {
+  width: 100%;
+  height: 64px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.24);
+  color: #f1f8f1;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: center;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.gate-code input:focus {
+  border-color: rgba(200, 255, 102, 0.55);
+  background: rgba(200, 255, 102, 0.06);
+  outline: none;
+}
+
+.gate-code input[data-filled="true"] { border-color: rgba(114, 239, 208, 0.34); }
+
+.gate-code[data-error="true"] input {
+  border-color: rgba(255, 107, 107, 0.5);
+  animation: gate-shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes gate-shake {
+  10%, 90% { transform: translateX(-2px); }
+  30%, 70% { transform: translateX(4px); }
+  50% { transform: translateX(-4px); }
+}
+
+.gate-code-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #8c9890;
+  font-size: 12px;
+}
+
+.gate-resend {
+  border: 0;
+  background: none;
+  color: #c8ff66;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.gate-resend:disabled { color: #6b7871; cursor: default; }
+.gate-resend:focus-visible { outline: 2px solid #72efd0; outline-offset: 2px; }
+
+/* ---------- feedback ---------- */
+
+.gate-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid rgba(255, 107, 107, 0.26);
+  border-radius: 16px;
+  background: rgba(255, 107, 107, 0.07);
+  padding: 12px 14px;
+  color: #ffb4b4;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.gate-error svg { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 1px; }
+
+/* ---------- success ---------- */
+
+.gate-done-mark {
+  display: grid;
+  width: 60px;
+  height: 60px;
+  place-items: center;
+  border-radius: 20px;
+  background: #c8ff66;
+  color: #08100b;
+}
+
+.gate-done-mark svg { width: 30px; height: 30px; }
+
+/* ---------- trust ---------- */
+
+.gate-trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  color: #6f7c74;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gate-trust svg { width: 12px; height: 12px; color: #72efd0; }
+
+.gate-spin { animation: gate-spin 1s linear infinite; }
+
+@keyframes gate-spin { to { transform: rotate(360deg); } }
+
+/* ---------- motion opt-out ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .gate-code[data-error="true"] input,
+  .gate-passkey[data-scanning="true"] .gate-scanner::before {
+    animation: none !important;
+  }
+
+  .gate-passkey[data-scanning="true"] .gate-scanner::before { opacity: 1; }
+  .gate-spin { animation-duration: 2.4s; }
+  * { transition-duration: 1ms !important; }
+}
