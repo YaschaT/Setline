@@ -1,4 +1,4 @@
-import { readCookie, readSessionToken, SESSION_COOKIE_NAME } from "../../lib/auth-core";
+import { readCookie, readSessionToken, SESSION_COOKIE_NAME } from "../../../lib/auth-core";
 import { json, secret } from "../_shared";
 
 export const config = { runtime: "edge" };

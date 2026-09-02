@@ -1,4 +1,4 @@
-import { signPayload } from "../../../lib/auth-core";
+import { signPayload } from "../../../../lib/auth-core";
 import { googleConfig, originOf, secret } from "../../_shared";
 
 export const config = { runtime: "edge" };

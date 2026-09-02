@@ -4,7 +4,16 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build:web",
   "outputDirectory": "deploy/web/dist",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/api/auth/session", "destination": "/api/v/auth/session" },
+    { "source": "/api/auth/signout", "destination": "/api/v/auth/signout" },
+    { "source": "/api/auth/methods", "destination": "/api/v/auth/methods" },
+    { "source": "/api/auth/google/start", "destination": "/api/v/auth/google/start" },
+    { "source": "/api/auth/google/callback", "destination": "/api/v/auth/google/callback" },
+    { "source": "/api/auth/email/request", "destination": "/api/v/auth/email/request" },
+    { "source": "/api/auth/email/verify", "destination": "/api/v/auth/email/verify" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

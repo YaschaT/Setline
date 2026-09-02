@@ -3,7 +3,7 @@ import {
   createSessionToken,
   sessionCookie,
   verifyPayload,
-} from "../../../lib/auth-core";
+} from "../../../../lib/auth-core";
 import { googleConfig, originOf, secret } from "../../_shared";
 
 export const config = { runtime: "edge" };

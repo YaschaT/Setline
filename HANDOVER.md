@@ -213,3 +213,26 @@ npm run deploy:web
 That host has no backend, so `/api/*` is stubbed in `deploy/web/preview-auth.ts`
 and the app runs on `localStorage`. Real authentication needs D1 and R2, which
 means a Cloudflare deploy.
+
+### Two auth backends, one client
+
+The login screen talks to the same URLs everywhere; what answers them differs.
+
+| URL | Cloudflare / local | Vercel |
+|---|---|---|
+| `/api/auth/*` | `app/api/auth/**` (Next routes, D1-backed) | `api/v/auth/**` (Edge functions, stateless) |
+
+Cloudflare has D1, so it stores six-digit codes and passkey credentials.
+Vercel has no database, so e-mail sign-in is a signed magic link and passkeys
+are unavailable there; `/api/auth/methods` reports what each deployment can
+actually do and the screen renders only that.
+
+**Why `api/v/` and not `api/`.** Vercel discovers functions under `api/` at
+the repo root, but the dev server resolves `/api/auth/session` to
+`api/auth/session.ts` and serves it as a module, shadowing the app router's
+route of the same name — three endpoints silently returned TypeScript source.
+Moving the functions to `api/v/` removes the filename collision, and
+`vercel.json` rewrites each public URL onto them. Do not move them back.
+
+Signing lives once in `lib/auth-core.ts` and is used by both backends, so the
+two cannot drift apart on anything security-critical.

@@ -1,4 +1,4 @@
-import { createMagicLinkToken, normalizeEmail } from "../../../lib/auth-core";
+import { createMagicLinkToken, normalizeEmail } from "../../../../lib/auth-core";
 import { json, originOf, secret } from "../../_shared";
 
 export const config = { runtime: "edge" };

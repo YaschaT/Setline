@@ -1,4 +1,4 @@
-import { createSessionToken, readMagicLinkToken, sessionCookie } from "../../../lib/auth-core";
+import { createSessionToken, readMagicLinkToken, sessionCookie } from "../../../../lib/auth-core";
 import { originOf, secret } from "../../_shared";
 
 export const config = { runtime: "edge" };

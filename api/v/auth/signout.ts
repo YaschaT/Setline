@@ -1,4 +1,4 @@
-import { clearedSessionCookie } from "../../lib/auth-core";
+import { clearedSessionCookie } from "../../../lib/auth-core";
 import { json } from "../_shared";
 
 export const config = { runtime: "edge" };
