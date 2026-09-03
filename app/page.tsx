@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "./auth-gate";
 import { signOutEverywhere } from "./auth/supabase-auth";
-import { loadCloudState, saveCloudState } from "@/lib/cloud-state";
+import { clearCloudState, loadCloudState, saveCloudState } from "@/lib/cloud-state";
+import { clearOnboarded } from "./auth-gate";
 import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
 import {
   Activity,
@@ -1332,6 +1333,8 @@ function TrainingApp() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("connecting");
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [accountDialog, setAccountDialog] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(STARTER_CHAT);
   const [chatDraft, setChatDraft] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -2181,6 +2184,33 @@ function TrainingApp() {
         ? `${day.short} ${verb} voor ${selectedDateLabel} · ${readyCount} ${readyCount === 1 ? "oefening mag" : "oefeningen mogen"} hoger`
         : `${day.short} ${verb} voor ${selectedDateLabel}`,
     );
+  }
+
+  /**
+   * Wipes this account's training progress everywhere, then hands the person
+   * back to the same four questions they answered when they registered.
+   *
+   * Progress photos are deliberately left alone: they live in object storage,
+   * deleting them is not undoable, and "ik heb me vergist bij het loggen" is
+   * almost never a reason to throw away a year of photos. The dialog says so.
+   */
+  async function resetProgress() {
+    setResetting(true);
+    await clearCloudState().catch(() => false);
+    await fetch("/api/user-state", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: {} }),
+    }).catch(() => {});
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // The reload below still lands on a clean slate from the cloud.
+    }
+    clearOnboarded();
+    // A full reload is the honest way to restart: every derived value in this
+    // component is rebuilt from scratch rather than half-cleared in place.
+    window.location.href = "/";
   }
 
   function saveExercise() {
@@ -3738,6 +3768,16 @@ function TrainingApp() {
                 </div>
               </div>
 
+              <div className="account-danger">
+                <div>
+                  <strong>Opnieuw beginnen</strong>
+                  <small>Wist je sessies, metingen, voeding en planning, en stelt je account opnieuw in.</small>
+                </div>
+                <button type="button" className="account-danger-action" onClick={() => setResetOpen(true)}>
+                  <RefreshCw /> Wis alle progressie
+                </button>
+              </div>
+
               <div className="account-actions">
                 {account ? (
                   <button
@@ -4315,6 +4355,35 @@ function TrainingApp() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={resetOpen} onOpenChange={(open) => !resetting && setResetOpen(open)}>
+        <AlertDialogContent className="border-white/10 bg-[#121714] text-[#f3f7f4]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alle progressie wissen?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[#93a096]">
+              Dit verwijdert je {sessions.length} {sessions.length === 1 ? "sessie" : "sessies"},{" "}
+              {metrics.length} {metrics.length === 1 ? "meting" : "metingen"} en je voedingsdagboek,
+              op al je toestellen. Je foto&rsquo;s blijven staan. Daarna stellen we je account
+              opnieuw in met dezelfde vragen als bij je registratie. Dit kan niet ongedaan gemaakt worden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting} className="border-white/10 bg-white/5 text-[#e4ece6] hover:bg-white/10">
+              Annuleer
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetting}
+              onClick={(event) => {
+                event.preventDefault();
+                void resetProgress();
+              }}
+              className="bg-[#ff6b6b] text-[#1a0b0b] hover:bg-[#ff8585]"
+            >
+              {resetting ? "Bezig met wissen…" : "Ja, wis alles"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent className="border-white/10 bg-[#121714] text-[#f3f7f4]">

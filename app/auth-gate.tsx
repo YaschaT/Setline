@@ -48,6 +48,18 @@ function readLocalState(): StateShape {
   }
 }
 
+/** Forgets that setup ever ran, so the same questions are asked again. */
+export function clearOnboarded() {
+  try {
+    for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.localStorage.key(i);
+      if (key?.startsWith(ONBOARDED_PREFIX)) window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Nothing to forget if the store is unavailable.
+  }
+}
+
 export function markOnboarded(email: string) {
   try {
     window.localStorage.setItem(onboardedKey(email), "1");

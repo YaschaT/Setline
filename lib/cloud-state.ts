@@ -52,3 +52,11 @@ export async function saveCloudState(state: Record<string, unknown>): Promise<bo
     .upsert({ user_id: userId, state, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
   return !error;
 }
+
+/** Removes this account's stored state entirely. Used by "wis alle progressie". */
+export async function clearCloudState(): Promise<boolean> {
+  const userId = await currentUserId();
+  if (!supabase || !userId) return false;
+  const { error } = await supabase.from(TABLE).delete().eq("user_id", userId);
+  return !error;
+}

@@ -4807,3 +4807,22 @@ textarea {
 .account-targets input:focus { border-color: rgb(200 255 102 / 0.55); }
 .account-targets span { position: absolute; right: 12px; color: #8b968e; font-size: 11.5px; pointer-events: none; }
 @media (min-width: 640px) { .account-targets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Destructive action, kept apart from the everyday ones. */
+.account-danger {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid rgb(255 107 107 / 0.22); border-radius: 24px;
+  background: rgb(255 107 107 / 0.05); padding: 18px 20px;
+}
+.account-danger strong { display: block; color: #f3dede; font-size: 13.5px; font-weight: 580; }
+.account-danger small { display: block; margin-top: 3px; color: #b39a9a; font-size: 12px; line-height: 1.5; max-width: 44ch; }
+.account-danger-action {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 42px; flex: 0 0 auto;
+  border: 1px solid rgb(255 107 107 / 0.35); border-radius: 14px;
+  background: rgb(255 107 107 / 0.1); padding: 0 16px;
+  color: #ff9d9d; font-size: 13px; font-weight: 580; cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+.account-danger-action:hover { background: rgb(255 107 107 / 0.18); color: #ffbdbd; }
+.account-danger-action:focus-visible { outline: 2px solid rgb(255 107 107 / 0.8); outline-offset: 2px; }
+.account-danger-action svg { width: 15px; height: 15px; }
