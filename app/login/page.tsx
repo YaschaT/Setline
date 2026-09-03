@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { LoginScreen } from "./login-screen";
-import "./login.css";
 
 export const metadata: Metadata = {
   title: "Aanmelden — Setline",

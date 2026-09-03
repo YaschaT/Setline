@@ -23,6 +23,7 @@
     "@shadcn/react": "^0.3.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.3",
+    "@supabase/supabase-js": "^2.114.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",

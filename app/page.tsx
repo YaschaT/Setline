@@ -4,6 +4,8 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "./auth-gate";
+import { signOutEverywhere } from "./auth/supabase-auth";
+import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
 import {
   Activity,
   ArrowRightLeft,
@@ -38,6 +40,7 @@ import {
   Search,
   SendHorizontal,
   ShieldCheck,
+  Smartphone,
   Target,
   Trash2,
   TrendingUp,
@@ -1135,13 +1138,6 @@ const MEAL_IDEAS: Record<MealIdeaType, MealIdea[]> = {
 };
 const WORKOUT_CHOICES: CanonicalDayId[] = ["push", "pull", "legs", "lower", "upper", "rest"];
 
-function dateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 const DEFAULT_SCHEDULE: Record<number, CanonicalDayId> = {
   0: "rest",
   1: "push",
@@ -1151,10 +1147,6 @@ const DEFAULT_SCHEDULE: Record<number, CanonicalDayId> = {
   5: "lower",
   6: "upper",
 };
-
-function parseDateKey(value: string) {
-  return new Date(`${value}T12:00:00`);
-}
 
 function shiftDateKey(value: string, days: number) {
   const date = parseDateKey(value);
@@ -1167,23 +1159,6 @@ function timestampForDate(value: string) {
   const selected = parseDateKey(value);
   selected.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
   return selected.toISOString();
-}
-
-function startOfWeek(date = new Date()) {
-  const result = new Date(date);
-  result.setHours(12, 0, 0, 0);
-  const distanceFromMonday = (result.getDay() + 6) % 7;
-  result.setDate(result.getDate() - distanceFromMonday);
-  return result;
-}
-
-function datesInWeek(date = new Date()) {
-  const monday = startOfWeek(date);
-  return Array.from({ length: 7 }, (_, index) => {
-    const result = new Date(monday);
-    result.setDate(monday.getDate() + index);
-    return result;
-  });
 }
 
 /** Six weeks of Mondays-to-Sundays covering the month the anchor week sits in.
@@ -3474,66 +3449,91 @@ function TrainingApp() {
 
           <TabsContent value="account" className="space-y-5">
             <section className="account-page">
-              <header className="account-hero">
-                <div className="account-hero-id">
-                  <span className="account-hero-avatar">{accountInitials}</span>
-                  <div>
-                    <h2>{account?.displayName ?? "Nog niet aangemeld"}</h2>
-                    <p>{account ? "Persoonlijk account" : "Je data staat alleen op dit toestel"}</p>
-                  </div>
+              <header className="account-identity">
+                <span className="account-identity-avatar">{accountInitials}</span>
+                <div className="account-identity-copy">
+                  <h2>{account?.email ?? "Niet aangemeld"}</h2>
+                  <p>{account ? "Persoonlijk account" : "Je data staat alleen op dit toestel"}</p>
                 </div>
-                <span className={`account-hero-state account-hero-state-${syncStatus}`}>
-                  {syncStatus === "offline" ? <CloudOff /> : syncStatus === "saving" || syncStatus === "connecting" ? <LoaderCircle className="account-spinner" /> : <Cloud />}
-                  {syncLabel}
-                </span>
               </header>
 
-              <div className="account-stats">
-                <article>
-                  <span>Sessies gelogd</span>
-                  <strong>{sessions.length}</strong>
-                </article>
-                <article>
-                  <span>Metingen</span>
-                  <strong>{metrics.length}</strong>
-                </article>
-                <article>
-                  <span>Foto&rsquo;s</span>
-                  <strong>{photos.length}</strong>
-                </article>
+              {/* The question this page exists to answer: is my laptop showing
+                  the same thing as my phone? */}
+              <div className={`account-link account-link-${account ? syncStatus : "offline"}`}>
+                <div className="account-link-diagram" aria-hidden="true">
+                  <span className="account-link-node">
+                    <Smartphone />
+                  </span>
+                  <span className="account-link-track">
+                    <i />
+                  </span>
+                  <span className="account-link-node">
+                    {account && syncStatus !== "offline" ? <Cloud /> : <CloudOff />}
+                  </span>
+                </div>
+                <div className="account-link-copy">
+                  <strong>
+                    {!account
+                      ? "Alleen op dit toestel"
+                      : syncStatus === "synced"
+                        ? "Alles staat gelijk"
+                        : syncStatus === "saving"
+                          ? "Bezig met opslaan"
+                          : syncStatus === "connecting"
+                            ? "Verbinden"
+                            : "Alleen op dit toestel"}
+                  </strong>
+                  <p>
+                    {!account
+                      ? "Meld je aan om je sessies op je telefoon én je laptop te zien."
+                      : syncStatus === "synced"
+                        ? "Je telefoon en je laptop tonen dezelfde sessies, metingen en doelen."
+                        : syncStatus === "saving"
+                          ? "Je laatste wijziging wordt weggeschreven naar je account."
+                          : syncStatus === "connecting"
+                            ? "We halen je opgeslagen data op."
+                            : "Je wijzigingen staan lokaal en gaan mee zodra er weer verbinding is."}
+                  </p>
+                  {account && lastSyncedAt && (
+                    <span className="account-link-stamp">
+                      Laatst gelijkgezet om{" "}
+                      {new Date(lastSyncedAt).toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="account-vault">
+                <p>Bewaard op je account</p>
+                <div>
+                  <span>
+                    <strong>{sessions.length}</strong>
+                    <small>{sessions.length === 1 ? "sessie" : "sessies"}</small>
+                  </span>
+                  <span>
+                    <strong>{metrics.length}</strong>
+                    <small>{metrics.length === 1 ? "meting" : "metingen"}</small>
+                  </span>
+                  <span>
+                    <strong>{photos.length}</strong>
+                    <small>{photos.length === 1 ? "foto" : "foto\u2019s"}</small>
+                  </span>
+                </div>
               </div>
 
               <div className="account-rows">
                 <div className="account-row">
-                  <span className="account-row-icon"><UserRound /></span>
+                  <span className="account-row-icon"><Dumbbell /></span>
                   <div>
-                    <strong>E-mailadres</strong>
-                    <small>{account?.email ?? "Meld je aan om te synchroniseren"}</small>
-                  </div>
-                </div>
-                <div className="account-row">
-                  <span className="account-row-icon"><Cloud /></span>
-                  <div>
-                    <strong>Cloudback-up</strong>
-                    <small>
-                      {lastSyncedAt
-                        ? `Laatst gesynchroniseerd om ${new Date(lastSyncedAt).toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" })}`
-                        : "Nog niet gesynchroniseerd"}
-                    </small>
+                    <strong>Actief schema</strong>
+                    <small>{planMode === "personal" ? "Mijn plan" : activeSciencePlan.label}</small>
                   </div>
                 </div>
                 <div className="account-row">
                   <span className="account-row-icon"><ShieldCheck /></span>
                   <div>
                     <strong>Afgeschermd</strong>
-                    <small>Sessies, metingen en foto&rsquo;s worden per account bewaard.</small>
-                  </div>
-                </div>
-                <div className="account-row">
-                  <span className="account-row-icon"><Dumbbell /></span>
-                  <div>
-                    <strong>Actief schema</strong>
-                    <small>{planMode === "personal" ? "Mijn plan" : activeSciencePlan.label}</small>
+                    <small>Alles wordt per account bewaard. Uitloggen wist de kopie op dit toestel, niet je account.</small>
                   </div>
                 </div>
               </div>
@@ -3544,7 +3544,7 @@ function TrainingApp() {
                     type="button"
                     className="account-action account-action-quiet"
                     onClick={() => {
-                      void fetch("/api/auth/signout", { method: "POST" }).finally(() => {
+                      void signOutEverywhere().finally(() => {
                         window.location.href = "/login";
                       });
                     }}
@@ -3556,7 +3556,7 @@ function TrainingApp() {
                     <Cloud /> Aanmelden en synchroniseren
                   </a>
                 )}
-                {syncStatus === "offline" && (
+                {syncStatus === "offline" && account && (
                   <button type="button" className="account-action account-action-quiet" onClick={() => window.location.reload()}>
                     <RefreshCw /> Opnieuw proberen
                   </button>
@@ -3950,7 +3950,7 @@ function TrainingApp() {
                 type="button"
                 className="account-signout"
                 onClick={() => {
-                  void fetch("/api/auth/signout", { method: "POST" }).finally(() => {
+                  void signOutEverywhere().finally(() => {
                     window.location.href = "/login";
                   });
                 }}

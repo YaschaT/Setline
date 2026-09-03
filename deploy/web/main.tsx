@@ -2,7 +2,6 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 
 import "./app.css";
-import "../../app/login/login.css";
 
 /**
  * Both routes are lazy on purpose. Importing the login screen eagerly put it

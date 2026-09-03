@@ -74,6 +74,30 @@ Seven progress photos and their metadata are included under `PRIVATE-DATA/photos
 
 ## Runtime configuration
 
+### Accounts (Supabase)
+
+Sign-in runs on Supabase email + password. Create a project, enable the Email
+provider under Authentication > Providers, then set both values in `.env.local`:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+
+Both are public by design and are inlined into the browser bundle. There is no
+hardcoded fallback: until both are set, the login screen says accounts are not
+connected and names the two variables, rather than offering a form that cannot
+work.
+
+Supabase is only the front door. `POST /api/auth/supabase` verifies the access
+token against Supabase's own `/auth/v1/user` endpoint and exchanges it for the
+first-party signed session cookie that `app/auth/current-user.ts` already
+issues, so `/api/user-state`, `/api/progress-photos` and `/api/coach` keep
+authorizing exactly as before. `AUTH_SECRET` (32+ characters) still signs that
+cookie and is still required in production.
+
+### AI coach
+
 The AI route reads the following server-side values:
 
 ```text
