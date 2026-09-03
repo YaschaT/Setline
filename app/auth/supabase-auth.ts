@@ -48,7 +48,13 @@ export type SignUpResult = {
 };
 
 export async function signUpWithEmail(email: string, password: string): Promise<SignUpResult> {
-  const { data, error } = await client().auth.signUp({ email, password });
+  const { data, error } = await client().auth.signUp({
+    email,
+    password,
+    // Without this, Supabase sends people to whatever Site URL the project was
+    // created with — which is localhost until someone changes it by hand.
+    options: { emailRedirectTo: `${window.location.origin}/login` },
+  });
   if (error) throw error;
   if (data.session) {
     await adoptSession(data.session.access_token);
@@ -71,17 +77,17 @@ export async function sendPasswordReset(email: string): Promise<void> {
   if (error) throw error;
 }
 
-const STORAGE_KEY = "yascha-training-v1";
 const ONBOARDED_PREFIX = "setline-onboarded-v1";
 
 /**
- * Clears both sessions and this device's copy of the training data.
+ * Clears both sessions, and nothing else.
  *
- * Dropping the local copy matters: it is keyed to nobody in particular, so
- * leaving it behind would show one account's sessions to the next person who
- * signs in here — and worse, the sync effect would then push those sessions up
- * under the new account and overwrite their real data. The cloud copy is
- * untouched, so signing back in restores everything.
+ * An earlier version wiped this device's training data on sign-out to stop one
+ * account inheriting another's. That was the wrong trade: the Vercel build has
+ * no server-side store, so the local copy is sometimes the only copy, and
+ * signing out threw it away. Ownership is handled where it belongs instead —
+ * the data is tagged with the account that wrote it, and only dropped when a
+ * *different* account signs in. See claimLocalState.
  */
 export async function signOutEverywhere(): Promise<void> {
   try {
@@ -89,16 +95,34 @@ export async function signOutEverywhere(): Promise<void> {
   } finally {
     // The cookie must go even if Supabase is unreachable.
     await fetch("/api/auth/signout", { method: "POST", cache: "no-store" }).catch(() => {});
-    try {
+  }
+}
+
+const STORAGE_KEY = "yascha-training-v1";
+const OWNER_KEY = "setline-account-v1";
+
+/**
+ * Hands this device's saved data to whoever just signed in.
+ *
+ * Same account as last time: keep everything, so settings survive a sign-out.
+ * Different account: drop it, so nobody sees the previous person's sessions and
+ * the sync never pushes them up under the wrong account.
+ */
+export function claimLocalState(email: string): void {
+  const account = email.trim().toLowerCase();
+  if (!account) return;
+  try {
+    const previous = window.localStorage.getItem(OWNER_KEY);
+    if (previous && previous !== account) {
       window.localStorage.removeItem(STORAGE_KEY);
-      for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-        const key = window.localStorage.key(index);
+      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+        const key = window.localStorage.key(i);
         if (key?.startsWith(ONBOARDED_PREFIX)) window.localStorage.removeItem(key);
       }
-    } catch {
-      // Private browsing or a locked store: the session cookie is already gone,
-      // which is what actually ends the session.
     }
+    window.localStorage.setItem(OWNER_KEY, account);
+  } catch {
+    // Private browsing: the session cookie still governs access.
   }
 }
 

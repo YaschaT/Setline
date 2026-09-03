@@ -4724,3 +4724,86 @@ textarea {
 }
 
 .setup-account strong { color: #a4afa7; font-weight: 560; }
+
+/* ---- Banner profile: who is signed in, and is the data safe ---- */
+.banner-profile {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 14px 0 2px;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.04);
+  padding: 9px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms cubic-bezier(0.16, 1, 0.3, 1), background 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.banner-profile:hover { border-color: rgb(255 255 255 / 0.16); background: rgb(255 255 255 / 0.06); }
+.banner-profile:focus-visible { outline: 2px solid rgb(200 255 102 / 0.7); outline-offset: 2px; }
+.banner-profile-avatar {
+  display: grid; width: 34px; height: 34px; place-items: center;
+  border-radius: 11px; background: linear-gradient(145deg, #d8ff95, #72efd0);
+  color: #08100b; font-size: 12px; font-weight: 800; letter-spacing: -0.02em;
+}
+.banner-profile-copy { display: grid; gap: 1px; min-width: 0; }
+.banner-profile-copy strong {
+  overflow: hidden; color: #e9f1eb; font-size: 12.5px; font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.banner-profile-copy small { color: #8b968e; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.banner-profile-dot { width: 7px; height: 7px; border-radius: 50%; background: #c8ff66; }
+.banner-profile-offline .banner-profile-dot { background: #f4c65b; }
+.banner-profile-saving .banner-profile-dot,
+.banner-profile-connecting .banner-profile-dot { background: #72efd0; }
+
+/* ---- Account settings: change what setup asked, without redoing setup ---- */
+.account-settings {
+  display: grid; gap: 20px;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 24px; background: rgb(255 255 255 / 0.025); padding: 20px;
+}
+.account-settings-title {
+  margin: 0; color: #7b877f; font-size: 11px; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.account-setting { display: grid; gap: 11px; }
+.account-setting-head strong { display: block; color: #edf5ef; font-size: 13.5px; font-weight: 580; }
+.account-setting-head small { display: block; margin-top: 2px; color: #8c9890; font-size: 12px; line-height: 1.45; }
+.account-choice { display: flex; flex-wrap: wrap; gap: 7px; }
+.account-choice button {
+  border: 1px solid rgb(255 255 255 / 0.1); border-radius: 999px;
+  background: rgb(255 255 255 / 0.03); padding: 8px 14px;
+  color: #a4afa7; font-size: 12.5px; font-weight: 540; cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+.account-choice button:hover { border-color: rgb(255 255 255 / 0.2); color: #e4ece6; }
+.account-choice button.is-chosen { border-color: rgb(200 255 102 / 0.55); background: rgb(200 255 102 / 0.1); color: #c8ff66; }
+.account-choice button:focus-visible,
+.account-day:focus-visible,
+.account-targets input:focus-visible { outline: 2px solid rgb(200 255 102 / 0.7); outline-offset: 2px; }
+.account-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.account-day {
+  display: grid; gap: 4px; justify-items: center;
+  border: 1px solid rgb(255 255 255 / 0.08); border-radius: 12px;
+  background: rgb(255 255 255 / 0.025); padding: 10px 2px 8px; cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+.account-day:hover { border-color: rgb(255 255 255 / 0.16); }
+.account-day.is-training { border-color: rgb(200 255 102 / 0.5); background: rgb(200 255 102 / 0.1); }
+.account-day span { color: #8b968e; font-size: 11px; font-weight: 500; }
+.account-day.is-training span { color: #d3e0d6; }
+.account-day em { font-style: normal; color: #6d7a72; font-size: 8px; font-weight: 700; letter-spacing: 0.04em; }
+.account-day.is-training em { color: #c8ff66; }
+.account-targets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.account-targets label { position: relative; display: flex; align-items: center; }
+.account-targets input {
+  width: 100%; height: 44px; border: 1px solid rgb(255 255 255 / 0.11); border-radius: 13px;
+  background: rgb(255 255 255 / 0.035); padding: 0 52px 0 13px;
+  color: #f3f7f4; font-size: 15px; font-variant-numeric: tabular-nums; outline: none;
+}
+.account-targets input:focus { border-color: rgb(200 255 102 / 0.55); }
+.account-targets span { position: absolute; right: 12px; color: #8b968e; font-size: 11.5px; pointer-events: none; }
+@media (min-width: 640px) { .account-targets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

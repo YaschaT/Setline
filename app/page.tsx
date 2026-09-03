@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "./auth-gate";
 import { signOutEverywhere } from "./auth/supabase-auth";
+import { loadCloudState, saveCloudState } from "@/lib/cloud-state";
 import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
 import {
   Activity,
@@ -985,6 +986,8 @@ const SCIENCE_FULL_BODY_PLAN: WorkoutDay[] = [
 
 const DEFAULT_SCIENCE_PLAN_ID: SciencePlanId = "ppl-ul";
 
+const SCIENCE_PLAN_ORDER: SciencePlanId[] = ["ppl-ul", "upper-lower", "full-body"];
+
 const SCIENCE_PLANS: Record<SciencePlanId, SciencePlanDefinition> = {
   "ppl-ul": {
     id: "ppl-ul",
@@ -1443,7 +1446,31 @@ function TrainingApp() {
         if (user) setAccount(user);
       });
 
-    fetch("/api/user-state", { cache: "no-store" })
+    void (async () => {
+      // Supabase exists in every deployment; the D1 route only on Cloudflare.
+      const cloud = await loadCloudState().catch(() => null);
+      if (cloud?.state) {
+        setSyncStatus("saving");
+        const localUpdatedAt = localState.updatedAt ? Date.parse(localState.updatedAt) : 0;
+        const cloudUpdatedAt = cloud.updatedAt ? Date.parse(cloud.updatedAt) : 0;
+        if (cloudUpdatedAt >= localUpdatedAt) applyStoredState(cloud.state as StoredState);
+        else await saveCloudState(localState as unknown as Record<string, unknown>);
+        setLastSyncedAt(cloud.updatedAt ?? new Date().toISOString());
+        setSyncStatus("synced");
+        setCloudHydrated(true);
+        return;
+      }
+      if (cloud === null && saved) {
+        // Nothing stored for this account yet: seed it from this device.
+        if (await saveCloudState(localState as unknown as Record<string, unknown>)) {
+          setLastSyncedAt(new Date().toISOString());
+          setSyncStatus("synced");
+          setCloudHydrated(true);
+          return;
+        }
+      }
+
+      fetch("/api/user-state", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json() as {
           authenticated?: boolean;
@@ -1476,6 +1503,7 @@ function TrainingApp() {
         setSyncStatus("offline");
       })
       .finally(() => setCloudHydrated(true));
+    })();
 
     fetch("/api/coach", { cache: "no-store" })
       .then((response) => response.json())
@@ -1527,6 +1555,18 @@ function TrainingApp() {
     if (!hydrated || !cloudHydrated || !account) return;
     setSyncStatus("saving");
     const timer = window.setTimeout(() => {
+      const snapshot = {
+        plan, planMode, sciencePlanId,
+        planSchemaVersion: CURRENT_PLAN_SCHEMA_VERSION,
+        scheduleOverrides, completed, performance, sessions, metrics, targets,
+        nutritionEntries, chatMessages, recoveryDraft,
+      };
+      void saveCloudState(snapshot as unknown as Record<string, unknown>).then((ok) => {
+        if (ok) {
+          setLastSyncedAt(new Date().toISOString());
+          setSyncStatus("synced");
+        }
+      });
       fetch("/api/user-state", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1554,7 +1594,7 @@ function TrainingApp() {
           setLastSyncedAt(payload.updatedAt ?? new Date().toISOString());
           setSyncStatus("synced");
         })
-        .catch(() => setSyncStatus("offline"));
+        .catch(() => setSyncStatus((current) => (current === "synced" ? current : "offline")));
     }, 900);
     return () => window.clearTimeout(timer);
   }, [hydrated, cloudHydrated, account, plan, planMode, sciencePlanId, scheduleOverrides, completed, performance, sessions, metrics, targets, nutritionEntries, chatMessages, recoveryDraft]);
@@ -1854,6 +1894,32 @@ function TrainingApp() {
   function selectAgendaDay(value: string) {
     setSelectedDate(value);
     setSelectedDay(planIdForMode(scheduleForDate(value), planMode, sciencePlanId));
+  }
+
+  /**
+   * Turns one calendar day into a training day or a rest day.
+   *
+   * Switching a rest day on hands it the plan slot used least that week, so
+   * rearranging the week never silently drops a movement pattern.
+   */
+  function toggleScheduleDay(dateValue: string) {
+    const current = scheduleForDate(dateValue);
+    let next: CanonicalDayId = "rest";
+    if (current === "rest") {
+      const slots: CanonicalDayId[] = planMode === "personal"
+        ? ["push", "pull", "legs", "lower", "upper"]
+        : sciencePlanFromId(sciencePlanId).slots;
+      const counts = new Map<CanonicalDayId, number>(slots.map((slot) => [slot, 0]));
+      for (const calendarDate of weekDays) {
+        const assigned = scheduleForDate(dateKey(calendarDate));
+        if (counts.has(assigned)) counts.set(assigned, (counts.get(assigned) ?? 0) + 1);
+      }
+      next = slots.reduce((best, slot) => ((counts.get(slot) ?? 0) < (counts.get(best) ?? 0) ? slot : best), slots[0]);
+    }
+    setScheduleOverrides((currentOverrides) => ({
+      ...currentOverrides,
+      [`${activeProgramKey}:${dateValue}`]: next,
+    }));
   }
 
   function chooseWorkoutForDate(dayId: CanonicalDayId) {
@@ -2911,22 +2977,31 @@ function TrainingApp() {
                       <i>·</i>
                       <b>{isRestDay ? "Herstel" : `Sessie ${bannerSessionMark}`}</b>
                     </div>
-                    <strong>{planMode === "personal" ? "Mijn plan" : activeSciencePlan.label}</strong>
                   </div>
 
-                  {/* Who is signed in, on the screen you actually open. */}
+                  {/* Who is signed in, and whether their data is safe. */}
                   <button
                     type="button"
-                    className={`banner-identity banner-identity-${syncStatus}`}
+                    className={`banner-profile banner-profile-${account ? syncStatus : "offline"}`}
                     onClick={() => setActiveTab("account")}
                     aria-label={account ? `Aangemeld als ${account.email}. Open account` : "Aanmelden"}
                   >
-                    <span className="banner-identity-avatar">{accountInitials}</span>
-                    <span className="banner-identity-copy">
+                    <span className="banner-profile-avatar">{accountInitials}</span>
+                    <span className="banner-profile-copy">
                       <strong>{account?.email ?? "Niet aangemeld"}</strong>
-                      <small>{account ? syncLabel : "Tik om aan te melden"}</small>
+                      <small>
+                        {account
+                          ? `${planMode === "personal" ? "Mijn plan" : activeSciencePlan.label} · ${
+                              syncStatus === "synced"
+                                ? "gesynchroniseerd"
+                                : syncStatus === "offline"
+                                  ? "alleen dit toestel"
+                                  : "opslaan…"
+                            }`
+                          : "Tik om aan te melden"}
+                      </small>
                     </span>
-                    <span className="banner-identity-dot" aria-hidden="true" />
+                    <span className="banner-profile-dot" aria-hidden="true" />
                   </button>
                   <div className="session-banner-copy">
                     <h2>
@@ -3521,19 +3596,99 @@ function TrainingApp() {
                 </div>
               </div>
 
-              <div className="account-rows">
-                <div className="account-row">
-                  <span className="account-row-icon"><Dumbbell /></span>
-                  <div>
-                    <strong>Actief schema</strong>
-                    <small>{planMode === "personal" ? "Mijn plan" : activeSciencePlan.label}</small>
+              <div className="account-settings">
+                <p className="account-settings-title">Instellingen</p>
+
+                <div className="account-setting">
+                  <div className="account-setting-head">
+                    <strong>Trainingsplan</strong>
+                    <small>Bepaalt je oefeningen en je weekindeling.</small>
+                  </div>
+                  <div className="account-choice">
+                    <button
+                      type="button"
+                      className={planMode === "personal" ? "is-chosen" : ""}
+                      aria-pressed={planMode === "personal"}
+                      onClick={() => changePlanMode("personal")}
+                    >
+                      Mijn plan
+                    </button>
+                    {SCIENCE_PLAN_ORDER.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={planMode === "science" && sciencePlanId === id ? "is-chosen" : ""}
+                        aria-pressed={planMode === "science" && sciencePlanId === id}
+                        onClick={() => changeSciencePlan(id)}
+                      >
+                        {SCIENCE_PLANS[id].label}
+                      </button>
+                    ))}
                   </div>
                 </div>
+
+                <div className="account-setting">
+                  <div className="account-setting-head">
+                    <strong>Trainingsdagen</strong>
+                    <small>Tik een dag aan of uit. Geldt vanaf deze week.</small>
+                  </div>
+                  <div className="account-week" role="group" aria-label="Trainingsdagen aanpassen">
+                    {weekDays.map((calendarDate) => {
+                      const key = dateKey(calendarDate);
+                      const assignment = scheduleForDate(key);
+                      const training = assignment !== "rest";
+                      const label = calendarDate.toLocaleDateString("nl-BE", { weekday: "short" }).slice(0, 2);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`account-day ${training ? "is-training" : ""}`}
+                          aria-pressed={training}
+                          onClick={() => toggleScheduleDay(key)}
+                        >
+                          <span>{label}</span>
+                          <em>{training ? (activePlan.find((item) => item.id === planIdForMode(assignment, planMode, sciencePlanId))?.short ?? "").slice(0, 5) : "rust"}</em>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="account-setting">
+                  <div className="account-setting-head">
+                    <strong>Dagdoelen</strong>
+                    <small>Calorieën en macro&rsquo;s waar je voeding tegen afzet.</small>
+                  </div>
+                  <div className="account-targets">
+                    {([
+                      ["calories", "kcal"],
+                      ["protein", "g eiwit"],
+                      ["carbs", "g kh"],
+                      ["fat", "g vet"],
+                    ] as Array<[keyof Targets, string]>).map(([field, unit]) => (
+                      <label key={field}>
+                        <input
+                          inputMode="numeric"
+                          value={targets[field]}
+                          aria-label={unit}
+                          onChange={(event) => {
+                            const value = Number(event.target.value.replace(/[^0-9]/g, ""));
+                            setTargets((current) => ({ ...current, [field]: Number.isFinite(value) ? value : 0 }));
+                          }}
+                        />
+                        <span>{unit}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="account-rows">
                 <div className="account-row">
                   <span className="account-row-icon"><ShieldCheck /></span>
                   <div>
                     <strong>Afgeschermd</strong>
-                    <small>Alles wordt per account bewaard. Uitloggen wist de kopie op dit toestel, niet je account.</small>
+                    <small>Alles wordt per account bewaard. Uitloggen laat je instellingen staan; ze verdwijnen alleen als iemand anders zich hier aanmeldt.</small>
                   </div>
                 </div>
               </div>

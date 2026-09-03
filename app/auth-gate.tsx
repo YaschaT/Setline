@@ -2,6 +2,9 @@
 
 import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { claimLocalState } from "./auth/supabase-auth";
+import { loadCloudState } from "@/lib/cloud-state";
+
 const LoginScreen = lazy(() =>
   import("./login/login-screen").then((m) => ({ default: m.LoginScreen })),
 );
@@ -71,11 +74,24 @@ export function AuthGate({ children }: { children: ReactNode }) {
    */
   const resolveStage = useCallback(async (accountEmail: string): Promise<Stage> => {
     if (accountEmail) {
+      claimLocalState(accountEmail);
       try {
         if (window.localStorage.getItem(onboardedKey(accountEmail)) === "1") return "app";
       } catch {
         // Fall through to the network answer.
       }
+    }
+
+    // Supabase is the store that exists in every deployment; the D1 route only
+    // exists on Cloudflare, so it is a fallback rather than the answer.
+    try {
+      const cloud = await loadCloudState();
+      if (isSetUp((cloud?.state ?? null) as StateShape)) {
+        if (accountEmail) markOnboarded(accountEmail);
+        return "app";
+      }
+    } catch {
+      // Fall through to the D1 route, then to this device.
     }
 
     try {

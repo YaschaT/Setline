@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DAY_LABELS, WeekCanvas, type WeekSlot } from "@/components/week-canvas";
+import { saveCloudState } from "@/lib/cloud-state";
 import {
   DAY_SHORT,
   GOALS,
@@ -148,6 +149,7 @@ export function OnboardingFlow({
       // The server stamps its own updatedAt; sending ours would only compete.
       const cloudState: Record<string, unknown> = { ...nextState };
       delete cloudState.updatedAt;
+      await saveCloudState(cloudState);
       await fetch("/api/user-state", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
