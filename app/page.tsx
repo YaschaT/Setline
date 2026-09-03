@@ -2086,7 +2086,16 @@ function TrainingApp() {
         })),
       },
     };
-    setSessions((current) => [session, ...current]);
+    setSessions((current) => {
+      const existing = current.find(
+        (entry) =>
+          (entry.sessionType === "recovery" || entry.dayId === "rest") &&
+          dateKey(new Date(entry.date)) === selectedDate,
+      );
+      return existing
+        ? current.map((entry) => (entry.id === existing.id ? { ...session, id: existing.id, date: existing.date } : entry))
+        : [session, ...current];
+    });
     setRecoveryDraft({
       date: dateKey(),
       sleep: "",
@@ -2117,20 +2126,45 @@ function TrainingApp() {
         ),
       };
     });
+    // A date can only hold one workout. Re-opening a day you already logged
+    // updates that session in place; appending a second one would double-count
+    // every set in the history, the trend and the personal-record checks.
+    const existing = sessions.find(
+      (entry) =>
+        entry.sessionType !== "recovery" &&
+        entry.dayId === day.id &&
+        dateKey(new Date(entry.date)) === selectedDate,
+    );
+
+    // The draft only holds what was typed this time, so anything left untouched
+    // keeps the sets it was saved with rather than being blanked.
+    const mergedRows = existing
+      ? resultRows.map((row) => {
+          const hasDraft = row.sets.length > 0;
+          if (hasDraft) return row;
+          const saved = existing.results.find((item) => item.exerciseId === row.exerciseId);
+          return saved ? { ...row, sets: resultSets(saved) } : row;
+        })
+      : resultRows;
+
     const session: Session = {
-      id: `${Date.now()}`,
-      date: timestampForDate(selectedDate),
+      id: existing?.id ?? `${Date.now()}`,
+      date: existing?.date ?? timestampForDate(selectedDate),
       dayId: day.id,
       dayLabel: day.short,
       completion,
-      results: resultRows,
+      results: mergedRows,
     };
     const readyCount = day.exercises.filter((exercise) => {
       const sets = performance[`${day.id}:${exercise.id}`]?.sets ?? [];
       return sets.some((set) => set.weight || set.reps || set.pausedReps) &&
         liveProgressStatus(exercise, sets).tone === "ready";
     }).length;
-    setSessions((current) => [session, ...current]);
+    setSessions((current) =>
+      existing
+        ? current.map((entry) => (entry.id === existing.id ? session : entry))
+        : [session, ...current],
+    );
     setCompleted((current) => {
       const next = { ...current };
       day.exercises.forEach((exercise) => delete next[`${day.id}:${exercise.id}`]);
@@ -2141,10 +2175,11 @@ function TrainingApp() {
       day.exercises.forEach((exercise) => delete next[`${day.id}:${exercise.id}`]);
       return next;
     });
+    const verb = existing ? "bijgewerkt" : "opgeslagen";
     setBanner(
       readyCount > 0
-        ? `${day.short} opgeslagen voor ${selectedDateLabel} · ${readyCount} ${readyCount === 1 ? "oefening mag" : "oefeningen mogen"} hoger`
-        : `${day.short} opgeslagen voor ${selectedDateLabel}`,
+        ? `${day.short} ${verb} voor ${selectedDateLabel} · ${readyCount} ${readyCount === 1 ? "oefening mag" : "oefeningen mogen"} hoger`
+        : `${day.short} ${verb} voor ${selectedDateLabel}`,
     );
   }
 
@@ -3311,7 +3346,7 @@ function TrainingApp() {
 
                 <div className="recovery-panel-footer">
                   <p><ShieldCheck /> Volledige rust zonder checklist is ook een geldige keuze. Bij scherpe of aanhoudende pijn: niet forceren.</p>
-                  <Button onClick={finishRecovery} className="recovery-save-button"><Save /> Opslaan · {selectedDateLabel}</Button>
+                  <Button onClick={finishRecovery} className="recovery-save-button"><Save /> {selectedActualRecovery ? "Bijwerken" : "Opslaan"} · {selectedDateLabel}</Button>
                 </div>
               </section>
             ) : (
@@ -3340,10 +3375,20 @@ function TrainingApp() {
                   const key = `${day.id}:${exercise.id}`;
                   const prescribedSets = progressionTargets(exercise.prescription).length || WORKING_SETS[exercise.id] || 3;
                   const storedResult = performance[key];
-                  const visibleSets = storedResult
+                  // Re-opening a day you already logged must show what you
+                  // logged. The saved session is read here only — it is never
+                  // written into the draft, which is shared by every date.
+                  const savedRow = selectedActualWorkout?.dayId === day.id
+                    ? selectedActualWorkout.results.find((row) => row.exerciseId === exercise.id)
+                    : undefined;
+                  const draftSets = storedResult?.sets.filter((set) => set.weight || set.reps || set.pausedReps).length
+                    ? storedResult.sets
+                    : undefined;
+                  const baseSets = draftSets ?? (savedRow ? resultSets(savedRow) : undefined);
+                  const visibleSets = baseSets
                     ? [
-                        ...storedResult.sets,
-                        ...emptySetsForExercise(exercise.id, Math.max(0, prescribedSets - storedResult.sets.length)),
+                        ...baseSets,
+                        ...emptySetsForExercise(exercise.id, Math.max(0, prescribedSets - baseSets.length)),
                       ]
                     : emptySetsForExercise(exercise.id, prescribedSets);
                   const guide = GUIDANCE[exercise.id] ?? DEFAULT_GUIDE;
@@ -3516,7 +3561,7 @@ function TrainingApp() {
               </div>
               <div className="flex flex-col gap-3 border-t border-white/8 bg-black/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <p className="text-xs leading-5 text-[#7e8a82]">Stop bij techniekverlies. Is pijn scherp? Kies een pijnvrije ROM.</p>
-                <Button onClick={finishSession} disabled={doneCount === 0} className="h-11 rounded-xl bg-[#b9f45b] px-5 font-semibold text-[#0a0d0b] hover:bg-[#c7fa74]"><Save /> Opslaan · {selectedDateLabel}</Button>
+                <Button onClick={finishSession} disabled={doneCount === 0 && selectedActualWorkout?.dayId !== day.id} className="h-11 rounded-xl bg-[#b9f45b] px-5 font-semibold text-[#0a0d0b] hover:bg-[#c7fa74]"><Save /> {selectedActualWorkout?.dayId === day.id ? "Bijwerken" : "Opslaan"} · {selectedDateLabel}</Button>
               </div>
             </section>
             )}
