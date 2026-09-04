@@ -3002,12 +3002,21 @@ function TrainingApp() {
     .map((part) => part[0]?.toUpperCase())
     .join("") || "YT";
   const syncLabel = syncStatus === "saving"
-    ? "Synchroniseren…"
+    ? "Opslaan…"
     : syncStatus === "synced"
-      ? "Cloud gesynchroniseerd"
+      ? "Opgeslagen in de cloud"
       : syncStatus === "offline"
-        ? "Lokale modus"
-        : "Account verbinden…";
+        ? "Alleen op dit toestel"
+        : "Verbinden…";
+
+  /** The banner has room for a state, not a sentence. Same meaning, fewer words. */
+  const shortSyncLabel = !account
+    ? "Niet aangemeld"
+    : syncStatus === "synced"
+      ? "Opgeslagen"
+      : syncStatus === "offline"
+        ? "Alleen dit toestel"
+        : "Opslaan…";
 
   return (
     <main className="app-shell min-h-screen text-[#f3f7f4] selection:bg-[#c8ff66] selection:text-[#071009]">
@@ -3015,11 +3024,19 @@ function TrainingApp() {
       <div className="ambient-canvas" aria-hidden="true"><span /><span /><span /></div>
       <div className="app-frame mx-auto min-h-screen max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">
 
-        {banner && (
-          <div className="fixed left-1/2 top-4 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#b9f45b]/30 bg-[#182018] px-4 py-2 text-sm font-medium shadow-2xl">
-            <Check className="size-4 text-[#b9f45b]" /> {banner}
-          </div>
-        )}
+        {/*
+          The live region itself is always in the document; only the pill inside
+          it comes and goes. A role="status" element that appears together with
+          its text is announced unreliably, so the container is mounted from the
+          first paint and the confirmation is inserted into it. (WCAG 4.1.3)
+        */}
+        <div role="status" aria-live="polite">
+          {banner && (
+            <div className="fixed left-1/2 top-4 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#b9f45b]/30 bg-[#182018] px-4 py-2 text-sm font-medium shadow-2xl">
+              <Check className="size-4 text-[#b9f45b]" aria-hidden="true" /> {banner}
+            </div>
+          )}
+        </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="main-nav fixed inset-x-0 bottom-0 z-40 grid !h-[calc(70px+env(safe-area-inset-bottom))] !w-full max-w-none grid-cols-5 rounded-none px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:sticky lg:top-4 lg:mx-auto lg:mb-8 lg:!h-12 lg:!w-fit lg:grid-cols-5 lg:rounded-[18px] lg:p-1.5">
@@ -3042,37 +3059,40 @@ function TrainingApp() {
                       <i>·</i>
                       <b>{isRestDay ? "Herstel" : `Sessie ${bannerSessionMark}`}</b>
                     </div>
-                  </div>
 
-                  {/* Who is signed in, and whether their data is safe. */}
-                  <button
-                    type="button"
-                    className={`banner-profile banner-profile-${account ? syncStatus : "offline"}`}
-                    onClick={() => setActiveTab("account")}
-                    aria-label={account ? `Aangemeld als ${account.email}. Open account` : "Aanmelden"}
-                  >
-                    <span className="banner-profile-avatar">{accountInitials}</span>
-                    <span className="banner-profile-copy">
-                      <strong>{account?.email ?? "Niet aangemeld"}</strong>
-                      <small>
-                        {account
-                          ? `${planMode === "personal" ? "Mijn plan" : activeSciencePlan.label} · ${
-                              syncStatus === "synced"
-                                ? "gesynchroniseerd"
-                                : syncStatus === "offline"
-                                  ? "alleen dit toestel"
-                                  : "opslaan…"
-                            }`
-                          : "Tik om aan te melden"}
-                      </small>
-                    </span>
-                    <span className="banner-profile-dot" aria-hidden="true" />
-                  </button>
+                    {/*
+                      Where the work is being saved.
+                      This used to be a full-width card carrying the account's
+                      e-mail address, directly above the headline — the loudest
+                      element on a screen whose only job is "what am I lifting
+                      today". It is a state, so it is shown as one: quiet while
+                      the data is safe, coloured only when something needs
+                      doing. The e-mail and the full detail live on Account,
+                      one tap away, which is also where they can be acted on.
+                    */}
+                    <button
+                      type="button"
+                      className={`banner-sync banner-sync-${account ? syncStatus : "signedout"}`}
+                      onClick={() => setActiveTab("account")}
+                    >
+                      {!account || syncStatus === "offline" ? (
+                        <CloudOff aria-hidden="true" />
+                      ) : syncStatus === "synced" ? (
+                        <Cloud aria-hidden="true" />
+                      ) : (
+                        <LoaderCircle className="banner-sync-spin" aria-hidden="true" />
+                      )}
+                      <span>{shortSyncLabel}</span>
+                      {/* Keeps the visible words in the accessible name (WCAG 2.5.3)
+                          while still saying where the button goes. */}
+                      <span className="sr-only"> — open account</span>
+                    </button>
+                  </div>
                   <div className="session-banner-copy">
-                    <h2>
+                    <h1>
                       <span>{day.short}.</span>
                       <em>{isRestDay ? "Herstel slim." : doneCount > 0 ? "Maak het af." : "Bouw verder."}</em>
-                    </h2>
+                    </h1>
                     <p>{isRestDay ? "Optioneel · 10–15 min" : `${day.exercises.length} oefeningen · ${day.focus}`}</p>
                   </div>
                   <div className="session-banner-footer">
@@ -3624,7 +3644,7 @@ function TrainingApp() {
                 <div className="account-link-copy">
                   <strong>
                     {!account
-                      ? "Alleen op dit toestel"
+                      ? "Nog niet gekoppeld"
                       : syncStatus === "synced"
                         ? "Alles staat gelijk"
                         : syncStatus === "saving"

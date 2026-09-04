@@ -419,7 +419,7 @@ textarea {
   padding-top: 18px;
 }
 
-.session-banner-copy h2 {
+.session-banner-copy h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 0 .2em;
@@ -431,7 +431,7 @@ textarea {
   line-height: .96;
 }
 
-.session-banner-copy h2 em {
+.session-banner-copy h1 em {
   color: #c8ff66;
   font-family: Georgia, "Times New Roman", serif;
   font-weight: 400;
@@ -562,7 +562,7 @@ textarea {
   transform: translateY(-1px);
 }
 
-.session-banner-rest .session-banner-copy h2 em,
+.session-banner-rest .session-banner-copy h1 em,
 .session-banner-rest .session-banner-context span {
   color: #72efd0;
 }
@@ -618,15 +618,15 @@ textarea {
   .session-banner-line span { right: -25%; width: 72%; }
   .session-banner-line i { right: 8%; }
 
-  .session-banner-copy h2 {
+  .session-banner-copy h1 {
     display: block;
     margin-top: 14px;
     font-size: clamp(46px,13.5vw,56px);
     line-height: .9;
   }
 
-  .session-banner-copy h2 span,
-  .session-banner-copy h2 em { display: block; }
+  .session-banner-copy h1 span,
+  .session-banner-copy h1 em { display: block; }
 
   .session-banner-copy p { max-width: 92%; margin-top: 12px; font-size: 13px; }
 
@@ -863,10 +863,25 @@ textarea {
 }
 
 .exercise-check {
+  position: relative;
   width: 22px !important;
   height: 22px !important;
   flex: 0 0 22px;
   border-radius: 7px !important;
+}
+
+/*
+  Tapped after every exercise, one-handed, mid-session. The box is 22px by
+  design; the *target* was 22px by accident, under the 24px WCAG 2.5.8 floor
+  and far under a comfortable thumb. The hit area grows into the padding on its
+  left and the gap on its right, so nothing moves and the row still opens.
+*/
+.exercise-check::before {
+  content: "";
+  position: absolute;
+  inset-block: -12px;
+  inset-inline-start: -15px;
+  inset-inline-end: -8px;
 }
 
 .exercise-summary-trigger {
@@ -4725,39 +4740,57 @@ textarea {
 
 .setup-account strong { color: #a4afa7; font-weight: 560; }
 
-/* ---- Banner profile: who is signed in, and is the data safe ---- */
-.banner-profile {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+/* ---- Banner sync chip: where the work is saved ---- */
+/*
+  This replaces a full-width account card that sat above the headline and
+  showed the account's e-mail address. Saving state is a state, not a record:
+  it reads as one line, it stays quiet while the data is safe, and it only
+  takes colour when there is something to do about it.
+*/
+.banner-sync {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin: 14px 0 2px;
+  gap: 5px;
+  max-width: 54%;
   border: 1px solid rgb(255 255 255 / 0.09);
-  border-radius: 16px;
-  background: rgb(255 255 255 / 0.04);
-  padding: 9px 12px;
-  text-align: left;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.03);
+  padding: 4px 10px 4px 8px;
+  color: #97a49b;
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: border-color 200ms cubic-bezier(0.16, 1, 0.3, 1), background 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+              color 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.banner-profile:hover { border-color: rgb(255 255 255 / 0.16); background: rgb(255 255 255 / 0.06); }
-.banner-profile:focus-visible { outline: 2px solid rgb(200 255 102 / 0.7); outline-offset: 2px; }
-.banner-profile-avatar {
-  display: grid; width: 34px; height: 34px; place-items: center;
-  border-radius: 11px; background: linear-gradient(145deg, #d8ff95, #72efd0);
-  color: #08100b; font-size: 12px; font-weight: 800; letter-spacing: -0.02em;
+
+/* Comfortable to hit mid-set without inflating the visible chip. */
+.banner-sync::before { content: ""; position: absolute; inset: -11px -6px; }
+
+.banner-sync svg { flex: 0 0 12px; width: 12px; height: 12px; }
+.banner-sync span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner-sync:hover { border-color: rgb(255 255 255 / 0.16); background: rgb(255 255 255 / 0.06); color: #cbd6ce; }
+.banner-sync:focus-visible { outline: 2px solid rgb(200 255 102 / 0.7); outline-offset: 2px; }
+
+/* Safe: stay out of the way. Needs attention: say so in colour *and* in words,
+   so the meaning never rests on colour alone. */
+.banner-sync-saving,
+.banner-sync-connecting { border-color: rgb(114 239 208 / 0.24); color: #72efd0; }
+.banner-sync-offline,
+.banner-sync-signedout {
+  border-color: rgb(244 198 91 / 0.36);
+  background: rgb(244 198 91 / 0.1);
+  color: #f6cf74;
 }
-.banner-profile-copy { display: grid; gap: 1px; min-width: 0; }
-.banner-profile-copy strong {
-  overflow: hidden; color: #e9f1eb; font-size: 12.5px; font-weight: 600;
-  text-overflow: ellipsis; white-space: nowrap;
-}
-.banner-profile-copy small { color: #8b968e; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.banner-profile-dot { width: 7px; height: 7px; border-radius: 50%; background: #c8ff66; }
-.banner-profile-offline .banner-profile-dot { background: #f4c65b; }
-.banner-profile-saving .banner-profile-dot,
-.banner-profile-connecting .banner-profile-dot { background: #72efd0; }
+
+.banner-sync-spin { animation: banner-sync-spin 900ms linear infinite; }
+@keyframes banner-sync-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .banner-sync-spin { animation: none; } }
 
 /* ---- Account settings: change what setup asked, without redoing setup ---- */
 .account-settings {
