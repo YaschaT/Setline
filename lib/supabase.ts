@@ -20,8 +20,10 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        // Setline has no OAuth redirect: nothing ever arrives with tokens in
-        // the URL, so parsing it would only be a way to be surprised.
+        // Left off deliberately. Password-recovery links *do* arrive with a
+        // token in the URL, but auto-detection would adopt it on any page load
+        // and skip the "choose a new password" step. app/auth/password-recovery.ts
+        // reads that link explicitly instead, on the one screen that should.
         detectSessionInUrl: false,
       },
     })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { ArrowRight, Check, CircleAlert, LoaderCircle, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,11 @@ import {
   sendPasswordReset,
   signInWithEmail,
   signUpWithEmail,
+  updatePassword,
 } from "@/app/auth/supabase-auth";
+import { readRecoveryLink, startRecovery } from "@/app/auth/password-recovery";
 
-type Mode = "signin" | "signup" | "reset";
+type Mode = "signin" | "signup" | "reset" | "newPassword";
 
 const COPY: Record<Mode, { headline: string; sub: string; submit: string }> = {
   signin: {
@@ -32,6 +34,11 @@ const COPY: Record<Mode, { headline: string; sub: string; submit: string }> = {
     headline: "Wachtwoord kwijt.",
     sub: "We sturen een link waarmee je een nieuw wachtwoord kiest.",
     submit: "Stuur de link",
+  },
+  newPassword: {
+    headline: "Kies een nieuw wachtwoord.",
+    sub: "De link klopt. Zet hieronder je nieuwe wachtwoord en je bent meteen binnen.",
+    submit: "Wachtwoord opslaan",
   },
 };
 
@@ -53,6 +60,43 @@ export function LoginScreen({
   const passwordId = useId();
   const copy = COPY[mode];
 
+  /**
+   * A recovery link lands on this screen with its token in the URL fragment.
+   * Nothing else in the app reads the address bar, so it is picked up here
+   * explicitly — and only to open the "choose a new password" step, never to
+   * wave someone straight into the app.
+   */
+  useEffect(() => {
+    const link = readRecoveryLink();
+    if (link.kind === "none") return;
+
+    let cancelled = false;
+    void (async () => {
+      if (link.kind === "error") {
+        setMode("reset");
+        setError(link.message);
+        return;
+      }
+      setBusy(true);
+      try {
+        const recoveredEmail = await startRecovery(link);
+        if (cancelled) return;
+        if (recoveredEmail) setEmail(recoveredEmail);
+        setMode("newPassword");
+      } catch (cause) {
+        if (cancelled) return;
+        setMode("reset");
+        setError(friendlyAuthError(cause));
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function switchMode(next: Mode) {
     setMode(next);
     setFieldErrors({});
@@ -66,7 +110,8 @@ export function LoginScreen({
     if (busy || handingOver) return;
 
     const nextFieldErrors: { email?: string; password?: string } = {
-      email: validateEmail(email),
+      // The recovery link already says who this is, so there is no field to check.
+      email: mode === "newPassword" ? undefined : validateEmail(email),
       password: mode === "reset" ? undefined : validatePassword(password),
     };
     setFieldErrors(nextFieldErrors);
@@ -83,7 +128,11 @@ export function LoginScreen({
         return;
       }
 
-      if (mode === "signup") {
+      let signedInAs = email.trim().toLowerCase();
+
+      if (mode === "newPassword") {
+        signedInAs = (await updatePassword(password)) || signedInAs;
+      } else if (mode === "signup") {
         const { hasSession } = await signUpWithEmail(email.trim(), password);
         if (!hasSession) {
           setNotice("Bevestig je e-mailadres via de link in je inbox, en meld je daarna aan.");
@@ -97,7 +146,6 @@ export function LoginScreen({
       // The one authored moment: the week behind the panel ignites while the
       // panel lets go, so arriving in the app reads as continuous.
       setHandingOver(true);
-      const signedInAs = email.trim().toLowerCase();
       window.setTimeout(() => {
         if (onAuthenticated) onAuthenticated(signedInAs);
         else window.location.href = "/";
@@ -151,9 +199,12 @@ export function LoginScreen({
           ) : (
             <>
               <h1 className="gate-headline">{copy.headline}</h1>
-              <p className="gate-sub">{copy.sub}</p>
+              <p className="gate-sub">
+                {mode === "newPassword" && email ? `Voor ${email}. ${copy.sub}` : copy.sub}
+              </p>
 
               <form className="gate-form" onSubmit={handleSubmit} noValidate>
+                {mode !== "newPassword" && (
                 <div className="gate-field">
                   <Label htmlFor={emailId}>E-mailadres</Label>
                   <Input
@@ -176,11 +227,14 @@ export function LoginScreen({
                     </p>
                   )}
                 </div>
+                )}
 
                 {mode !== "reset" && (
                   <div className="gate-field">
                     <div className="gate-field-head">
-                      <Label htmlFor={passwordId}>Wachtwoord</Label>
+                      <Label htmlFor={passwordId}>
+                        {mode === "newPassword" ? "Nieuw wachtwoord" : "Wachtwoord"}
+                      </Label>
                       {mode === "signin" && (
                         <button
                           type="button"
@@ -194,8 +248,8 @@ export function LoginScreen({
                     <Input
                       id={passwordId}
                       type="password"
-                      autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                      placeholder={mode === "signup" ? "Minstens 8 tekens" : "••••••••"}
+                      autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                      placeholder={mode === "signin" ? "••••••••" : "Minstens 8 tekens"}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       aria-invalid={Boolean(fieldErrors.password)}
@@ -261,6 +315,14 @@ export function LoginScreen({
                 {mode === "reset" && (
                   <p>
                     Weet je het weer?{" "}
+                    <button type="button" onClick={() => switchMode("signin")}>
+                      Terug naar aanmelden
+                    </button>
+                  </p>
+                )}
+                {mode === "newPassword" && (
+                  <p>
+                    Toch niet nodig?{" "}
                     <button type="button" onClick={() => switchMode("signin")}>
                       Terug naar aanmelden
                     </button>

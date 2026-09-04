@@ -3,6 +3,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { claimLocalState } from "./auth/supabase-auth";
+import { readRecoveryLink } from "./auth/password-recovery";
 import { loadCloudState } from "@/lib/cloud-state";
 
 const LoginScreen = lazy(() =>
@@ -137,11 +138,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), SESSION_TIMEOUT_MS);
 
-    fetch("/api/auth/session", { cache: "no-store", signal: controller.signal })
+    // Someone resetting a password is usually still signed in on this device.
+    // Skipping the session check sends them down the existing "not signed in"
+    // path to the login screen, which is the only screen that reads the
+    // recovery link — otherwise the check wins the race, the app opens, and the
+    // link they just clicked does nothing at all.
+    const recovering = readRecoveryLink().kind !== "none";
+
+    (recovering
+      ? Promise.resolve(null)
+      : fetch("/api/auth/session", { cache: "no-store", signal: controller.signal })
+    )
       .then(async (response) => {
         if (settled) return;
         clearTimeout(timer);
-        if (!response.ok) {
+        if (!response || !response.ok) {
           settled = true;
           setStage("login");
           return;

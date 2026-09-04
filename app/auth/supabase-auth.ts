@@ -77,6 +77,24 @@ export async function sendPasswordReset(email: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Sets the new password once a recovery link has been exchanged for a session,
+ * then mints the first-party cookie so the person lands in the app already
+ * signed in rather than being asked to type the password they just chose.
+ */
+export async function updatePassword(password: string): Promise<string> {
+  const { data, error } = await client().auth.updateUser({ password });
+  if (error) throw error;
+
+  const { data: sessionData } = await client().auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) {
+    throw new Error("Je wachtwoord is aangepast, maar de sessie kon niet worden opgezet. Meld je aan met je nieuwe wachtwoord.");
+  }
+  await adoptSession(accessToken);
+  return data.user?.email ?? "";
+}
+
 const ONBOARDED_PREFIX = "setline-onboarded-v1";
 
 /**
