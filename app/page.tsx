@@ -1033,8 +1033,8 @@ const SCIENCE_PLANS: Record<SciencePlanId, SciencePlanDefinition> = {
 
 const REST_DAY: WorkoutDay = {
   id: "rest",
-  label: "Flexibel · Rest day",
-  short: "Rest day",
+  label: "Flexibel · Rustdag",
+  short: "Rustdag",
   focus: "Herstellen zonder er een workout van te maken",
   exercises: [],
 };
@@ -3001,6 +3001,94 @@ function TrainingApp() {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "YT";
+  /**
+   * What this day actually is, in one word, because every other decision on
+   * this screen hangs off it: the headline, the state line and the one action.
+   */
+  const todayState: "rest" | "done" | "active" | "fresh" = isRestDay
+    ? (selectedActualRecovery ? "done" : "rest")
+    : selectedActualWorkout?.dayId === day.id
+      ? "done"
+      : trackedSetCount > 0
+        ? "active"
+        : "fresh";
+
+  const todayAction = {
+    rest: "Open herstel",
+    done: "Bekijk samenvatting",
+    active: "Hervat training",
+    fresh: "Start training",
+  }[todayState];
+
+  const todayStateLabel = isRestDay
+    ? todayState === "done"
+      ? `${doneCount}/${dayItemCount} herstelblokken`
+      : "Rustdag"
+    : todayState === "done"
+      ? `Afgerond · ${trackedSetCount}/${plannedSetCount} sets`
+      : todayState === "active"
+        ? `Bezig · ${trackedSetCount}/${plannedSetCount} sets`
+        : "Nog niet gestart";
+
+  /**
+   * One honest line about progression, or none at all.
+   *
+   * Two sessions at the top of the prescribed rep range on the same weight is
+   * this app's own double-progression rule, so that is the call worth making
+   * before a set is entered. Failing that, the last logged top set is the
+   * reference point. No target weight is produced: the next increment depends
+   * on the equipment, and inventing one would be advice the data cannot carry.
+   */
+  const todayInsight = (() => {
+    if (isRestDay) return null;
+    const topSetOf = (sets: SetResult[]) =>
+      sets.reduce<{ weight: number; reps: number } | null>((best, set) => {
+        const weight = numberValue(set.weight);
+        const reps = completedReps(set);
+        if (!weight || !reps) return best;
+        const better = !best || weight > best.weight || (weight === best.weight && reps > best.reps);
+        return better ? { weight, reps } : best;
+      }, null);
+
+    let reference: { tone: "reference"; exercise: string; detail: string } | null = null;
+
+    for (const exercise of day.exercises) {
+      const history = recentExerciseHistory(exercise.id);
+      if (history.length === 0) continue;
+      const last = topSetOf(history[0].sets);
+      if (!last) continue;
+      const kg = last.weight.toLocaleString("nl-BE");
+
+      if (!reference) {
+        reference = {
+          tone: "reference",
+          exercise: exercise.name,
+          detail: `vorige keer ${last.reps} reps op ${kg} kg`,
+        };
+      }
+
+      const targets = progressionTargets(exercise.prescription);
+      const topTarget = targets.length ? Math.max(...targets) : 0;
+      const previous = history[1] ? topSetOf(history[1].sets) : null;
+      if (
+        topTarget &&
+        previous &&
+        last.weight === previous.weight &&
+        last.reps >= topTarget &&
+        previous.reps >= topTarget
+      ) {
+        return {
+          tone: "advance" as const,
+          exercise: exercise.name,
+          detail: `twee sessies ${topTarget}+ reps op ${kg} kg — tijd om te verzwaren`,
+        };
+      }
+    }
+    return reference;
+  })();
+
+  const nutritionLogged = Math.round(trainingNutritionTotals.calories) > 0;
+
   const syncLabel = syncStatus === "saving"
     ? "Opslaan…"
     : syncStatus === "synced"
@@ -3049,78 +3137,108 @@ function TrainingApp() {
 
           <TabsContent value="training" className="training-stack">
             <section className="training-overview" aria-label="Training en dagdoel">
-              <div className={`session-banner ${isRestDay ? "session-banner-rest" : ""}`}>
-                <div className="session-banner-line" aria-hidden="true"><span /><i /></div>
-                <div className="session-banner-mark" aria-hidden="true"><strong>{bannerSessionMark}</strong></div>
-                <div className="session-banner-content">
-                  <div className="session-banner-topline">
-                    <div className="session-banner-context">
-                      <span>{selectedDate === todayKey ? "Vandaag" : selectedDateLabel}</span>
-                      <i>·</i>
-                      <b>{isRestDay ? "Herstel" : `Sessie ${bannerSessionMark}`}</b>
-                    </div>
+              <div className={`today today-${todayState}`}>
+                <div className="today-head">
+                  <span className="today-wordmark">
+                    <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                      <path d="M32 31V51" stroke="var(--sig-rest)" strokeWidth="9" strokeLinecap="round" />
+                      <path
+                        d="M14 14C18 24 24 30 32 35C40 30 46 24 50 14"
+                        stroke="var(--sig-action)"
+                        strokeWidth="9"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Setline
+                  </span>
 
-                    {/*
-                      Where the work is being saved.
-                      This used to be a full-width card carrying the account's
-                      e-mail address, directly above the headline — the loudest
-                      element on a screen whose only job is "what am I lifting
-                      today". It is a state, so it is shown as one: quiet while
-                      the data is safe, coloured only when something needs
-                      doing. The e-mail and the full detail live on Account,
-                      one tap away, which is also where they can be acted on.
-                    */}
-                    <button
-                      type="button"
-                      className={`banner-sync banner-sync-${account ? syncStatus : "signedout"}`}
-                      onClick={() => setActiveTab("account")}
-                    >
-                      {!account || syncStatus === "offline" ? (
-                        <CloudOff aria-hidden="true" />
-                      ) : syncStatus === "synced" ? (
-                        <Cloud aria-hidden="true" />
-                      ) : (
-                        <LoaderCircle className="banner-sync-spin" aria-hidden="true" />
-                      )}
-                      <span>{shortSyncLabel}</span>
-                      {/* Keeps the visible words in the accessible name (WCAG 2.5.3)
-                          while still saying where the button goes. */}
-                      <span className="sr-only"> — open account</span>
-                    </button>
-                  </div>
-                  <div className="session-banner-copy">
-                    <h1>
-                      <span>{day.short}.</span>
-                      <em>{isRestDay ? "Herstel slim." : doneCount > 0 ? "Maak het af." : "Bouw verder."}</em>
-                    </h1>
-                    <p>{isRestDay ? "Optioneel · 10–15 min" : `${day.exercises.length} oefeningen · ${day.focus}`}</p>
-                  </div>
-                  <div className="session-banner-footer">
-                    <div className="session-banner-progress">
-                      <div><strong>{isRestDay ? `${doneCount}/${dayItemCount}` : `${trackedSetCount}/${plannedSetCount}`}</strong><span>{isRestDay ? "herstelblokken" : "sets gelogd"}</span></div>
-                      <button
-                        type="button"
-                        className="session-banner-nutrition"
-                        onClick={() => {
-                          setNutritionDate(selectedDate);
-                          setActiveTab("voeding");
-                        }}
-                        aria-label={`Voeding voor ${selectedDateLabel} openen: ${Math.round(trainingNutritionTotals.calories)} van ${targets.calories} kilocalorieën en ${Math.round(trainingNutritionTotals.protein)} van ${targets.protein} gram eiwit`}
-                      >
-                        <strong>{Math.round(trainingNutritionTotals.calories)} <small>/ {targets.calories} kcal</small></strong>
-                        <span><Utensils /> {Math.round(trainingNutritionTotals.protein)}/{targets.protein} g eiwit</span>
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      className="session-banner-start"
-                      onClick={scrollToSession}
-                      aria-label={`${isRestDay ? "Herstel openen" : doneCount > 0 || trackedSetCount > 0 ? "Training hervatten" : "Training starten"}: ${day.short} voor ${selectedDateLabel}`}
-                    >
-                      <span>{isRestDay ? "Open herstel" : doneCount > 0 || trackedSetCount > 0 ? "Hervat" : "Start"}</span><ChevronRight />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className={`banner-sync banner-sync-${account ? syncStatus : "signedout"}`}
+                    onClick={() => setActiveTab("account")}
+                  >
+                    {!account || syncStatus === "offline" ? (
+                      <CloudOff aria-hidden="true" />
+                    ) : syncStatus === "synced" ? (
+                      <Cloud aria-hidden="true" />
+                    ) : (
+                      <LoaderCircle className="banner-sync-spin" aria-hidden="true" />
+                    )}
+                    <span>{shortSyncLabel}</span>
+                    {/* Keeps the visible words in the accessible name (WCAG 2.5.3). */}
+                    <span className="sr-only"> — open account</span>
+                  </button>
                 </div>
+
+                <p className="today-meta">
+                  <span>{selectedDate === todayKey ? "Vandaag" : selectedDateLabel}</span>
+                  <i aria-hidden="true">·</i>
+                  <span>{isRestDay ? "Herstel" : `Sessie ${bannerSessionMark}`}</span>
+                </p>
+
+                <h1 className="today-title">
+                  <span>{day.short}.</span>{" "}
+                  <em>
+                    {isRestDay
+                      ? "Herstel slim."
+                      : todayState === "done"
+                        ? "Klaar."
+                        : todayState === "active"
+                          ? "Maak het af."
+                          : "Bouw verder."}
+                  </em>
+                </h1>
+
+                <p className="today-sub">
+                  {isRestDay ? "Optioneel · 10–15 min" : `${day.exercises.length} oefeningen · ${day.focus}`}
+                </p>
+
+                {/* The state has to be readable before the action is, or the
+                    action is a guess. Colour repeats it; the words carry it. */}
+                <p className="today-state tabular" data-state={todayState}>
+                  <span className="today-state-dot" aria-hidden="true" />
+                  {todayStateLabel}
+                </p>
+
+                <button
+                  type="button"
+                  className="today-cta"
+                  onClick={scrollToSession}
+                  aria-label={`${todayAction}: ${day.short} voor ${selectedDateLabel}`}
+                >
+                  <span>{todayAction}</span>
+                  <ChevronRight aria-hidden="true" />
+                </button>
+
+                {todayInsight && (
+                  <p className={`today-insight today-insight-${todayInsight.tone}`}>
+                    <TrendingUp aria-hidden="true" />
+                    <span>
+                      <strong>{todayInsight.exercise}</strong> — {todayInsight.detail}
+                    </span>
+                  </p>
+                )}
+
+                {nutritionLogged && (
+                  <button
+                    type="button"
+                    className="today-nutrition"
+                    onClick={() => {
+                      setNutritionDate(selectedDate);
+                      setActiveTab("voeding");
+                    }}
+                    aria-label={`Voeding voor ${selectedDateLabel} openen: ${Math.round(trainingNutritionTotals.calories)} van ${targets.calories} kilocalorieën en ${Math.round(trainingNutritionTotals.protein)} van ${targets.protein} gram eiwit`}
+                  >
+                    <Utensils aria-hidden="true" />
+                    <span className="tabular">
+                      {Math.round(trainingNutritionTotals.calories)} / {targets.calories} kcal
+                      <i aria-hidden="true">·</i>
+                      {Math.round(trainingNutritionTotals.protein)} / {targets.protein} g eiwit
+                    </span>
+                    <ChevronRight aria-hidden="true" />
+                  </button>
+                )}
               </div>
             </section>
 
@@ -3548,11 +3666,19 @@ function TrainingApp() {
                           {visibleSets.map((set, setIndex) => {
                             const signal = setComparisonFeedback(exercise.id, setIndex, set);
                             const previousSet = previousSessionSets[setIndex];
+                            // Last session's numbers become the hint, so the target is in the
+                            // field you are about to type into rather than a line below it.
+                            // A placeholder only — never a value, so nothing is ever logged
+                            // that the user did not type.
+                            const previousWeight = previousSet ? numberValue(previousSet.weight) : 0;
+                            const previousRepCount = previousSet ? completedReps(previousSet) : 0;
+                            const weightHint = previousWeight > 0 ? previousWeight.toLocaleString("nl-BE") : "0";
+                            const repsHint = previousRepCount > 0 ? String(previousRepCount) : "0";
                             return <div className="set-entry" key={`${exercise.id}-set-${setIndex}`}>
                               <div className="set-line">
                                 <span className="set-index" aria-label={`Set ${setIndex + 1}`}>{String(setIndex + 1).padStart(2, "0")}</span>
-                                <label className="log-field"><input inputMode="decimal" enterKeyHint="next" value={set.weight} onChange={(event) => setResult(exercise.id, setIndex, "weight", event.target.value)} placeholder="0" aria-label={`${exercise.name} set ${setIndex + 1} gewicht`} /><span>kg</span></label>
-                                <label className="log-field"><input inputMode="numeric" enterKeyHint="next" value={set.reps} onChange={(event) => setResult(exercise.id, setIndex, "reps", event.target.value)} placeholder="0" aria-label={`${exercise.name} set ${setIndex + 1} normale herhalingen`} /><span>reps</span></label>
+                                <label className="log-field"><input inputMode="decimal" enterKeyHint="next" value={set.weight} onChange={(event) => setResult(exercise.id, setIndex, "weight", event.target.value)} placeholder={weightHint} aria-label={`${exercise.name} set ${setIndex + 1} gewicht${previousWeight > 0 ? `, vorige keer ${weightHint} kg` : ""}`} /><span>kg</span></label>
+                                <label className="log-field"><input inputMode="numeric" enterKeyHint="next" value={set.reps} onChange={(event) => setResult(exercise.id, setIndex, "reps", event.target.value)} placeholder={repsHint} aria-label={`${exercise.name} set ${setIndex + 1} normale herhalingen${previousRepCount > 0 ? `, vorige keer ${repsHint}` : ""}`} /><span>reps</span></label>
                                 <span className="set-actions">
                                   {supportsPausedReps && !set.pauseEnabled && <button type="button" className="pause-add" onClick={() => togglePausedReps(exercise.id, setIndex)} aria-label={`Paused reps toevoegen aan set ${setIndex + 1}`}><Pause /><span>Pauze</span></button>}
                                   {(set.weight || set.reps || set.pausedReps || setIndex >= prescribedSets) && <button type="button" className="set-clear" onClick={() => clearOrRemoveSet(exercise.id, setIndex)} aria-label={`${exercise.name} set ${setIndex + 1} ${setIndex >= prescribedSets ? "verwijderen" : "wissen"}`}><Trash2 /><span>{setIndex >= prescribedSets ? "Verwijder" : "Wis"}</span></button>}

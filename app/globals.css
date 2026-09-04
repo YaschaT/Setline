@@ -62,6 +62,86 @@
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* ============================================================================
+   Setline design tokens — the single source of truth.
+
+   The shadcn variables above stay as they are: they feed the primitives in
+   components/ui. These are the product's own semantics, and everything written
+   from here on reads from them rather than repeating a hex value. Existing
+   rules further down still carry literals; they are migrated as they are
+   touched, not in one sweep that would risk the whole surface at once.
+   ============================================================================ */
+:root {
+  /* Surfaces. One ground, two raised steps, two line weights. Nothing else. */
+  --s-ground: #060908;
+  --s-raised: #0d1310;
+  --s-raised-2: #151c17;
+  --s-line: rgb(255 255 255 / 0.08);
+  --s-line-strong: rgb(255 255 255 / 0.16);
+
+  /* Text. Three steps, all of them measured against --s-ground for AA. */
+  --t-primary: #f3f7f4;   /* 17.4:1 */
+  --t-secondary: #a9b5ad; /*  8.6:1 */
+  --t-muted: #8b968e;     /*  5.8:1 — the floor; nothing quieter carries meaning */
+
+  /* Signals. Lime is the one action colour; mint is rest and recovery; amber
+     asks for attention; red is loss. A fifth accent would dilute all four. */
+  --sig-action: #c8ff66;
+  --sig-action-press: #b9f45b;
+  --sig-on-action: #0a0d0b;
+  --sig-rest: #72efd0;
+  --sig-attention: #f6cf74;
+  --sig-danger: #ff8a8a;
+
+  /* Space. Multiples of four, named by step so gaps stop being invented. */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+
+  /* Radii. --radius (1rem) above stays the shadcn base; these are the ladder. */
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px; --r-pill: 999px;
+
+  /* Type. One display step, then a tight functional ramp — this is a screen
+     read at arm's length in bad light, so nothing meaningful goes under 12px. */
+  --fs-micro: 12px;
+  --fs-meta: 13px;
+  --fs-body: 15px;
+  --fs-lead: 17px;
+  --fs-title: 21px;
+  --fs-display: clamp(38px, 10.5vw, 54px);
+
+  /* Elevation. Offset plus blur. A zero-offset colour halo is not depth. */
+  --el-1: 0 1px 2px rgb(0 0 0 / 0.45);
+  --el-2: 0 10px 30px -14px rgb(0 0 0 / 0.75);
+
+  /* Motion. */
+  --mo-fast: 120ms;
+  --mo-base: 180ms;
+  --mo-slow: 260ms;
+  --mo-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Controls. */
+  --tap-min: 44px;
+  --focus-ring-width: 2px;
+  --focus-ring-color: rgb(200 255 102 / 0.75);
+  --focus-ring-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --mo-fast: 1ms; --mo-base: 1ms; --mo-slow: 1ms; }
+}
+
+/* The surfaces the browser draws for us still belong to the design. */
+::selection { background: var(--sig-action); color: var(--sig-on-action); }
+:root { accent-color: var(--sig-action); caret-color: var(--sig-action); }
+
+:where(input, textarea, select, button, a, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Numbers that get compared to each other must not dance between rows. */
+.tabular { font-variant-numeric: tabular-nums; }
+
 * {
   box-sizing: border-box;
 }
@@ -330,243 +410,6 @@ textarea {
   background: none;
   padding: 0;
 }
-
-.session-banner {
-  position: relative;
-  min-height: 340px;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  background:
-    radial-gradient(circle at 90% 0%, rgba(114,239,208,.075), transparent 35%),
-    #0a0f0c;
-  box-shadow: none;
-}
-
-.session-banner::before {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
-  background-size: 26px 26px;
-  mask-image: linear-gradient(90deg, black, transparent 74%);
-  content: "";
-  pointer-events: none;
-}
-
-.session-banner-mark { display: none; }
-
-.session-banner-line span {
-  position: absolute;
-  right: -11%;
-  bottom: 24px;
-  width: 57%;
-  height: 88px;
-  border-top: 1px solid rgba(200,255,102,.38);
-  border-radius: 50%;
-  transform: rotate(-7deg);
-}
-
-.session-banner-line i {
-  position: absolute;
-  right: 7%;
-  bottom: 70px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #c8ff66;
-  box-shadow: 0 0 14px rgba(200,255,102,.58);
-}
-
-.session-banner-content {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  min-height: 210px;
-  flex-direction: column;
-  padding: 19px 21px;
-}
-
-.session-banner-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #829087;
-  font-size: 10px;
-  font-weight: 720;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.session-banner-context { display: flex; min-width: 0; align-items: center; gap: 6px; }
-.session-banner-context span { color: #c8ff66; }
-.session-banner-context i { color: #56635b; font-style: normal; }
-.session-banner-context b { overflow: hidden; color: #8a978e; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
-
-.session-banner-topline strong {
-  overflow: hidden;
-  max-width: 50%;
-  color: #8f9c93;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-banner-copy {
-  margin-top: auto;
-  padding-top: 18px;
-}
-
-.session-banner-copy h1 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 .2em;
-  margin: 9px 0 4px;
-  color: #f5f8f5;
-  font-size: clamp(34px,4.2vw,46px);
-  font-weight: 610;
-  letter-spacing: -.05em;
-  line-height: .96;
-}
-
-.session-banner-copy h1 em {
-  color: #c8ff66;
-  font-family: Georgia, "Times New Roman", serif;
-  font-weight: 400;
-  letter-spacing: -.045em;
-}
-
-.session-banner-copy p {
-  overflow: hidden;
-  margin: 0;
-  color: #919e95;
-  font-size: 11px;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-banner-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.session-banner-progress {
-  display: grid;
-  min-width: 0;
-  max-width: 430px;
-  flex: 1;
-  grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 9px;
-}
-
-.session-banner-progress > div,
-.session-banner-nutrition {
-  min-width: 0;
-  border-left: 1px solid rgba(200,255,102,.22);
-  padding-left: 9px;
-}
-
-.session-banner-nutrition {
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease;
-}
-
-.session-banner-nutrition:hover {
-  border-left-color: rgba(114,239,208,.65);
-  transform: translateX(2px);
-}
-
-.session-banner-progress strong,
-.session-banner-progress span {
-  display: block;
-}
-
-.session-banner-progress strong {
-  color: #e8f2ea;
-  font-size: 14px;
-  font-weight: 730;
-  letter-spacing: -.02em;
-}
-
-.session-banner-progress strong small {
-  color: #7f8d83;
-  font-size: .72em;
-  font-weight: 620;
-}
-
-.session-banner-progress span {
-  overflow: hidden;
-  margin-top: 1px;
-  color: #748178;
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: .04em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.session-banner-nutrition span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.session-banner-nutrition span svg {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 auto;
-  color: #72efd0;
-}
-
-.session-banner-start {
-  display: flex;
-  min-width: 142px;
-  min-height: 47px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 0;
-  border-radius: 14px;
-  background: #c8ff66;
-  padding: 0 6px 0 15px;
-  color: #09100b;
-  font-size: 13px;
-  font-weight: 720;
-  transition: filter 160ms ease, transform 160ms ease;
-}
-
-.session-banner-start svg {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: #0a100c;
-  padding: 9px;
-  color: #c8ff66;
-}
-
-.session-banner-start:hover {
-  filter: brightness(1.04);
-  transform: translateY(-1px);
-}
-
-.session-banner-rest .session-banner-copy h1 em,
-.session-banner-rest .session-banner-context span {
-  color: #72efd0;
-}
-
 @media (max-width: 639px) {
   .training-overview {
     width: auto;
@@ -582,83 +425,9 @@ textarea {
     margin-bottom: 16px;
     padding: 0;
   }
-
-  .session-banner {
-    min-height: clamp(420px, 64svh, 620px);
-  }
-
-  .session-banner-mark {
-    position: absolute;
-    top: 92px;
-    right: 18px;
-    z-index: 1;
-    display: block;
-    pointer-events: none;
-  }
-
-  .session-banner-mark strong {
-    color: rgba(200,255,102,.018);
-    font-size: clamp(94px,28vw,126px);
-    font-weight: 760;
-    letter-spacing: -.1em;
-    line-height: .7;
-    -webkit-text-stroke: 1px rgba(200,255,102,.075);
-  }
-
-  .session-banner-rest .session-banner-mark strong {
-    color: rgba(114,239,208,.015);
-    -webkit-text-stroke-color: rgba(114,239,208,.07);
-  }
-
-  .session-banner-content {
-    min-height: clamp(420px, 64svh, 620px);
-    padding: 26px 22px 26px;
-  }
-
-  .session-banner-line span { right: -25%; width: 72%; }
-  .session-banner-line i { right: 8%; }
-
-  .session-banner-copy h1 {
-    display: block;
-    margin-top: 14px;
-    font-size: clamp(46px,13.5vw,56px);
-    line-height: .9;
-  }
-
-  .session-banner-copy h1 span,
-  .session-banner-copy h1 em { display: block; }
-
-  .session-banner-copy p { max-width: 92%; margin-top: 12px; font-size: 13px; }
-
-  .session-banner-footer { gap: 10px; margin-top: 32px; }
-  .session-banner-progress { gap: 5px; }
-  .session-banner-progress > div { padding-left: 8px; }
-  .session-banner-progress strong { font-size: 14px; }
-  .session-banner-progress span { font-size: 9px; }
-  .session-banner-nutrition span svg { display: none; }
-
-  .session-banner-start {
-    min-width: 122px;
-    min-height: 52px;
-    padding-left: 15px;
-    font-size: 13px;
-  }
-
-  .session-banner-start svg {
-    width: 38px;
-    height: 38px;
-  }
-
 }
 
-@media (max-width: 374px) {
-  .session-banner,
-  .session-banner-content { min-height: 500px; }
-  .session-banner-mark strong { font-size: clamp(88px,27vw,108px); }
-  .session-banner-footer { align-items: stretch; flex-direction: column; }
-  .session-banner-progress { max-width: none; }
-  .session-banner-start { width: 100%; }
-}
+@media (max-width: 374px) {}
 
 .hero-card {
   min-height: 250px;
@@ -4739,6 +4508,181 @@ textarea {
 }
 
 .setup-account strong { color: #a4afa7; font-weight: 560; }
+
+/* ============================================================================
+   Today — identity, state, and the one action, as a single composition.
+
+   What stood here was a 520px editorial hero: a ghost session number filling
+   roughly 480px of empty middle, the headline pushed to the bottom edge, and
+   no word anywhere about whether the session had been started. It answered
+   "what am I lifting" slowly and "where am I in it" not at all. This answers
+   both inside the first screen, and spends the reclaimed height on the week
+   below, which is real content.
+   ============================================================================ */
+.today {
+  display: grid;
+  gap: var(--sp-3);
+  border-bottom: 1px solid var(--s-line);
+  padding: var(--sp-4) var(--sp-5) var(--sp-6);
+}
+
+.today-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: var(--tap-min);
+}
+
+.today-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--t-primary);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.today-wordmark svg { width: 17px; height: 17px; }
+
+.today-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-1) 0 0;
+  color: var(--t-muted);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.today-meta span:first-child { color: var(--sig-action); }
+.today-rest .today-meta span:first-child { color: var(--sig-rest); }
+
+.today-title {
+  margin: 0;
+  font-size: var(--fs-display);
+  font-weight: 680;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
+}
+
+/* Two deliberate lines rather than a wrap the day name happens to cause:
+   "Legs." and "Bench-techniek" are different lengths and a shared line breaks
+   in a different place for each of them. */
+.today-title span,
+.today-title em { display: block; }
+.today-title em {
+  color: var(--sig-action);
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+.today-rest .today-title em { color: var(--sig-rest); }
+
+.today-sub {
+  margin: 0;
+  color: var(--t-secondary);
+  font-size: var(--fs-body);
+}
+
+.today-state {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-meta);
+  font-weight: 620;
+}
+.today-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+.today-state[data-state="fresh"]  { color: var(--t-secondary); }
+.today-state[data-state="active"] { color: var(--sig-action); }
+.today-state[data-state="done"],
+.today-state[data-state="rest"]   { color: var(--sig-rest); }
+
+.today-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 52px;
+  width: 100%;
+  border-radius: var(--r-lg);
+  background: var(--sig-action);
+  padding: 0 var(--sp-4) 0 var(--sp-5);
+  color: var(--sig-on-action);
+  font-size: var(--fs-lead);
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  box-shadow: var(--el-1);
+  cursor: pointer;
+  transition: background-color var(--mo-base) var(--mo-ease),
+              transform var(--mo-fast) var(--mo-ease);
+}
+.today-cta:hover { background: var(--sig-action-press); }
+.today-cta:active { transform: translateY(1px); }
+.today-cta svg { width: 20px; height: 20px; }
+.today-rest .today-cta { background: var(--sig-rest); }
+
+.today-insight,
+.today-nutrition {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  width: 100%;
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-raised);
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--t-secondary);
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+  text-align: left;
+}
+.today-insight svg,
+.today-nutrition svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: var(--t-muted);
+}
+.today-insight strong { color: var(--t-primary); font-weight: 640; }
+
+/* The one case where the history says to do something differently. */
+.today-insight-advance { border-color: rgb(200 255 102 / 0.3); }
+.today-insight-advance svg { color: var(--sig-action); }
+
+.today-nutrition {
+  min-height: var(--tap-min);
+  cursor: pointer;
+  transition: border-color var(--mo-base) var(--mo-ease);
+}
+.today-nutrition > span { flex: 1; min-width: 0; }
+.today-nutrition i { margin: 0 var(--sp-2); color: var(--t-muted); font-style: normal; }
+.today-nutrition:hover { border-color: var(--s-line-strong); }
+
+/* Desktop is a composition, not a stretched phone: the measure is capped and
+   the action takes its own width instead of spanning the frame. */
+@media (min-width: 768px) {
+  .today {
+    gap: var(--sp-4);
+    padding: var(--sp-6) var(--sp-8) var(--sp-10);
+  }
+  .today-title { font-size: clamp(52px, 5.2vw, 68px); }
+  .today-sub,
+  .today-state,
+  .today-insight,
+  .today-nutrition { max-width: 62ch; }
+  .today-cta { width: auto; min-width: 268px; justify-self: start; }
+}
 
 /* ---- Banner sync chip: where the work is saved ---- */
 /*
