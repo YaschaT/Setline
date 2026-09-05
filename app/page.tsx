@@ -1,7 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- private R2 and local blob URLs are intentionally rendered directly */
 
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "./auth-gate";
 import { signOutEverywhere } from "./auth/supabase-auth";
@@ -50,7 +49,6 @@ import {
   Upload,
   UserRound,
   Utensils,
-  Weight,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -3126,6 +3124,41 @@ function TrainingApp() {
           )}
         </div>
 
+        {/* App chrome: the same header on every tab, so the product reads as
+            one thing rather than five screens that each start differently. */}
+        <div className="app-header">
+          <h1 className="today-wordmark">
+            <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <path d="M32 31V51" stroke="var(--sig-rest)" strokeWidth="9" strokeLinecap="round" />
+              <path
+                d="M14 14C18 24 24 30 32 35C40 30 46 24 50 14"
+                stroke="var(--sig-action)"
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Setline
+          </h1>
+
+          <button
+            type="button"
+            className={`banner-sync banner-sync-${account ? syncStatus : "signedout"}`}
+            onClick={() => setActiveTab("account")}
+          >
+            {!account || syncStatus === "offline" ? (
+              <CloudOff aria-hidden="true" />
+            ) : syncStatus === "synced" ? (
+              <Cloud aria-hidden="true" />
+            ) : (
+              <LoaderCircle className="banner-sync-spin" aria-hidden="true" />
+            )}
+            <span>{shortSyncLabel}</span>
+            {/* Keeps the visible words in the accessible name (WCAG 2.5.3). */}
+            <span className="sr-only"> — open account</span>
+          </button>
+        </div>
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="main-nav fixed inset-x-0 bottom-0 z-40 grid !h-[calc(70px+env(safe-area-inset-bottom))] !w-full max-w-none grid-cols-5 rounded-none px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:sticky lg:top-4 lg:mx-auto lg:mb-8 lg:!h-12 lg:!w-fit lg:grid-cols-5 lg:rounded-[18px] lg:p-1.5">
             <TabsTrigger value="training" className="nav-tab"><Dumbbell /> <span>Training</span></TabsTrigger>
@@ -3138,46 +3171,13 @@ function TrainingApp() {
           <TabsContent value="training" className="training-stack">
             <section className="training-overview" aria-label="Training en dagdoel">
               <div className={`today today-${todayState}`}>
-                <div className="today-head">
-                  <span className="today-wordmark">
-                    <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
-                      <path d="M32 31V51" stroke="var(--sig-rest)" strokeWidth="9" strokeLinecap="round" />
-                      <path
-                        d="M14 14C18 24 24 30 32 35C40 30 46 24 50 14"
-                        stroke="var(--sig-action)"
-                        strokeWidth="9"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    Setline
-                  </span>
-
-                  <button
-                    type="button"
-                    className={`banner-sync banner-sync-${account ? syncStatus : "signedout"}`}
-                    onClick={() => setActiveTab("account")}
-                  >
-                    {!account || syncStatus === "offline" ? (
-                      <CloudOff aria-hidden="true" />
-                    ) : syncStatus === "synced" ? (
-                      <Cloud aria-hidden="true" />
-                    ) : (
-                      <LoaderCircle className="banner-sync-spin" aria-hidden="true" />
-                    )}
-                    <span>{shortSyncLabel}</span>
-                    {/* Keeps the visible words in the accessible name (WCAG 2.5.3). */}
-                    <span className="sr-only"> — open account</span>
-                  </button>
-                </div>
-
-                <p className="today-meta">
+                                <p className="today-meta">
                   <span>{selectedDate === todayKey ? "Vandaag" : selectedDateLabel}</span>
                   <i aria-hidden="true">·</i>
                   <span>{isRestDay ? "Herstel" : `Sessie ${bannerSessionMark}`}</span>
                 </p>
 
-                <h1 className="today-title">
+                <h2 className="today-title">
                   <span>{day.short}.</span>{" "}
                   <em>
                     {isRestDay
@@ -3188,7 +3188,7 @@ function TrainingApp() {
                           ? "Maak het af."
                           : "Bouw verder."}
                   </em>
-                </h1>
+                </h2>
 
                 <p className="today-sub">
                   {isRestDay ? "Optioneel · 10–15 min" : `${day.exercises.length} oefeningen · ${day.focus}`}
@@ -3981,9 +3981,9 @@ function TrainingApp() {
                 </div>
 
                 <div className="nutrition-macro-grid">
-                  <NutritionMacroCard label="Eiwit" value={nutritionTotals.protein} target={targets.protein} color="#c8ff66" />
-                  <NutritionMacroCard label="Carbs" value={nutritionTotals.carbs} target={targets.carbs} color="#72efd0" />
-                  <NutritionMacroCard label="Vet" value={nutritionTotals.fat} target={targets.fat} color="#f4c65b" />
+                  <NutritionMacroCard label="Eiwit" value={nutritionTotals.protein} target={targets.protein} color="var(--sig-action)" />
+                  <NutritionMacroCard label="Carbs" value={nutritionTotals.carbs} target={targets.carbs} color="var(--sig-rest)" />
+                  <NutritionMacroCard label="Vet" value={nutritionTotals.fat} target={targets.fat} color="var(--sig-attention)" />
                 </div>
               </article>
 
@@ -4118,10 +4118,22 @@ function TrainingApp() {
           </TabsContent>
 
           <TabsContent value="progressie" className="space-y-5">
-            <section className="grid gap-4 sm:grid-cols-3">
-              <StatCard icon={<Weight />} label="Laatste gewicht" value={orderedMetrics.length ? `${orderedMetrics[orderedMetrics.length - 1].weight.toFixed(1)} kg` : "Nog leeg"} />
-              <StatCard icon={<TrendingUp />} label="Weektrend" value={weightTrend === null ? "Meer data nodig" : `${weightTrend >= 0 ? "+" : ""}${weightTrend.toFixed(2)} kg`} />
-              <StatCard icon={<Moon />} label="Weekbalans · 7 dagen" value={`${weekSessions}/5 training · ${weekRecoveryDays} rust`} />
+            {/* Three numbers, not three cards. Stacked icon-and-number cards
+                cost ~690px of the first screen on a phone and pushed the thing
+                this tab exists for — entering a measurement — below the fold. */}
+            <section className="stat-strip" aria-label="Samenvatting">
+              <div>
+                <span>Laatste gewicht</span>
+                <strong className="tabular">{orderedMetrics.length ? `${orderedMetrics[orderedMetrics.length - 1].weight.toFixed(1)} kg` : "—"}</strong>
+              </div>
+              <div>
+                <span>Weektrend</span>
+                <strong className="tabular">{weightTrend === null ? "—" : `${weightTrend >= 0 ? "+" : ""}${weightTrend.toFixed(2)} kg`}</strong>
+              </div>
+              <div>
+                <span>Deze week</span>
+                <strong className="tabular">{weekSessions}/5 · {weekRecoveryDays} rust</strong>
+              </div>
             </section>
 
             <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
@@ -4606,10 +4618,6 @@ function StrengthTrendChart({ points }: { points: StrengthTrendPoint[] }) {
 function NutritionMacroCard({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
   const progress = clamp((value / target) * 100);
   return <div className="nutrition-macro-card"><div><span>{label}</span><strong>{Math.round(value)} <small>/ {target} g</small></strong></div><div className="nutrition-macro-track"><span style={{ width: `${progress}%`, background: color }} /></div></div>;
-}
-
-function StatCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return <article className="metric-card rounded-[24px] border border-white/8 p-5"><div className="mb-5 flex size-9 items-center justify-center rounded-xl bg-white/5 text-[#64dfc5] [&_svg]:size-4">{icon}</div><p className="text-xs text-[#748078]">{label}</p><strong className="mt-1 block text-xl tracking-tight">{value}</strong></article>;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
