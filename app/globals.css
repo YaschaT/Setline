@@ -3969,6 +3969,18 @@ textarea {
   color: #ff9d9d;
 }
 
+/* "Vergeten?" and "Maak er een" were 19px tall — under the 24px WCAG 2.5.8
+   floor, on the two secondary actions of the screen everybody starts at. The
+   text keeps its size; only the target grows. */
+.gate-inline-link,
+.gate-switch button { position: relative; }
+.gate-inline-link::before,
+.gate-switch button::before {
+  content: "";
+  position: absolute;
+  inset: -13px -10px;
+}
+
 .gate-inline-link,
 .gate-switch button {
   background: none;

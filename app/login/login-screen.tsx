@@ -264,19 +264,27 @@ export function LoginScreen({
                   </div>
                 )}
 
-                {error && (
-                  <p className="gate-error" role="alert">
-                    <CircleAlert aria-hidden="true" />
-                    <span>{error}</span>
-                  </p>
-                )}
+                {/* Both regions stay mounted so a message inserted into them is
+                    announced. An alert that appears together with its text is
+                    announced unreliably, which on this screen means a failed
+                    sign-in can pass a screen-reader user in silence. */}
+                <div role="alert">
+                  {error && (
+                    <p className="gate-error">
+                      <CircleAlert aria-hidden="true" />
+                      <span>{error}</span>
+                    </p>
+                  )}
+                </div>
 
-                {notice && (
-                  <p className="gate-notice" role="status">
-                    <Mail aria-hidden="true" />
-                    <span>{notice}</span>
-                  </p>
-                )}
+                <div role="status">
+                  {notice && (
+                    <p className="gate-notice">
+                      <Mail aria-hidden="true" />
+                      <span>{notice}</span>
+                    </p>
+                  )}
+                </div>
 
                 <Button type="submit" className="gate-submit" disabled={busy || handingOver}>
                   {handingOver ? (
