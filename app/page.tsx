@@ -706,6 +706,28 @@ function bestStrengthSet(sets: SetResult[]) {
   }, null);
 }
 
+/**
+ * Photo requests reach a backend that does not exist on every deployment, so a
+ * failure often arrives as an HTML error page parsed as JSON — which surfaced
+ * to the user as: Unexpected token '<', "<!doctype "... is not valid JSON.
+ * Messages this app wrote are shown as-is; anything else is named in terms of
+ * what went wrong and what to do about it.
+ */
+function photoErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error) || !error.message) return fallback;
+  const message = error.message.toLowerCase();
+  if (
+    message.includes("json") ||
+    message.includes("unexpected token") ||
+    message.includes("failed to fetch") ||
+    message.includes("load failed") ||
+    message.includes("networkerror")
+  ) {
+    return "We krijgen geen antwoord van de fotoservice. Check je verbinding en probeer het zo opnieuw.";
+  }
+  return error.message;
+}
+
 function recoveryLevelLabel(field: keyof typeof RECOVERY_SCALE, value: string) {
   return RECOVERY_SCALE[field].find((option) => option.value === value)?.label ?? "Niet ingevuld";
 }
@@ -1524,7 +1546,7 @@ function TrainingApp() {
         return payload as { photos: ProgressPhoto[] };
       })
       .then((payload) => setPhotos([...payload.photos].sort((a, b) => a.capturedOn.localeCompare(b.capturedOn))))
-      .catch((error) => setPhotoError(error instanceof Error ? error.message : "Foto's konden niet worden geladen."))
+      .catch((error) => setPhotoError(photoErrorMessage(error, "Foto's konden niet worden geladen.")))
       .finally(() => setPhotosLoading(false));
   }, []);
 
@@ -2293,7 +2315,7 @@ function TrainingApp() {
       setPhotoDraft((current) => ({ ...current, weight: "" }));
       setBanner("Dagelijkse check-in opgeslagen");
     } catch (error) {
-      setPhotoError(error instanceof Error ? error.message : "Upload mislukt.");
+      setPhotoError(photoErrorMessage(error, "Upload mislukt."));
     } finally {
       setPhotoUploadLoading(false);
     }
@@ -2328,7 +2350,7 @@ function TrainingApp() {
         setPhotoIndex(0);
         setBanner("Check-in en foto verwijderd");
       } catch (error) {
-        setPhotoError(error instanceof Error ? error.message : "Foto kon niet worden verwijderd.");
+        setPhotoError(photoErrorMessage(error, "Foto kon niet worden verwijderd."));
       }
     }
     setDeleteTarget(null);
@@ -3686,7 +3708,7 @@ function TrainingApp() {
                               </div>
                               {supportsPausedReps && set.pauseEnabled && (
                                 <div className="pause-line">
-                                  <span className="pause-mark"><Pause /></span>
+                                  <span className="pause-mark"><Pause aria-hidden="true" /><span>Pauze</span></span>
                                   <label className="log-field pause-field"><input inputMode="numeric" enterKeyHint="next" value={set.pausedReps ?? ""} onChange={(event) => setResult(exercise.id, setIndex, "pausedReps", event.target.value)} placeholder="0" aria-label={`${exercise.name} set ${setIndex + 1} paused herhalingen`} /><span>paused</span></label>
                                   <label className="log-field pause-field"><input inputMode="decimal" value={set.pauseSeconds ?? ""} onChange={(event) => setResult(exercise.id, setIndex, "pauseSeconds", event.target.value)} placeholder="3" aria-label={`${exercise.name} set ${setIndex + 1} pauzeduur`} /><span>sec</span></label>
                                   <button type="button" className="pause-remove" onClick={() => togglePausedReps(exercise.id, setIndex)} aria-label={`Paused reps uit set ${setIndex + 1} verwijderen`}><Trash2 /><span>Verwijder</span></button>
@@ -4210,25 +4232,36 @@ function TrainingApp() {
           </TabsContent>
 
           <TabsContent value="transformatie" className="space-y-5">
-            <section className="transformation-hero">
-              <div className="transformation-hero-copy">
-                <span className="transformation-kicker"><Camera /> Dagelijkse visuele check-in</span>
-                <h2>Zie de verandering die je spiegel mist.</h2>
-                <p>Zelfde pose, licht en afstand. De tijdlijn zet je foto’s en gewicht naast elkaar en speelt je volledige transformatie chronologisch af.</p>
+            {/* This was a landing page inside a tab: a kicker, a 40px marketing
+                headline, a three-line explainer and a play button that did
+                nothing until two photos existed — roughly 740px before the
+                thing the tab is for. The instruction that actually matters
+                survives as one line. */}
+            <section className="transformation-head">
+              <div>
+                <h2>Foto&rsquo;s</h2>
+                <p>Zelfde pose, licht en afstand. De tijdlijn zet je foto&rsquo;s en gewicht naast elkaar.</p>
+              </div>
+              {photos.length > 1 && (
                 <Button
                   onClick={() => { setPhotoIndex(0); setPhotoPlaying(true); setPhotoViewerOpen(true); }}
-                  disabled={photos.length < 2}
                   className="transformation-play"
                 >
-                  <Play /> Transformatie afspelen
+                  <Play /> Afspelen
                 </Button>
-              </div>
-              <div className="transformation-stats">
-                <div><strong>{photos.length}</strong><span>check-ins</span></div>
-                <div><strong>{photoSpanDays}</strong><span>dagen gevolgd</span></div>
-                <div><strong>{photos.length > 1 ? `${photoWeightDelta > 0 ? "+" : ""}${photoWeightDelta.toFixed(1)}` : "—"}</strong><span>kg verschil</span></div>
-              </div>
+              )}
             </section>
+
+            {photos.length > 0 && (
+              <section className="stat-strip" aria-label="Samenvatting">
+                <div><span>Check-ins</span><strong className="tabular">{photos.length}</strong></div>
+                <div><span>Dagen gevolgd</span><strong className="tabular">{photoSpanDays}</strong></div>
+                <div>
+                  <span>Kg verschil</span>
+                  <strong className="tabular">{photos.length > 1 ? `${photoWeightDelta > 0 ? "+" : ""}${photoWeightDelta.toFixed(1)}` : "—"}</strong>
+                </div>
+              </section>
+            )}
 
             <section className="transformation-workspace">
               <div className="photo-upload-card">

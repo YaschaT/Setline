@@ -2563,65 +2563,9 @@ textarea {
 @keyframes signal-pop {
   from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-.transformation-hero {
-  position: relative;
-  display: grid;
-  min-height: 310px;
-  overflow: hidden;
-  grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
-  align-items: end;
-  gap: 36px;
-  border: 1px solid rgba(200,255,102,.14);
-  border-radius: 32px;
-  background:
-    radial-gradient(circle at 86% 18%, rgba(200,255,102,.16), transparent 30%),
-    radial-gradient(circle at 58% 95%, rgba(100,223,197,.11), transparent 35%),
-    linear-gradient(135deg, rgba(20,29,23,.98), rgba(8,12,10,.99));
-  padding: 34px;
-  box-shadow: 0 30px 90px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.05);
-}
-
-.transformation-hero::after {
-  position: absolute;
-  top: -90px;
-  right: -70px;
-  width: 280px;
-  height: 280px;
-  border: 1px solid rgba(200,255,102,.08);
-  border-radius: 50%;
-  box-shadow: 0 0 0 38px rgba(200,255,102,.02), 0 0 0 80px rgba(100,223,197,.015);
-  content: "";
-}
-
-.transformation-hero-copy { position: relative; z-index: 1; max-width: 650px; }
-.transformation-kicker { display: inline-flex; align-items: center; gap: 7px; color: #bff875; font-size: 10px; font-weight: 740; letter-spacing: .13em; text-transform: uppercase; }
-.transformation-kicker svg { width: 15px; height: 15px; }
-.transformation-hero h2 { max-width: 620px; margin: 16px 0 0; font-size: clamp(36px, 5vw, 62px); font-weight: 620; letter-spacing: -.06em; line-height: .98; }
-.transformation-hero-copy > p { max-width: 560px; margin: 18px 0 0; color: #9ba89f; font-size: 14px; line-height: 1.7; }
-.transformation-play { margin-top: 25px; height: 43px !important; border-radius: 14px !important; background: var(--sig-action) !important; color: #081009 !important; font-weight: 700 !important; }
+}.transformation-play { margin-top: 25px; height: 43px !important; border-radius: 14px !important; background: var(--sig-action) !important; color: #081009 !important; font-weight: 700 !important; }
 .transformation-play:hover { background: #d5ff8c !important; }
-.transformation-play:disabled { background: var(--s-fill-3) !important; color: var(--t-muted) !important; }
-
-.transformation-stats {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid var(--s-fill-3);
-  border-radius: 22px;
-  background: rgba(7,11,9,.58);
-  backdrop-filter: blur(18px);
-}
-
-.transformation-stats div { padding: 19px 16px; text-align: center; }
-.transformation-stats div + div { border-left: 1px solid var(--s-fill-3); }
-.transformation-stats strong { display: block; font-size: 24px; font-weight: 620; letter-spacing: -.04em; }
-.transformation-stats span { display: block; margin-top: 4px; color: var(--t-muted); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
-
-.transformation-workspace { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; }
+.transformation-play:disabled { background: var(--s-fill-3) !important; color: var(--t-muted) !important; }.transformation-workspace { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; }
 .photo-upload-card,
 .photo-compare-card,
 .photo-timeline-panel {
@@ -2926,10 +2870,7 @@ textarea {
   .nutrition-top-grid { grid-template-columns: 1fr; grid-template-areas: "overview" "ideas" "add"; }
   .nutrition-add-button { margin-top: 18px; }
   .day-workout-options { width: 100%; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
-  .day-workout-options::-webkit-scrollbar { display: none; }
-  .transformation-hero { grid-template-columns: 1fr; align-items: start; }
-  .transformation-stats { max-width: 520px; }
-  .transformation-workspace { grid-template-columns: 1fr; }
+  .day-workout-options::-webkit-scrollbar { display: none; }  .transformation-workspace { grid-template-columns: 1fr; }
   .photo-upload-card { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(280px, 1fr); column-gap: 20px; }
   .photo-upload-card .photo-section-head,
   .photo-upload-card .photo-dropzone { grid-row: span 1; }
@@ -3122,16 +3063,7 @@ textarea {
   .session-edit-add-pause { margin-left: 40px; }
   .session-edit-footer { align-items: stretch; flex-direction: column-reverse; }
   .session-edit-footer button { width: 100%; }
-  .history-set-list > div strong:last-child { line-height: 1.4; }
-  .transformation-hero { min-height: 0; gap: 28px; border-radius: 25px; padding: 24px 20px 20px; }
-  .transformation-hero h2 { font-size: 39px; }
-  .transformation-hero-copy > p { font-size: 12px; }
-  .transformation-play { width: 100%; }
-  .transformation-stats { width: 100%; }
-  .transformation-stats div { padding: 14px 7px; }
-  .transformation-stats strong { font-size: 19px; }
-  .transformation-stats span { min-height: 22px; font-size: 10px; line-height: 1.4; }
-  .transformation-workspace { gap: 12px; }
+  .history-set-list > div strong:last-child { line-height: 1.4; }  .transformation-play { width: 100%; }  .transformation-workspace { gap: 12px; }
   .photo-upload-card { display: block; padding: 18px; }
   .photo-dropzone { min-height: 280px; }
   .photo-compare-card { padding: 18px; }
@@ -4724,6 +4656,44 @@ textarea {
   .stat-strip > div { padding: var(--sp-3) var(--sp-3); }
   .stat-strip strong { font-size: var(--fs-body); }
 }
+
+/* Photos: a heading and the instruction that matters, not a landing page. */
+.transformation-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-1);
+}
+.transformation-head h2 {
+  margin: 0;
+  color: var(--t-primary);
+  font-size: var(--fs-title);
+  font-weight: 660;
+  letter-spacing: -0.03em;
+}
+.transformation-head p {
+  margin: var(--sp-1) 0 0;
+  max-width: 46ch;
+  color: var(--t-secondary);
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+}
+.transformation-play { flex: 0 0 auto; }
+
+/* A paused-rep line belongs to the set above it. Indenting it and naming it
+   stops the four column headings from appearing to describe two different
+   rows that mean different things. */
+.pause-line { margin-inline-start: var(--sp-6); }
+.pause-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--t-muted);
+  font-size: var(--fs-micro);
+  font-weight: 620;
+}
+.pause-mark svg { width: 13px; height: 13px; }
 
 /* ---- Banner sync chip: where the work is saved ---- */
 /*
