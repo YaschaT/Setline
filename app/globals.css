@@ -114,7 +114,7 @@
   --fs-body: 15px;
   --fs-lead: 17px;
   --fs-title: 21px;
-  --fs-display: clamp(38px, 10.5vw, 54px);
+  --fs-display: clamp(46px, 13.5vw, 58px);
 
   /* Elevation. Offset plus blur. A zero-offset colour halo is not depth. */
   --el-1: 0 1px 2px rgb(0 0 0 / 0.45);
@@ -4470,11 +4470,80 @@ textarea {
    below, which is real content.
    ============================================================================ */
 .today {
+  position: relative;
   display: grid;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
+  overflow: hidden;
+  /* Bleeds past the app frame's own padding, the way the original did. */
+  margin-inline: calc(var(--sp-4) * -1);
   border-bottom: 1px solid var(--s-line);
-  padding: var(--sp-2) var(--sp-5) var(--sp-6);
+  padding: var(--sp-8) var(--sp-8) var(--sp-10);
+  background:
+    radial-gradient(circle at 92% 0%, rgb(114 239 208 / 0.075), transparent 38%),
+    #0a0f0c;
 }
+
+/* Ruled ground, fading out to the right so it never fights the copy. */
+.today::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--s-fill-1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--s-fill-1) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: linear-gradient(90deg, black, transparent 74%);
+  pointer-events: none;
+}
+
+/* The session number, as a mark rather than a measurement. */
+.today-mark {
+  position: absolute;
+  top: 46px;
+  right: 14px;
+  color: rgb(200 255 102 / 0.02);
+  font-size: clamp(104px, 30vw, 148px);
+  font-weight: 760;
+  letter-spacing: -0.1em;
+  line-height: 0.7;
+  -webkit-text-stroke: 1px rgb(200 255 102 / 0.08);
+  pointer-events: none;
+}
+.today-rest .today-mark {
+  color: rgb(114 239 208 / 0.018);
+  -webkit-text-stroke-color: rgb(114 239 208 / 0.075);
+}
+
+/* The arc and its signal dot. The dot's halo is a light source, not elevation
+   dressed up as one, so it keeps its glow. */
+.today-arc span {
+  position: absolute;
+  top: 128px;
+  right: -25%;
+  width: 72%;
+  height: 88px;
+  border-top: 1px solid rgb(200 255 102 / 0.38);
+  border-radius: 50%;
+  transform: rotate(-7deg);
+}
+.today-arc i {
+  position: absolute;
+  top: 124px;
+  right: 8%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sig-action);
+  box-shadow: 0 0 14px rgb(200 255 102 / 0.58);
+}
+.today-rest .today-arc span { border-top-color: rgb(114 239 208 / 0.38); }
+.today-rest .today-arc i {
+  background: var(--sig-rest);
+  box-shadow: 0 0 14px rgb(114 239 208 / 0.58);
+}
+
+/* Copy and controls ride above every decorative layer. */
+.today > :not(.today-mark):not(.today-arc) { position: relative; z-index: 1; }
 
 /* One header row for the whole app. */
 .app-header { padding: 0 var(--sp-5); }
@@ -4517,7 +4586,7 @@ textarea {
 .today-rest .today-meta span:first-child { color: var(--sig-rest); }
 
 .today-title {
-  margin: 0;
+  margin: var(--sp-2) 0 0;
   font-size: var(--fs-display);
   font-weight: 680;
   letter-spacing: -0.045em;
@@ -4630,8 +4699,14 @@ textarea {
 @media (min-width: 768px) {
   .today {
     gap: var(--sp-4);
-    padding: var(--sp-6) var(--sp-8) var(--sp-10);
+    margin-inline: 0;
+    border: 1px solid var(--s-line);
+    border-radius: var(--r-xl);
+    padding: var(--sp-8) var(--sp-8) var(--sp-10);
   }
+  .today-mark { top: 40px; right: 40px; font-size: clamp(150px, 15vw, 210px); }
+  .today-arc span { top: 150px; right: 2%; width: 46%; }
+  .today-arc i { top: 146px; right: 10%; }
   .today-title { font-size: clamp(52px, 5.2vw, 68px); }
   .today-sub,
   .today-state,

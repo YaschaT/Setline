@@ -3193,7 +3193,16 @@ function TrainingApp() {
           <TabsContent value="training" className="training-stack">
             <section className="training-overview" aria-label="Training en dagdoel">
               <div className={`today today-${todayState}`}>
-                                <p className="today-meta">
+                {/* The editorial layer, restored from the original banner: the
+                    session number as a watermark, the arc and its signal dot,
+                    over a ruled ground. All of it sits *behind* the content
+                    now. What made the old hero 520px tall was never these — it
+                    was a min-height of 64svh the content was justified against,
+                    which is the one thing not coming back. */}
+                <span className="today-mark" aria-hidden="true">{bannerSessionMark}</span>
+                <span className="today-arc" aria-hidden="true"><span /><i /></span>
+
+                <p className="today-meta">
                   <span>{selectedDate === todayKey ? "Vandaag" : selectedDateLabel}</span>
                   <i aria-hidden="true">·</i>
                   <span>{isRestDay ? "Herstel" : `Sessie ${bannerSessionMark}`}</span>
