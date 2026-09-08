@@ -10,7 +10,6 @@ import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
 import {
   Activity,
   ArrowRightLeft,
-  BrainCircuit,
   Camera,
   CalendarDays,
   Check,
@@ -39,7 +38,6 @@ import {
   PackageSearch,
   Save,
   Search,
-  SendHorizontal,
   ShieldCheck,
   Smartphone,
   Target,
@@ -77,7 +75,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -576,13 +573,6 @@ const STARTER_CHAT: ChatMessage[] = [
     content:
       "Vraag me iets over je gelogde trainingen, progressie of calorieën. Ik stel wijzigingen eerst voor; jij beslist of ze in je schema komen.",
   },
-];
-
-const COACH_PROMPTS = [
-  { code: "01", label: "Progressie", prompt: "Kan ik mijn 18 kg curls verhogen? Gebruik alleen mijn gelogde sets." },
-  { code: "02", label: "Herstel", prompt: "Wat zegt mijn laatste herstelcheck-in over mijn training van vandaag?" },
-  { code: "03", label: "Voeding", prompt: "Moet ik mijn calorieën aanpassen op basis van mijn gewichts- en tailletrend?" },
-  { code: "04", label: "Plan", prompt: "Bekijk mijn Pull-dag en stel alleen een wijziging voor als mijn data daar reden voor geeft." },
 ];
 
 const WORKING_SETS: Record<string, number> = {
@@ -1185,6 +1175,27 @@ function timestampForDate(value: string) {
   return selected.toISOString();
 }
 
+/** A session id only has to be unique on this device, and the clock is the
+ *  cheapest thing that is. Called from the save handlers, never while
+ *  rendering — an id minted during a render would change on every re-render. */
+function newSessionId() {
+  return `${Date.now()}`;
+}
+
+const RECENT_WINDOW_DAYS = 8;
+
+/**
+ * Whether a session falls in the trailing window that ends on `today`.
+ *
+ * The window is measured in whole days from a fixed `today` rather than from
+ * the wall clock, so the counts it feeds stay the same for a whole render
+ * instead of drifting each time the component happens to re-render.
+ */
+function isRecentSession(session: Session, today: string) {
+  const age = parseDateKey(today).getTime() - parseDateKey(dateKey(new Date(session.date))).getTime();
+  return age >= 0 && age < RECENT_WINDOW_DAYS * 86_400_000;
+}
+
 /** Six weeks of Mondays-to-Sundays covering the month the anchor week sits in.
  *  A week belongs to the month containing its Thursday (ISO 8601), so the week
  *  of 31 Aug - 6 Sep shows September, not August. */
@@ -1288,7 +1299,6 @@ function TrainingApp() {
   const [plan, setPlan] = useState<WorkoutDay[]>(DEFAULT_PLAN);
   const [planMode, setPlanMode] = useState<PlanMode>("personal");
   const [sciencePlanId, setSciencePlanId] = useState<SciencePlanId>(DEFAULT_SCIENCE_PLAN_ID);
-  const [selectedDay, setSelectedDay] = useState("push");
   const [selectedDate, setSelectedDate] = useState(dateKey());
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverrides>({});
   const [moveSourceDate, setMoveSourceDate] = useState<string | null>(null);
@@ -1356,10 +1366,6 @@ function TrainingApp() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(STARTER_CHAT);
-  const [chatDraft, setChatDraft] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [aiReady, setAiReady] = useState<boolean | null>(null);
-  const [aiConfig, setAiConfig] = useState({ model: "gpt-5.6", mode: "pro", effort: "max" });
   const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
   const [photoUploadLoading, setPhotoUploadLoading] = useState(false);
@@ -1434,11 +1440,6 @@ function TrainingApp() {
           : { date: today, sleep: "", soreness: "", energy: "", note: "", completedIds: [] },
       );
       setSelectedDate(today);
-      const storedProgramKey = programKey(mode, storedSciencePlanId);
-      const scheduledDay = storedSchedule[`${storedProgramKey}:${today}`]
-        ?? (mode === "personal" || storedSciencePlanId === "ppl-ul" ? storedSchedule[today] : undefined)
-        ?? defaultScheduleForDate(today, mode, storedSciencePlanId);
-      setSelectedDay(planIdForMode(scheduledDay, mode, storedSciencePlanId));
     };
     const saved = window.localStorage.getItem(STORAGE_KEY);
     let localState: StoredState = {};
@@ -1449,10 +1450,19 @@ function TrainingApp() {
         // Keep safe defaults if browser storage is malformed.
       }
     }
-    applyStoredState(localState);
-    setMetricDraft((current) => ({ ...current, date: today }));
-    setPhotoDraft((current) => ({ ...current, capturedOn: today }));
-    setHydrated(true);
+    // Restoring the stored state is a whole second render on top of the one
+    // that just committed. Handing it to a microtask keeps it off the
+    // synchronous effect path instead of cascading inside the same commit.
+    void Promise.resolve().then(() => {
+      applyStoredState(localState);
+      setMetricDraft((current) => ({ ...current, date: today }));
+      setPhotoDraft((current) => ({ ...current, capturedOn: today }));
+      // The meal tab opens on whatever meal is next. Only the browser knows
+      // the local hour, so this cannot be picked while rendering.
+      const hour = new Date().getHours();
+      setMealIdeaType(hour < 11 ? "Ontbijt" : hour < 16 ? "Lunch" : "Avondeten");
+      setHydrated(true);
+    });
 
     // Identity and cloud sync are separate concerns. /api/auth/session exists
     // on every deployment; /api/user-state only where D1 is bound. Reading
@@ -1528,17 +1538,6 @@ function TrainingApp() {
       .finally(() => setCloudHydrated(true));
     })();
 
-    fetch("/api/coach", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
-        setAiReady(Boolean(data.configured));
-        setAiConfig({
-          model: typeof data.model === "string" ? data.model : "gpt-5.6",
-          mode: typeof data.mode === "string" ? data.mode : "pro",
-          effort: typeof data.effort === "string" ? data.effort : "max",
-        });
-      })
-      .catch(() => setAiReady(false));
     fetch("/api/progress-photos", { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json();
@@ -1576,8 +1575,10 @@ function TrainingApp() {
 
   useEffect(() => {
     if (!hydrated || !cloudHydrated || !account) return;
-    setSyncStatus("saving");
     const timer = window.setTimeout(() => {
+      // The debounce decides when a save really starts, so the status flips
+      // here rather than on every edit that only reschedules this timer.
+      setSyncStatus("saving");
       const snapshot = {
         plan, planMode, sciencePlanId,
         planSchemaVersion: CURRENT_PLAN_SCHEMA_VERSION,
@@ -1629,27 +1630,14 @@ function TrainingApp() {
   }, [banner]);
 
   useEffect(() => {
-    const hour = new Date().getHours();
-    setMealIdeaType(hour < 11 ? "Ontbijt" : hour < 16 ? "Lunch" : "Avondeten");
-  }, []);
-
-  useEffect(() => {
-    if (!photoFile) {
-      setPhotoPreview("");
-      return;
-    }
-    const preview = URL.createObjectURL(photoFile);
-    setPhotoPreview(preview);
-    return () => URL.revokeObjectURL(preview);
-  }, [photoFile]);
-
-  useEffect(() => {
     if (!photoViewerOpen || !photoPlaying || photos.length < 2) return;
-    if (photoIndex >= photos.length - 1) {
-      setPhotoPlaying(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setPhotoIndex((current) => current + 1), photoSpeed);
+    const lastIndex = photos.length - 1;
+    const timer = window.setTimeout(() => {
+      // A run ends on the last photo. Deciding that here, in the callback that
+      // actually advances, keeps the effect body free of synchronous setState.
+      if (photoIndex < lastIndex) setPhotoIndex(photoIndex + 1);
+      if (photoIndex + 1 >= lastIndex) setPhotoPlaying(false);
+    }, photoSpeed);
     return () => window.clearTimeout(timer);
   }, [photoIndex, photoPlaying, photoSpeed, photoViewerOpen, photos.length]);
 
@@ -1736,13 +1724,10 @@ function TrainingApp() {
     const templateId = planIdForMode(dayId, planMode, sciencePlanId);
     return activePlan.find((item) => item.id === templateId)?.short ?? "Training";
   };
-  useEffect(() => {
-    const scheduledDay = scheduleOverrides[`${activeProgramKey}:${selectedDate}`]
-      ?? (planMode === "personal" || sciencePlanId === "ppl-ul" ? scheduleOverrides[selectedDate] : undefined)
-      ?? defaultScheduleForDate(selectedDate, planMode, sciencePlanId);
-    const matchingDay = planIdForMode(scheduledDay, planMode, sciencePlanId);
-    setSelectedDay((current) => current === matchingDay ? current : matchingDay);
-  }, [activeProgramKey, planMode, sciencePlanId, scheduleOverrides, selectedDate]);
+  // The schedule is the one source of truth for which day is open. Every
+  // handler that used to set this alongside a schedule change wrote back
+  // exactly this value, so deriving it keeps the two from ever disagreeing.
+  const selectedDay = planIdForMode(scheduleForDate(selectedDate), planMode, sciencePlanId);
   const day = activePlan.find((item) => item.id === selectedDay) ?? activePlan[0];
   const isRestDay = day.id === "rest";
   const exerciseScopeKey = `${activeProgramKey}:${selectedDate}:${day.id}`;
@@ -1812,95 +1797,8 @@ function TrainingApp() {
     return ((last.weight - first.weight) / days) * 7;
   }, [orderedMetrics]);
 
-  const calorieDelta = useMemo(() => {
-    if (weightTrend === null) return 0;
-    const firstWaist = orderedMetrics.find((metric) => metric.waist)?.waist;
-    const lastWaist = [...orderedMetrics].reverse().find((metric) => metric.waist)?.waist;
-    if (weightTrend < -0.3) return 100;
-    if (
-      weightTrend > 0.25 &&
-      firstWaist !== undefined &&
-      lastWaist !== undefined &&
-      lastWaist >= firstWaist
-    ) return -100;
-    return 0;
-  }, [orderedMetrics, weightTrend]);
-
-  const coachDossier = useMemo(() => {
-    const recentWorkoutCount = sessions.filter(
-      (session) =>
-        session.sessionType !== "recovery" &&
-        session.dayId !== "rest" &&
-        Date.now() - new Date(session.date).getTime() < 8 * 86_400_000,
-    ).length;
-    const latestMetric = orderedMetrics[orderedMetrics.length - 1];
-    return {
-      recentWorkoutCount,
-      latestWeight: latestMetric ? `${latestMetric.weight.toFixed(1)} kg` : "Nog leeg",
-      proteinToday: `${Math.round(nutritionTotals.protein)} / ${targets.protein} g`,
-    };
-  }, [nutritionTotals.protein, orderedMetrics, sessions, targets.protein]);
-
-  const coachCards = useMemo(() => {
-    const cards: Array<{ title: string; body: string; tone: string }> = [];
-    if (weightTrend === null) {
-      cards.push({
-        title: "Eerst een betrouwbare trend",
-        body: "Log minstens twee ochtendmetingen. Daarna kan ik je calorieën onderbouwd bijsturen.",
-        tone: "neutral",
-      });
-    } else if (calorieDelta > 0) {
-      cards.push({
-        title: "Herstel iets meer voeden",
-        body: `Je daalt ongeveer ${Math.abs(weightTrend).toFixed(2)} kg per week. Voeg 100 kcal toe, liefst 25 g koolhydraten rond je training.`,
-        tone: "warn",
-      });
-    } else if (calorieDelta < 0) {
-      cards.push({
-        title: "Kleine correctie",
-        body: `Je stijgt ongeveer ${weightTrend.toFixed(2)} kg per week en je taille daalt niet. Trek 100 kcal af; eiwit blijft gelijk.`,
-        tone: "warn",
-      });
-    } else {
-      cards.push({
-        title: "Calorieën behouden",
-        body: `Je trend van ${weightTrend >= 0 ? "+" : ""}${weightTrend.toFixed(2)} kg per week past bij recompositie. Houd ${targets.calories} kcal voorlopig aan.`,
-        tone: "good",
-      });
-    }
-
-    const recentSessions = sessions.filter(
-      (session) =>
-        session.sessionType !== "recovery" &&
-        session.dayId !== "rest" &&
-        Date.now() - new Date(session.date).getTime() < 8 * 86_400_000,
-    );
-    if (recentSessions.length >= 4) {
-      cards.push({
-        title: "Frequentie zit goed",
-        body: `${recentSessions.length} sessies in de laatste zeven dagen. Voeg alleen gewicht toe wanneer alle sets de bovenkant van de rep-range halen.`,
-        tone: "good",
-      });
-    } else {
-      cards.push({
-        title: "Prioriteit: consistente sessies",
-        body: "Rond vier à vijf kwaliteitsvolle sessies af voordat je extra sets of intensiteit toevoegt.",
-        tone: "neutral",
-      });
-    }
-
-    cards.push({
-      title: "Fysiek-focus",
-      body: "Zijkant schouders, latbreedte en bovenborst blijven je hoogste rendement geven voor een sterkere V-vorm.",
-      tone: "accent",
-    });
-    return cards;
-  }, [calorieDelta, sessions, targets.calories, weightTrend]);
-
   function changePlanMode(mode: PlanMode) {
     setPlanMode(mode);
-    const scheduledDay = scheduleForDate(selectedDate, mode, sciencePlanId);
-    setSelectedDay(planIdForMode(scheduledDay, mode, sciencePlanId));
   }
 
   function changeSciencePlan(value: string) {
@@ -1908,15 +1806,12 @@ function TrainingApp() {
     const nextSciencePlanId: SciencePlanId = value;
     setSciencePlanId(nextSciencePlanId);
     setPlanMode("science");
-    const scheduledDay = scheduleForDate(selectedDate, "science", nextSciencePlanId);
-    setSelectedDay(planIdForMode(scheduledDay, "science", nextSciencePlanId));
     const nextPlan = sciencePlanFromId(nextSciencePlanId);
     setBanner(`${nextPlan.label} · ${nextPlan.daysLabel} actief`);
   }
 
   function selectAgendaDay(value: string) {
     setSelectedDate(value);
-    setSelectedDay(planIdForMode(scheduleForDate(value), planMode, sciencePlanId));
   }
 
   /**
@@ -1947,7 +1842,6 @@ function TrainingApp() {
 
   function chooseWorkoutForDate(dayId: CanonicalDayId) {
     setScheduleOverrides((current) => ({ ...current, [`${activeProgramKey}:${selectedDate}`]: dayId }));
-    setSelectedDay(planIdForMode(dayId, planMode, sciencePlanId));
     const template = activePlan.find((item) => item.id === planIdForMode(dayId, planMode, sciencePlanId)) ?? REST_DAY;
     setBanner(`${template.short} gekozen voor ${selectedDateLabel}`);
   }
@@ -1962,7 +1856,6 @@ function TrainingApp() {
       [`${activeProgramKey}:${targetDate}`]: sourceAssignment,
     }));
     setSelectedDate(targetDate);
-    setSelectedDay(planIdForMode(sourceAssignment, planMode, sciencePlanId));
     const sourceName = activePlan.find((item) => item.id === planIdForMode(sourceAssignment, planMode, sciencePlanId))?.short ?? "Planning";
     const targetName = parseDateKey(targetDate).toLocaleDateString("nl-BE", { weekday: "long" });
     setMoveSourceDate(null);
@@ -2086,7 +1979,7 @@ function TrainingApp() {
       recoveryDraft.completedIds.includes(activity.id),
     );
     const session: Session = {
-      id: `${Date.now()}`,
+      id: newSessionId(),
       date: timestampForDate(selectedDate),
       dayId: "rest",
       dayLabel: "Rest day",
@@ -2171,7 +2064,7 @@ function TrainingApp() {
       : resultRows;
 
     const session: Session = {
-      id: existing?.id ?? `${Date.now()}`,
+      id: existing?.id ?? newSessionId(),
       date: existing?.date ?? timestampForDate(selectedDate),
       dayId: day.id,
       dayLabel: day.short,
@@ -2311,7 +2204,7 @@ function TrainingApp() {
       const payload = (await response.json()) as { photo?: ProgressPhoto; message?: string };
       if (!response.ok || !payload.photo) throw new Error(payload.message || "Upload mislukt.");
       setPhotos((current) => [...current, payload.photo!].sort((a, b) => a.capturedOn.localeCompare(b.capturedOn)));
-      setPhotoFile(null);
+      choosePhotoFile(null);
       setPhotoDraft((current) => ({ ...current, weight: "" }));
       setBanner("Dagelijkse check-in opgeslagen");
     } catch (error) {
@@ -2319,6 +2212,17 @@ function TrainingApp() {
     } finally {
       setPhotoUploadLoading(false);
     }
+  }
+
+  /**
+   * Owns the preview blob URL. Minting it where the file is chosen ties the
+   * blob's lifetime to that choice rather than to a render pass, and revoking
+   * the previous one here leaves no cleanup for an effect to do.
+   */
+  function choosePhotoFile(file: File | null) {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(file);
+    setPhotoPreview(file ? URL.createObjectURL(file) : "");
   }
 
   function openPhoto(photoId: string) {
@@ -2839,134 +2743,16 @@ function TrainingApp() {
     };
   }
 
-  function applyPlanChanges(messageId: string, changes: PlanChange[]) {
-    setPlan((current) =>
-      current.map((workoutDay) => ({
-        ...workoutDay,
-        exercises: workoutDay.exercises.map((exercise) => {
-          const matching = changes.filter(
-            (change) => change.exerciseId === exercise.id,
-          );
-          if (!matching.length) return exercise;
-          const next = { ...exercise };
-          matching.forEach((change) => {
-            next[change.field] = change.value.slice(0, 140);
-          });
-          return next;
-        }),
-      })),
-    );
-    setChatMessages((current) =>
-      current.map((message) =>
-        message.id === messageId ? { ...message, applied: true } : message,
-      ),
-    );
-    setBanner("AI-voorstel toegepast op je schema");
-  }
-
-  async function sendChat(suggestedPrompt?: string) {
-    const message = (suggestedPrompt ?? chatDraft).trim();
-    if (!message || chatLoading) return;
-
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: message,
-    };
-    setChatMessages((current) => [...current, userMessage]);
-    setChatDraft("");
-
-    if (aiReady !== true) {
-      setChatMessages((current) => [
-        ...current,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content:
-            "De chatinterface is klaar, maar live AI-antwoorden zijn nog niet geactiveerd. Daarvoor ontbreekt nog een beveiligde server-side OpenAI API-sleutel.",
-        },
-      ]);
-      return;
-    }
-
-    setChatLoading(true);
-    try {
-      const response = await fetch("/api/coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          history: chatMessages.slice(-8).map(({ role, content }) => ({
-            role,
-            content,
-          })),
-          context: {
-            targets,
-            nutrition: {
-              date: nutritionDate,
-              totals: nutritionTotals,
-              entries: selectedNutritionEntries,
-            },
-            metrics: metrics.slice(-12),
-            sessions: sessions.slice(0, 12),
-            planMode,
-            sciencePlanId,
-            plan: activePlan.map((workoutDay) => ({
-              id: workoutDay.id,
-              label: workoutDay.label,
-              exercises: workoutDay.exercises,
-            })),
-            alternatives: activePlan.flatMap((workoutDay) =>
-              workoutDay.exercises
-                .filter((exercise) => ALTERNATIVES[exercise.id]?.length)
-                .map((exercise) => ({
-                  exerciseId: exercise.id,
-                  exercise: exercise.name,
-                  alternatives: ALTERNATIVES[exercise.id],
-                })),
-            ),
-          },
-        }),
-      });
-      const payload = (await response.json()) as {
-        reply?: string;
-        planChanges?: PlanChange[];
-        message?: string;
-      };
-      if (!response.ok) throw new Error(payload.message || "Geen antwoord ontvangen");
-      setChatMessages((current) => [
-        ...current,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: payload.reply || "Ik heb geen bruikbaar antwoord ontvangen.",
-          changes: payload.planChanges ?? [],
-        },
-      ]);
-    } catch (error) {
-      setChatMessages((current) => [
-        ...current,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: `De coach kon nu niet antwoorden: ${error instanceof Error ? error.message : "onbekende fout"}.`,
-        },
-      ]);
-    } finally {
-      setChatLoading(false);
-    }
-  }
-
   const weekSessions = sessions.filter(
     (session) =>
       session.sessionType !== "recovery" &&
       session.dayId !== "rest" &&
-      Date.now() - new Date(session.date).getTime() < 8 * 86_400_000,
+      isRecentSession(session, todayKey),
   ).length;
   const weekRecoveryDays = sessions.filter(
     (session) =>
       (session.sessionType === "recovery" || session.dayId === "rest") &&
-      Date.now() - new Date(session.date).getTime() < 8 * 86_400_000,
+      isRecentSession(session, todayKey),
   ).length;
   const photoSpanDays = photos.length > 1
     ? Math.round((new Date(`${photos[photos.length - 1].capturedOn}T12:00:00`).getTime() - new Date(`${photos[0].capturedOn}T12:00:00`).getTime()) / 86_400_000)
@@ -4291,7 +4077,7 @@ function TrainingApp() {
                   type="file"
                   accept="image/*"
                   className="sr-only"
-                  onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                  onChange={(event) => choosePhotoFile(event.target.files?.[0] ?? null)}
                 />
 
                 <div className="photo-form-grid">
