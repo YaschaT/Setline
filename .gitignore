@@ -50,3 +50,9 @@ deploy/*/.vercel
 *.tsbuildinfo
 # Vendored agent skills (installed via npx, not project source)
 .agents/
+
+# iOS local secrets (same values as .env.local)
+ios/Setline.xcconfig
+ios/**/xcuserdata/
+ios/**/.build/
+ios/DerivedData*/

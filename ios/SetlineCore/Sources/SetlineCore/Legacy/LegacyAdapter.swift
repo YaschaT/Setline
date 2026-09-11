@@ -1,0 +1,296 @@
+import Foundation
+
+/// Reads the web app's blob into the typed domain, and writes typed changes
+/// back into the blob without disturbing anything it does not own.
+///
+/// Both clients keep working while iOS is built: the blob stays the wire
+/// format on `public.user_state`, and the typed model is what the app
+/// reasons in. The one-way schema migration lands in a later phase, once.
+public enum LegacyAdapter {
+
+    // MARK: - Reading
+
+    public static func sessions(from state: LegacyState) -> [TrainingSession] {
+        guard let rows = state["sessions"]?.arrayValue else { return [] }
+        return rows.compactMap(session(from:))
+    }
+
+    static func session(from value: JSONValue) -> TrainingSession? {
+        guard let object = value.objectValue,
+              let id = object["id"]?.stringValue,
+              let dateString = object["date"]?.stringValue,
+              let date = isoDate(dateString)
+        else { return nil }
+
+        let kind: SessionKind = object["sessionType"]?.stringValue == "recovery" ? .recovery : .workout
+        let results = (object["results"]?.arrayValue ?? []).compactMap(result(from:))
+
+        return TrainingSession(
+            id: id,
+            date: date,
+            dayID: object["dayId"]?.stringValue ?? "",
+            dayLabel: object["dayLabel"]?.stringValue ?? "",
+            completion: object["completion"]?.intValue ?? 0,
+            kind: kind,
+            results: results,
+            durationSeconds: object["durationSeconds"]?.intValue,
+            note: object["note"]?.stringValue
+        )
+    }
+
+    static func result(from value: JSONValue) -> ExerciseResult? {
+        guard let object = value.objectValue,
+              let exerciseID = object["exerciseId"]?.stringValue
+        else { return nil }
+
+        let name = object["name"]?.stringValue ?? ExerciseCatalog.exercise(exerciseID)?.name ?? exerciseID
+
+        var sets: [LoggedSet] = []
+        if let rows = object["sets"]?.arrayValue {
+            for (index, row) in rows.enumerated() {
+                if let set = loggedSet(from: row, index: index) { sets.append(set) }
+            }
+        } else if let set = loggedSet(from: value, index: 0) {
+            // The oldest sessions stored a single weight/reps pair on the
+            // result itself rather than a `sets` array.
+            sets.append(set)
+        }
+
+        return ExerciseResult(exerciseID: exerciseID, name: name, sets: sets, note: object["note"]?.stringValue ?? "")
+    }
+
+    static func loggedSet(from value: JSONValue, index: Int) -> LoggedSet? {
+        guard let object = value.objectValue else { return nil }
+
+        let weight = object["weight"]?.decimalValue
+        let reps = object["reps"]?.intValue ?? 0
+        let pausedReps = object["pausedReps"]?.intValue ?? 0
+        let pauseSeconds = object["pauseSeconds"]?.doubleValue
+        let pauseEnabled = object["pauseEnabled"]?.boolValue ?? (pausedReps > 0 || (pauseSeconds ?? 0) > 0)
+
+        // Nothing is dropped and nothing is summed.
+        //
+        // The web app's `completedReps()` returned `reps + pausedReps`, so a
+        // paused rep and a normal rep became one number that then drove
+        // progression, PR detection and the strength trend
+        // (TRAINING_LOGIC §15 change 2). Addendum 16R states the same rule
+        // from the design side: "Pauze-reps tellen nooit mee in het
+        // repsaantal."
+        //
+        // So `reps` stays `reps` and the paused count travels beside it. Two
+        // sets in the existing history mix the two (flat-bench 120 kg, 6 + 2
+        // paused). They keep both numbers, count toward volume, and stay out
+        // of progression — a mixed set is comparable to neither series.
+        let modifiers = SetModifiers(
+            pauseEnabled: pauseEnabled,
+            pauseSeconds: pauseEnabled ? (pauseSeconds ?? 2) : nil
+        )
+
+        guard weight != nil || reps > 0 || pausedReps > 0 else {
+            // An untouched draft row. Preserved as an empty set so the grid
+            // keeps its shape.
+            return LoggedSet(index: index, weightKg: nil, reps: 0, modifiers: modifiers)
+        }
+
+        return LoggedSet(
+            index: index,
+            weightKg: weight,
+            reps: reps,
+            rirReported: object["rir"]?.intValue,
+            isWarmup: object["isWarmup"]?.boolValue ?? false,
+            modifiers: modifiers,
+            flags: [],
+            substitutedFrom: object["substitutedFrom"]?.stringValue,
+            partialReps: object["partialReps"]?.intValue,
+            pausedReps: pausedReps > 0 ? pausedReps : nil
+        )
+    }
+
+    public static func metrics(from state: LegacyState) -> [BodyMetric] {
+        (state["metrics"]?.arrayValue ?? []).compactMap { value in
+            guard let object = value.objectValue,
+                  let id = object["id"]?.stringValue,
+                  let date = object["date"]?.stringValue,
+                  let weight = object["weight"]?.doubleValue
+            else { return nil }
+            return BodyMetric(id: id, date: date, weight: weight, waist: object["waist"]?.doubleValue)
+        }
+    }
+
+    public static func targets(from state: LegacyState) -> NutritionTargets? {
+        guard let object = state["targets"]?.objectValue else { return nil }
+        return NutritionTargets(
+            calories: object["calories"]?.intValue ?? 0,
+            protein: object["protein"]?.intValue ?? 0,
+            carbs: object["carbs"]?.intValue ?? 0,
+            fat: object["fat"]?.intValue ?? 0
+        )
+    }
+
+    public static func planMode(from state: LegacyState) -> (mode: String, sciencePlanID: String) {
+        (
+            state["planMode"]?.stringValue ?? "personal",
+            state["sciencePlanId"]?.stringValue ?? "ppl-ul"
+        )
+    }
+
+    /// The saved plan, if the user edited theirs, otherwise the catalogue's.
+    public static func plan(from state: LegacyState) -> [WorkoutDay] {
+        let (mode, scienceID) = planMode(from: state)
+        guard let days = state["plan"]?.arrayValue, !days.isEmpty else {
+            return PlanCatalog.plan(mode: mode, sciencePlanID: scienceID)
+        }
+        let parsed = days.compactMap(workoutDay(from:))
+        return parsed.isEmpty ? PlanCatalog.plan(mode: mode, sciencePlanID: scienceID) : parsed
+    }
+
+    static func workoutDay(from value: JSONValue) -> WorkoutDay? {
+        guard let object = value.objectValue, let id = object["id"]?.stringValue else { return nil }
+        let exercises = (object["exercises"]?.arrayValue ?? []).compactMap(plannedExercise(from:))
+        return WorkoutDay(
+            id: id,
+            label: object["label"]?.stringValue ?? id,
+            short: object["short"]?.stringValue ?? id,
+            focus: object["focus"]?.stringValue ?? "",
+            exercises: exercises
+        )
+    }
+
+    static func plannedExercise(from value: JSONValue) -> PlannedExercise? {
+        guard let object = value.objectValue, let id = object["id"]?.stringValue else { return nil }
+        let prescription = object["prescription"]?.stringValue ?? ""
+        let load = object["load"]?.stringValue ?? ""
+        let rest = object["rest"]?.stringValue ?? ""
+        let role = ExerciseCatalog.role(id)
+        let rir = PrescriptionParser.targetRIR(from: load, role: role)
+        var sets = PrescriptionParser.setPrescriptions(from: prescription, targetRIR: rir)
+        if sets.isEmpty {
+            sets = [SetPrescription(repRange: 8...12, targetRIR: rir)]
+        }
+        let paused = id == "upper-paused-bench"
+        return PlannedExercise(
+            exerciseID: id,
+            role: role,
+            sets: sets,
+            modifiers: SetModifiers(pauseEnabled: paused, pauseSeconds: paused ? 2 : nil),
+            authoredNote: LegacyPrescriptionNote(prescription: prescription, load: load, rest: rest)
+        )
+    }
+
+    /// Date → canonical day id. Tolerates both key shapes the web app has
+    /// used: a bare `"2026-08-28"` in older exports, and the newer
+    /// `"personal:2026-08-28"` scoped by program.
+    public static func scheduleOverrides(from state: LegacyState) -> [String: String] {
+        guard let object = state["scheduleOverrides"]?.objectValue else { return [:] }
+        var result: [String: String] = [:]
+        for (key, value) in object {
+            guard let day = value.stringValue else { continue }
+            let dateKey = key.contains(":") ? String(key.split(separator: ":").last ?? "") : key
+            result[dateKey] = day
+        }
+        return result
+    }
+
+    /// The key the paused session rides in. Namespaced so the web app — which
+    /// reads only the keys it knows — leaves it alone, and so `LegacyState`
+    /// carries it through untouched on every write.
+    public static let activeSessionKey = "iosActiveSession"
+
+    public static func activeSession(from state: LegacyState) -> ActiveSessionSnapshot? {
+        guard let value = state[activeSessionKey], value != .null else { return nil }
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(ActiveSessionSnapshot.self, from: data)
+    }
+
+    public static func apply(activeSession: ActiveSessionSnapshot?, to state: inout LegacyState) {
+        guard let activeSession else {
+            state.set(activeSessionKey, to: .null)
+            return
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(activeSession),
+              let value = try? JSONDecoder().decode(JSONValue.self, from: data)
+        else { return }
+        state.set(activeSessionKey, to: value)
+    }
+
+    // MARK: - Writing
+
+    /// Writes sessions back into the blob in the web app's own shape.
+    ///
+    /// Only the `sessions` and `updatedAt` keys are touched. Nutrition
+    /// entries, the recovery draft, chat history, targets and any key a
+    /// future web release adds all survive untouched.
+    public static func apply(sessions: [TrainingSession], to state: inout LegacyState) {
+        let rows = sessions.map { JSONValue(session: $0) }
+        state.set("sessions", to: .array(rows))
+        state.set("updatedAt", to: .string(isoString(Date())))
+    }
+
+    // MARK: - Dates
+
+    // `ISO8601DateFormatter` is not Sendable, so it is built per call rather
+    // than cached in a static. Import runs once over a few dozen sessions;
+    // the allocation is not worth a lock.
+    private static func formatter(fractionalSeconds: Bool) -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = fractionalSeconds
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
+        return formatter
+    }
+
+    public static func isoDate(_ string: String) -> Date? {
+        formatter(fractionalSeconds: true).date(from: string)
+            ?? formatter(fractionalSeconds: false).date(from: string)
+    }
+
+    /// Milliseconds included, matching what the web app writes
+    /// (`new Date().toISOString()`).
+    public static func isoString(_ date: Date) -> String {
+        formatter(fractionalSeconds: true).string(from: date)
+    }
+}
+
+extension JSONValue {
+    init(session: TrainingSession) {
+        var object: [String: JSONValue] = [
+            "id": .string(session.id),
+            "date": .string(LegacyAdapter.isoString(session.date)),
+            "dayId": .string(session.dayID),
+            "dayLabel": .string(session.dayLabel),
+            "completion": .number(Decimal(session.completion)),
+            "results": .array(session.results.map { JSONValue(result: $0) }),
+        ]
+        if session.kind == .recovery { object["sessionType"] = .string("recovery") }
+        if let duration = session.durationSeconds { object["durationSeconds"] = .number(Decimal(duration)) }
+        if let note = session.note { object["note"] = .string(note) }
+        self = .object(object)
+    }
+
+    init(result: ExerciseResult) {
+        self = .object([
+            "exerciseId": .string(result.exerciseID),
+            "name": .string(result.name),
+            "sets": .array(result.sets.map { JSONValue(set: $0) }),
+        ])
+    }
+
+    init(set: LoggedSet) {
+        var object: [String: JSONValue] = [
+            "weight": .string(set.weightKg.map { "\($0)" } ?? ""),
+            "reps": .string(set.reps > 0 ? "\(set.reps)" : ""),
+            "pausedReps": .string(set.pausedReps.map { "\($0)" } ?? ""),
+            "pauseSeconds": .string(set.modifiers.pauseSeconds.map { "\(Int($0))" } ?? ""),
+            "pauseEnabled": .bool(set.modifiers.pauseEnabled),
+        ]
+        if let rir = set.rirReported { object["rir"] = .number(Decimal(rir)) }
+        if set.isWarmup { object["isWarmup"] = .bool(true) }
+        if let partial = set.partialReps, partial > 0 { object["partialReps"] = .number(Decimal(partial)) }
+        if let origin = set.substitutedFrom { object["substitutedFrom"] = .string(origin) }
+        self = .object(object)
+    }
+}

@@ -1,0 +1,47 @@
+# Hand-authored attribute table for every exercise id in the web app's plans.
+# equipment drives the default load increment (TRAINING_LOGIC §3.3);
+# role drives the rest prescription (addendum 13R) and the progression rule (§3.2).
+ATTRS = {
+    # id:                 (equipment,             compound, unilateral, role)
+    "flat-bench":         ("barbell",             True,  False, "primaryStrength"),
+    "incline-bench":      ("barbell",             True,  False, "primaryStrength"),
+    "upper-paused-bench": ("barbell",             True,  False, "primaryStrength"),
+    "pull-up":            ("bodyweight",          True,  False, "primaryStrength"),
+    "rdl":                ("barbell",             True,  False, "primaryStrength"),
+    "hack-squat":         ("machinePlate",        True,  False, "primaryStrength"),
+
+    "lat-pulldown":       ("machineSelectorised", True,  False, "secondaryCompound"),
+    "neutral-row":        ("machineSelectorised", True,  False, "secondaryCompound"),
+    "wide-row":           ("machineSelectorised", True,  False, "secondaryCompound"),
+    "upper-wide-row":     ("machineSelectorised", True,  False, "secondaryCompound"),
+    "incline-machine":    ("machinePlate",        True,  False, "secondaryCompound"),
+    "push-shoulder":      ("machineSelectorised", True,  False, "secondaryCompound"),
+    "upper-shoulder":     ("machineSelectorised", True,  False, "secondaryCompound"),
+    "leg-press":          ("machinePlate",        True,  False, "secondaryCompound"),
+    "hip-thrust":         ("barbell",             True,  False, "secondaryCompound"),
+    "bulgarian":          ("dumbbell",            True,  True,  "secondaryCompound"),
+    "strict-curl":        ("dumbbell",            False, False, "accessory"),
+    "science-preacher":   ("machineSelectorised", False, False, "accessory"),
+
+    "pec-fly":            ("machineSelectorised", False, False, "isolation"),
+    "upper-fly":          ("cable",               False, False, "isolation"),
+    "push-lateral":       ("cable",               False, False, "isolation"),
+    "legs-lateral":       ("cable",               False, False, "isolation"),
+    "upper-lateral":      ("cable",               False, False, "isolation"),
+    "science-lateral":    ("cable",               False, False, "isolation"),
+    "overhead-triceps":   ("cable",               False, False, "isolation"),
+    "pressdown":          ("cable",               False, False, "isolation"),
+    "upper-pressdown":    ("cable",               False, False, "isolation"),
+    "cable-curl":         ("cable",               False, False, "isolation"),
+    "hammer-curl":        ("dumbbell",            False, False, "isolation"),
+    "reverse-pec":        ("machineSelectorised", False, False, "isolation"),
+    "rear-delt":          ("machineSelectorised", False, False, "isolation"),
+    "seated-curl":        ("machineSelectorised", False, False, "isolation"),
+    "lying-curl":         ("machineSelectorised", False, False, "isolation"),
+    "leg-extension":      ("machineSelectorised", False, False, "isolation"),
+    "standing-calf":      ("machinePlate",        False, False, "isolation"),
+    "seated-calf":        ("machinePlate",        False, False, "isolation"),
+    "kneeling-lat":       ("cable",               False, True,  "isolation"),
+    "cable-crunch":       ("cable",               False, False, "isolation"),
+    "hanging-raise":      ("bodyweight",          False, False, "isolation"),
+}
