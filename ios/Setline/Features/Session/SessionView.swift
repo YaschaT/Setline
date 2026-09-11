@@ -50,6 +50,8 @@ struct SessionView: View {
             value: runner.isTimerExpanded
         )
         .onReceive(clock) { _ in runner.tick() }
+        .onAppear { runner.configureWarmups(hidden: app.hiddenWarmups) }
+        .onChange(of: app.hiddenWarmups) { _, hidden in runner.configureWarmups(hidden: hidden) }
         .slRespondsToTextSize()
         .task {
             #if DEBUG
@@ -73,15 +75,9 @@ struct SessionView: View {
                 SetEntrySheet(
                     slot: runner.slots[editing.slot],
                     setIndex: editing.set,
-                    onLog: { weight, reps, rir, failed in
-                        runner.log(
-                            slotIndex: editing.slot,
-                            setIndex: editing.set,
-                            weight: weight,
-                            reps: reps,
-                            rir: rir,
-                            failed: failed
-                        )
+                    isCalibration: editing.set == 0 && runner.needsCalibration(slotIndex: editing.slot),
+                    onLog: { entry in
+                        runner.log(slotIndex: editing.slot, setIndex: editing.set, entry: entry)
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         runner.editing = nil
                     },
@@ -201,7 +197,14 @@ struct SessionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 exerciseHeader
-                if runner.showsProposal { proposalCard.padding(.top, SL.Space.s5) }
+                if let prompt = runner.calibrationPrompt(slotIndex: runner.currentIndex) {
+                    calibrationCard(prompt).padding(.top, SL.Space.s5)
+                } else if let summary = runner.calibrationSummary(slotIndex: runner.currentIndex) {
+                    calibratedSummary(summary).padding(.top, SL.Space.s5)
+                } else if runner.showsProposal {
+                    proposalCard.padding(.top, SL.Space.s5)
+                }
+                warmupSection.padding(.top, SL.Space.s5)
                 setRows.padding(.top, SL.Space.s5)
                 if let advice = runner.adviceLine(for: runner.currentIndex) {
                     Text(advice)
@@ -304,6 +307,52 @@ struct SessionView: View {
 
     private var increment: Decimal { runner.current.exercise.incrementKg }
 
+    /// Artboard 28. Same slot, same size and radius as the proposal card it
+    /// replaces — the app asks for a weight instead of proposing one.
+    private func calibrationCard(_ prompt: CalibrationPrompt) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SLEyebrow(text: prompt.contextLabel)
+            SLEyebrow(text: "Set 1 · kalibratie").padding(.top, 10)
+            Text(prompt.headline)
+                .slTitle()
+                .lineSpacing(SL.TypeSize.title * 0.3)
+                .foregroundStyle(SL.Ink.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+            Text(prompt.body)
+                .slMeta()
+                .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 14)
+        }
+        .padding(SL.Space.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slCardStrong(fill: SL.Surface.raised2)
+    }
+
+    /// Artboard 28b, plus the one honest extra: say so when the set was easy
+    /// enough that the next one starts a step higher.
+    private func calibratedSummary(_ summary: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SLEyebrow(text: "Gekalibreerd op")
+            Text(summary)
+                .slLead().slNumerals()
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, 4)
+            if runner.didStepUpAfterCalibration(slotIndex: runner.currentIndex) {
+                Text("RIR 3 of meer: set 2 staat één stap hoger. Pas aan als dat niet klopt.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+            }
+        }
+        .padding(SL.Space.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slCard(radius: SL.Radius.lg)
+    }
+
     private func toneLabel(_ tone: ProposalTone) -> String {
         switch tone {
         case .ready: return "Bovengrens bevestigd"
@@ -313,8 +362,75 @@ struct SessionView: View {
         }
     }
 
+    /// Artboard 30. Generated from today's top set, outside the working-set
+    /// card, dashed, with no status dot and no rest timer — and no taps: it is
+    /// a reference strip, not a log.
+    @ViewBuilder
+    private var warmupSection: some View {
+        let ladder = runner.warmupLadder(slotIndex: runner.currentIndex)
+        if !ladder.isEmpty {
+            if runner.isWarmupCollapsed(slotIndex: runner.currentIndex) {
+                Button { runner.showWarmup(slotIndex: runner.currentIndex) } label: {
+                    HStack(spacing: SL.Space.s2) {
+                        Text(runner.collapsedWarmupLabel(slotIndex: runner.currentIndex))
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.tertiary)
+                        Text("Toon")
+                            .slMeta(SL.Weight.semibold)
+                            .foregroundStyle(SL.Ink.secondary)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(runner.collapsedWarmupLabel(slotIndex: runner.currentIndex)), tonen")
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let topSet = runner.topSetLabel(slotIndex: runner.currentIndex) {
+                        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                            SLEyebrow(text: "Topset vandaag")
+                            Text(topSet).slLead().slNumerals().foregroundStyle(SL.Ink.primary)
+                        }
+                        .padding(.bottom, SL.Space.s4)
+                    }
+
+                    HStack {
+                        SLEyebrow(text: "Opwarmen · telt niet mee")
+                        Spacer()
+                        Button {
+                            Task { await app.hideWarmup(exerciseID: runner.current.planned.exerciseID) }
+                        } label: {
+                            Text("Altijd verbergen").slMeta().foregroundStyle(SL.Ink.tertiary).slHitTarget()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.bottom, SL.Space.s2)
+
+                    VStack(spacing: SLSetColumn.rowGap) {
+                        ForEach(SetRowPresenter.warmupRows(ladder), id: \.index) { row in
+                            SLSetRow(row: row) {}
+                        }
+                    }
+
+                    Text(WarmupPlanner.footnote(
+                        topSetKg: ladder.last?.weightKg ?? 0,
+                        formatter: app.display
+                    ))
+                    .slMeta()
+                    .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, SL.Space.s3)
+
+                    SLEyebrow(text: "Werksets").padding(.top, SL.Space.s5)
+                }
+            }
+        }
+    }
+
     private var setRows: some View {
-        SLSetGrid(referenceLabel: runner.columnHeaderDate) {
+        SLSetGrid(referenceLabel: runner.columnHeader(slotIndex: runner.currentIndex)) {
             VStack(spacing: SLSetColumn.rowGap) {
                 ForEach(runner.rows(for: runner.currentIndex), id: \.index) { row in
                     SLSetRow(row: row) {
@@ -386,7 +502,9 @@ struct SessionView: View {
                 .buttonStyle(SLPrimaryButtonStyle())
         } else if let next = runner.nextIndex(in: runner.current) {
             Button { runner.editing = (runner.currentIndex, next) } label: {
-                Text("Begin set \(next + 1)")
+                Text(next == 0 && runner.needsCalibration(slotIndex: runner.currentIndex)
+                     ? "Kalibratieset invoeren"
+                     : "Begin set \(next + 1)")
             }
             .buttonStyle(SLPrimaryButtonStyle())
         } else if let next = runner.nextSlotIndex {

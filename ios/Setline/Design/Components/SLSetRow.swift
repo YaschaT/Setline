@@ -149,7 +149,9 @@ struct SLSetRow: View {
         switch row.delta {
         case .personalRecord: return SL.Signal.action
         case .failed: return SL.Signal.loss
-        case .paused, .partial: return SL.Signal.attention
+        // 16R keeps one amber for both. They are told apart by their words and
+        // by the partial count, never by colour.
+        case .paused, .partial, .pausedAndPartial: return SL.Signal.attention
         default: return nil
         }
     }
@@ -174,18 +176,33 @@ struct SLSetRow: View {
             marker("mislukt")
         case .paused:
             marker("met pauze")
-        case .partial:
-            marker("partieel")
+        case .partial(let count):
+            marker("partieel +\(count)")
+        case .pausedAndPartial(let count):
+            // Two true things about one set. The column wraps rather than
+            // dropping either, and stays at the 12pt floor.
+            marker("met pauze · partieel +\(count)", lines: 2)
+        case .calibration:
+            Text("kalibratie")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                .foregroundStyle(SL.Ink.tertiary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        case .baseline:
+            Text("basis")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                .foregroundStyle(SL.Ink.tertiary)
+                .lineLimit(1).minimumScaleFactor(0.7)
         case .none:
             EmptyView()
         }
     }
 
-    private func marker(_ text: String) -> some View {
+    private func marker(_ text: String, lines: Int = 1) -> some View {
         Text(text)
             .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
             .foregroundStyle(toneColor ?? SL.Ink.tertiary)
-            .lineLimit(1)
+            .multilineTextAlignment(.trailing)
+            .lineLimit(lines)
             .minimumScaleFactor(0.85)
     }
 
@@ -199,7 +216,10 @@ struct SLSetRow: View {
         case .personalRecord: parts.append("persoonlijk record")
         case .failed: parts.append("mislukte set")
         case .paused: parts.append("set met pauze")
-        case .partial: parts.append("partiële reps")
+        case .partial(let count): parts.append("\(count) partiële reps")
+        case .pausedAndPartial(let count): parts.append("set met pauze, \(count) partiële reps")
+        case .calibration: parts.append("kalibratieset")
+        case .baseline: parts.append("basis voor deze oefening")
         case .none: break
         }
         return parts.joined(separator: ", ")

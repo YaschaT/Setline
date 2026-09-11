@@ -117,7 +117,7 @@ struct TrainingHomeView: View {
 
                 if isFirstRun {
                     SLHairline().padding(.vertical, SL.Space.s5)
-                    Text("Nog geen sessies gelogd. Je eerste sessie zet de startgewichten; daarna rekent SETLINE de progressie zelf.")
+                    Text("Nog geen sessies gelogd. Je eerste sessie zet de startgewichten; na drie vergelijkbare sessies per oefening komen de voorstellen en records.")
                         .slBody()
                         .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
                         .foregroundStyle(SL.Ink.secondary)

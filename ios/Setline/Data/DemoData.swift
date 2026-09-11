@@ -47,9 +47,13 @@ enum DemoData {
             // real "+5 kg sinds ..." to say and the two sessions since then
             // are what make the proposal READY.
             let step: Decimal = index == 2 ? 5 : 0
-            let results = PlanCatalog.personal
-                .first { $0.id == "push" }?
-                .exercises.map { planned -> JSONValue in
+            // `-SetlineNewExercise` leaves the last push exercise out of the
+            // seeded history, so it has nothing to compare against and the
+            // calibration path is reachable.
+            let dropsLast = ProcessInfo.processInfo.arguments.contains("-SetlineNewExercise")
+            let planned = PlanCatalog.personal.first { $0.id == "push" }?.exercises ?? []
+            let seeded = dropsLast ? Array(planned.dropLast()) : planned
+            let results = seeded.map { planned -> JSONValue in
                     let load = (loads[planned.exerciseID] ?? 40) - step
                     let sets = planned.sets.map { prescription -> JSONValue in
                         JSONValue.object([
@@ -66,7 +70,7 @@ enum DemoData {
                         "name": .string(ExerciseCatalog.exercise(planned.exerciseID)?.name ?? planned.exerciseID),
                         "sets": .array(sets),
                     ])
-                } ?? []
+                }
 
             sessions.append(.object([
                 "id": .string("demo-\(index)"),
@@ -80,8 +84,11 @@ enum DemoData {
 
         // Today is a push day whatever the weekday, so the slice is always
         // reachable from a cold launch.
+        // `-SetlineUpperDay` puts today on Upper, which is where the planned
+        // paused bench lives.
+        let today = ProcessInfo.processInfo.arguments.contains("-SetlineUpperDay") ? "upper" : "push"
         let overrides = JSONValue.object([
-            "personal:\(Schedule.dateKey(Date()))": .string("push")
+            "personal:\(Schedule.dateKey(Date()))": .string(today)
         ])
 
         var raw: [String: JSONValue] = [

@@ -143,7 +143,12 @@ final class RecordsEngineTests: XCTestCase {
             history: history(sessions)
         )
         XCTAssertEqual(record?.headline, "Referentie opbouwen · sessie 3 van 3")
-        XCTAssertEqual(record?.detail, "Nog geen record mogelijk voor deze oefening")
+        // Phase 2 replaced this copy: artboard 08 had promised progression
+        // after one session, which the three-session gate then withheld.
+        XCTAssertEqual(
+            record?.detail,
+            "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen."
+        )
     }
 
     func testLoadPROutranksEverythingElse() {

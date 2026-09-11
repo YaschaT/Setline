@@ -130,7 +130,7 @@ public enum ProgressionEngine {
                 targetReps: nil,
                 label: nil,
                 headline: "Referentie opbouwen · sessie \(history.referenceSessionNumber) van \(ExerciseHistory.sessionsBeforeReference)",
-                body: "Geen voorstel. Na drie sessies rekent SETLINE progressie voor deze oefening."
+                body: "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen."
             )
         }
 

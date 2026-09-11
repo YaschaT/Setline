@@ -217,6 +217,21 @@ public enum LegacyAdapter {
         state.set(activeSessionKey, to: value)
     }
 
+    /// Exercises whose warm-up ramp the user has hidden for good.
+    ///
+    /// The only thing about a warm-up that is worth persisting: the ramp
+    /// itself is generated on the fly and never stored as sets.
+    public static let hiddenWarmupsKey = "iosHiddenWarmups"
+
+    public static func hiddenWarmups(from state: LegacyState) -> Set<String> {
+        guard let values = state[hiddenWarmupsKey]?.arrayValue else { return [] }
+        return Set(values.compactMap(\.stringValue))
+    }
+
+    public static func apply(hiddenWarmups: Set<String>, to state: inout LegacyState) {
+        state.set(hiddenWarmupsKey, to: .array(hiddenWarmups.sorted().map { .string($0) }))
+    }
+
     // MARK: - Writing
 
     /// Writes sessions back into the blob in the web app's own shape.

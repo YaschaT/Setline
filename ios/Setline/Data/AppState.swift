@@ -37,6 +37,8 @@ final class AppState {
     /// A workout that was started and paused. Not history: nothing in it
     /// counts until the session is finished.
     private(set) var activeSession: ActiveSessionSnapshot?
+    /// Exercises whose warm-up ramp is hidden for good.
+    private(set) var hiddenWarmups: Set<String> = []
 
     let display = NumberDisplay.dutch
     private let client: SupabaseClient
@@ -170,6 +172,7 @@ final class AppState {
         sessions = LegacyAdapter.sessions(from: next).sorted { $0.date > $1.date }
         scheduleOverrides = LegacyAdapter.scheduleOverrides(from: next)
         activeSession = LegacyAdapter.activeSession(from: next)
+        hiddenWarmups = LegacyAdapter.hiddenWarmups(from: next)
     }
 
     /// Saves a paused workout, locally first.
@@ -180,6 +183,15 @@ final class AppState {
     func pauseSession(_ snapshot: ActiveSessionSnapshot) async {
         guard var current = state, let session else { return }
         LegacyAdapter.apply(activeSession: snapshot, to: &current)
+        apply(current)
+        store?.save(current, for: session.email, pending: true)
+        await push(current, for: session)
+    }
+
+    /// "Altijd verbergen" on the ramp. The only warm-up state that persists.
+    func hideWarmup(exerciseID: String) async {
+        guard var current = state, let session, !hiddenWarmups.contains(exerciseID) else { return }
+        LegacyAdapter.apply(hiddenWarmups: hiddenWarmups.union([exerciseID]), to: &current)
         apply(current)
         store?.save(current, for: session.email, pending: true)
         await push(current, for: session)

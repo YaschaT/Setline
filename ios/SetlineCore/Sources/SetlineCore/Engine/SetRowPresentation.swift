@@ -13,10 +13,45 @@ public enum SetDelta: Hashable, Sendable {
     case difference(String)
     case personalRecord
     case failed
+    /// A set performed with a pause. The word carries the meaning; amber
+    /// alone never does.
     case paused
-    case partial
+    /// Partial reps at the end of a set, with their count, so "partieel" and
+    /// "met pauze" are never told apart by colour alone.
+    case partial(count: Int)
+    /// Both at once. Neither state is allowed to hide the other.
+    case pausedAndPartial(count: Int)
+    /// The calibration set itself, before it is written.
+    case calibration
+    /// The calibration set once written: everything else compares to it.
+    case baseline
     /// A warm-up row carries no delta and no status dot.
     case none
+
+    /// Whether this says what the set *was*, rather than how it compares.
+    /// Those descriptions outrank any comparison — losing one would hide the
+    /// very thing that keeps the set out of progression.
+    public var describesTheSet: Bool {
+        switch self {
+        case .failed, .paused, .partial, .pausedAndPartial: return true
+        case .reference, .difference, .personalRecord, .calibration, .baseline, .none: return false
+        }
+    }
+}
+
+/// What the grid's trailing column is comparing against.
+public enum SetGridMode: Hashable, Sendable {
+    /// The usual case: compare each set with the same set last session.
+    case history
+    /// No history at all and set 1 not yet written (artboard 28).
+    case calibrationPending
+    /// Set 1 is in; the rest of the exercise compares to it (artboard 28b).
+    case calibrated(baseline: LoggedSet)
+
+    public var isCalibration: Bool {
+        if case .history = self { return false }
+        return true
+    }
 }
 
 public enum SetRowStatus: String, Sendable {
@@ -65,12 +100,14 @@ public enum SetRowPresenter {
     ///   - warmups: the ramp, if it is showing (design 30).
     ///   - reference: the comparable session the delta column names.
     ///   - activeIndex: the row that is next up.
+    ///   - mode: what the trailing column compares against.
     public static func rows(
         sets: [LoggedSet],
         warmups: [LoggedSet] = [],
         reference: ExerciseAppearance?,
         history: ExerciseHistory,
         activeIndex: Int?,
+        mode: SetGridMode = .history,
         formatter: NumberDisplay = .dutch
     ) -> [SetRowPresentation] {
         var rows: [SetRowPresentation] = []
@@ -109,12 +146,16 @@ public enum SetRowPresenter {
 
             let delta: SetDelta
             if set.isLogged {
+                let partialCount = (set.partialReps ?? 0) > 0 ? set.partialReps : nil
                 if set.flags.contains(.failed) {
                     delta = .failed
+                } else if set.modifiers.pauseEnabled, let partial = partialCount {
+                    // Both descriptions are true, so both are shown.
+                    delta = .pausedAndPartial(count: partial)
                 } else if set.modifiers.pauseEnabled {
                     delta = .paused
-                } else if (set.partialReps ?? 0) > 0 {
-                    delta = .partial
+                } else if let partial = partialCount {
+                    delta = .partial(count: partial)
                 } else if RecordsEngine.isLoadPR(
                     set: set,
                     history: history,
@@ -140,13 +181,42 @@ public enum SetRowPresenter {
             case .warmup: repsLabel = "—"
             }
 
+            var weightLabel = set.weightKg.map(formatter.kg) ?? "— kg"
+            var resolvedDelta = delta
+
+            switch mode {
+            case .history:
+                break
+            case .calibrationPending:
+                // Artboard 28: set 1 asks for a weight, the rest wait for it.
+                if offset == 0 {
+                    if !set.isLogged { resolvedDelta = .calibration }
+                } else if !set.isLogged {
+                    weightLabel = "volgt uit set 1"
+                    resolvedDelta = .none
+                }
+            case .calibrated(let baseline):
+                // Artboard 28b: everything compares to the calibration set —
+                // but a comparison never replaces what the set actually was.
+                // A paused, partial or failed set keeps saying so.
+                if !delta.describesTheSet {
+                    if offset == 0 {
+                        resolvedDelta = .baseline
+                    } else if let weight = baseline.weightKg {
+                        resolvedDelta = set.isLogged
+                            ? .difference(formatter.signedDelta((set.weightKg ?? 0) - weight))
+                            : .reference(formatter.setReference(weightKg: weight, reps: baseline.reps))
+                    }
+                }
+            }
+
             rows.append(
                 SetRowPresentation(
                     index: offset,
                     indexLabel: "\(offset + 1)",
-                    weightLabel: set.weightKg.map(formatter.kg) ?? "— kg",
+                    weightLabel: weightLabel,
                     repsLabel: repsLabel,
-                    delta: delta,
+                    delta: resolvedDelta,
                     status: status,
                     isWarmup: false
                 )
@@ -154,6 +224,24 @@ public enum SetRowPresenter {
         }
 
         return rows
+    }
+
+    /// The ramp's rows, for the section above the working-set grid.
+    public static func warmupRows(
+        _ warmups: [WarmupSet],
+        formatter: NumberDisplay = .dutch
+    ) -> [SetRowPresentation] {
+        warmups.enumerated().map { offset, warmup in
+            SetRowPresentation(
+                index: offset,
+                indexLabel: "W\(offset + 1)",
+                weightLabel: formatter.kg(warmup.weightKg),
+                repsLabel: "\(warmup.reps)",
+                delta: .none,
+                status: .warmup,
+                isWarmup: true
+            )
+        }
     }
 
     /// The advice line under the set list, which appears only once the last

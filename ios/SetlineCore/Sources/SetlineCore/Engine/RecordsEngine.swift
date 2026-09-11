@@ -41,7 +41,7 @@ public enum RecordsEngine {
             return ExerciseRecord(
                 type: .sessionBest,
                 headline: "Referentie opbouwen · sessie \(history.referenceSessionNumber) van \(ExerciseHistory.sessionsBeforeReference)",
-                detail: "Nog geen record mogelijk voor deze oefening"
+                detail: "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen."
             )
         }
 
@@ -148,7 +148,13 @@ public enum RecordsEngine {
     ) -> Bool {
         guard history.hasReference, set.countsTowardProgression, let load = set.weightKg else { return false }
         let priorBest = history.appearances.flatMap(\.sets).compactMap(\.weightKg).max() ?? 0
-        let sessionBest = earlierInSession.compactMap(\.weightKg).max() ?? 0
+        // Only sets that could themselves have been a record count as the bar
+        // to beat. A partial or failed set earlier in the session must not
+        // quietly suppress a clean set at the same weight — 16R already shows
+        // those rows as `partieel` and `mislukt`, never as `PR`.
+        let sessionBest = earlierInSession
+            .filter { $0.countsTowardProgression && !$0.flags.contains(.failed) }
+            .compactMap(\.weightKg).max() ?? 0
         return load > max(priorBest, sessionBest) + Estimates.epsilonKg
     }
 }
