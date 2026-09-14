@@ -40,7 +40,10 @@ public enum Calibration {
     }
 
     public static func prompt(for exercise: Exercise, substitutedFrom origin: String? = nil) -> CalibrationPrompt {
-        let context = origin.map { "Gewisseld van \($0) · geen historiek" } ?? "Geen historiek"
+        // The origin belongs in the body, not the label: the exercise header
+        // already says what this was swapped from, and saying it twice costs
+        // two lines above the first set row.
+        let context = "Geen historiek"
         let body = origin == nil
             ? "SETLINE stelt hier geen gewicht voor: er is nog niets om mee te vergelijken. Je sets, reps en RIR blijven behouden."
             : "SETLINE stelt hier geen gewicht voor: \(exercise.name.lowercased()) is een andere oefening. Je sets, reps en RIR blijven behouden."

@@ -17,7 +17,9 @@ for m in ex_re.finditer(SRC):
     allex.setdefault(m.group(1), m.groups())
 
 buf = io.StringIO()
-buf.write('''// Generated from app/page.tsx by scratchpad/gen/generate.py — do not hand-edit.
+buf.write('''// Generated from app/page.tsx by Tools/generate.py — do not hand-edit.
+// The curated V1 catalogue merges these with its own additions and metadata;
+// see ExerciseCatalogV1.swift.
 //
 // The names, prescriptions, load notes and rest notes are the web app's own,
 // carried over verbatim. Equipment, role, compound and unilateral are the
@@ -27,9 +29,9 @@ buf.write('''// Generated from app/page.tsx by scratchpad/gen/generate.py — do
 
 import Foundation
 
-public enum ExerciseCatalog {
+public enum GeneratedExerciseCatalog {
 
-    public static let all: [String: Exercise] = [
+    public static let exercises: [String: Exercise] = [
 ''')
 for eid, (i, name, presc, load, rest) in sorted(allex.items()):
     equip, compound, uni, role = ATTRS[eid]
@@ -48,9 +50,6 @@ for eid in sorted(ATTRS):
     buf.write(f'        {swift_str(eid)}: .{ATTRS[eid][3]},\n')
 buf.write('''    ]
 
-    public static func exercise(_ id: String) -> Exercise? { all[id] }
-
-    public static func role(_ id: String) -> ExerciseRole { roles[id] ?? .accessory }
 }
 ''')
 open(f'{OUT}/ExerciseCatalog.swift','w').write(buf.getvalue())

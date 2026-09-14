@@ -13,15 +13,31 @@ import SetlineCore
 final class SessionRunner {
 
     struct ExerciseSlot: Identifiable {
-        let planned: PlannedExercise
+        /// Everything that happened in this position: the active exercise and
+        /// its rows, work preserved from earlier swaps, and the exact states an
+        /// undo returns to. This is what a pause saves.
+        var model: SessionSlot
         let exercise: Exercise
         let history: ExerciseHistory
         let proposal: ProgressionProposal
-        var sets: [LoggedSet]
-        var proposalDismissed = false
+        /// The exercise this slot stands in for today, resolved. `nil` when not
+        /// substituted — including after a permanent replacement.
+        let substitutedFrom: Exercise?
 
-        var id: String { planned.exerciseID }
-        var isComplete: Bool { sets.allSatisfy(\.isLogged) }
+        var id: Int { model.position }
+        var planned: PlannedExercise { model.activePlanned }
+        var sets: [LoggedSet] {
+            get { model.active.sets }
+            set { model.active.sets = newValue }
+        }
+        var proposalDismissed: Bool {
+            get { model.active.proposalDismissed }
+            set { model.active.proposalDismissed = newValue }
+        }
+        /// Work logged here under an exercise that has since been swapped out.
+        var preserved: [ExerciseResult] { model.preserved }
+        var isComplete: Bool { !model.hasOpenSets }
+        var hasStarted: Bool { model.loggedSetCount > 0 }
     }
 
     let day: WorkoutDay
@@ -31,6 +47,12 @@ final class SessionRunner {
     /// Duration is active workout time, banked across pauses.
     private var clock = WorkoutClock(segmentStartedAt: Date())
     private(set) var restTimer: RestTimerState?
+    /// "Rust · primaire lift 3:00", fixed when the rest starts. Moving to
+    /// another exercise mid-rest must not relabel a countdown it did not start.
+    private(set) var restTitle = ""
+    /// Bumped once each time a running rest reaches zero — the haptic's cue.
+    private(set) var restCompletions = 0
+    private var restCompletionSignalled = false
     private(set) var now = Date()
     /// The timer opens expanded and steps back after a few seconds; the user
     /// can flip it either way at any time.
@@ -42,39 +64,35 @@ final class SessionRunner {
 
     var currentIndex: Int = 0
     var editing: (slot: Int, set: Int)?
-    private(set) var proposedReps: [String: Int] = [:]
+    /// The next set sheet opens with `Partieel` already on — the pain flow's
+    /// "Beperk de beweging" promise, kept.
+    var editingStartsPartial = false
 
     private let display = NumberDisplay.dutch
+    private let exerciseNamed: @MainActor (String) -> Exercise
+    private let historyFor: @MainActor (PlannedExercise) -> ExerciseHistory
+    /// Exercises handed to a swap directly. A custom exercise is saved to the
+    /// account asynchronously, so for a moment the app-wide lookup does not
+    /// know it yet — and the session showed its id ("custom:sled") instead of
+    /// its name. The exercise the swap was given is the truth for that id.
+    private var knownExercises: [String: Exercise] = [:]
 
     init(day: WorkoutDay, app: AppState, restoring snapshot: ActiveSessionSnapshot? = nil) {
         self.day = day
-        self.slots = day.exercises.map { planned in
-            let history = app.history(for: planned)
-            let exercise = app.exercise(planned.exerciseID)
-            let proposal = ProgressionEngine.proposal(
-                planned: planned,
-                exercise: exercise,
-                history: history
+        let exerciseNamed: @MainActor (String) -> Exercise = { app.exercise($0) }
+        let historyFor: @MainActor (PlannedExercise) -> ExerciseHistory = { app.history(for: $0) }
+        self.exerciseNamed = exerciseNamed
+        self.historyFor = historyFor
+        self.slots = day.exercises.enumerated().map { index, planned in
+            var slot = Self.resolve(
+                SessionSlot(position: index, plan: planned, exerciseName: exerciseNamed(planned.exerciseID).name),
+                exerciseNamed: exerciseNamed,
+                historyFor: historyFor
             )
             // Pre-filled from the proposal, or from the previous session, or
             // left blank when there is nothing honest to put there.
-            let prefillWeight = proposal.weightKg
-                ?? history.mostRecent?.sets.first?.weightKg
-            let sets = planned.sets.enumerated().map { index, _ in
-                LoggedSet(
-                    index: index,
-                    weightKg: prefillWeight,
-                    reps: 0,
-                    modifiers: planned.modifiers
-                )
-            }
-            return ExerciseSlot(
-                planned: planned,
-                exercise: exercise,
-                history: history,
-                proposal: proposal,
-                sets: sets
-            )
+            slot.model.prefillOpenSets(weightKg: Self.prefillWeight(slot))
+            return slot
         }
 
         if let snapshot { restore(from: snapshot) }
@@ -83,18 +101,65 @@ final class SessionRunner {
         clock = WorkoutClock(accumulatedSeconds: snapshot?.activeSeconds ?? 0, segmentStartedAt: Date())
     }
 
+    private static func resolve(
+        _ model: SessionSlot,
+        exerciseNamed: @MainActor (String) -> Exercise,
+        historyFor: @MainActor (PlannedExercise) -> ExerciseHistory
+    ) -> ExerciseSlot {
+        let planned = model.activePlanned
+        var exercise = exerciseNamed(model.active.exerciseID)
+        // An id that resolves to nothing comes back named after itself. The
+        // name saved with the rows is the better truth.
+        if exercise.name == exercise.id, !model.active.exerciseName.isEmpty {
+            exercise.name = model.active.exerciseName
+        }
+        let history = historyFor(planned)
+        return ExerciseSlot(
+            model: model,
+            exercise: exercise,
+            history: history,
+            proposal: ProgressionEngine.proposal(planned: planned, exercise: exercise, history: history),
+            substitutedFrom: model.active.substitutedFromID.map { exerciseNamed($0) }
+        )
+    }
+
+    private func resolve(_ model: SessionSlot) -> ExerciseSlot {
+        let known = knownExercises
+        let lookup = exerciseNamed
+        return Self.resolve(
+            model,
+            exerciseNamed: { id in known[id] ?? lookup(id) },
+            historyFor: historyFor
+        )
+    }
+
+    private static func prefillWeight(_ slot: ExerciseSlot) -> Decimal? {
+        slot.proposal.weightKg ?? slot.history.mostRecent?.sets.first?.weightKg
+    }
+
     // MARK: - Pause and resume
 
-    /// Puts the saved rows back over the freshly built slots, so a resumed
-    /// session shows exactly what was left behind — written sets, pre-filled
-    /// drafts, rep-target overrides and the exercise the user was on.
+    /// Puts the session back exactly as it was left.
+    ///
+    /// A snapshot with slots describes the session completely — each slot
+    /// carries its own plan, its swaps and its preserved work — so it is
+    /// restored by position, and a substitute comes back as the substitute.
+    /// Snapshots written before slots were saved still match rows by id.
     private func restore(from snapshot: ActiveSessionSnapshot) {
-        for result in snapshot.results {
-            guard let index = slots.firstIndex(where: { $0.planned.exerciseID == result.exerciseID }) else { continue }
-            guard !result.sets.isEmpty else { continue }
-            slots[index].sets = result.sets
+        if let saved = snapshot.slots, !saved.isEmpty {
+            slots = saved.sorted { $0.position < $1.position }.map { resolve($0) }
+        } else {
+            for result in snapshot.results {
+                guard let index = slots.firstIndex(where: { $0.planned.exerciseID == result.exerciseID }) else { continue }
+                var model = slots[index].model
+                model.restoreLegacyRows(result.sets)
+                if let legacyTarget = snapshot.proposedReps[result.exerciseID],
+                   let base = slots[index].proposal.setTargets?.first {
+                    model.active.repTargetOffset = legacyTarget - base
+                }
+                slots[index] = resolve(model)
+            }
         }
-        proposedReps = snapshot.proposedReps
         currentIndex = min(max(0, snapshot.currentIndex), max(0, slots.count - 1))
         startedAt = snapshot.startedAt
         // A resumed session never resumes a rest countdown: the clock kept
@@ -109,15 +174,16 @@ final class SessionRunner {
             dayLabel: day.short,
             startedAt: startedAt,
             currentIndex: currentIndex,
-            results: slots.map { slot in
-                ExerciseResult(
-                    exerciseID: slot.planned.exerciseID,
-                    name: slot.exercise.name,
-                    sets: slot.sets
-                )
+            // Every row, as readers written before slots were saved expect.
+            results: slots.flatMap { slot in
+                slot.model.preserved + [ExerciseResult(
+                    exerciseID: slot.model.active.exerciseID,
+                    name: slot.model.active.exerciseName,
+                    sets: slot.model.active.sets
+                )]
             },
-            proposedReps: proposedReps,
-            activeSeconds: clock.activeSeconds(at: Date())
+            activeSeconds: clock.activeSeconds(at: Date()),
+            slots: slots.map(\.model)
         )
     }
 
@@ -127,16 +193,16 @@ final class SessionRunner {
     /// the row's own lime — a PR, a positive delta — is the screen's one
     /// meaning.
     var showsProposal: Bool {
-        guard !needsCalibration(slotIndex: currentIndex) else { return false }
+        guard !current.sets.isEmpty, !needsCalibration(slotIndex: currentIndex) else { return false }
         return !current.proposalDismissed && !(current.sets.first?.isLogged ?? false)
     }
 
     var elapsedSeconds: Int { clock.activeSeconds(at: now) }
 
-    var completedSetCount: Int { slots.flatMap(\.sets).filter(\.isLogged).count }
-    var plannedSetCount: Int { slots.flatMap(\.sets).count }
+    var completedSetCount: Int { slots.reduce(0) { $0 + $1.model.loggedSetCount } }
+    var plannedSetCount: Int { slots.reduce(0) { $0 + $1.model.setCount } }
     var hasProgress: Bool { completedSetCount > 0 }
-    /// Every planned set across every exercise has been written.
+    /// Every open row in every slot has been written.
     var isComplete: Bool { slots.allSatisfy(\.isComplete) }
 
     // MARK: - Calibration
@@ -148,9 +214,15 @@ final class SessionRunner {
     }
 
     func calibrationPrompt(slotIndex: Int) -> CalibrationPrompt? {
-        guard needsCalibration(slotIndex: slotIndex) else { return nil }
+        guard needsCalibration(slotIndex: slotIndex), !slots[slotIndex].sets.isEmpty else { return nil }
         guard !(slots[slotIndex].sets.first?.isLogged ?? false) else { return nil }
-        return Calibration.prompt(for: slots[slotIndex].exercise)
+        // A substitute with no history says where it came from, which is the
+        // difference between "we know nothing" and "this is a different
+        // exercise" (artboard 28 vs 28b).
+        return Calibration.prompt(
+            for: slots[slotIndex].exercise,
+            substitutedFrom: slots[slotIndex].substitutedFrom?.name.lowercased()
+        )
     }
 
     /// "80 kg × 8 · RIR 2" once the calibration set is in.
@@ -242,6 +314,9 @@ final class SessionRunner {
         if partial != nil { flags.insert(.partialReps) }
         set.flags = flags
 
+        // §12.5: the set belongs to the substitute's series, and remembers
+        // which exercise it stood in for.
+        set.substitutedFrom = slots[slotIndex].substitutedFrom?.id
         slots[slotIndex].sets[setIndex] = set
 
         // The calibration set is what the rest of the exercise is built on:
@@ -286,21 +361,189 @@ final class SessionRunner {
         }
     }
 
+    /// Moves every row's target together, so a mixed prescription keeps its
+    /// shape — `5 · 6 · 6` becomes `6 · 7 · 7`, never `6 · 6 · 6`.
     func adjustProposedReps(slotIndex: Int, by delta: Int) {
         guard slots.indices.contains(slotIndex) else { return }
-        proposedReps[slots[slotIndex].planned.exerciseID] = max(1, proposedRepTarget(slotIndex: slotIndex) + delta)
+        let base = slots[slotIndex].proposal.setTargets ?? []
+        let lowest = 1 - (base.min() ?? 1)
+        let offset = slots[slotIndex].model.active.repTargetOffset + delta
+        slots[slotIndex].model.active.repTargetOffset = max(lowest, offset)
     }
 
     func proposedWeight(slotIndex: Int) -> Decimal? {
         slots[slotIndex].sets.first { !$0.isLogged }?.weightKg
     }
 
+    /// The first row's target — the single number `Mik op` shows.
     func proposedRepTarget(slotIndex: Int) -> Int {
-        let slot = slots[slotIndex]
-        return proposedReps[slot.planned.exerciseID]
-            ?? slot.proposal.targetReps
-            ?? slot.planned.sets.first?.repRange.upperBound
+        targetReps(slotIndex: slotIndex, setIndex: 0)
+            ?? slots[slotIndex].planned.sets.first?.repRange.upperBound
             ?? 8
+    }
+
+    /// What SETLINE proposes for one row, from that row's own range.
+    func targetReps(slotIndex: Int, setIndex: Int) -> Int? {
+        guard slots.indices.contains(slotIndex),
+              let base = slots[slotIndex].proposal.setTargets,
+              base.indices.contains(setIndex)
+        else { return nil }
+        return max(1, base[setIndex] + slots[slotIndex].model.active.repTargetOffset)
+    }
+
+    func proposedTargets(slotIndex: Int) -> [Int]? {
+        guard slots.indices.contains(slotIndex), let base = slots[slotIndex].proposal.setTargets else { return nil }
+        let offset = slots[slotIndex].model.active.repTargetOffset
+        return base.map { max(1, $0 + offset) }
+    }
+
+    // MARK: - Substitution
+
+    /// Swaps this slot to another exercise for today only.
+    ///
+    /// Only the rows still open move. Sets already written stay with the
+    /// exercise they were written under, the prescription of every moved row
+    /// survives verbatim, and the load does not: §12.3 forbids converting a
+    /// weight between exercises, so the rows come back empty and a substitute
+    /// with no history lands in calibration.
+    ///
+    /// The origin's progression state freezes for this occurrence: nothing
+    /// advances it, nothing resets it, and sitting a session out carries no
+    /// penalty. The rest timer keeps running — a swap usually happens *during*
+    /// rest.
+    func substitute(slotIndex: Int, with exercise: Exercise, reason: SwapReason) {
+        change(slotIndex: slotIndex, to: exercise, temporary: true, reason: reason)
+    }
+
+    /// Writes a program change into this session. From here on the new
+    /// exercise simply *is* the programmed one, so nothing is marked as
+    /// standing in; the change itself is recorded as a `ProgramReplacement`.
+    func replaceInProgram(slotIndex: Int, with exercise: Exercise, recording replacement: ProgramReplacement) {
+        change(slotIndex: slotIndex, to: exercise, temporary: false, reason: .preference, replacement: replacement)
+    }
+
+    private func change(
+        slotIndex: Int, to exercise: Exercise, temporary: Bool, reason: SwapReason,
+        replacement: ProgramReplacement? = nil
+    ) {
+        guard slots.indices.contains(slotIndex) else { return }
+        var model = slots[slotIndex].model
+        let origin = model.active.substitutedFromID ?? model.active.exerciseID
+        model.swap(to: exercise.id, name: exercise.name, temporary: temporary, replacement: replacement)
+        knownExercises[exercise.id] = exercise
+
+        var resolved = resolve(model)
+        resolved.model.prefillOpenSets(weightKg: Self.prefillWeight(resolved))
+        slots[slotIndex] = resolved
+
+        substitutions.removeAll { $0.originExerciseID == origin }
+        if let standsInFor = resolved.model.active.substitutedFromID {
+            substitutions.append(
+                Substitution(originExerciseID: standsInFor, substituteExerciseID: exercise.id, reason: reason)
+            )
+        }
+    }
+
+    /// Reverses the most recent swap in this slot exactly. Sets written on the
+    /// exercise that leaves stay in the session as their own result.
+    ///
+    /// Returns the change it reversed, so a permanent one can be taken out of
+    /// the program as well. `ifLatestIs` keeps a late undo — the toast's,
+    /// after the header's — from reversing a different change.
+    @discardableResult
+    func undoChange(slotIndex: Int, ifLatestIs expected: UUID? = nil) -> SessionSlot.UndoPoint? {
+        guard slots.indices.contains(slotIndex) else { return nil }
+        var model = slots[slotIndex].model
+        guard let point = model.latestUndo, model.undo(ifLatestIs: expected) else { return nil }
+        slots[slotIndex] = resolve(model)
+        if model.active.substitutedFromID == nil {
+            substitutions.removeAll { $0.originExerciseID == model.active.exerciseID }
+        }
+        return point
+    }
+
+    /// The change an undo in this slot would reverse right now.
+    func latestUndo(slotIndex: Int) -> SessionSlot.UndoPoint? {
+        slots.indices.contains(slotIndex) ? slots[slotIndex].model.latestUndo : nil
+    }
+
+    /// Swaps made during this session, for the summary and for the nudge that
+    /// offers a program change after the same pair repeats.
+    private(set) var substitutions: [Substitution] = []
+
+    func substitutedOrigin(slotIndex: Int) -> Exercise? {
+        slots.indices.contains(slotIndex) ? slots[slotIndex].substitutedFrom : nil
+    }
+
+    /// Whether the exercise on screen already has a written set.
+    func hasLoggedSets(slotIndex: Int) -> Bool {
+        slots.indices.contains(slotIndex) && slots[slotIndex].sets.contains(where: \.isLogged)
+    }
+
+    /// Every exercise in today's session, in any slot and under any swap.
+    /// None of them is ever offered as a substitute.
+    var sessionExerciseIDs: Set<String> {
+        Set(slots.flatMap { slot in
+            [slot.model.plan.exerciseID, slot.model.active.exerciseID] + slot.model.preserved.map(\.exerciseID)
+        })
+    }
+
+    /// Takes load off the sets that are still open, without leaving the
+    /// exercise. One decrement per step is a real change on a machine and a
+    /// modest one on a barbell — and it is pre-filled, not applied: the user
+    /// still logs it. Returns the rows as they were, for undo.
+    func reduceLoad(slotIndex: Int, steps: Int = 2) -> [LoggedSet] {
+        guard slots.indices.contains(slotIndex) else { return [] }
+        let previous = slots[slotIndex].sets
+        let increment = slots[slotIndex].exercise.incrementKg
+        for index in slots[slotIndex].sets.indices where !slots[slotIndex].sets[index].isLogged {
+            let current = slots[slotIndex].sets[index].weightKg ?? 0
+            slots[slotIndex].sets[index].weightKg = max(0, current - increment * Decimal(steps))
+        }
+        return previous
+    }
+
+    /// Puts pre-filled weights back. Written rows are never touched.
+    func restoreOpenWeights(slotIndex: Int, from previous: [LoggedSet]) {
+        guard slots.indices.contains(slotIndex) else { return }
+        for index in slots[slotIndex].sets.indices
+        where index < previous.count && !slots[slotIndex].sets[index].isLogged {
+            slots[slotIndex].sets[index].weightKg = previous[index].weightKg
+        }
+    }
+
+    /// Opens the next open set with `Partieel` already on. `false` when no
+    /// set is left open.
+    @discardableResult
+    func beginPartialSet(slotIndex: Int) -> Bool {
+        guard slots.indices.contains(slotIndex), let next = nextIndex(in: slots[slotIndex]) else { return false }
+        currentIndex = slotIndex
+        editingStartsPartial = true
+        editing = (slotIndex, next)
+        return true
+    }
+
+    // MARK: - Reorder
+
+    /// The "do something else now and come back" offer, when one exists.
+    func reorderPlan(slotIndex: Int) -> ReorderPlan? {
+        guard slots.indices.contains(slotIndex) else { return nil }
+        let later = slots.dropFirst(slotIndex + 1).map {
+            (exercise: $0.exercise, role: $0.planned.role, hasStarted: $0.hasStarted)
+        }
+        return ReorderPlanner.plan(
+            current: slots[slotIndex].exercise,
+            currentIndex: slotIndex,
+            currentIsComplete: slots[slotIndex].isComplete,
+            later: Array(later)
+        )
+    }
+
+    /// Moves to the later exercise. Nothing is reordered in the plan itself —
+    /// the session simply carries on somewhere else, and the exercise left
+    /// behind is still there to come back to. The rest timer keeps running.
+    func takeReorder(_ plan: ReorderPlan) {
+        currentIndex = plan.candidateIndex
     }
 
     // MARK: - Warm-up ladder
@@ -374,9 +617,13 @@ final class SessionRunner {
     /// Rest inherits from the exercise's role (13R), never a flat 2:00.
     private func startRest(for planned: PlannedExercise) {
         let prescription = RestPrescription.forRole(planned.role)
-        restTimer = RestTimerState(targetSeconds: prescription.defaultSeconds, startedAt: Date())
+        let timer = RestTimerState(targetSeconds: prescription.defaultSeconds, startedAt: Date())
+        restTimer = timer
+        restTitle = "Rust · \(Self.roleLabel(planned.role)) \(prescription.displayLabel)"
+        restCompletionSignalled = false
         isTimerExpanded = true
         hasAutoCollapsed = false
+        RestNotifier.schedule(at: timer.fireDate)
     }
 
     /// Seconds after which the expanded timer steps back to the compact bar.
@@ -384,12 +631,22 @@ final class SessionRunner {
 
     func adjustRest(by seconds: Int) {
         restTimer?.adjust(by: seconds, floorRemainingAt: now)
+        guard let timer = restTimer else { return }
+        if timer.remaining(at: Date()) > 0 { restCompletionSignalled = false }
+        RestNotifier.schedule(at: timer.fireDate)
     }
 
     func endRest() {
         restTimer = nil
         isTimerExpanded = true
         hasAutoCollapsed = false
+        RestNotifier.cancel()
+    }
+
+    /// The session is leaving the screen — paused or finished. Nothing may
+    /// announce the end of a rest that no longer exists.
+    func stopRestSignals() {
+        RestNotifier.cancel()
     }
 
     func toggleTimerExpanded() {
@@ -400,7 +657,12 @@ final class SessionRunner {
 
     func tick() {
         now = Date()
-        guard let timer = restTimer, !hasAutoCollapsed else { return }
+        guard let timer = restTimer else { return }
+        if !restCompletionSignalled, timer.remaining(at: now) == 0 {
+            restCompletionSignalled = true
+            restCompletions += 1
+        }
+        guard !hasAutoCollapsed else { return }
         if isTimerExpanded, now.timeIntervalSince(timer.startedAt) >= Self.expandedTimerSeconds {
             isTimerExpanded = false
             hasAutoCollapsed = true
@@ -408,8 +670,8 @@ final class SessionRunner {
     }
 
     /// The role name the timer labels itself with.
-    var restRoleLabel: String {
-        switch current.planned.role {
+    static func roleLabel(_ role: ExerciseRole) -> String {
+        switch role {
         case .primaryStrength: return "primaire lift"
         case .secondaryCompound: return "samengesteld"
         case .accessory, .isolation: return "isolatie"
@@ -435,7 +697,8 @@ final class SessionRunner {
             sets: slot.sets,
             planned: slot.planned,
             exercise: slot.exercise,
-            history: slot.history
+            history: slot.history,
+            proposedTargets: proposedTargets(slotIndex: slotIndex)
         )
     }
 
@@ -456,14 +719,11 @@ final class SessionRunner {
 
     // MARK: - Finishing
 
+    /// Every result the session produced, each under the exercise it was
+    /// logged on — preserved work from swaps included.
+    var allResults: [ExerciseResult] { slots.flatMap(\.model.results) }
+
     func finishedSession(existing: TrainingSession?) -> TrainingSession {
-        let results = slots.map { slot in
-            ExerciseResult(
-                exerciseID: slot.planned.exerciseID,
-                name: slot.exercise.name,
-                sets: slot.sets.filter(\.isLogged)
-            )
-        }
         let completion = plannedSetCount == 0 ? 0 : Int(Double(completedSetCount) / Double(plannedSetCount) * 100)
         return TrainingSession(
             id: existing?.id ?? "\(Int(Date().timeIntervalSince1970 * 1000))",
@@ -472,23 +732,34 @@ final class SessionRunner {
             dayLabel: day.short,
             completion: completion,
             kind: .workout,
-            results: results,
+            results: allResults,
             durationSeconds: clock.activeSeconds(at: Date())
         )
     }
 
     /// The volume card on 17R, and its comparison against the last session.
     func volumeSummary(previous: TrainingSession?) -> (volume: Decimal, delta: Decimal?) {
-        let volume = RecordsEngine.volumeLoad(slots.flatMap(\.sets))
+        let volume = RecordsEngine.volumeLoad(allResults.flatMap(\.sets))
         guard let previous else { return (volume, nil) }
         let before = RecordsEngine.volumeLoad(previous.results.flatMap(\.sets))
         return (volume, before > 0 ? volume - before : nil)
     }
 
+    /// Records from every exercise that did work today, swapped-out ones too.
     func records() -> [(name: String, record: ExerciseRecord)] {
-        slots.compactMap { slot in
-            guard let record = RecordsEngine.record(for: slot.sets, history: slot.history) else { return nil }
-            return (slot.exercise.name, record)
+        slots.flatMap { slot -> [(name: String, record: ExerciseRecord)] in
+            slot.model.results.compactMap { result -> (name: String, record: ExerciseRecord)? in
+                let history = result.exerciseID == slot.planned.exerciseID
+                    ? slot.history
+                    : historyFor(PlannedExercise(
+                        exerciseID: result.exerciseID,
+                        role: slot.model.plan.role,
+                        sets: [],
+                        modifiers: slot.model.plan.modifiers
+                    ))
+                guard let record = RecordsEngine.record(for: result.sets, history: history) else { return nil }
+                return (result.name, record)
+            }
         }
     }
 

@@ -1,4 +1,6 @@
-// Generated from app/page.tsx by scratchpad/gen/generate.py — do not hand-edit.
+// Generated from app/page.tsx by Tools/generate.py — do not hand-edit.
+// The curated V1 catalogue merges these with its own additions and metadata;
+// see ExerciseCatalogV1.swift.
 //
 // The names, prescriptions, load notes and rest notes are the web app's own,
 // carried over verbatim. Equipment, role, compound and unilateral are the
@@ -8,9 +10,9 @@
 
 import Foundation
 
-public enum ExerciseCatalog {
+public enum GeneratedExerciseCatalog {
 
-    public static let all: [String: Exercise] = [
+    public static let exercises: [String: Exercise] = [
         "bulgarian": Exercise(
             id: "bulgarian",
             name: "Bulgarian split squat",
@@ -328,7 +330,4 @@ public enum ExerciseCatalog {
         "wide-row": .secondaryCompound,
     ]
 
-    public static func exercise(_ id: String) -> Exercise? { all[id] }
-
-    public static func role(_ id: String) -> ExerciseRole { roles[id] ?? .accessory }
 }

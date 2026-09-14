@@ -19,7 +19,12 @@ public struct ProgressionProposal: Hashable, Sendable {
     public let tone: ProposalTone
     /// Absent only for `.noReference`.
     public let weightKg: Decimal?
+    /// The first row's target, for places that show one number.
     public let targetReps: Int?
+    /// One target per planned set, each from that set's own range. A
+    /// `1×5–6 + 2×6–8` prescription must never hand set 1's target to sets 2
+    /// and 3 — following the pre-fill would then log them below their range.
+    public let setTargets: [Int]?
     /// Eyebrow label. The design shows one only on the READY tone.
     public let label: String?
     public let headline: String
@@ -31,11 +36,13 @@ public struct ProgressionProposal: Hashable, Sendable {
         targetReps: Int?,
         label: String?,
         headline: String,
-        body: String
+        body: String,
+        setTargets: [Int]? = nil
     ) {
         self.tone = tone
         self.weightKg = weightKg
         self.targetReps = targetReps
+        self.setTargets = setTargets
         self.label = label
         self.headline = headline
         self.body = body
@@ -134,21 +141,25 @@ public enum ProgressionEngine {
             )
         }
 
+        let lows = planned.sets.map(\.repRange.lowerBound)
+        let tops = planned.sets.map(\.repRange.upperBound)
+
         let (streak, load) = confirmingStreak(history: history, planned: planned)
         guard let load else {
             return ProgressionProposal(
                 tone: .neutral,
                 weightKg: nil,
-                targetReps: planned.sets.first?.repRange.lowerBound,
+                targetReps: lows.first,
                 label: nil,
                 headline: "Bouw verder",
-                body: "Voorstel: geen. Nog geen reden om te verhogen of te verlagen."
+                body: "Voorstel: geen. Nog geen reden om te verhogen of te verlagen.",
+                setTargets: lows
             )
         }
 
         let needed = requiredConfirmations(for: planned)
-        let lowTarget = planned.sets.first?.repRange.lowerBound ?? 6
-        let topTarget = planned.sets.first?.repRange.upperBound ?? lowTarget
+        let lowTarget = lows.first ?? 6
+        let topTarget = tops.first ?? lowTarget
         let rirCeiling = planned.sets.first?.targetRIR.upperBound ?? 2
 
         if streak >= needed {
@@ -160,7 +171,8 @@ public enum ProgressionEngine {
                 targetReps: lowTarget,
                 label: "BOVENGRENS BEVESTIGD",
                 headline: "Klaar om te verhogen vanaf \(formatter.kg(load))",
-                body: "Voorstel: \(formatter.kg(next)), mik op \(lowTarget). \(confirmationSentence(streak: streak, load: load, rirCeiling: rirCeiling, formatter: formatter))"
+                body: "Voorstel: \(formatter.kg(next)), mik op \(repsLabel(lows)). \(confirmationSentence(streak: streak, load: load, rirCeiling: rirCeiling, formatter: formatter))",
+                setTargets: lows
             )
         }
 
@@ -171,7 +183,8 @@ public enum ProgressionEngine {
                 targetReps: topTarget,
                 label: nil,
                 headline: "Nog 1 bevestiging op \(formatter.kg(load))",
-                body: "Voorstel: \(formatter.kg(load)), mik op \(topTarget). Haal je dat opnieuw, dan gaat het gewicht omhoog."
+                body: "Voorstel: \(formatter.kg(load)), mik op \(repsLabel(tops)). Haal je dat opnieuw, dan gaat het gewicht omhoog.",
+                setTargets: tops
             )
         }
 
@@ -181,8 +194,16 @@ public enum ProgressionEngine {
             targetReps: topTarget,
             label: nil,
             headline: "Bouw verder op \(formatter.kg(load))",
-            body: "Voorstel: \(formatter.kg(load)), mik op \(topTarget). Nog geen reden om te verhogen of te verlagen."
+            body: "Voorstel: \(formatter.kg(load)), mik op \(repsLabel(tops)). Nog geen reden om te verhogen of te verlagen.",
+            setTargets: tops
         )
+    }
+
+    /// "6" when every set aims at the same number, "5 · 6 · 6" when they
+    /// differ — a prescription that varies by set is read out as it varies.
+    public static func repsLabel(_ targets: [Int]) -> String {
+        guard let first = targets.first else { return "—" }
+        return Set(targets).count == 1 ? "\(first)" : targets.map(String.init).joined(separator: " · ")
     }
 
     private static func confirmationSentence(

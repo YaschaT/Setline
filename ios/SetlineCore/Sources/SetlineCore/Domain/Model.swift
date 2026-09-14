@@ -18,6 +18,13 @@ public struct Exercise: Codable, Hashable, Identifiable, Sendable {
     public var unilateral: Bool
     /// Per-gym override of `equipment.defaultIncrementKg`, when set.
     public var incrementKgOverride: Decimal?
+    /// The apparatus this exercise needs, where two exercises genuinely
+    /// contend for one. `nil` for anything a gym has several of.
+    public var station: Station?
+    /// Ranking metadata. Optional so the catalogue can grow incrementally —
+    /// but every exercise offered as a V1 recommendation has it, and a test
+    /// enforces that.
+    public var attributes: ExerciseAttributes?
 
     public init(
         id: String,
@@ -25,7 +32,9 @@ public struct Exercise: Codable, Hashable, Identifiable, Sendable {
         equipment: Equipment,
         isCompound: Bool,
         unilateral: Bool = false,
-        incrementKgOverride: Decimal? = nil
+        incrementKgOverride: Decimal? = nil,
+        station: Station? = nil,
+        attributes: ExerciseAttributes? = nil
     ) {
         self.id = id
         self.name = name
@@ -33,6 +42,8 @@ public struct Exercise: Codable, Hashable, Identifiable, Sendable {
         self.isCompound = isCompound
         self.unilateral = unilateral
         self.incrementKgOverride = incrementKgOverride
+        self.station = station
+        self.attributes = attributes
     }
 
     public var incrementKg: Decimal { incrementKgOverride ?? equipment.defaultIncrementKg }

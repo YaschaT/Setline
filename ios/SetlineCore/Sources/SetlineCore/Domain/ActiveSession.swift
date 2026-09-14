@@ -22,6 +22,11 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
     /// Active workout time banked so far, in seconds. Time spent paused is
     /// never in here.
     public var activeSeconds: Int
+    /// Every slot as it stood, swaps and preserved work included. Resume
+    /// restores from these by position, which is what lets a substitute — and
+    /// the sets logged on it — survive a pause. `nil` in snapshots written
+    /// before slots were saved; those still restore by exercise id.
+    public var slots: [SessionSlot]?
 
     public init(
         dayID: String,
@@ -30,7 +35,8 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         currentIndex: Int,
         results: [ExerciseResult],
         proposedReps: [String: Int] = [:],
-        activeSeconds: Int = 0
+        activeSeconds: Int = 0,
+        slots: [SessionSlot]? = nil
     ) {
         self.dayID = dayID
         self.dayLabel = dayLabel
@@ -39,10 +45,11 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         self.results = results
         self.proposedReps = proposedReps
         self.activeSeconds = max(0, activeSeconds)
+        self.slots = slots
     }
 
     private enum CodingKeys: String, CodingKey {
-        case dayID, dayLabel, startedAt, currentIndex, results, proposedReps, activeSeconds
+        case dayID, dayLabel, startedAt, currentIndex, results, proposedReps, activeSeconds, slots
     }
 
     /// Tolerates a snapshot written before duration was tracked.
@@ -55,15 +62,18 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         results = try container.decode([ExerciseResult].self, forKey: .results)
         proposedReps = try container.decodeIfPresent([String: Int].self, forKey: .proposedReps) ?? [:]
         activeSeconds = try container.decodeIfPresent(Int.self, forKey: .activeSeconds) ?? 0
+        slots = try container.decodeIfPresent([SessionSlot].self, forKey: .slots)
     }
 
     /// Sets actually written, for the resume prompt on the home screen.
     public var loggedSetCount: Int {
-        results.flatMap(\.sets).filter(\.isLogged).count
+        if let slots { return slots.reduce(0) { $0 + $1.loggedSetCount } }
+        return results.flatMap(\.sets).filter(\.isLogged).count
     }
 
     public var plannedSetCount: Int {
-        results.flatMap(\.sets).count
+        if let slots { return slots.reduce(0) { $0 + $1.setCount } }
+        return results.flatMap(\.sets).count
     }
 
     public var hasProgress: Bool { loggedSetCount > 0 }
@@ -74,7 +84,7 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
     /// resumed. Unwritten sets simply are not there — they count as not
     /// trained, which carries no penalty anywhere in the engine.
     public func finishedSession(id: String? = nil) -> TrainingSession {
-        let results = results.map { result in
+        let results = slots?.flatMap(\.results) ?? results.map { result in
             ExerciseResult(
                 exerciseID: result.exerciseID,
                 name: result.name,

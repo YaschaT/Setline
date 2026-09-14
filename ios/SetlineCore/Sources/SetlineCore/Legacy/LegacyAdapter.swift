@@ -232,6 +232,59 @@ public enum LegacyAdapter {
         state.set(hiddenWarmupsKey, to: .array(hiddenWarmups.sorted().map { .string($0) }))
     }
 
+    // MARK: - Phase 3 keys
+    //
+    // Three more iOS-only keys, written the same way and for the same
+    // reason: the web app does not read them, and `LegacyState` carries
+    // anything it does not recognise through a round trip untouched.
+
+    public static let painFlagsKey = "iosPainFlags"
+    public static let replacementsKey = "iosProgramReplacements"
+    public static let customExercisesKey = "iosCustomExercises"
+
+    public static func painFlags(from state: LegacyState) -> [PainFlag] {
+        decodeList(state[painFlagsKey]) ?? []
+    }
+
+    /// Expired flags are dropped on write rather than filtered on read, so a
+    /// flag that has run out actually leaves the account (§14: a flag is
+    /// re-confirmed, not accumulated).
+    public static func apply(painFlags: [PainFlag], to state: inout LegacyState) {
+        encodeList(painFlags.active(), into: &state, key: painFlagsKey)
+    }
+
+    public static func programReplacements(from state: LegacyState) -> [ProgramReplacement] {
+        decodeList(state[replacementsKey]) ?? []
+    }
+
+    public static func apply(programReplacements: [ProgramReplacement], to state: inout LegacyState) {
+        encodeList(programReplacements, into: &state, key: replacementsKey)
+    }
+
+    public static func customExercises(from state: LegacyState) -> [CustomExercise] {
+        decodeList(state[customExercisesKey]) ?? []
+    }
+
+    public static func apply(customExercises: [CustomExercise], to state: inout LegacyState) {
+        encodeList(customExercises, into: &state, key: customExercisesKey)
+    }
+
+    private static func decodeList<T: Decodable>(_ value: JSONValue?) -> [T]? {
+        guard let value, value != .null, let data = try? JSONEncoder().encode(value) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode([T].self, from: data)
+    }
+
+    private static func encodeList<T: Encodable>(_ list: [T], into state: inout LegacyState, key: String) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(list),
+              let value = try? JSONDecoder().decode(JSONValue.self, from: data)
+        else { return }
+        state.set(key, to: value)
+    }
+
     // MARK: - Writing
 
     /// Writes sessions back into the blob in the web app's own shape.

@@ -23,6 +23,8 @@ struct SLStepper: View {
     let onDecrement: () -> Void
     let onIncrement: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     private var tileRadius: CGFloat { level == .onRaised ? SL.Radius.lg : SL.Radius.md }
     private var tileFill: Color { level == .onRaised ? SL.Surface.raised2 : SL.Surface.raised }
     private var buttonRadius: CGFloat { level == .onRaised ? SL.Radius.md : SL.Radius.sm }
@@ -36,19 +38,38 @@ struct SLStepper: View {
                 size: SL.TypeSize.micro
             )
 
-            HStack(spacing: 0) {
-                control("−", action: onDecrement)
-                Spacer(minLength: 0)
+            if typeSize.isAccessibilitySize {
+                // At accessibility sizes the number gets the whole row. Squeezed
+                // between two buttons it truncated to "1…" — the one value this
+                // control exists to show. It is never shrunk or cut; the
+                // controls move to their own row instead.
                 Text(display)
                     .font(.sl(valueSize, SL.Weight.semibold))
                     .slNumerals()
                     .foregroundStyle(disabledNote == nil ? SL.Ink.primary : SL.Ink.tertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Spacer(minLength: 0)
-                control("+", action: onIncrement)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 6)
+                HStack(spacing: SL.Space.s2) {
+                    control("−", expands: true, action: onDecrement)
+                    control("+", expands: true, action: onIncrement)
+                }
+                .padding(.top, SL.Space.s2)
+            } else {
+                HStack(spacing: 0) {
+                    control("−", action: onDecrement)
+                    Spacer(minLength: 0)
+                    Text(display)
+                        .font(.sl(valueSize, SL.Weight.semibold))
+                        .slNumerals()
+                        .foregroundStyle(disabledNote == nil ? SL.Ink.primary : SL.Ink.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Spacer(minLength: 0)
+                    control("+", action: onIncrement)
+                }
+                .padding(.top, 6)
             }
-            .padding(.top, 6)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -67,12 +88,12 @@ struct SLStepper: View {
         }
     }
 
-    private func control(_ glyph: String, action: @escaping () -> Void) -> some View {
+    private func control(_ glyph: String, expands: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(glyph)
                 .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
                 .foregroundStyle(disabledNote == nil ? SL.Ink.primary : SL.Ink.tertiary)
-                .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
+                .frame(minWidth: SL.Space.hitMin, maxWidth: expands ? .infinity : nil, minHeight: SL.Space.hitMin)
                 .background(
                     RoundedRectangle(cornerRadius: buttonRadius, style: .continuous).fill(buttonFill)
                 )

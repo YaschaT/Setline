@@ -8,6 +8,9 @@ struct SessionCompleteView: View {
     @Environment(AppState.self) private var app
     let runner: SessionRunner
     let previous: TrainingSession?
+    /// Back to the session without saving — a mis-tap on `Sessie afronden`,
+    /// or one set to fix, must not force a save.
+    let onBack: () -> Void
     let onSave: () -> Void
 
     var body: some View {
@@ -36,6 +39,15 @@ struct SessionCompleteView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: SL.Space.s2) {
+                Button(action: onBack) {
+                    Text("Terug naar sessie")
+                        .slBody(SL.Weight.medium)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 Button(action: onSave) { Text("Sessie opslaan") }
                     .buttonStyle(SLPrimaryButtonStyle())
                 Text("Notitie toevoegen")
@@ -44,7 +56,11 @@ struct SessionCompleteView: View {
                     .frame(height: SL.Metric.tertiaryHeight)
             }
             .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.top, SL.Space.s3)
             .padding(.bottom, SL.Space.s3)
+            // Opaque, like the session's own bottom bar: records scroll
+            // underneath it instead of showing through the actions.
+            .background(SL.Surface.ground.ignoresSafeArea(edges: .bottom))
         }
     }
 
@@ -107,19 +123,17 @@ struct SessionCompleteView: View {
 
     private var summaryRows: some View {
         VStack(spacing: 0) {
-            ForEach(runner.slots) { slot in
-                let logged = slot.sets.filter(\.isLogged)
-                if !logged.isEmpty {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(slot.exercise.name).slBody().foregroundStyle(SL.Ink.primary)
-                        Spacer()
-                        Text(summary(logged))
-                            .slBody().slNumerals()
-                            .foregroundStyle(SL.Ink.secondary)
-                    }
-                    .padding(.vertical, SL.Space.s3)
-                    SLHairline()
+            // Every exercise that did work today, swapped-out ones included.
+            ForEach(Array(runner.allResults.enumerated()), id: \.offset) { _, result in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(result.name).slBody().foregroundStyle(SL.Ink.primary)
+                    Spacer()
+                    Text(summary(result.sets))
+                        .slBody().slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
                 }
+                .padding(.vertical, SL.Space.s3)
+                SLHairline()
             }
         }
     }

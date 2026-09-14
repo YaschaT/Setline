@@ -39,6 +39,12 @@ final class AppState {
     private(set) var activeSession: ActiveSessionSnapshot?
     /// Exercises whose warm-up ramp is hidden for good.
     private(set) var hiddenWarmups: Set<String> = []
+    /// Notes that something was felt. They expire after 14 days (§14).
+    private(set) var painFlags: [PainFlag] = []
+    /// Replacements written into the program, as opposed to swapped for a day.
+    private(set) var programReplacements: [ProgramReplacement] = []
+    /// Exercises the user typed in themselves.
+    private(set) var customExercises: [CustomExercise] = []
 
     let display = NumberDisplay.dutch
     private let client: SupabaseClient
@@ -173,6 +179,31 @@ final class AppState {
         scheduleOverrides = LegacyAdapter.scheduleOverrides(from: next)
         activeSession = LegacyAdapter.activeSession(from: next)
         hiddenWarmups = LegacyAdapter.hiddenWarmups(from: next)
+        painFlags = LegacyAdapter.painFlags(from: next).active()
+        programReplacements = LegacyAdapter.programReplacements(from: next)
+        customExercises = LegacyAdapter.customExercises(from: next)
+        plan = applyReplacements(to: plan)
+    }
+
+    /// Rewrites the plan wherever a permanent replacement reaches it.
+    ///
+    /// Done on read rather than by editing the stored plan, so the original
+    /// prescription is never destroyed: undoing a replacement is deleting one
+    /// row, not reconstructing what used to be there.
+    private func applyReplacements(to days: [WorkoutDay]) -> [WorkoutDay] {
+        guard !programReplacements.isEmpty else { return days }
+        return days.map { day in
+            var copy = day
+            copy.exercises = day.exercises.map { planned in
+                guard let replacement = programReplacements.last(where: {
+                    $0.originExerciseID == planned.exerciseID && $0.applies(toDay: day.id)
+                }) else { return planned }
+                var swapped = planned
+                swapped.exerciseID = replacement.substituteExerciseID
+                return swapped
+            }
+            return copy
+        }
     }
 
     /// Saves a paused workout, locally first.
@@ -310,7 +341,135 @@ final class AppState {
 
     func exercise(_ id: String) -> Exercise {
         ExerciseCatalog.exercise(id)
+            ?? customExercises.first { $0.id == id }?.exercise
             ?? Exercise(id: id, name: id, equipment: .machineSelectorised, isCompound: false)
+    }
+
+    // MARK: - Substitution
+
+    /// Load tags the ranking should avoid right now, from every unexpired flag.
+    var painfulLoadTags: Set<LoadTag> { painFlags.activeLoadTags() }
+
+    /// Exercises the user has logged at least once. Familiarity is a nudge in
+    /// the ranking, never a filter.
+    var familiarExerciseIDs: Set<String> {
+        Set(sessions.flatMap(\.results).filter { !$0.sets.filter(\.isLogged).isEmpty }.map(\.exerciseID))
+    }
+
+    /// Every unexpired flag narrows every swap, not only the one that
+    /// recorded it — and "the machine is taken" applies alongside it. Neither
+    /// context switches the other off.
+    func swapContext(for exerciseID: String, occupied: Bool, excluding: Set<String>) -> SwapContext {
+        SwapContext(
+            currentExerciseID: exerciseID,
+            role: ExerciseCatalog.role(exerciseID),
+            isOccupied: occupied,
+            painfulLoadTags: painfulLoadTags,
+            familiarExerciseIDs: familiarExerciseIDs,
+            excludedExerciseIDs: excluding
+        )
+    }
+
+    func alternatives(for exerciseID: String, occupied: Bool, excluding: Set<String>) -> [RankedAlternative] {
+        SubstitutionRanker.rank(swapContext(for: exerciseID, occupied: occupied, excluding: excluding))
+    }
+
+    /// Everything eligible, for `Andere opties bekijken`. Same engine, same
+    /// filters — it simply does not stop at three.
+    func browsableAlternatives(for exerciseID: String, occupied: Bool, excluding: Set<String>) -> [RankedAlternative] {
+        SubstitutionRanker.browse(swapContext(for: exerciseID, occupied: occupied, excluding: excluding))
+    }
+
+    /// Whether an active region actually changed this list. The sheet may only
+    /// say it took a region into account when this is true.
+    func painChangesList(region: PainRegion, for exerciseID: String, occupied: Bool, excluding: Set<String>) -> Bool {
+        let others = painFlags.active()
+            .filter { $0.region != region }
+            .reduce(into: Set<LoadTag>()) { $0.formUnion($1.region.loadTags) }
+        return SubstitutionRanker.painChangesRecommendations(
+            swapContext(for: exerciseID, occupied: occupied, excluding: excluding),
+            tags: region.loadTags.subtracting(others)
+        )
+    }
+
+    /// The same question, asked before the flag exists.
+    func painWouldChangeList(region: PainRegion, for exerciseID: String, occupied: Bool, excluding: Set<String>) -> Bool {
+        SubstitutionRanker.painChangesRecommendations(
+            swapContext(for: exerciseID, occupied: occupied, excluding: excluding),
+            tags: region.loadTags
+        )
+    }
+
+    /// True when pain is the reason the list is empty.
+    func painEmptiesList(for exerciseID: String, occupied: Bool, excluding: Set<String>) -> Bool {
+        let context = swapContext(for: exerciseID, occupied: occupied, excluding: excluding)
+        guard !context.painfulLoadTags.isEmpty, SubstitutionRanker.rank(context).isEmpty else { return false }
+        var without = context
+        without.painfulLoadTags = []
+        return !SubstitutionRanker.rank(without).isEmpty
+    }
+
+    /// Regions currently narrowing the list, newest first.
+    var activePainRegions: [PainRegion] {
+        var seen: Set<PainRegion> = []
+        return painFlags.active().sorted { $0.date > $1.date }.compactMap { flag in
+            seen.insert(flag.region).inserted ? flag.region : nil
+        }
+    }
+
+    func forgetPain(region: PainRegion) async {
+        guard var current = state, let session else { return }
+        LegacyAdapter.apply(painFlags: painFlags.filter { $0.region != region }, to: &current)
+        apply(current)
+        store?.save(current, for: session.email, pending: true)
+        await push(current, for: session)
+    }
+
+    func record(pain flag: PainFlag) async {
+        guard var current = state, let session else { return }
+        LegacyAdapter.apply(painFlags: (painFlags + [flag]).active(), to: &current)
+        apply(current)
+        store?.save(current, for: session.email, pending: true)
+        await push(current, for: session)
+    }
+
+    func forget(pain flag: PainFlag) async {
+        guard var current = state, let session else { return }
+        LegacyAdapter.apply(painFlags: painFlags.filter { $0.id != flag.id }, to: &current)
+        apply(current)
+        store?.save(current, for: session.email, pending: true)
+        await push(current, for: session)
+    }
+
+    func replaceInProgram(_ replacement: ProgramReplacement) async {
+        guard var current = state, let session else { return }
+        LegacyAdapter.apply(programReplacements: programReplacements + [replacement], to: &current)
+        apply(current)
+        store?.save(current, for: session.email, pending: true)
+        await push(current, for: session)
+    }
+
+    /// Removes a program change. The old exercise was never edited away — the
+    /// plan is rewritten on read — so undoing is deleting one row.
+    func undoReplacement(_ replacement: ProgramReplacement) async {
+        guard var current = state, let session else { return }
+        LegacyAdapter.apply(
+            programReplacements: programReplacements.filter { $0.id != replacement.id },
+            to: &current
+        )
+        apply(current)
+        store?.save(current, for: session.email, pending: true)
+        await push(current, for: session)
+    }
+
+    func addCustomExercise(_ exercise: CustomExercise) async {
+        guard var current = state, let session,
+              !customExercises.contains(where: { $0.id == exercise.id })
+        else { return }
+        LegacyAdapter.apply(customExercises: customExercises + [exercise], to: &current)
+        apply(current)
+        store?.save(current, for: session.email, pending: true)
+        await push(current, for: session)
     }
 
     /// "18 sets · doel 6.240 kg · laatst 3 sep"

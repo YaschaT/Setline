@@ -251,19 +251,27 @@ public enum SetRowPresenter {
         planned: PlannedExercise,
         exercise: Exercise,
         history: ExerciseHistory,
+        proposedTargets: [Int]? = nil,
         formatter: NumberDisplay = .dutch
     ) -> String? {
         let working = sets.filter { !$0.isWarmup }
         guard !working.isEmpty, working.allSatisfy(\.isLogged) else { return nil }
         guard history.hasReference else { return nil }
 
-        let targets = planned.repTargets
-        let hitAll = zip(working, targets).allSatisfy { $0.0.reps >= $0.1 }
+        let tops = planned.repTargets
+        let hitTop = zip(working, tops).allSatisfy { $0.0.reps >= $0.1 }
         guard let load = working.first?.weightKg else { return nil }
 
-        if hitAll {
+        if hitTop {
             let step = ProgressionEngine.increment(for: exercise, currentLoad: load, role: planned.role)
             return "Alle reps gehaald. Volgende keer \(formatter.kg(load + step))."
+        }
+        // Doing what SETLINE proposed is never a miss. After a load increase
+        // the proposal aims at the bottom of each range, and reaching it is
+        // exactly the plan: same weight next time, working toward the top.
+        if let proposed = proposedTargets, proposed.count >= working.count,
+           zip(working, proposed).allSatisfy({ $0.0.reps >= $0.1 }) {
+            return "Op doel. Volgende keer \(formatter.kg(load)), mik op \(ProgressionEngine.repsLabel(tops))."
         }
         return "Niet alle reps gehaald. Volgende keer hetzelfde gewicht."
     }

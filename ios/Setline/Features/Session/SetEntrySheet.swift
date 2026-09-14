@@ -9,8 +9,12 @@ struct SetEntrySheet: View {
     let setIndex: Int
     /// The first set of an exercise with no history (artboard 28).
     let isCalibration: Bool
+    /// What SETLINE proposed for *this* row, from its own range.
+    let proposedReps: Int?
     let onLog: (SessionRunner.SetEntry) -> Void
     let onClose: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var weight: Decimal
     @State private var reps: Int
@@ -28,12 +32,15 @@ struct SetEntrySheet: View {
         slot: SessionRunner.ExerciseSlot,
         setIndex: Int,
         isCalibration: Bool = false,
+        proposedReps: Int? = nil,
+        startsPartial: Bool = false,
         onLog: @escaping (SessionRunner.SetEntry) -> Void,
         onClose: @escaping () -> Void
     ) {
         self.slot = slot
         self.setIndex = setIndex
         self.isCalibration = isCalibration
+        self.proposedReps = proposedReps
         self.onLog = onLog
         self.onClose = onClose
 
@@ -44,7 +51,7 @@ struct SetEntrySheet: View {
             ? Calibration.targetReps
             : (draft.reps > 0
                 ? draft.reps
-                : (slot.proposal.targetReps ?? reference?.reps ?? slot.planned.sets[setIndex].repRange.upperBound)))
+                : (proposedReps ?? reference?.reps ?? slot.planned.sets[setIndex].repRange.upperBound)))
         // Stepping to a first weight from zero is 30-odd taps. A calibration
         // set opens on the keypad instead.
         _showsKeypad = State(initialValue: isCalibration)
@@ -52,7 +59,9 @@ struct SetEntrySheet: View {
         // A planned paused exercise opens with pause already on, because that
         // is what the plan prescribes; anywhere else it is off until asked for.
         _paused = State(initialValue: slot.planned.modifiers.pauseEnabled)
-        _partialReps = State(initialValue: nil)
+        // The pain flow's "Beperk de beweging" opens the set with partial on,
+        // because that is what it promised.
+        _partialReps = State(initialValue: startsPartial ? 1 : nil)
     }
 
     /// RIR is the third, optional tap, and by default only the last set of an
@@ -89,19 +98,12 @@ struct SetEntrySheet: View {
             }
             .padding(.bottom, 14)
 
-            HStack(spacing: SL.Space.s2) {
-                SLStepper(
-                    label: "Gewicht",
-                    display: display.number(weight),
-                    onDecrement: { weight = max(0, weight - increment) },
-                    onIncrement: { weight += increment }
-                )
-                SLStepper(
-                    label: "Reps",
-                    display: "\(reps)",
-                    onDecrement: { reps = max(0, reps - 1) },
-                    onIncrement: { reps += 1 }
-                )
+            Group {
+                if isAccessibilityLayout {
+                    VStack(spacing: SL.Space.s2) { steppers }
+                } else {
+                    HStack(spacing: SL.Space.s2) { steppers }
+                }
             }
             .padding(.bottom, SL.Space.s4)
 
@@ -113,6 +115,54 @@ struct SetEntrySheet: View {
 
             if showsKeypad { keypad.padding(.bottom, SL.Space.s3) }
 
+            if !isAccessibilityLayout { logControls }
+        }
+        .padding(.horizontal, SL.Space.gutterSession)
+        .padding(.top, SL.Space.s4)
+        .padding(.bottom, 42)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background(SL.Surface.raised)
+        .safeAreaInset(edge: .bottom) {
+            // At accessibility sizes the sheet takes the full height and the
+            // commit action is pinned, so it is reachable without scrolling.
+            if isAccessibilityLayout {
+                logControls
+                    .padding(.horizontal, SL.Space.gutterSession)
+                    .padding(.top, SL.Space.s3)
+                    .padding(.bottom, SL.Space.s2)
+                    .background(SL.Surface.raised)
+            }
+        }
+        .task {
+            if isCalibration { keypadFocused = true }
+        }
+        .presentationDetents(isAccessibilityLayout ? [.large] : [.height(sheetHeight)])
+        .presentationBackground(SL.Surface.raised)
+        .presentationDragIndicator(.hidden)
+    }
+
+    private var isAccessibilityLayout: Bool { typeSize.isAccessibilitySize }
+
+    @ViewBuilder
+    private var steppers: some View {
+        SLStepper(
+            label: "Gewicht",
+            display: display.number(weight),
+            onDecrement: { weight = max(0, weight - increment) },
+            onIncrement: { weight += increment }
+        )
+        SLStepper(
+            label: "Reps",
+            display: "\(reps)",
+            onDecrement: { reps = max(0, reps - 1) },
+            onIncrement: { reps += 1 }
+        )
+    }
+
+    private var logControls: some View {
+        VStack(spacing: 0) {
             Button {
                 onLog(SessionRunner.SetEntry(
                     weightKg: weight,
@@ -127,7 +177,6 @@ struct SetEntrySheet: View {
             }
             .buttonStyle(SLPrimaryButtonStyle())
             .disabled(weight <= 0 || reps <= 0)
-            .padding(.top, 0)
 
             Text(asksForRIR
                  ? "Gewicht en reps zijn een volledige set. RIR mag leeg blijven."
@@ -138,19 +187,6 @@ struct SetEntrySheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, SL.Space.s3)
         }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.top, SL.Space.s4)
-        .padding(.bottom, 42)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .background(SL.Surface.raised)
-        .task {
-            if isCalibration { keypadFocused = true }
-        }
-        .presentationDetents([.height(sheetHeight)])
-        .presentationBackground(SL.Surface.raised)
-        .presentationDragIndicator(.hidden)
     }
 
     private var grabber: some View {
