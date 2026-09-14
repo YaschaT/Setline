@@ -25,6 +25,9 @@ public enum SetDelta: Hashable, Sendable {
     case calibration
     /// The calibration set once written: everything else compares to it.
     case baseline
+    /// A set added during this session, where the column would otherwise
+    /// be empty.
+    case added
     /// A warm-up row carries no delta and no status dot.
     case none
 
@@ -34,7 +37,7 @@ public enum SetDelta: Hashable, Sendable {
     public var describesTheSet: Bool {
         switch self {
         case .failed, .paused, .partial, .pausedAndPartial: return true
-        case .reference, .difference, .personalRecord, .calibration, .baseline, .none: return false
+        case .reference, .difference, .personalRecord, .calibration, .baseline, .added, .none: return false
         }
     }
 }
@@ -71,6 +74,8 @@ public struct SetRowPresentation: Hashable, Sendable {
     public let delta: SetDelta
     public let status: SetRowStatus
     public let isWarmup: Bool
+    /// A working set added during this session rather than prescribed.
+    public let isAdded: Bool
 
     public init(
         index: Int,
@@ -79,7 +84,8 @@ public struct SetRowPresentation: Hashable, Sendable {
         repsLabel: String,
         delta: SetDelta,
         status: SetRowStatus,
-        isWarmup: Bool
+        isWarmup: Bool,
+        isAdded: Bool = false
     ) {
         self.index = index
         self.indexLabel = indexLabel
@@ -88,6 +94,7 @@ public struct SetRowPresentation: Hashable, Sendable {
         self.delta = delta
         self.status = status
         self.isWarmup = isWarmup
+        self.isAdded = isAdded
     }
 }
 
@@ -210,6 +217,12 @@ public enum SetRowPresenter {
                 }
             }
 
+            // A row added during this session says so, in the column's own
+            // quiet type, wherever the column would otherwise be empty.
+            if set.origin == .sessionAdded, resolvedDelta == .none {
+                resolvedDelta = .added
+            }
+
             rows.append(
                 SetRowPresentation(
                     index: offset,
@@ -218,7 +231,8 @@ public enum SetRowPresenter {
                     repsLabel: repsLabel,
                     delta: resolvedDelta,
                     status: status,
-                    isWarmup: false
+                    isWarmup: false,
+                    isAdded: set.origin == .sessionAdded
                 )
             )
         }
@@ -254,12 +268,15 @@ public enum SetRowPresenter {
         proposedTargets: [Int]? = nil,
         formatter: NumberDisplay = .dutch
     ) -> String? {
-        let working = sets.filter { !$0.isWarmup }
+        // Judged on the prescribed sets only. A set added during the session
+        // neither holds the advice back until it is logged, nor changes it.
+        let working = sets.filter { !$0.isWarmup && $0.origin == .prescribed }
         guard !working.isEmpty, working.allSatisfy(\.isLogged) else { return nil }
         guard history.hasReference else { return nil }
 
         let tops = planned.repTargets
-        let hitTop = zip(working, tops).allSatisfy { $0.0.reps >= $0.1 }
+        func slot(_ number: Int) -> LoggedSet? { working.first { $0.index == number } }
+        let hitTop = tops.indices.allSatisfy { (slot($0)?.reps ?? 0) >= tops[$0] }
         guard let load = working.first?.weightKg else { return nil }
 
         if hitTop {
@@ -269,8 +286,8 @@ public enum SetRowPresenter {
         // Doing what SETLINE proposed is never a miss. After a load increase
         // the proposal aims at the bottom of each range, and reaching it is
         // exactly the plan: same weight next time, working toward the top.
-        if let proposed = proposedTargets, proposed.count >= working.count,
-           zip(working, proposed).allSatisfy({ $0.0.reps >= $0.1 }) {
+        if let proposed = proposedTargets, proposed.count >= tops.count,
+           tops.indices.allSatisfy({ (slot($0)?.reps ?? 0) >= proposed[$0] }) {
             return "Op doel. Volgende keer \(formatter.kg(load)), mik op \(ProgressionEngine.repsLabel(tops))."
         }
         return "Niet alle reps gehaald. Volgende keer hetzelfde gewicht."

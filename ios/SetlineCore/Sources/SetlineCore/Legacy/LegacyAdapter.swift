@@ -67,6 +67,10 @@ public enum LegacyAdapter {
         let pausedReps = object["pausedReps"]?.intValue ?? 0
         let pauseSeconds = object["pauseSeconds"]?.doubleValue
         let pauseEnabled = object["pauseEnabled"]?.boolValue ?? (pausedReps > 0 || (pauseSeconds ?? 0) > 0)
+        // Only iOS writes an origin, and only on added sets. Everything else —
+        // the web app's own unmarked "Extra set" rows included — reads as
+        // prescribed (see `ProgressionEngine.prescribedSlots`).
+        let origin = SetOrigin(rawValue: object["origin"]?.stringValue ?? "") ?? .prescribed
 
         // Nothing is dropped and nothing is summed.
         //
@@ -89,7 +93,7 @@ public enum LegacyAdapter {
         guard weight != nil || reps > 0 || pausedReps > 0 else {
             // An untouched draft row. Preserved as an empty set so the grid
             // keeps its shape.
-            return LoggedSet(index: index, weightKg: nil, reps: 0, modifiers: modifiers)
+            return LoggedSet(index: index, weightKg: nil, reps: 0, modifiers: modifiers, origin: origin)
         }
 
         return LoggedSet(
@@ -102,7 +106,8 @@ public enum LegacyAdapter {
             flags: [],
             substitutedFrom: object["substitutedFrom"]?.stringValue,
             partialReps: object["partialReps"]?.intValue,
-            pausedReps: pausedReps > 0 ? pausedReps : nil
+            pausedReps: pausedReps > 0 ? pausedReps : nil,
+            origin: origin
         )
     }
 
@@ -359,6 +364,9 @@ extension JSONValue {
         if set.isWarmup { object["isWarmup"] = .bool(true) }
         if let partial = set.partialReps, partial > 0 { object["partialReps"] = .number(Decimal(partial)) }
         if let origin = set.substitutedFrom { object["substitutedFrom"] = .string(origin) }
+        // Written only for added sets, so a prescribed set keeps the web app's
+        // exact shape.
+        if set.origin == .sessionAdded { object["origin"] = .string(SetOrigin.sessionAdded.rawValue) }
         self = .object(object)
     }
 }

@@ -51,29 +51,47 @@ public struct ProgressionProposal: Hashable, Sendable {
 
 public enum ProgressionEngine {
 
+    /// The prescribed slots of one appearance: for each prescribed set, the
+    /// progression-eligible set logged in exactly that slot, or `nil`.
+    ///
+    /// Matched by origin and set number, never by position in a filtered
+    /// list. A set added during a session is not a prescribed slot, and a
+    /// skipped or partial prescribed set leaves its slot empty — so an extra
+    /// fourth set can never stand in for a missed third.
+    ///
+    /// The web app's own "Extra set" rows carry no origin. Past a complete
+    /// prescription their set number keeps them out. But the web app drops
+    /// empty rows when it saves, so an extra row logged after a skipped set
+    /// takes that set's number, and nothing here can tell the two apart.
+    public static func prescribedSlots(
+        _ appearance: ExerciseAppearance,
+        planned: PlannedExercise
+    ) -> [LoggedSet?] {
+        let eligible = appearance.sets.filter { $0.countsTowardProgression && $0.origin == .prescribed }
+        return planned.sets.indices.map { slot in eligible.first { $0.index == slot } }
+    }
+
     /// Does this appearance qualify as a confirming session? (§3.1)
     ///
-    /// Every working set reached the top of its range, at the same load, and
-    /// — when RIR was logged — the median RIR is inside the target.
+    /// Every prescribed set reached the top of its range, at the same load,
+    /// and — when RIR was logged — the median RIR is inside the target.
     public static func qualifies(
         _ appearance: ExerciseAppearance,
         planned: PlannedExercise
     ) -> Bool {
-        let sets = appearance.sets.filter(\.countsTowardProgression)
         let targets = planned.repTargets
-        guard !sets.isEmpty, sets.count >= targets.count else { return false }
+        guard !targets.isEmpty else { return false }
 
-        for (index, target) in targets.enumerated() {
-            guard index < sets.count else { return false }
-            let set = sets[index]
-            if set.flags.contains(.failed) { return false }
-            if set.reps < target { return false }
+        var sets: [LoggedSet] = []
+        for (slot, target) in zip(prescribedSlots(appearance, planned: planned), targets) {
+            guard let set = slot, !set.flags.contains(.failed), set.reps >= target else { return false }
+            sets.append(set)
         }
 
-        let loads = Set(sets.prefix(targets.count).map { $0.weightKg ?? 0 })
+        let loads = Set(sets.map { $0.weightKg ?? 0 })
         guard loads.count == 1 else { return false }
 
-        let logged = sets.prefix(targets.count).compactMap(\.rirReported)
+        let logged = sets.compactMap(\.rirReported)
         if !logged.isEmpty {
             let sorted = logged.sorted()
             let median = sorted[sorted.count / 2]
@@ -84,17 +102,22 @@ public enum ProgressionEngine {
     }
 
     /// How many consecutive most-recent sessions qualify at the same load.
+    ///
+    /// The load is the prescribed work's load. An added set — a lighter
+    /// back-off, say — is real training, but it is not the prescription, so it
+    /// neither sets the load nor breaks the streak.
     static func confirmingStreak(
         history: ExerciseHistory,
         planned: PlannedExercise
     ) -> (streak: Int, load: Decimal?) {
         guard let latest = history.mostRecent,
-              let load = latest.sets.first(where: \.countsTowardProgression)?.weightKg
+              let load = (prescribedSlots(latest, planned: planned).compactMap { $0 }.first
+                  ?? latest.sets.first(where: \.countsTowardProgression))?.weightKg
         else { return (0, nil) }
 
         var streak = 0
         for appearance in history.appearances {
-            let loads = Set(appearance.sets.filter(\.countsTowardProgression).map { $0.weightKg ?? 0 })
+            let loads = Set(prescribedSlots(appearance, planned: planned).compactMap { $0?.weightKg })
             guard loads == [load], qualifies(appearance, planned: planned) else { break }
             streak += 1
         }

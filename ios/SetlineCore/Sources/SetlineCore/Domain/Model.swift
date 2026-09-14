@@ -154,6 +154,10 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
     /// The web app allowed one set to hold both normal and paused reps and
     /// then summed them. They are kept apart here and never added to `reps`.
     public var pausedReps: Int?
+    /// Prescribed by the program, or added during this session. An added set
+    /// counts toward volume, history and records like any working set, but
+    /// never fills a prescribed slot when progression is judged.
+    public var origin: SetOrigin
 
     public init(
         id: UUID = UUID(),
@@ -166,7 +170,8 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
         flags: SetFlags = [],
         substitutedFrom: String? = nil,
         partialReps: Int? = nil,
-        pausedReps: Int? = nil
+        pausedReps: Int? = nil,
+        origin: SetOrigin = .prescribed
     ) {
         self.id = id
         self.index = index
@@ -179,6 +184,31 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
         self.substitutedFrom = substitutedFrom
         self.partialReps = partialReps
         self.pausedReps = pausedReps
+        self.origin = origin
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, index, weightKg, reps, rirReported, isWarmup, modifiers, flags
+        case substitutedFrom, partialReps, pausedReps, origin
+    }
+
+    /// Tolerates sets saved before `origin` existed — every one of those was a
+    /// prescribed set. A paused session whose sets failed to decode would not
+    /// fail loudly; it would simply not be there to resume.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        index = try container.decode(Int.self, forKey: .index)
+        weightKg = try container.decodeIfPresent(Decimal.self, forKey: .weightKg)
+        reps = try container.decode(Int.self, forKey: .reps)
+        rirReported = try container.decodeIfPresent(Int.self, forKey: .rirReported)
+        isWarmup = try container.decode(Bool.self, forKey: .isWarmup)
+        modifiers = try container.decode(SetModifiers.self, forKey: .modifiers)
+        flags = try container.decode(SetFlags.self, forKey: .flags)
+        substitutedFrom = try container.decodeIfPresent(String.self, forKey: .substitutedFrom)
+        partialReps = try container.decodeIfPresent(Int.self, forKey: .partialReps)
+        pausedReps = try container.decodeIfPresent(Int.self, forKey: .pausedReps)
+        origin = try container.decodeIfPresent(SetOrigin.self, forKey: .origin) ?? .prescribed
     }
 
     /// A set with weight and reps is a complete set. RIR is the optional

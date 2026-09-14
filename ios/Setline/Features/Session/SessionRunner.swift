@@ -523,6 +523,72 @@ final class SessionRunner {
         return true
     }
 
+    // MARK: - Added sets
+
+    /// Adds a working set to this exercise, for this session only.
+    ///
+    /// The row is pre-filled from the most recent working set and is logged
+    /// through the same sheet as every other row; adding it writes nothing.
+    /// The program is not touched: the row has no prescription, and
+    /// progression never reads it as one of the prescribed sets.
+    @discardableResult
+    func addSet(slotIndex: Int) -> LoggedSet? {
+        guard slots.indices.contains(slotIndex) else { return nil }
+        let fallback = Self.prefillWeight(slots[slotIndex])
+        return slots[slotIndex].model.addSet(fallbackWeightKg: fallback)
+    }
+
+    func isAddedSet(slotIndex: Int, setIndex: Int) -> Bool {
+        guard slots.indices.contains(slotIndex), slots[slotIndex].sets.indices.contains(setIndex) else { return false }
+        return slots[slotIndex].sets[setIndex].origin == .sessionAdded
+    }
+
+    /// Takes an added row back out, logged or not, and returns what an undo
+    /// needs to put it back. Prescribed rows are never removed: leaving one
+    /// open is what skipping it means.
+    func removeAddedSet(slotIndex: Int, setIndex: Int) -> SessionSlot.RemovedSet? {
+        guard slots.indices.contains(slotIndex) else { return nil }
+        // The rows after it renumber, so a sheet open on this exercise would
+        // be pointing at a different set.
+        if editing?.slot == slotIndex {
+            editing = nil
+            editingStartsPartial = false
+        }
+        return slots[slotIndex].model.removeAddedSet(at: setIndex)
+    }
+
+    func restore(_ removed: SessionSlot.RemovedSet, slotIndex: Int) {
+        guard slots.indices.contains(slotIndex) else { return }
+        slots[slotIndex].model.restore(removed)
+    }
+
+    /// The undo on "Set toegevoegd", honoured only while the row is still
+    /// untouched. Once it is logged it is real work, and removing it asks
+    /// first.
+    @discardableResult
+    func removeUntouchedAddedSet(slotIndex: Int, setID: UUID) -> Bool {
+        guard slots.indices.contains(slotIndex),
+              let position = slots[slotIndex].sets.firstIndex(where: { $0.id == setID }),
+              !slots[slotIndex].sets[position].isLogged
+        else { return false }
+        return removeAddedSet(slotIndex: slotIndex, setIndex: position) != nil
+    }
+
+    /// The reps a row's sheet opens on.
+    ///
+    /// A prescribed row takes its own target. An added row has none, so it
+    /// repeats the most recent written set — or, before anything is written,
+    /// aims where the last prescribed set does.
+    func suggestedReps(slotIndex: Int, setIndex: Int) -> Int? {
+        guard isAddedSet(slotIndex: slotIndex, setIndex: setIndex) else {
+            return targetReps(slotIndex: slotIndex, setIndex: setIndex)
+        }
+        let model = slots[slotIndex].model
+        if let written = model.mostRecentWrittenSet { return written.reps }
+        return targetReps(slotIndex: slotIndex, setIndex: model.prescribedRows.count - 1)
+            ?? slots[slotIndex].planned.sets.last?.repRange.upperBound
+    }
+
     // MARK: - Reorder
 
     /// The "do something else now and come back" offer, when one exists.
@@ -724,13 +790,14 @@ final class SessionRunner {
     var allResults: [ExerciseResult] { slots.flatMap(\.model.results) }
 
     func finishedSession(existing: TrainingSession?) -> TrainingSession {
-        let completion = plannedSetCount == 0 ? 0 : Int(Double(completedSetCount) / Double(plannedSetCount) * 100)
-        return TrainingSession(
+        TrainingSession(
             id: existing?.id ?? "\(Int(Date().timeIntervalSince1970 * 1000))",
             date: existing?.date ?? startedAt,
             dayID: day.id,
             dayLabel: day.short,
-            completion: completion,
+            // Against the prescription. The header's SET n/N counts every
+            // row, added ones included; completion never does.
+            completion: SessionSlot.completion(of: slots.map(\.model)),
             kind: .workout,
             results: allResults,
             durationSeconds: clock.activeSeconds(at: Date())
@@ -777,7 +844,10 @@ final class SessionRunner {
         for slotIndex in slots.indices {
             for setIndex in slots[slotIndex].sets.indices {
                 let weight = slots[slotIndex].sets[setIndex].weightKg ?? 20
-                let target = slots[slotIndex].planned.sets[setIndex].repRange.upperBound
+                // A resumed session can hold added rows, which have no range.
+                let planned = slots[slotIndex].planned.sets
+                let target = (planned.indices.contains(setIndex) ? planned[setIndex] : planned.last)?
+                    .repRange.upperBound ?? 8
                 log(slotIndex: slotIndex, setIndex: setIndex, entry: SetEntry(weightKg: weight, reps: target, rir: 1, failed: false, paused: false, partialReps: nil))
             }
         }

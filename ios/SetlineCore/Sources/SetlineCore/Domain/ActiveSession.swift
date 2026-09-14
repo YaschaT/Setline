@@ -91,9 +91,11 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
                 sets: result.sets.filter(\.isLogged)
             )
         }
-        let completion = plannedSetCount == 0
-            ? 0
-            : Int(Double(loggedSetCount) / Double(plannedSetCount) * 100)
+        // Measured against the prescription, exactly as a session finished on
+        // screen is. Snapshots saved before slots cannot hold an added set and
+        // keep the count they always used.
+        let completion = slots.map(SessionSlot.completion(of:))
+            ?? (plannedSetCount == 0 ? 0 : Int(Double(loggedSetCount) / Double(plannedSetCount) * 100))
         return TrainingSession(
             id: id ?? "\(Int(startedAt.timeIntervalSince1970 * 1000))",
             date: startedAt,

@@ -192,6 +192,13 @@ struct SLSetRow: View {
                 .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
                 .foregroundStyle(SL.Ink.tertiary)
                 .lineLimit(1).minimumScaleFactor(0.7)
+        case .added:
+            // Quiet on purpose: the row is an ordinary working set, and says
+            // where it came from only where nothing else needs the column.
+            Text("extra")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                .foregroundStyle(SL.Ink.tertiary)
+                .lineLimit(1).minimumScaleFactor(0.7)
         case .none:
             EmptyView()
         }
@@ -208,7 +215,9 @@ struct SLSetRow: View {
 
     /// "Set 2, 50 kilogram, 8 reps, plus 2,5 vergeleken met vorige sessie"
     private var accessibilityText: String {
-        var parts = [row.isWarmup ? "Opwarmset \(row.indexLabel)" : "Set \(row.indexLabel)", row.weightLabel]
+        // An added set says so whatever its delta column shows.
+        let name = row.isWarmup ? "Opwarmset" : (row.isAdded ? "Extra set" : "Set")
+        var parts = ["\(name) \(row.indexLabel)", row.weightLabel]
         if row.status == .written || row.isWarmup { parts.append("\(row.repsLabel) reps") }
         switch row.delta {
         case .reference(let text): parts.append("vorige keer \(text)")
@@ -220,6 +229,7 @@ struct SLSetRow: View {
         case .pausedAndPartial(let count): parts.append("set met pauze, \(count) partiële reps")
         case .calibration: parts.append("kalibratieset")
         case .baseline: parts.append("basis voor deze oefening")
+        case .added: parts.append("alleen voor deze sessie")
         case .none: break
         }
         return parts.joined(separator: ", ")

@@ -85,3 +85,15 @@ public enum SetKind: String, Sendable {
     case warmup
     case working
 }
+
+/// Where a working set came from.
+///
+/// The program prescribes how many sets an exercise gets; the logger never
+/// caps a session at that number. A set added during the session is an
+/// ordinary working set for volume, history and records, but it is not one
+/// of the prescribed slots: it can never complete a prescription that was
+/// otherwise incomplete, and adding it never changes the program.
+public enum SetOrigin: String, Codable, Sendable {
+    case prescribed
+    case sessionAdded
+}

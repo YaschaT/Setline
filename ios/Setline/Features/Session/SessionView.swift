@@ -59,6 +59,10 @@ struct SessionView: View {
         )
         .animation(
             .easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion)),
+            value: runner.plannedSetCount
+        )
+        .animation(
+            .easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion)),
             value: runner.isTimerExpanded
         )
         .animation(
@@ -97,19 +101,26 @@ struct SessionView: View {
             get: { runner.editing != nil },
             set: { if !$0 { closeEntry() } }
         )) {
-            if let editing = runner.editing {
+            // Rows can be removed now, so a stale position opens nothing rather
+            // than the wrong set.
+            if let editing = runner.editing,
+               runner.slots.indices.contains(editing.slot),
+               runner.slots[editing.slot].sets.indices.contains(editing.set) {
                 SetEntrySheet(
                     slot: runner.slots[editing.slot],
                     setIndex: editing.set,
                     isCalibration: editing.set == 0 && runner.needsCalibration(slotIndex: editing.slot),
-                    proposedReps: runner.targetReps(slotIndex: editing.slot, setIndex: editing.set),
+                    proposedReps: runner.suggestedReps(slotIndex: editing.slot, setIndex: editing.set),
                     startsPartial: runner.editingStartsPartial,
                     onLog: { entry in
                         runner.log(slotIndex: editing.slot, setIndex: editing.set, entry: entry)
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         closeEntry()
                     },
-                    onClose: { closeEntry() }
+                    onClose: { closeEntry() },
+                    onRemove: runner.isAddedSet(slotIndex: editing.slot, setIndex: editing.set)
+                        ? { removeSet(slot: editing.slot, set: editing.set) }
+                        : nil
                 )
             }
         }
@@ -230,6 +241,24 @@ struct SessionView: View {
             { action(); toast = nil }
         })
         AccessibilityNotification.Announcement(message).post()
+    }
+
+    /// Adds a working set to the exercise on screen, for this session only.
+    /// Nothing is logged: the new row is simply the next one up.
+    private func addSet() {
+        let index = runner.currentIndex
+        guard let row = runner.addSet(slotIndex: index) else { return }
+        show("Set \(row.index + 1) toegevoegd. Alleen voor deze sessie.") {
+            _ = runner.removeUntouchedAddedSet(slotIndex: index, setID: row.id)
+        }
+    }
+
+    /// Takes an added set out again. A logged one was confirmed in the sheet
+    /// first; either way the toast can put it back.
+    private func removeSet(slot: Int, set: Int) {
+        closeEntry()
+        guard let removed = runner.removeAddedSet(slotIndex: slot, setIndex: set) else { return }
+        show("Set \(set + 1) verwijderd.") { runner.restore(removed, slotIndex: slot) }
     }
 
     // MARK: Chrome
@@ -707,7 +736,32 @@ struct SessionView: View {
                     }
                 }
             }
+            addSetButton.padding(.top, SL.Space.s1)
         }
+    }
+
+    /// The grid's own footer: one more working set, for this session only.
+    ///
+    /// A text action, not a row — no fill, no dashes (those mean warm-up) and
+    /// no lime, so logging stays the screen's one commit action. The plus
+    /// sits in the set column, where the next number would be.
+    private var addSetButton: some View {
+        Button { addSet() } label: {
+            HStack(spacing: SL.Space.s2) {
+                Image(systemName: "plus")
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                Text("Set toevoegen")
+                    .slBody(SL.Weight.medium)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(SL.Ink.secondary)
+            .padding(.horizontal, SLSetColumn.rowInset)
+            .frame(minHeight: SL.Space.hitMin)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Set toevoegen aan \(runner.current.exercise.name)")
+        .accessibilityHint("Alleen voor deze sessie. Je schema verandert niet.")
     }
 
     @ViewBuilder

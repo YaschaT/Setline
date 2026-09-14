@@ -19,7 +19,9 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         /// As it was when the slot was built, so a renamed exercise never
         /// rewrites what the session shows.
         public var exerciseName: String
-        /// One prescription per row, aligned with `sets`.
+        /// One prescription per *prescribed* row, in order. Rows added during
+        /// the session have no prescription: they carry `origin ==
+        /// .sessionAdded` and always follow the prescribed rows.
         public var prescription: [SetPrescription]
         public var sets: [LoggedSet]
         /// The exercise this one stands in for, today only. `nil` for the
@@ -131,9 +133,14 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         )
     }
 
-    /// Prescriptions of the rows not yet written — the only part a swap moves.
+    /// The rows the program prescribed, in order — aligned with
+    /// `active.prescription`. Rows added during the session are not in it.
+    public var prescribedRows: [LoggedSet] { active.sets.filter { $0.origin == .prescribed } }
+
+    /// Prescriptions of the prescribed rows not yet written — what a swap
+    /// carries to the substitute as its prescription.
     public var openPrescription: [SetPrescription] {
-        zip(active.sets, active.prescription).filter { !$0.0.isLogged }.map(\.1)
+        zip(prescribedRows, active.prescription).filter { !$0.0.isLogged }.map(\.1)
     }
 
     public var hasOpenSets: Bool { active.sets.contains { !$0.isLogged } }
@@ -142,15 +149,59 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         preserved.reduce(0) { $0 + $1.sets.count } + active.sets.filter(\.isLogged).count
     }
 
-    /// Every row the slot holds: preserved work plus the active rows.
+    /// Every row the slot holds: preserved work plus the active rows. Rows
+    /// added during the session count, so the session total grows with them.
     public var setCount: Int {
         preserved.reduce(0) { $0 + $1.sets.count } + active.sets.count
+    }
+
+    /// The prescription's size across the slot, preserved work included.
+    /// Added rows never change it.
+    public var prescribedSetCount: Int {
+        let moved = preserved.reduce(0) { total, result in
+            total + result.sets.filter { $0.origin == .prescribed }.count
+        }
+        return moved + prescribedRows.count
+    }
+
+    /// How much of the prescription is written. An added set, logged or not,
+    /// never moves this.
+    public var loggedPrescribedSetCount: Int {
+        let moved = preserved.reduce(0) { total, result in
+            total + result.sets.filter { $0.origin == .prescribed }.count
+        }
+        return moved + prescribedRows.filter(\.isLogged).count
     }
 
     public var canUndo: Bool { !undoStack.isEmpty }
     public var lastChangeWasPermanent: Bool { undoStack.last?.wasPermanent ?? false }
     /// The change an undo would reverse right now.
     public var latestUndo: UndoPoint? { undoStack.last }
+
+    /// The last row written in the active exercise, in row order.
+    public var mostRecentWrittenSet: LoggedSet? { active.sets.last(where: \.isLogged) }
+
+    /// Whether the set sheet asks for RIR on this row.
+    ///
+    /// Once per exercise, on its last prescribed set (addendum 11R), and on
+    /// every added set. An added row comes after that point by definition, so
+    /// adding one never takes the question away from the prescription.
+    public func asksForRIR(at position: Int) -> Bool {
+        guard active.sets.indices.contains(position) else { return false }
+        if active.sets[position].origin == .sessionAdded { return true }
+        return position == active.sets.lastIndex(where: { $0.origin == .prescribed })
+    }
+
+    /// A session's completion percentage, measured against the prescription.
+    ///
+    /// An added set left unlogged is not a missed set, and a logged one never
+    /// lifts an incomplete prescription.
+    public static func completion(of slots: [SessionSlot]) -> Int {
+        let prescribed = slots.reduce(0) { $0 + $1.prescribedSetCount }
+        let done = slots.reduce(0) { $0 + $1.loggedPrescribedSetCount }
+        guard prescribed > 0 else { return 0 }
+        return min(100, Int(Double(done) / Double(prescribed) * 100))
+    }
 
     /// What this slot contributes to history: every logged set, each under the
     /// exercise it was logged on.
@@ -161,6 +212,71 @@ public struct SessionSlot: Codable, Hashable, Sendable {
     }
 
     // MARK: - Changing
+
+    /// A row removed with `removeAddedSet`, with what it takes to put it back.
+    public struct RemovedSet: Hashable, Sendable {
+        public let set: LoggedSet
+        public let position: Int
+        /// The exercise the row was on. It only ever goes back there.
+        public let exerciseID: String
+    }
+
+    /// Adds one working row for this session only.
+    ///
+    /// The row is pre-filled from the most recent working set — the last one
+    /// written, or else the last row's own pre-fill — and waits to be logged
+    /// like any other row: adding never writes a set. It has no prescription,
+    /// carries `origin == .sessionAdded`, and changes nothing about the
+    /// program. It is a working set, never a warm-up.
+    ///
+    /// `fallbackWeightKg` only matters for a slot with no rows at all, such as
+    /// a substitute that took over a finished exercise. It must come from the
+    /// active exercise: a weight is never carried across a swap (§12.3).
+    @discardableResult
+    public mutating func addSet(fallbackWeightKg: Decimal? = nil) -> LoggedSet {
+        let row = LoggedSet(
+            index: active.sets.count,
+            weightKg: mostRecentWrittenSet?.weightKg ?? active.sets.last?.weightKg ?? fallbackWeightKg,
+            reps: 0,
+            modifiers: plan.modifiers,
+            substitutedFrom: active.substitutedFromID,
+            origin: .sessionAdded
+        )
+        active.sets.append(row)
+        return row
+    }
+
+    /// Removes a row that was added during the session, logged or not.
+    /// Prescribed rows are never removable here — leaving one unlogged is what
+    /// skipping it means.
+    public mutating func removeAddedSet(at position: Int) -> RemovedSet? {
+        guard active.sets.indices.contains(position),
+              active.sets[position].origin == .sessionAdded
+        else { return nil }
+        let exerciseID = active.exerciseID
+        let removed = RemovedSet(set: active.sets.remove(at: position), position: position, exerciseID: exerciseID)
+        renumber()
+        return removed
+    }
+
+    /// Puts a removed row back where it was, logged data included — once, and
+    /// only into the exercise it was removed from.
+    public mutating func restore(_ removed: RemovedSet) {
+        guard removed.set.origin == .sessionAdded,
+              removed.exerciseID == active.exerciseID,
+              !active.sets.contains(where: { $0.id == removed.set.id })
+        else { return }
+        // Added rows always follow the prescribed ones.
+        let position = min(max(removed.position, prescribedRows.count), active.sets.count)
+        active.sets.insert(removed.set, at: position)
+        renumber()
+    }
+
+    /// Set numbers follow the rows. Only added rows are ever removed, and they
+    /// sit after every prescribed row, so a prescribed set keeps its number.
+    private mutating func renumber() {
+        for position in active.sets.indices { active.sets[position].index = position }
+    }
 
     /// Moves the slot's open rows to another exercise.
     ///
@@ -176,6 +292,7 @@ public struct SessionSlot: Codable, Hashable, Sendable {
     ) {
         let logged = active.sets.filter(\.isLogged)
         let open = openPrescription
+        let openAdded = active.sets.filter { $0.origin == .sessionAdded && !$0.isLogged }.count
         let origin = active.substitutedFromID ?? active.exerciseID
         // Standing in for yourself is not a substitution.
         let standsInFor: String? = temporary && origin != exerciseID ? origin : nil
@@ -189,17 +306,23 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         if !logged.isEmpty {
             preserved.append(ExerciseResult(exerciseID: active.exerciseID, name: active.exerciseName, sets: logged))
         }
+        // Open prescribed rows move with their prescriptions, and open rows
+        // the user added move too, still added. Numbers restart for the
+        // substitute, prescribed rows first.
+        let origins = Array(repeating: SetOrigin.prescribed, count: open.count)
+            + Array(repeating: SetOrigin.sessionAdded, count: openAdded)
         active = Segment(
             exerciseID: exerciseID,
             exerciseName: name,
             prescription: open,
-            sets: open.indices.map {
+            sets: origins.enumerated().map { index, setOrigin in
                 LoggedSet(
-                    index: $0,
+                    index: index,
                     weightKg: prefillWeight,
                     reps: 0,
                     modifiers: plan.modifiers,
-                    substitutedFrom: standsInFor
+                    substitutedFrom: standsInFor,
+                    origin: setOrigin
                 )
             },
             substitutedFromID: standsInFor

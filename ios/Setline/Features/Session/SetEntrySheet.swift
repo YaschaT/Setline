@@ -13,6 +13,9 @@ struct SetEntrySheet: View {
     let proposedReps: Int?
     let onLog: (SessionRunner.SetEntry) -> Void
     let onClose: () -> Void
+    /// Takes the row out of the session. Only a set added during the session
+    /// has one — a prescribed set is skipped by leaving it open.
+    let onRemove: (() -> Void)?
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -24,6 +27,7 @@ struct SetEntrySheet: View {
     @State private var partialReps: Int?
     @State private var showsKeypad = false
     @State private var keypadText = ""
+    @State private var confirmsRemoval = false
     @FocusState private var keypadFocused: Bool
 
     private let display = NumberDisplay.dutch
@@ -35,7 +39,8 @@ struct SetEntrySheet: View {
         proposedReps: Int? = nil,
         startsPartial: Bool = false,
         onLog: @escaping (SessionRunner.SetEntry) -> Void,
-        onClose: @escaping () -> Void
+        onClose: @escaping () -> Void,
+        onRemove: (() -> Void)? = nil
     ) {
         self.slot = slot
         self.setIndex = setIndex
@@ -43,15 +48,20 @@ struct SetEntrySheet: View {
         self.proposedReps = proposedReps
         self.onLog = onLog
         self.onClose = onClose
+        self.onRemove = onRemove
 
         let draft = slot.sets[setIndex]
         let reference = slot.history.mostRecent?.sets.first { $0.index == setIndex }
+        // A row added during the session has no range of its own.
+        let plannedTop = slot.planned.sets.indices.contains(setIndex)
+            ? slot.planned.sets[setIndex].repRange.upperBound
+            : (slot.planned.sets.last?.repRange.upperBound ?? 8)
         _weight = State(initialValue: draft.weightKg ?? reference?.weightKg ?? 0)
         _reps = State(initialValue: isCalibration
             ? Calibration.targetReps
             : (draft.reps > 0
                 ? draft.reps
-                : (proposedReps ?? reference?.reps ?? slot.planned.sets[setIndex].repRange.upperBound)))
+                : (proposedReps ?? reference?.reps ?? plannedTop)))
         // Stepping to a first weight from zero is 30-odd taps. A calibration
         // set opens on the keypad instead.
         _showsKeypad = State(initialValue: isCalibration)
@@ -64,9 +74,17 @@ struct SetEntrySheet: View {
         _partialReps = State(initialValue: startsPartial ? 1 : nil)
     }
 
-    /// RIR is the third, optional tap, and by default only the last set of an
-    /// exercise is asked (addendum 11R). Per-set entry is an Account setting.
-    private var asksForRIR: Bool { isCalibration || setIndex == slot.sets.count - 1 }
+    /// RIR is the third, optional tap. By default an exercise asks it on its
+    /// last prescribed set (addendum 11R) and on any set added after it.
+    /// Per-set entry is an Account setting.
+    private var asksForRIR: Bool { isCalibration || slot.model.asksForRIR(at: setIndex) }
+
+    /// A set added during this session rather than prescribed.
+    private var isAddedSet: Bool {
+        slot.sets.indices.contains(setIndex) && slot.sets[setIndex].origin == .sessionAdded
+    }
+
+    private var canRemove: Bool { isAddedSet && onRemove != nil }
 
     /// The sheet's height, fixed for as long as it is open.
     ///
@@ -79,6 +97,7 @@ struct SetEntrySheet: View {
         var height: CGFloat = 412        // grabber, head, steppers, chips, pill, footnote
         if asksForRIR { height += 86 }
         if isCalibration { height += 56 } // the keypad it opens on
+        if canRemove { height += 52 }     // the quiet way back out
         return height
     }
 
@@ -141,6 +160,12 @@ struct SetEntrySheet: View {
         .presentationDetents(isAccessibilityLayout ? [.large] : [.height(sheetHeight)])
         .presentationBackground(SL.Surface.raised)
         .presentationDragIndicator(.hidden)
+        .alert("Set \(setIndex + 1) verwijderen?", isPresented: $confirmsRemoval) {
+            Button("Annuleer", role: .cancel) {}
+            Button("Verwijder", role: .destructive) { onRemove?() }
+        } message: {
+            Text(removalMessage)
+        }
     }
 
     private var isAccessibilityLayout: Bool { typeSize.isAccessibilitySize }
@@ -186,7 +211,38 @@ struct SetEntrySheet: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.top, SL.Space.s3)
+
+            if canRemove {
+                Button(action: requestRemoval) {
+                    Text("Verwijder set \(setIndex + 1)")
+                        .slBody(SL.Weight.medium)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, SL.Space.s2)
+                .accessibilityHint("Alleen uit deze sessie. Je schema verandert niet.")
+            }
         }
+    }
+
+    /// An empty row simply goes. A written set is real work, so it asks first.
+    private func requestRemoval() {
+        if slot.sets.indices.contains(setIndex), slot.sets[setIndex].isLogged {
+            confirmsRemoval = true
+        } else {
+            onRemove?()
+        }
+    }
+
+    /// What a confirmed removal takes out, in the set's logged numbers.
+    private var removalMessage: String {
+        guard slot.sets.indices.contains(setIndex), let weight = slot.sets[setIndex].weightKg else {
+            return "Deze set verdwijnt uit deze sessie. Je schema verandert niet."
+        }
+        return "\(display.kg(weight)) × \(slot.sets[setIndex].reps) verdwijnt uit deze sessie. Je schema verandert niet."
     }
 
     private var grabber: some View {
@@ -202,6 +258,8 @@ struct SetEntrySheet: View {
 
     private var setLabel: String {
         if isCalibration { return "Set 1 · kalibratie" }
+        if isAddedSet { return "Set \(setIndex + 1) · extra" }
+        // Once a set is added, the last prescribed set is no longer the last.
         let last = setIndex == slot.sets.count - 1
         return last ? "Set \(setIndex + 1) · laatste set" : "Set \(setIndex + 1)"
     }
