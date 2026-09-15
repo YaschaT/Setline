@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct SetlineApp: App {
     @State private var app = AppState(client: SupabaseClient(config: SupabaseConfig.fromBundle()))
+    @Environment(\.scenePhase) private var scenePhase
     private let container: ModelContainer = {
         do {
             return try ModelContainer(for: StoredState.self)
@@ -22,6 +23,11 @@ struct SetlineApp: App {
             RootView()
                 .environment(app)
                 .modelContainer(container)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Coming back to the app retries anything still waiting to sync,
+            // so a change made offline never simply waits for the next one.
+            if phase == .active { Task { await app.syncNow() } }
         }
     }
 }

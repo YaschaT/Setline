@@ -192,13 +192,24 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         return position == active.sets.lastIndex(where: { $0.origin == .prescribed })
     }
 
+    /// Prescribed working sets across a session. Added rows never change it.
+    public static func plannedSetCount(of slots: [SessionSlot]) -> Int {
+        slots.reduce(0) { $0 + $1.prescribedSetCount }
+    }
+
+    /// Prescribed working sets logged across a session. An added set, logged
+    /// or not, never moves it.
+    public static func completedSetCount(of slots: [SessionSlot]) -> Int {
+        slots.reduce(0) { $0 + $1.loggedPrescribedSetCount }
+    }
+
     /// A session's completion percentage, measured against the prescription.
     ///
     /// An added set left unlogged is not a missed set, and a logged one never
     /// lifts an incomplete prescription.
     public static func completion(of slots: [SessionSlot]) -> Int {
-        let prescribed = slots.reduce(0) { $0 + $1.prescribedSetCount }
-        let done = slots.reduce(0) { $0 + $1.loggedPrescribedSetCount }
+        let prescribed = plannedSetCount(of: slots)
+        let done = completedSetCount(of: slots)
         guard prescribed > 0 else { return 0 }
         return min(100, Int(Double(done) / Double(prescribed) * 100))
     }

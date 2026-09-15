@@ -1,0 +1,87 @@
+{
+  "name": "A web tab opened before an iOS workout keeps that workout when it saves",
+  "why": "The tab never re-reads the row. Its save must apply its own new meal to the latest state, not replace the state with its old copy.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-14T18:05:00.000Z",
+      "remote": {
+        "planMode": "personal",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "sessions": [
+          { "id": "web-1", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [],
+        "iosHiddenWarmups": ["pec-fly"]
+      },
+      "ops": [
+        { "kind": "upsertSession", "createdAt": "2026-09-14T18:00:00Z",
+          "session": { "id": "ios-1", "date": "2026-09-14T17:00:00.000Z", "dayId": "pull", "dayLabel": "Pull", "completion": 100,
+            "results": [{ "exerciseId": "neutral-row", "name": "Neutral-grip row",
+              "sets": [{ "weight": "80", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2 }] }],
+            "durationSeconds": 3000, "iosPlannedSetCount": 1, "iosCompletedSetCount": 1 } }
+      ],
+      "expected": {
+        "planMode": "personal",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "sessions": [
+          { "id": "ios-1", "date": "2026-09-14T17:00:00.000Z", "dayId": "pull", "dayLabel": "Pull", "completion": 100,
+            "results": [{ "exerciseId": "neutral-row", "name": "Neutral-grip row",
+              "sets": [{ "weight": "80", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2 }] }],
+            "durationSeconds": 3000, "iosPlannedSetCount": 1, "iosCompletedSetCount": 1 },
+          { "id": "web-1", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [],
+        "iosHiddenWarmups": ["pec-fly"]
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-14T20:00:00.000Z",
+      "ancestry": {
+        "planMode": "personal",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "sessions": [
+          { "id": "web-1", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [],
+        "iosHiddenWarmups": ["pec-fly"]
+      },
+      "snapshot": {
+        "planMode": "personal",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "sessions": [
+          { "id": "web-1", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [
+          { "id": "n-1", "date": "2026-09-14", "meal": "Avondeten", "name": "Kip, rijst, broccoli", "calories": 740, "protein": 52, "carbs": 80, "fat": 14 }
+        ]
+      },
+      "expected": {
+        "planMode": "personal",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "sessions": [
+          { "id": "ios-1", "date": "2026-09-14T17:00:00.000Z", "dayId": "pull", "dayLabel": "Pull", "completion": 100,
+            "results": [{ "exerciseId": "neutral-row", "name": "Neutral-grip row",
+              "sets": [{ "weight": "80", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2 }] }],
+            "durationSeconds": 3000, "iosPlannedSetCount": 1, "iosCompletedSetCount": 1 },
+          { "id": "web-1", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [
+          { "id": "n-1", "date": "2026-09-14", "meal": "Avondeten", "name": "Kip, rijst, broccoli", "calories": 740, "protein": 52, "carbs": 80, "fat": 14 }
+        ],
+        "iosHiddenWarmups": ["pec-fly"]
+      }
+    }
+  ]
+}

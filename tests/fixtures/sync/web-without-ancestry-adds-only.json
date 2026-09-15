@@ -1,0 +1,35 @@
+{
+  "name": "A web copy with no provable ancestor can add what is missing but never overwrite or delete",
+  "why": "When the Supabase read fails, the page falls back to an older copy (the D1 mirror). Saving that copy must not undo newer data: an existing session keeps its stored values, the stored target stays, a missing iOS session is not deleted, and only genuinely absent data is added.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-14T20:00:00.000Z",
+      "remote": {
+        "targets": { "calories": 2600, "protein": 175, "carbs": 330, "fat": 70 },
+        "sessions": [
+          { "id": "ios-4", "date": "2026-09-14T16:00:00.000Z", "dayId": "pull", "dayLabel": "Pull", "completion": 100, "results": [], "durationSeconds": 2400 },
+          { "id": "web-5", "date": "2026-09-12T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100, "results": [] }
+        ]
+      },
+      "ancestry": null,
+      "snapshot": {
+        "planMode": "science",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "sessions": [
+          { "id": "web-5", "date": "2026-09-12T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 50, "results": [] },
+          { "id": "web-6", "date": "2026-09-13T17:00:00.000Z", "dayId": "upper", "dayLabel": "Upper", "completion": 80, "results": [] }
+        ]
+      },
+      "expected": {
+        "targets": { "calories": 2600, "protein": 175, "carbs": 330, "fat": 70 },
+        "sessions": [
+          { "id": "ios-4", "date": "2026-09-14T16:00:00.000Z", "dayId": "pull", "dayLabel": "Pull", "completion": 100, "results": [], "durationSeconds": 2400 },
+          { "id": "web-5", "date": "2026-09-12T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100, "results": [] },
+          { "id": "web-6", "date": "2026-09-13T17:00:00.000Z", "dayId": "upper", "dayLabel": "Upper", "completion": 80, "results": [] }
+        ],
+        "planMode": "science"
+      }
+    }
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "name": "An exercise removed on the web stays removed",
+  "why": "The session editor removes the dumbbell swap iOS logged: an explicit edit, so it goes. A stale tab that still holds the old session then finishes the day again. Its own typed bench press sets and its new empty row are applied, but the swap it merely carried along is not brought back, and a later iOS write does not bring it back either.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-15T21:00:00.000Z",
+      "remote": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" }
+                ] }
+            ],
+            "durationSeconds": 2800, "iosPlannedSetCount": 3, "iosCompletedSetCount": 3 }
+        ],
+        "iosActiveSession": null
+      },
+      "ancestry": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" }
+                ] }
+            ],
+            "durationSeconds": 2800, "iosPlannedSetCount": 3, "iosCompletedSetCount": 3 }
+        ],
+        "iosActiveSession": null
+      },
+      "snapshot": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] }
+            ],
+            "durationSeconds": 2800, "iosPlannedSetCount": 3, "iosCompletedSetCount": 3 }
+        ]
+      },
+      "expected": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] }
+            ],
+            "durationSeconds": 2800 }
+        ],
+        "iosActiveSession": null
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-15T21:05:00.000Z",
+      "ancestry": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" }
+                ] }
+            ],
+            "durationSeconds": 2800, "iosPlannedSetCount": 3, "iosCompletedSetCount": 3 }
+        ],
+        "iosActiveSession": null
+      },
+      "snapshot": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 50,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "105", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "105", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "incline-bench", "name": "Incline bench press", "sets": [] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" }
+                ] }
+            ],
+            "durationSeconds": 2800 }
+        ]
+      },
+      "expected": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 50,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "105", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "105", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "incline-bench", "name": "Incline bench press", "sets": [] }
+            ],
+            "durationSeconds": 2800 }
+        ],
+        "iosActiveSession": null
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-15T21:15:00.000Z",
+      "ops": [
+        { "kind": "setActiveSession", "createdAt": "2026-09-15T21:10:00Z",
+          "snapshot": { "dayID": "pull", "dayLabel": "Pull", "startedAt": "2026-09-15T21:10:00Z", "currentIndex": 0, "results": [], "activeSeconds": 0 } }
+      ],
+      "expected": {
+        "sessions": [
+          { "id": "1789499400000", "date": "2026-09-15T19:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 50,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "105", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "105", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "incline-bench", "name": "Incline bench press", "sets": [] }
+            ],
+            "durationSeconds": 2800 }
+        ],
+        "iosActiveSession": { "dayID": "pull", "dayLabel": "Pull", "startedAt": "2026-09-15T21:10:00Z", "currentIndex": 0, "results": [], "activeSeconds": 0 }
+      }
+    }
+  ]
+}

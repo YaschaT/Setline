@@ -1,0 +1,47 @@
+{
+  "name": "Re-logging a day on the web keeps iOS fields but drops iOS counts that no longer match",
+  "why": "The page rebuilt the session's results. Set counts iOS derived from the old results would now be wrong, so they go; duration, note and an unknown field describe the session, not its results, so they stay.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-14T21:00:00.000Z",
+      "remote": {
+        "sessions": [
+          { "id": "ios-3", "date": "2026-09-14T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "origin": "sessionAdded" }] }],
+            "durationSeconds": 2700, "note": "Goed", "iosPlannedSetCount": 3, "iosCompletedSetCount": 3, "futureField": true }
+        ]
+      },
+      "ancestry": {
+        "sessions": [
+          { "id": "ios-3", "date": "2026-09-14T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "origin": "sessionAdded" }] }],
+            "durationSeconds": 2700, "note": "Goed", "iosPlannedSetCount": 3, "iosCompletedSetCount": 3, "futureField": true }
+        ]
+      },
+      "snapshot": {
+        "sessions": [
+          { "id": "ios-3", "date": "2026-09-14T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 67,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [
+                { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "origin": "sessionAdded" },
+                { "weight": "100", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+              ] }] }
+        ]
+      },
+      "expected": {
+        "sessions": [
+          { "id": "ios-3", "date": "2026-09-14T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 67,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [
+                { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "origin": "sessionAdded" },
+                { "weight": "100", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+              ] }],
+            "durationSeconds": 2700, "note": "Goed", "futureField": true }
+        ]
+      }
+    }
+  ]
+}

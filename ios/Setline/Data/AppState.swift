@@ -8,20 +8,27 @@ enum SyncState: Equatable {
     case syncing
     case synced(Date)
     case offline
+    /// The account's refresh token was rejected, so only signing in again
+    /// resumes sync. Everything on the device, pending changes included, stays.
+    case sessionExpired
     case notConfigured
 }
 
 /// The app's one observable model.
 ///
-/// Local first: the device's copy is authoritative and every write lands
-/// there before the network is touched. "Loggen werkt offline; syncen
-/// gebeurt zodra er verbinding is."
+/// Local first: the device's copy is authoritative for what the screen shows,
+/// and every change lands there before the network is touched. "Loggen werkt
+/// offline; syncen gebeurt zodra er verbinding is."
+///
+/// A change is recorded as a `StateChange` and synced by applying it to the
+/// account's latest stored state — never by sending this device's copy, which
+/// would overwrite whatever the web app wrote since.
 @MainActor
 @Observable
 final class AppState {
 
     // MARK: Identity
-    private(set) var session: SupabaseClient.Session?
+    private(set) var session: AuthSession?
     private(set) var authError: String?
     private(set) var isWorking = false
     var isSignedIn: Bool { session != nil }
@@ -29,6 +36,10 @@ final class AppState {
     // MARK: Data
     private(set) var state: LegacyState?
     private(set) var sync: SyncState = .idle
+    /// Changes made on this device that the account does not have yet, oldest first.
+    private(set) var pendingChanges: [StateChange] = []
+    var hasPendingChanges: Bool { !pendingChanges.isEmpty }
+    private(set) var lastSyncedAt: Date?
 
     // MARK: Derived
     private(set) var plan: [WorkoutDay] = PlanCatalog.personal
@@ -49,6 +60,14 @@ final class AppState {
     let display = NumberDisplay.dutch
     private let client: SupabaseClient
     private var store: LocalStore?
+    /// One sync at a time. A change made while one runs asks for another pass.
+    private var isSyncing = false
+    private var syncRequested = false
+    /// Keeps the signed-in account's access token usable.
+    private var auth: AuthSessionCoordinator?
+    /// Which sign-in a refreshed token belongs to. A refresh that lands after
+    /// signing out, or into another account, is ignored.
+    private var authGeneration = UUID()
 
     private static let sessionKey = "supabase.session"
 
@@ -72,8 +91,9 @@ final class AppState {
             let stored = ProcessInfo.processInfo.arguments.contains("-SetlineResetDemo")
                 ? nil
                 : store?.load(for: DemoData.session.email)
-            apply(stored ?? DemoData.state())
-            if stored == nil { store?.save(DemoData.state(), for: DemoData.session.email, pending: false) }
+            let demo = stored ?? DemoData.state()
+            apply(demo)
+            if stored == nil { store?.markSynced(demo, pending: [], at: Date(), for: DemoData.session.email) }
             sync = .synced(Date())
             return
         }
@@ -83,8 +103,8 @@ final class AppState {
             return
         }
         if let data = Keychain.get(Self.sessionKey)?.data(using: .utf8),
-           let saved = try? JSONDecoder().decode(SupabaseClient.Session.self, from: data) {
-            session = saved
+           let saved = try? JSONDecoder().decode(AuthSession.self, from: data) {
+            begin(saved)
             await loadState()
         }
     }
@@ -112,16 +132,23 @@ final class AppState {
         }
     }
 
-    private func authenticate(_ work: @escaping () async throws -> SupabaseClient.Session) async {
+    private func authenticate(_ work: @escaping () async throws -> AuthSession) async {
         isWorking = true
         authError = nil
         defer { isWorking = false }
         do {
             let result = try await work()
-            session = result
-            if let encoded = try? JSONEncoder().encode(result),
-               let text = String(data: encoded, encoding: .utf8) {
-                Keychain.set(text, for: Self.sessionKey)
+            if let auth, session?.email.lowercased() == result.email.lowercased() {
+                // Signing in again after the session expired: the same
+                // account keeps its device copy and its pending changes.
+                session = result
+                persist(result)
+                await auth.replace(result)
+            } else {
+                // Another account's data never stays on screen for this one.
+                clearData()
+                begin(result)
+                persist(result)
             }
             await loadState()
         } catch {
@@ -129,46 +156,151 @@ final class AppState {
         }
     }
 
+    /// Leaves the account on this device. Its local copy and any pending
+    /// changes stay stored under that account, and sync when it signs in again.
     func signOut() {
         Keychain.remove(Self.sessionKey)
         session = nil
-        state = nil
-        sessions = []
+        auth = nil
+        authGeneration = UUID()
+        clearData()
         sync = .idle
+    }
+
+    /// Starts using a session, with a token coordinator tied to this sign-in.
+    private func begin(_ newSession: AuthSession) {
+        let generation = UUID()
+        authGeneration = generation
+        session = newSession
+        auth = AuthSessionCoordinator(session: newSession, refresher: client) { [weak self] renewed in
+            await self?.didRefresh(renewed, generation: generation)
+        }
+    }
+
+    /// Supabase retires a refresh token as soon as it is used, so the new one
+    /// is stored before anything else can need it. Never after signing out:
+    /// that would quietly sign the account back in on the next launch.
+    private func didRefresh(_ renewed: AuthSession, generation: UUID) {
+        guard generation == authGeneration, session != nil else { return }
+        session = renewed
+        persist(renewed)
+    }
+
+    private func persist(_ session: AuthSession) {
+        guard let encoded = try? JSONEncoder().encode(session),
+              let text = String(data: encoded, encoding: .utf8)
+        else { return }
+        Keychain.set(text, for: Self.sessionKey)
+    }
+
+    private func clearData() {
+        state = nil
+        plan = PlanCatalog.personal
+        sessions = []
+        scheduleOverrides = [:]
+        activeSession = nil
+        hiddenWarmups = []
+        painFlags = []
+        programReplacements = []
+        customExercises = []
+        pendingChanges = []
+        lastSyncedAt = nil
     }
 
     // MARK: - State
 
-    /// Device copy first, then the server, newest wins.
-    ///
-    /// A failed fetch is not "no data saved": it leaves whatever is on the
-    /// device in place, which is the rule `loadCloudState` states on the web.
+    /// The device's copy first, so the screen never waits on the network,
+    /// then a sync with the account.
     func loadState() async {
         guard let session else { return }
-        sync = .syncing
+        pendingChanges = store?.pendingChanges(for: session.email) ?? []
+        lastSyncedAt = store?.lastSyncedAt(for: session.email)
+        if let local = store?.load(for: session.email) {
+            apply(local)
+        }
+        await syncNow()
+        // A brand-new account starts on the catalogue plan rather than an
+        // empty screen.
+        if state == nil { apply(LegacyState(raw: [:])) }
+    }
 
-        var resolved = store?.load(for: session.email)
-
-        do {
-            if let remote = try await client.loadState(session: session) {
-                let remoteStamp = remote["updatedAt"]?.stringValue
-                let localStamp = resolved?["updatedAt"]?.stringValue
-                if resolved == nil || (remoteStamp ?? "") >= (localStamp ?? "") {
-                    resolved = remote
-                    store?.save(remote, for: session.email, pending: false)
-                }
-            }
+    /// Brings this device and the account together.
+    ///
+    /// Reads the latest stored state, applies this device's pending changes
+    /// to it, and writes only if nobody wrote in between. A failure of any
+    /// kind — no connection, another writer winning every attempt, an expired
+    /// session — keeps every pending change for the next sync. Nothing here
+    /// ever signs the account out.
+    func syncNow() async {
+        guard session != nil else { return }
+        #if DEBUG
+        if DemoData.isEnabled {
+            // Demo data never leaves the device.
+            pendingChanges = []
+            if let state, let session { store?.markSynced(state, pending: [], at: Date(), for: session.email) }
             sync = .synced(Date())
-        } catch {
-            sync = .offline
+            return
         }
+        #endif
+        guard await client.isConfigured else {
+            sync = .notConfigured
+            return
+        }
+        guard !isSyncing else {
+            syncRequested = true
+            return
+        }
+        isSyncing = true
+        defer { isSyncing = false }
 
-        if resolved == nil {
-            // A brand-new account starts on the catalogue plan rather than an
-            // empty screen.
-            resolved = LegacyState(raw: [:])
-        }
-        apply(resolved)
+        repeat {
+            syncRequested = false
+            // Read on every pass: signing in again while one ran replaces both.
+            guard let session, let auth else { return }
+            // An expired session is not asked again until the user signs in.
+            if await auth.isExpired {
+                sync = .sessionExpired
+                continue
+            }
+            sync = .syncing
+            do {
+                let outcome = try await StateSync.run(
+                    changes: pendingChanges,
+                    recovering: store?.unrecordedWork(for: session.email),
+                    store: SupabaseStateStore(client: client, auth: auth)
+                )
+                // Signed out, or into another account, while this ran.
+                guard self.session?.userID == session.userID else { return }
+                guard let outcome else {
+                    // Another writer won every attempt. Nothing is lost.
+                    sync = .offline
+                    continue
+                }
+
+                pendingChanges.removeAll { outcome.settled.contains($0.id) }
+                // What the account has, plus anything changed while this ran.
+                let shown = StateMerge.apply(pendingChanges, to: outcome.state)
+                apply(shown)
+                let now = Date()
+                lastSyncedAt = now
+                store?.markSynced(shown, pending: pendingChanges, at: now, for: session.email)
+                sync = .synced(now)
+            } catch {
+                guard self.session?.userID == session.userID else { return }
+                sync = (error as? AuthFailure) == .expired ? .sessionExpired : .offline
+            }
+        } while syncRequested
+    }
+
+    /// Records changes: shown at once, kept on the device until the account
+    /// has them, and synced straight away when there is a connection.
+    private func commit(_ changes: [StateChange]) async {
+        guard let session, let current = state, !changes.isEmpty else { return }
+        let next = StateMerge.apply(changes, to: current)
+        apply(next)
+        pendingChanges.append(contentsOf: changes)
+        store?.save(next, pending: pendingChanges, for: session.email)
+        await syncNow()
     }
 
     private func apply(_ next: LegacyState?) {
@@ -212,28 +344,18 @@ final class AppState {
     /// device immediately, and reaches the account when there is a network.
     /// Nothing about it is marked complete.
     func pauseSession(_ snapshot: ActiveSessionSnapshot) async {
-        guard var current = state, let session else { return }
-        LegacyAdapter.apply(activeSession: snapshot, to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        await commit([.activeSession(snapshot)])
     }
 
     /// "Altijd verbergen" on the ramp. The only warm-up state that persists.
     func hideWarmup(exerciseID: String) async {
-        guard var current = state, let session, !hiddenWarmups.contains(exerciseID) else { return }
-        LegacyAdapter.apply(hiddenWarmups: hiddenWarmups.union([exerciseID]), to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        guard !hiddenWarmups.contains(exerciseID) else { return }
+        await commit([StateChange(.hideWarmup(exerciseID: exerciseID))])
     }
 
     func clearActiveSession() async {
-        guard var current = state, let session, activeSession != nil else { return }
-        LegacyAdapter.apply(activeSession: nil, to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        guard activeSession != nil else { return }
+        await commit([.activeSession(nil)])
     }
 
     /// The paused snapshot, whatever day it was started on.
@@ -256,7 +378,6 @@ final class AppState {
             await clearActiveSession()
             return
         }
-        var all = sessions
         let finished = snapshot.finishedSession(
             id: sessions.first {
                 $0.dayID == snapshot.dayID
@@ -264,12 +385,7 @@ final class AppState {
                     && $0.kind == .workout
             }?.id
         )
-        if let index = all.firstIndex(where: { $0.id == finished.id }) {
-            all[index] = finished
-        } else {
-            all.insert(finished, at: 0)
-        }
-        await persist(sessions: all)
+        await save(session: finished)
     }
 
     /// "vandaag" / "van gisteren" / "van vrijdag" / "van 3 sep".
@@ -287,35 +403,12 @@ final class AppState {
         return "van \(display.shortDate(snapshot.startedAt))"
     }
 
-    /// Writes a finished session into the blob, locally first.
+    /// Writes a finished session, locally first.
     ///
     /// Finishing also clears the paused snapshot — the workout is history now,
     /// and leaving it behind would offer to resume something already saved.
-    func persist(sessions updated: [TrainingSession]) async {
-        guard var current = state, let session else { return }
-        LegacyAdapter.apply(sessions: updated, to: &current)
-        LegacyAdapter.apply(activeSession: nil, to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
-    }
-
-    private func push(_ state: LegacyState, for session: SupabaseClient.Session) async {
-        #if DEBUG
-        if DemoData.isEnabled {
-            sync = .synced(Date())
-            return
-        }
-        #endif
-
-        sync = .syncing
-        do {
-            try await client.saveState(state, session: session)
-            store?.markSynced(for: session.email)
-            sync = .synced(Date())
-        } catch {
-            sync = .offline
-        }
+    func save(session finished: TrainingSession) async {
+        await commit([.upsert(finished), .activeSession(nil)])
     }
 
     // MARK: - Today
@@ -418,58 +511,30 @@ final class AppState {
     }
 
     func forgetPain(region: PainRegion) async {
-        guard var current = state, let session else { return }
-        LegacyAdapter.apply(painFlags: painFlags.filter { $0.region != region }, to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        await commit(painFlags.filter { $0.region == region }.map { StateChange(.removePainFlag(id: $0.id)) })
     }
 
     func record(pain flag: PainFlag) async {
-        guard var current = state, let session else { return }
-        LegacyAdapter.apply(painFlags: (painFlags + [flag]).active(), to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        await commit([StateChange(.addPainFlag(flag))])
     }
 
     func forget(pain flag: PainFlag) async {
-        guard var current = state, let session else { return }
-        LegacyAdapter.apply(painFlags: painFlags.filter { $0.id != flag.id }, to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        await commit([StateChange(.removePainFlag(id: flag.id))])
     }
 
     func replaceInProgram(_ replacement: ProgramReplacement) async {
-        guard var current = state, let session else { return }
-        LegacyAdapter.apply(programReplacements: programReplacements + [replacement], to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        await commit([StateChange(.addProgramReplacement(replacement))])
     }
 
     /// Removes a program change. The old exercise was never edited away — the
     /// plan is rewritten on read — so undoing is deleting one row.
     func undoReplacement(_ replacement: ProgramReplacement) async {
-        guard var current = state, let session else { return }
-        LegacyAdapter.apply(
-            programReplacements: programReplacements.filter { $0.id != replacement.id },
-            to: &current
-        )
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        await commit([StateChange(.removeProgramReplacement(id: replacement.id))])
     }
 
     func addCustomExercise(_ exercise: CustomExercise) async {
-        guard var current = state, let session,
-              !customExercises.contains(where: { $0.id == exercise.id })
-        else { return }
-        LegacyAdapter.apply(customExercises: customExercises + [exercise], to: &current)
-        apply(current)
-        store?.save(current, for: session.email, pending: true)
-        await push(current, for: session)
+        guard !customExercises.contains(where: { $0.id == exercise.id }) else { return }
+        await commit([StateChange(.addCustomExercise(exercise))])
     }
 
     /// "18 sets · doel 6.240 kg · laatst 3 sep"

@@ -1,0 +1,36 @@
+{
+  "name": "An iOS workout on a day already started on the web keeps the web's exercises",
+  "why": "iOS re-uses the same-day session but only logged bench press. The pec fly logged earlier on the web stays, exactly as the web keeps rows it did not touch — and the iOS set counts go, because they no longer describe every result in the session.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-14T18:05:00.000Z",
+      "remote": {
+        "sessions": [
+          { "id": "w-10", "date": "2026-09-14T08:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 40,
+            "results": [{ "exerciseId": "pec-fly", "name": "Pec fly",
+              "sets": [{ "weight": "55", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ]
+      },
+      "ops": [
+        { "kind": "upsertSession", "createdAt": "2026-09-14T18:00:00Z",
+          "session": { "id": "w-10", "date": "2026-09-14T08:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 60,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "102.5", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }],
+            "durationSeconds": 2000, "iosPlannedSetCount": 3, "iosCompletedSetCount": 3 } }
+      ],
+      "expected": {
+        "sessions": [
+          { "id": "w-10", "date": "2026-09-14T08:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 60,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [{ "weight": "102.5", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] },
+              { "exerciseId": "pec-fly", "name": "Pec fly",
+                "sets": [{ "weight": "55", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }
+            ],
+            "durationSeconds": 2000 }
+        ]
+      }
+    }
+  ]
+}

@@ -24,6 +24,7 @@ public enum LegacyAdapter {
 
         let kind: SessionKind = object["sessionType"]?.stringValue == "recovery" ? .recovery : .workout
         let results = (object["results"]?.arrayValue ?? []).compactMap(result(from:))
+        let counts = setCounts(in: object)
 
         return TrainingSession(
             id: id,
@@ -34,8 +35,28 @@ public enum LegacyAdapter {
             kind: kind,
             results: results,
             durationSeconds: object["durationSeconds"]?.intValue,
-            note: object["note"]?.stringValue
+            note: object["note"]?.stringValue,
+            plannedSetCount: counts?.planned,
+            completedSetCount: counts?.completed
         )
+    }
+
+    /// Where iOS stores a session's exact set counts. The web app does not read
+    /// them, and removes them whenever it rewrites the session's results, which
+    /// they would then no longer describe.
+    public static let plannedSetCountKey = "iosPlannedSetCount"
+    public static let completedSetCountKey = "iosCompletedSetCount"
+
+    /// Read only as a pair that holds together. Anything else counts as
+    /// absent, so history falls back to the stored percentage rather than
+    /// showing a count that cannot be right.
+    static func setCounts(in object: [String: JSONValue]) -> (planned: Int, completed: Int)? {
+        guard let planned = object[plannedSetCountKey]?.intValue,
+              let completed = object[completedSetCountKey]?.intValue,
+              planned > 0,
+              (0...planned).contains(completed)
+        else { return nil }
+        return (planned, completed)
     }
 
     static func result(from value: JSONValue) -> ExerciseResult? {
@@ -281,6 +302,21 @@ public enum LegacyAdapter {
         return try? decoder.decode([T].self, from: data)
     }
 
+    /// One value as stored JSON, encoded the way every iOS key is.
+    static func jsonValue<T: Encodable>(_ value: T) -> JSONValue? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(value) else { return nil }
+        return try? JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    static func decodeValue<T: Decodable>(_ value: JSONValue) -> T? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(T.self, from: data)
+    }
+
     private static func encodeList<T: Encodable>(_ list: [T], into state: inout LegacyState, key: String) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -291,17 +327,12 @@ public enum LegacyAdapter {
     }
 
     // MARK: - Writing
-
-    /// Writes sessions back into the blob in the web app's own shape.
-    ///
-    /// Only the `sessions` and `updatedAt` keys are touched. Nutrition
-    /// entries, the recovery draft, chat history, targets and any key a
-    /// future web release adds all survive untouched.
-    public static func apply(sessions: [TrainingSession], to state: inout LegacyState) {
-        let rows = sessions.map { JSONValue(session: $0) }
-        state.set("sessions", to: .array(rows))
-        state.set("updatedAt", to: .string(isoString(Date())))
-    }
+    //
+    // Sessions are never written back as a list. Rebuilding every session from
+    // the typed model dropped what iOS does not model — a web recovery day's
+    // sleep, soreness, energy and activities — and rewrote sessions nobody had
+    // touched in iOS's own number format. A session change is a `StateChange`,
+    // applied by `StateMerge` to exactly that one session.
 
     // MARK: - Dates
 
@@ -341,6 +372,10 @@ extension JSONValue {
         if session.kind == .recovery { object["sessionType"] = .string("recovery") }
         if let duration = session.durationSeconds { object["durationSeconds"] = .number(Decimal(duration)) }
         if let note = session.note { object["note"] = .string(note) }
+        if let planned = session.plannedSetCount, let completed = session.completedSetCount {
+            object[LegacyAdapter.plannedSetCountKey] = .number(Decimal(planned))
+            object[LegacyAdapter.completedSetCountKey] = .number(Decimal(completed))
+        }
         self = .object(object)
     }
 

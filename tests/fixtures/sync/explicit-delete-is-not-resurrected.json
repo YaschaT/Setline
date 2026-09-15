@@ -1,0 +1,136 @@
+{
+  "name": "A session deleted on the web stays deleted, unless it is logged again afterwards",
+  "why": "The deletion leaves a tombstone. A stale tab that still holds the session cannot bring it back, nor can an iOS change made before the deletion. A re-log made after it is a new decision and wins.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-14T10:00:00.000Z",
+      "remote": {
+        "sessions": [
+          { "id": "s-old", "date": "2026-09-08T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100,
+            "results": [{ "exerciseId": "squat", "name": "Squat",
+              "sets": [{ "weight": "120", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] },
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": []
+      },
+      "ancestry": {
+        "sessions": [
+          { "id": "s-old", "date": "2026-09-08T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100,
+            "results": [{ "exerciseId": "squat", "name": "Squat",
+              "sets": [{ "weight": "120", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] },
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": []
+      },
+      "snapshot": {
+        "sessions": [
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": []
+      },
+      "expected": {
+        "sessions": [
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [],
+        "syncTombstones": { "sessions": { "s-old": "2026-09-14T10:00:00.000Z" } }
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-14T12:00:00.000Z",
+      "ancestry": {
+        "sessions": [
+          { "id": "s-old", "date": "2026-09-08T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100,
+            "results": [{ "exerciseId": "squat", "name": "Squat",
+              "sets": [{ "weight": "120", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] },
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": []
+      },
+      "snapshot": {
+        "sessions": [
+          { "id": "s-old", "date": "2026-09-08T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100,
+            "results": [{ "exerciseId": "squat", "name": "Squat",
+              "sets": [{ "weight": "120", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] },
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [
+          { "id": "n-9", "date": "2026-09-14", "meal": "Lunch", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12 }
+        ]
+      },
+      "expected": {
+        "sessions": [
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [
+          { "id": "n-9", "date": "2026-09-14", "meal": "Lunch", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12 }
+        ],
+        "syncTombstones": { "sessions": { "s-old": "2026-09-14T10:00:00.000Z" } }
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-14T12:30:00.000Z",
+      "ops": [
+        { "kind": "upsertSession", "createdAt": "2026-09-14T09:00:00Z",
+          "session": { "id": "s-old", "date": "2026-09-08T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100,
+            "results": [{ "exerciseId": "squat", "name": "Squat",
+              "sets": [{ "weight": "120", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }],
+            "durationSeconds": 3600 } }
+      ],
+      "expected": {
+        "sessions": [
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [
+          { "id": "n-9", "date": "2026-09-14", "meal": "Lunch", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12 }
+        ],
+        "syncTombstones": { "sessions": { "s-old": "2026-09-14T10:00:00.000Z" } }
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-14T13:05:00.000Z",
+      "ops": [
+        { "kind": "upsertSession", "createdAt": "2026-09-14T13:00:00Z",
+          "session": { "id": "s-old", "date": "2026-09-08T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100,
+            "results": [{ "exerciseId": "squat", "name": "Squat",
+              "sets": [{ "weight": "120", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }],
+            "durationSeconds": 3300 } }
+      ],
+      "expected": {
+        "sessions": [
+          { "id": "s-old", "date": "2026-09-08T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100,
+            "results": [{ "exerciseId": "squat", "name": "Squat",
+              "sets": [{ "weight": "120", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }],
+            "durationSeconds": 3300 },
+          { "id": "s-keep", "date": "2026-09-10T17:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "nutritionEntries": [
+          { "id": "n-9", "date": "2026-09-14", "meal": "Lunch", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12 }
+        ],
+        "syncTombstones": {}
+      }
+    }
+  ]
+}

@@ -104,7 +104,12 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
             completion: completion,
             kind: .workout,
             results: results,
-            durationSeconds: activeSeconds
+            durationSeconds: activeSeconds,
+            // Exact counts only where the prescription is known. An older
+            // snapshot's rows need not cover every exercise of the day, so it
+            // keeps showing its percentage instead.
+            plannedSetCount: slots.map(SessionSlot.plannedSetCount(of:)),
+            completedSetCount: slots.map(SessionSlot.completedSetCount(of:))
         )
     }
 }

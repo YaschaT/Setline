@@ -1,0 +1,212 @@
+{
+  "name": "Finishing an iOS-logged day again on the web keeps every exercise iOS logged",
+  "why": "iOS logged Push with a temporary swap to dumbbells (one of those sets an extra set), a program replacement and a custom exercise. The web then finishes the same day again and types new bench press sets. Bench press takes the web's sets and the planned rows the web shows are added, but the swap, the replacement and the custom exercise stay exactly as iOS wrote them — stand-ins, the extra-set marker and unknown fields included. The set counts go, because they described the old results.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-15T18:30:00.000Z",
+      "remote": { "planMode": "personal" },
+      "ops": [
+        { "kind": "upsertSession", "createdAt": "2026-09-15T18:25:00Z",
+          "session": { "id": "1789492200000", "date": "2026-09-15T17:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 88,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" },
+                  { "weight": "34", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "flat-bench", "origin": "sessionAdded" }
+                ] },
+              { "exerciseId": "chest-press-machine", "name": "Converging chest press",
+                "sets": [
+                  { "weight": "70", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "tempo": "3-1-1" },
+                  { "weight": "70", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "70", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }
+                ] },
+              { "exerciseId": "custom:landmine-press", "name": "Landmine press", "futureResultField": true,
+                "sets": [
+                  { "weight": "25", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "substitutedFrom": "pec-fly" },
+                  { "weight": "25", "reps": "11", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "pec-fly" }
+                ] }
+            ],
+            "durationSeconds": 3120, "iosPlannedSetCount": 9, "iosCompletedSetCount": 8, "futureField": { "from": "a later release" } } },
+        { "kind": "setActiveSession", "createdAt": "2026-09-15T18:25:00Z", "snapshot": null }
+      ],
+      "expected": {
+        "planMode": "personal",
+        "sessions": [
+          { "id": "1789492200000", "date": "2026-09-15T17:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 88,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" },
+                  { "weight": "34", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "flat-bench", "origin": "sessionAdded" }
+                ] },
+              { "exerciseId": "chest-press-machine", "name": "Converging chest press",
+                "sets": [
+                  { "weight": "70", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "tempo": "3-1-1" },
+                  { "weight": "70", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "70", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }
+                ] },
+              { "exerciseId": "custom:landmine-press", "name": "Landmine press", "futureResultField": true,
+                "sets": [
+                  { "weight": "25", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "substitutedFrom": "pec-fly" },
+                  { "weight": "25", "reps": "11", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "pec-fly" }
+                ] }
+            ],
+            "durationSeconds": 3120, "iosPlannedSetCount": 9, "iosCompletedSetCount": 8, "futureField": { "from": "a later release" } }
+        ],
+        "iosActiveSession": null
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-15T20:00:00.000Z",
+      "ancestry": {
+        "planMode": "personal",
+        "sessions": [
+          { "id": "1789492200000", "date": "2026-09-15T17:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 88,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" },
+                  { "weight": "34", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "flat-bench", "origin": "sessionAdded" }
+                ] },
+              { "exerciseId": "chest-press-machine", "name": "Converging chest press",
+                "sets": [
+                  { "weight": "70", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "tempo": "3-1-1" },
+                  { "weight": "70", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "70", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }
+                ] },
+              { "exerciseId": "custom:landmine-press", "name": "Landmine press", "futureResultField": true,
+                "sets": [
+                  { "weight": "25", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "substitutedFrom": "pec-fly" },
+                  { "weight": "25", "reps": "11", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "pec-fly" }
+                ] }
+            ],
+            "durationSeconds": 3120, "iosPlannedSetCount": 9, "iosCompletedSetCount": 8, "futureField": { "from": "a later release" } }
+        ],
+        "iosActiveSession": null
+      },
+      "snapshot": {
+        "planMode": "personal",
+        "sessions": [
+          { "id": "1789492200000", "date": "2026-09-15T17:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 33,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "102.5", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "102.5", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "incline-bench", "name": "Incline bench press", "sets": [] },
+              { "exerciseId": "pec-fly", "name": "Pec fly", "sets": [] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" },
+                  { "weight": "34", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "flat-bench", "origin": "sessionAdded" }
+                ] },
+              { "exerciseId": "chest-press-machine", "name": "Converging chest press",
+                "sets": [
+                  { "weight": "70", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "tempo": "3-1-1" },
+                  { "weight": "70", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "70", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }
+                ] },
+              { "exerciseId": "custom:landmine-press", "name": "Landmine press", "futureResultField": true,
+                "sets": [
+                  { "weight": "25", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "substitutedFrom": "pec-fly" },
+                  { "weight": "25", "reps": "11", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "pec-fly" }
+                ] }
+            ],
+            "durationSeconds": 3120, "futureField": { "from": "a later release" } }
+        ]
+      },
+      "expected": {
+        "planMode": "personal",
+        "sessions": [
+          { "id": "1789492200000", "date": "2026-09-15T17:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 33,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "102.5", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "102.5", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "incline-bench", "name": "Incline bench press", "sets": [] },
+              { "exerciseId": "pec-fly", "name": "Pec fly", "sets": [] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" },
+                  { "weight": "34", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "flat-bench", "origin": "sessionAdded" }
+                ] },
+              { "exerciseId": "chest-press-machine", "name": "Converging chest press",
+                "sets": [
+                  { "weight": "70", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "tempo": "3-1-1" },
+                  { "weight": "70", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "70", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }
+                ] },
+              { "exerciseId": "custom:landmine-press", "name": "Landmine press", "futureResultField": true,
+                "sets": [
+                  { "weight": "25", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "substitutedFrom": "pec-fly" },
+                  { "weight": "25", "reps": "11", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "pec-fly" }
+                ] }
+            ],
+            "durationSeconds": 3120, "futureField": { "from": "a later release" } }
+        ],
+        "iosActiveSession": null
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-15T20:15:00.000Z",
+      "ops": [
+        { "kind": "setActiveSession", "createdAt": "2026-09-15T20:10:00Z",
+          "snapshot": { "dayID": "pull", "dayLabel": "Pull", "startedAt": "2026-09-15T20:10:00Z", "currentIndex": 0, "results": [], "activeSeconds": 0 } }
+      ],
+      "expected": {
+        "planMode": "personal",
+        "sessions": [
+          { "id": "1789492200000", "date": "2026-09-15T17:10:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 33,
+            "results": [
+              { "exerciseId": "flat-bench", "name": "Flat bench press",
+                "sets": [
+                  { "weight": "102.5", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "102.5", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }
+                ] },
+              { "exerciseId": "incline-bench", "name": "Incline bench press", "sets": [] },
+              { "exerciseId": "pec-fly", "name": "Pec fly", "sets": [] },
+              { "exerciseId": "db-bench", "name": "Dumbbell bench press",
+                "sets": [
+                  { "weight": "34", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 2, "substitutedFrom": "flat-bench" },
+                  { "weight": "34", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "flat-bench", "origin": "sessionAdded" }
+                ] },
+              { "exerciseId": "chest-press-machine", "name": "Converging chest press",
+                "sets": [
+                  { "weight": "70", "reps": "10", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "tempo": "3-1-1" },
+                  { "weight": "70", "reps": "9", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+                  { "weight": "70", "reps": "8", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }
+                ] },
+              { "exerciseId": "custom:landmine-press", "name": "Landmine press", "futureResultField": true,
+                "sets": [
+                  { "weight": "25", "reps": "12", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "substitutedFrom": "pec-fly" },
+                  { "weight": "25", "reps": "11", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1, "substitutedFrom": "pec-fly" }
+                ] }
+            ],
+            "durationSeconds": 3120, "futureField": { "from": "a later release" } }
+        ],
+        "iosActiveSession": { "dayID": "pull", "dayLabel": "Pull", "startedAt": "2026-09-15T20:10:00Z", "currentIndex": 0, "results": [], "activeSeconds": 0 }
+      }
+    }
+  ]
+}

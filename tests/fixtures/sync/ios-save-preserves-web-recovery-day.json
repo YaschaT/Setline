@@ -1,0 +1,42 @@
+{
+  "name": "An iOS save keeps a web recovery day and its details byte for byte",
+  "why": "iOS does not model sleep, soreness, energy or recovery activities. Saving a workout and clearing the paused session must leave them exactly as the web wrote them.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-14T18:05:00.000Z",
+      "remote": {
+        "sessions": [
+          { "id": "rest-1", "date": "2026-09-13T09:00:00.000Z", "dayId": "rest", "dayLabel": "Rest day", "sessionType": "recovery", "completion": 0,
+            "results": [{ "exerciseId": "walk", "name": "Wandelen", "recoveryDetail": "30 min" }],
+            "recovery": { "sleep": "7", "soreness": "2", "energy": "4", "note": "Rustig",
+              "activities": [{ "id": "walk", "name": "Wandelen", "dose": "30 min" }] } }
+        ],
+        "metrics": [{ "id": "m-1", "date": "2026-09-13", "weight": 82.4 }],
+        "iosActiveSession": { "dayID": "push", "dayLabel": "Push", "startedAt": "2026-09-14T16:00:00Z", "currentIndex": 0, "results": [] }
+      },
+      "ops": [
+        { "kind": "upsertSession", "createdAt": "2026-09-14T18:00:00Z",
+          "session": { "id": "ios-2", "date": "2026-09-14T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "102.5", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }] }],
+            "durationSeconds": 2700, "iosPlannedSetCount": 1, "iosCompletedSetCount": 1 } },
+        { "kind": "setActiveSession", "createdAt": "2026-09-14T18:00:00Z", "snapshot": null }
+      ],
+      "expected": {
+        "sessions": [
+          { "id": "ios-2", "date": "2026-09-14T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "102.5", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false, "rir": 1 }] }],
+            "durationSeconds": 2700, "iosPlannedSetCount": 1, "iosCompletedSetCount": 1 },
+          { "id": "rest-1", "date": "2026-09-13T09:00:00.000Z", "dayId": "rest", "dayLabel": "Rest day", "sessionType": "recovery", "completion": 0,
+            "results": [{ "exerciseId": "walk", "name": "Wandelen", "recoveryDetail": "30 min" }],
+            "recovery": { "sleep": "7", "soreness": "2", "energy": "4", "note": "Rustig",
+              "activities": [{ "id": "walk", "name": "Wandelen", "dose": "30 min" }] } }
+        ],
+        "metrics": [{ "id": "m-1", "date": "2026-09-13", "weight": 82.4 }],
+        "iosActiveSession": null
+      }
+    }
+  ]
+}

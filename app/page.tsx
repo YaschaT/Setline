@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "./auth-gate";
 import { signOutEverywhere } from "./auth/supabase-auth";
 import { clearCloudState, loadCloudState, saveCloudState } from "@/lib/cloud-state";
+import { refinishSession } from "@/lib/refinish-session";
 import { clearOnboarded } from "./auth-gate";
 import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
 import {
@@ -2052,25 +2053,20 @@ function TrainingApp() {
         dateKey(new Date(entry.date)) === selectedDate,
     );
 
-    // The draft only holds what was typed this time, so anything left untouched
-    // keeps the sets it was saved with rather than being blanked.
-    const mergedRows = existing
-      ? resultRows.map((row) => {
-          const hasDraft = row.sets.length > 0;
-          if (hasDraft) return row;
-          const saved = existing.results.find((item) => item.exerciseId === row.exerciseId);
-          return saved ? { ...row, sets: resultSets(saved) } : row;
-        })
-      : resultRows;
-
-    const session: Session = {
-      id: existing?.id ?? newSessionId(),
-      date: existing?.date ?? timestampForDate(selectedDate),
-      dayId: day.id,
-      dayLabel: day.short,
-      completion,
-      results: mergedRows,
-    };
+    // The draft only holds what was typed this time, and finishing again changes
+    // only that. Untouched exercises keep exactly what was saved; results this
+    // plan does not list (a swap, a replacement or a custom exercise logged on
+    // iOS) and fields this page does not know are kept, not dropped.
+    const session: Session = existing
+      ? refinishSession(existing, { dayId: day.id, dayLabel: day.short, completion, rows: resultRows })
+      : {
+          id: newSessionId(),
+          date: timestampForDate(selectedDate),
+          dayId: day.id,
+          dayLabel: day.short,
+          completion,
+          results: resultRows,
+        };
     const readyCount = day.exercises.filter((exercise) => {
       const sets = performance[`${day.id}:${exercise.id}`]?.sets ?? [];
       return sets.some((set) => set.weight || set.reps || set.pausedReps) &&

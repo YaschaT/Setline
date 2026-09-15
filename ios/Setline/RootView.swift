@@ -98,17 +98,11 @@ struct RootView: View {
         }
     }
 
-    /// One workout per date: re-opening a day already logged updates that
-    /// session in place. Appending a second would double-count every set in
-    /// the history, the trend and the record checks.
+    /// One workout per date: re-opening a day already logged reuses that
+    /// session's id, so saving updates it in place. A second session would
+    /// double-count every set in the history, the trend and the record checks.
     private func save(_ session: TrainingSession) async {
-        var all = app.sessions
-        if let index = all.firstIndex(where: { $0.id == session.id }) {
-            all[index] = session
-        } else {
-            all.insert(session, at: 0)
-        }
-        await app.persist(sessions: all)
+        await app.save(session: session)
     }
 }
 

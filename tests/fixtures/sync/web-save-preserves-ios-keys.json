@@ -1,0 +1,57 @@
+{
+  "name": "A web save keeps every key it does not know",
+  "why": "The page's snapshot has thirteen fixed keys. Changing a nutrition target must not drop the paused workout, pain flags, program replacements, custom exercises, hidden warm-ups, the legacy nutrition key or a key a future release adds.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-14T20:00:00.000Z",
+      "remote": {
+        "planMode": "personal",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "scheduleOverrides": { "personal:2026-09-15": "push" },
+        "recoveryDraft": { "date": "2026-09-14", "sleep": "", "soreness": "", "energy": "", "note": "", "completedIds": [] },
+        "nutrition": { "date": "2026-08-01", "calories": "2100", "protein": "150", "carbs": "", "fat": "" },
+        "iosActiveSession": { "dayID": "push", "dayLabel": "Push", "startedAt": "2026-09-14T16:00:00Z", "currentIndex": 1, "results": [] },
+        "iosPainFlags": [{ "region": "shoulder", "exerciseID": "flat-bench", "date": "2026-09-12T18:00:00Z" }],
+        "iosProgramReplacements": [{ "originExerciseID": "flat-bench", "substituteExerciseID": "chest-press-machine", "scope": "thisPlan", "dayID": "push", "date": "2026-09-12T18:10:00Z" }],
+        "iosCustomExercises": [{ "id": "custom:sled", "name": "Sled", "equipment": "machineSelectorised", "isCompound": false, "createdAt": "2026-09-11T10:00:00Z" }],
+        "iosHiddenWarmups": ["pec-fly"],
+        "futureKey": { "version": 2 }
+      },
+      "ancestry": {
+        "planMode": "personal",
+        "targets": { "calories": 2750, "protein": 175, "carbs": 350, "fat": 70 },
+        "scheduleOverrides": { "personal:2026-09-15": "push" },
+        "recoveryDraft": { "date": "2026-09-14", "sleep": "", "soreness": "", "energy": "", "note": "", "completedIds": [] },
+        "nutrition": { "date": "2026-08-01", "calories": "2100", "protein": "150", "carbs": "", "fat": "" },
+        "iosActiveSession": { "dayID": "push", "dayLabel": "Push", "startedAt": "2026-09-14T16:00:00Z", "currentIndex": 1, "results": [] },
+        "iosPainFlags": [{ "region": "shoulder", "exerciseID": "flat-bench", "date": "2026-09-12T18:00:00Z" }],
+        "iosProgramReplacements": [{ "originExerciseID": "flat-bench", "substituteExerciseID": "chest-press-machine", "scope": "thisPlan", "dayID": "push", "date": "2026-09-12T18:10:00Z" }],
+        "iosCustomExercises": [{ "id": "custom:sled", "name": "Sled", "equipment": "machineSelectorised", "isCompound": false, "createdAt": "2026-09-11T10:00:00Z" }],
+        "iosHiddenWarmups": ["pec-fly"],
+        "futureKey": { "version": 2 }
+      },
+      "snapshot": {
+        "planMode": "personal",
+        "targets": { "calories": 2600, "protein": 175, "carbs": 330, "fat": 70 },
+        "scheduleOverrides": { "personal:2026-09-15": "push" },
+        "recoveryDraft": { "date": "2026-09-14", "sleep": "", "soreness": "", "energy": "", "note": "", "completedIds": [] },
+        "sessions": [],
+        "metrics": []
+      },
+      "expected": {
+        "planMode": "personal",
+        "targets": { "calories": 2600, "protein": 175, "carbs": 330, "fat": 70 },
+        "scheduleOverrides": { "personal:2026-09-15": "push" },
+        "recoveryDraft": { "date": "2026-09-14", "sleep": "", "soreness": "", "energy": "", "note": "", "completedIds": [] },
+        "nutrition": { "date": "2026-08-01", "calories": "2100", "protein": "150", "carbs": "", "fat": "" },
+        "iosActiveSession": { "dayID": "push", "dayLabel": "Push", "startedAt": "2026-09-14T16:00:00Z", "currentIndex": 1, "results": [] },
+        "iosPainFlags": [{ "region": "shoulder", "exerciseID": "flat-bench", "date": "2026-09-12T18:00:00Z" }],
+        "iosProgramReplacements": [{ "originExerciseID": "flat-bench", "substituteExerciseID": "chest-press-machine", "scope": "thisPlan", "dayID": "push", "date": "2026-09-12T18:10:00Z" }],
+        "iosCustomExercises": [{ "id": "custom:sled", "name": "Sled", "equipment": "machineSelectorised", "isCompound": false, "createdAt": "2026-09-11T10:00:00Z" }],
+        "iosHiddenWarmups": ["pec-fly"],
+        "futureKey": { "version": 2 }
+      }
+    }
+  ]
+}

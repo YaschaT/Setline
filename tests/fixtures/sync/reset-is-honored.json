@@ -1,0 +1,46 @@
+{
+  "name": "After an explicit reset, nothing from before it comes back",
+  "why": "A reset is written as a marker, not a missing row. A copy with no provable ancestor adds nothing, an iOS change made before the reset is dropped, and one made after it is kept.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-14T15:00:00.000Z",
+      "remote": {
+        "syncReset": { "at": "2026-09-14T12:00:00.000Z" },
+        "sessions": [
+          { "id": "s-new", "date": "2026-09-14T14:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100, "results": [] }
+        ]
+      },
+      "ancestry": null,
+      "snapshot": {
+        "planMode": "personal",
+        "sessions": [
+          { "id": "s-pre", "date": "2026-09-10T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100, "results": [] }
+        ]
+      },
+      "expected": {
+        "syncReset": { "at": "2026-09-14T12:00:00.000Z" },
+        "sessions": [
+          { "id": "s-new", "date": "2026-09-14T14:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100, "results": [] }
+        ]
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-14T15:10:00.000Z",
+      "ops": [
+        { "kind": "upsertSession", "createdAt": "2026-09-14T11:00:00Z",
+          "session": { "id": "s-pre", "date": "2026-09-10T17:00:00.000Z", "dayId": "legs", "dayLabel": "Benen", "completion": 100, "results": [] } },
+        { "kind": "upsertSession", "createdAt": "2026-09-14T15:00:00Z",
+          "session": { "id": "s-post", "date": "2026-09-14T14:30:00.000Z", "dayId": "pull", "dayLabel": "Pull", "completion": 100, "results": [], "durationSeconds": 1800 } }
+      ],
+      "expected": {
+        "syncReset": { "at": "2026-09-14T12:00:00.000Z" },
+        "sessions": [
+          { "id": "s-post", "date": "2026-09-14T14:30:00.000Z", "dayId": "pull", "dayLabel": "Pull", "completion": 100, "results": [], "durationSeconds": 1800 },
+          { "id": "s-new", "date": "2026-09-14T14:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100, "results": [] }
+        ]
+      }
+    }
+  ]
+}

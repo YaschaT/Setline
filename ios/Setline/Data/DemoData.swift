@@ -18,11 +18,12 @@ enum DemoData {
         ProcessInfo.processInfo.arguments.contains("-SetlineDemoData")
     }
 
-    static let session = SupabaseClient.Session(
+    static let session = AuthSession(
         accessToken: "demo",
         refreshToken: "demo",
         userID: "00000000-0000-0000-0000-000000000000",
-        email: "demo@setline.be"
+        email: "demo@setline.be",
+        expiresAt: nil
     )
 
     /// Push, three times, at the same load, hitting the top of the range —

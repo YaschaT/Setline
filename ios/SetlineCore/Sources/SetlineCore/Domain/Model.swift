@@ -269,6 +269,7 @@ public struct TrainingSession: Codable, Hashable, Identifiable, Sendable {
     public var dayID: String
     public var dayLabel: String
     /// Percentage of planned sets tracked, as the web app computed it.
+    /// History shows it for sessions that carry no exact counts.
     public var completion: Int
     public var kind: SessionKind
     public var results: [ExerciseResult]
@@ -277,6 +278,13 @@ public struct TrainingSession: Codable, Hashable, Identifiable, Sendable {
     /// recorded one.
     public var durationSeconds: Int?
     public var note: String?
+    /// Prescribed working sets, counted when iOS saved the session. Sets added
+    /// during the session are not in it. `nil` for every session without an
+    /// exact count — the web app's, and older ones — which show `completion`.
+    public var plannedSetCount: Int?
+    /// How many of those prescribed sets were logged. A logged added set never
+    /// raises it, and it is never more than `plannedSetCount`.
+    public var completedSetCount: Int?
 
     public init(
         id: String,
@@ -287,7 +295,9 @@ public struct TrainingSession: Codable, Hashable, Identifiable, Sendable {
         kind: SessionKind = .workout,
         results: [ExerciseResult],
         durationSeconds: Int? = nil,
-        note: String? = nil
+        note: String? = nil,
+        plannedSetCount: Int? = nil,
+        completedSetCount: Int? = nil
     ) {
         self.id = id
         self.date = date
@@ -298,6 +308,8 @@ public struct TrainingSession: Codable, Hashable, Identifiable, Sendable {
         self.results = results
         self.durationSeconds = durationSeconds
         self.note = note
+        self.plannedSetCount = plannedSetCount
+        self.completedSetCount = completedSetCount
     }
 }
 

@@ -46,3 +46,11 @@ enum Fixtures {
         )
     }
 }
+
+extension LegacyAdapter {
+    /// Test convenience: stores sessions the way a sync does, one change per
+    /// session, keeping them in the order given.
+    static func apply(sessions: [TrainingSession], to state: inout LegacyState) {
+        state = StateMerge.apply(sessions.reversed().map { StateChange.upsert($0) }, to: state)
+    }
+}

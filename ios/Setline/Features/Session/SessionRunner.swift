@@ -790,17 +790,22 @@ final class SessionRunner {
     var allResults: [ExerciseResult] { slots.flatMap(\.model.results) }
 
     func finishedSession(existing: TrainingSession?) -> TrainingSession {
-        TrainingSession(
+        let models = slots.map(\.model)
+        return TrainingSession(
             id: existing?.id ?? "\(Int(Date().timeIntervalSince1970 * 1000))",
             date: existing?.date ?? startedAt,
             dayID: day.id,
             dayLabel: day.short,
             // Against the prescription. The header's SET n/N counts every
             // row, added ones included; completion never does.
-            completion: SessionSlot.completion(of: slots.map(\.model)),
+            completion: SessionSlot.completion(of: models),
             kind: .workout,
             results: allResults,
-            durationSeconds: clock.activeSeconds(at: Date())
+            durationSeconds: clock.activeSeconds(at: Date()),
+            // What history shows as "completed of planned". Added rows are in
+            // neither number.
+            plannedSetCount: SessionSlot.plannedSetCount(of: models),
+            completedSetCount: SessionSlot.completedSetCount(of: models)
         )
     }
 

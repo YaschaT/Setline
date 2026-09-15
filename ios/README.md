@@ -31,6 +31,31 @@ a form that cannot work.
 The app signs in against the same Supabase project as the web app and reads
 and writes the same `public.user_state` row, so both stay in step.
 
+## Sync with the web app
+
+Both apps share one `public.user_state` row and follow one loop: read the
+latest row, apply only this client's own changes, write only if the row is
+still at the version that was read, and otherwise read again and reapply. iOS
+sends its changes (`StateChange`), never its copy of the state. The web app
+merges its page state against the state it provably started from
+(`lib/state-merge.ts`). Both clients are held to the scenarios in
+`tests/fixtures/sync`.
+
+### Known technical debt
+
+- **Device clocks decide deletions and resets.** A deletion record
+  (`syncTombstones`) or an account reset (`syncReset`) is compared with the time
+  a change was made, as each device's own clock recorded it. A badly wrong clock
+  can let a change made just before a deletion win, or drop one made just after.
+  Accepted for V1.
+- **Deletion records expire after 180 days.** A device that stays offline for
+  longer, holding a change to a session deleted meanwhile, can bring that
+  session back.
+- **Deletions from before deletion records existed left no trace.** A device
+  copy saved by a build older than the change log is recovered by adding what
+  the account lacks, so a session deleted on the web before then would come back
+  from it.
+
 ## Run without an account
 
 Two DEBUG-only launch arguments, for development and screenshots. They use

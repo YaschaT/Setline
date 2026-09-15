@@ -1,0 +1,44 @@
+{
+  "name": "A missing key is never a clear; an explicit removal or null is",
+  "why": "The page removed one schedule entry it had, so that entry goes. It sent no metrics or chat keys at all, so those stay. iOS writes an explicit null for the paused session, and that does clear it.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-14T20:00:00.000Z",
+      "remote": {
+        "scheduleOverrides": { "personal:2026-09-15": "rest", "personal:2026-09-16": "push" },
+        "metrics": [{ "id": "m-1", "date": "2026-09-13", "weight": 82.4 }],
+        "chatMessages": [{ "id": "c-1", "role": "assistant", "content": "Hoi" }],
+        "iosActiveSession": { "dayID": "push", "dayLabel": "Push", "startedAt": "2026-09-14T16:00:00Z", "currentIndex": 0, "results": [] }
+      },
+      "ancestry": {
+        "scheduleOverrides": { "personal:2026-09-15": "rest", "personal:2026-09-16": "push" },
+        "metrics": [{ "id": "m-1", "date": "2026-09-13", "weight": 82.4 }],
+        "chatMessages": [{ "id": "c-1", "role": "assistant", "content": "Hoi" }],
+        "iosActiveSession": { "dayID": "push", "dayLabel": "Push", "startedAt": "2026-09-14T16:00:00Z", "currentIndex": 0, "results": [] }
+      },
+      "snapshot": {
+        "scheduleOverrides": { "personal:2026-09-16": "push" }
+      },
+      "expected": {
+        "scheduleOverrides": { "personal:2026-09-16": "push" },
+        "metrics": [{ "id": "m-1", "date": "2026-09-13", "weight": 82.4 }],
+        "chatMessages": [{ "id": "c-1", "role": "assistant", "content": "Hoi" }],
+        "iosActiveSession": { "dayID": "push", "dayLabel": "Push", "startedAt": "2026-09-14T16:00:00Z", "currentIndex": 0, "results": [] }
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-14T20:10:00.000Z",
+      "ops": [
+        { "kind": "setActiveSession", "createdAt": "2026-09-14T20:05:00Z", "snapshot": null }
+      ],
+      "expected": {
+        "scheduleOverrides": { "personal:2026-09-16": "push" },
+        "metrics": [{ "id": "m-1", "date": "2026-09-13", "weight": 82.4 }],
+        "chatMessages": [{ "id": "c-1", "role": "assistant", "content": "Hoi" }],
+        "iosActiveSession": null
+      }
+    }
+  ]
+}
