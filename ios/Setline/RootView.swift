@@ -57,6 +57,8 @@ struct RootView: View {
                             running = RunningSession(day: day, snapshot: snapshot)
                         }
                     )
+                case .progressie:
+                    ProgressHomeView()
                 case .account:
                     AccountView()
                 default:
