@@ -30,7 +30,9 @@ struct ProgressHomeView: View {
             switch segment {
             case .kracht:
                 StrengthSegmentView()
-            case .lichaam, .historiek:
+            case .historiek:
+                HistoriekSegmentView()
+            case .lichaam:
                 notYet
             }
 
