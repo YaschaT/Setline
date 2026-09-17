@@ -149,12 +149,16 @@ public struct StrengthProgress: Equatable, Sendable {
         sets.compactMap { Estimates.e1RM(weightKg: $0.weightKg ?? 0, reps: $0.reps) }.max()
     }
 
-    /// Against the session closest to eight weeks back, or the oldest one when
-    /// the history is younger than that.
+    /// Against the session nearest to eight weeks back — before or after it,
+    /// whichever is closer, so a gap in training does not stretch the window
+    /// the screen names.
     static func change(in points: [Point], calendar: Calendar) -> Change? {
         guard let latest = points.last, points.count > 1 else { return nil }
         let windowStart = calendar.date(byAdding: .weekOfYear, value: -changeWindowWeeks, to: latest.date) ?? latest.date
-        let baseline = points.last(where: { $0.date <= windowStart }) ?? points.first!
+        let earlier = points.dropLast()
+        guard let baseline = earlier.min(by: {
+            abs($0.date.timeIntervalSince(windowStart)) < abs($1.date.timeIntervalSince(windowStart))
+        }) else { return nil }
         guard baseline.date < latest.date else { return nil }
 
         let days = calendar.dateComponents([.day], from: baseline.date, to: latest.date).day ?? 0

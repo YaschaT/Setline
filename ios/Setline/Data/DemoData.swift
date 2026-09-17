@@ -92,10 +92,24 @@ enum DemoData {
             "personal:\(Schedule.dateKey(Date()))": .string(today)
         ])
 
+        // Weigh-ins, so the Lichaam segment has a real series to draw. The
+        // numbers are the design's own (79,8 → 82,4 kg), kept consistent with
+        // the rest of the mock.
+        let weighIns: [(Int, String)] = [(56, "79.8"), (28, "81"), (14, "81.8"), (3, "82.4")]
+        let metrics = weighIns.map { daysAgo, weight -> JSONValue in
+            let when = calendar.date(byAdding: .day, value: -daysAgo, to: Date())!
+            return .object([
+                "id": .string("demo-weigh-\(daysAgo)"),
+                "date": .string(Schedule.dateKey(when)),
+                "weight": .number(Decimal(string: weight) ?? 0),
+            ])
+        }
+
         var raw: [String: JSONValue] = [
             "planMode": .string("personal"),
             "sciencePlanId": .string("ppl-ul"),
             "sessions": .array(sessions),
+            "metrics": .array(metrics),
             "scheduleOverrides": overrides,
             "targets": .object([
                 "calories": .number(2750),

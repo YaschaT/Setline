@@ -33,7 +33,7 @@ struct ProgressHomeView: View {
             case .historiek:
                 HistoriekSegmentView()
             case .lichaam:
-                notYet
+                LichaamSegmentView()
             }
 
             Spacer(minLength: 0)
@@ -74,16 +74,4 @@ struct ProgressHomeView: View {
         )
     }
 
-    /// The next two phases fill these in; until then the segment says so
-    /// rather than showing an empty subject.
-    private var notYet: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
-            Text("Nog niet beschikbaar").slLead()
-            Text("Deze weergave volgt in de volgende stap.")
-                .slBody()
-                .foregroundStyle(SL.Ink.secondary)
-        }
-        .padding(.horizontal, SL.Space.s5)
-        .padding(.top, SL.Space.s6)
-    }
 }

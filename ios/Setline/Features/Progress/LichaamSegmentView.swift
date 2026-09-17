@@ -1,0 +1,166 @@
+import Charts
+import SwiftUI
+import SetlineCore
+
+/// Artboard 20 · segment Lichaam, read-only.
+///
+/// Wording and colour come from the ≥1024 tile (27): `LICHAAMSGEWICHT`,
+/// `82,4 kg`, `+0,3 / 4 weken` in the recovery mint. A weigh-in is a status,
+/// not a training win, so lime stays out of this segment entirely.
+///
+/// Weighing in has no approved screen yet, so this one only reads.
+struct LichaamSegmentView: View {
+    @Environment(AppState.self) private var app
+    @State private var progress = BodyProgress.empty
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if let latest = progress.latest {
+                    header(latest)
+                    if progress.points.count > 1 { chart }
+                    entries
+                } else {
+                    emptyState
+                }
+            }
+            .padding(.horizontal, SL.Space.s5)
+            .padding(.top, SL.Space.s5)
+        }
+        .task(id: app.state?.raw.count) { reload() }
+    }
+
+    private func header(_ latest: BodyProgress.Entry) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("LICHAAMSGEWICHT")
+                .slMeta(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.tertiary)
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+                Text(app.display.kg(latest.weightKg)).slDisplay()
+                if let change = progress.change {
+                    Text("\(app.display.signedDelta(change.value)) / \(change.weeks) weken")
+                        .slLead()
+                        .foregroundStyle(SL.Signal.recovery)
+                }
+            }
+            .padding(.top, SL.Space.s2)
+            .accessibilityElement(children: .combine)
+
+            Text("Laatste weging · \(app.display.shortDate(latest.date))")
+                .slMeta()
+                .foregroundStyle(SL.Ink.tertiary)
+                .padding(.top, SL.Space.s1)
+        }
+        .padding(.bottom, SL.Space.s5)
+    }
+
+    private var chart: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Chart(progress.points) { entry in
+                LineMark(
+                    x: .value("Datum", entry.date),
+                    y: .value("Gewicht", (entry.weightKg as NSDecimalNumber).doubleValue)
+                )
+                .interpolationMethod(.linear)
+                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .foregroundStyle(SL.Signal.recovery)
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartYScale(domain: range)
+            .frame(height: 150)
+            .background(alignment: .top) {
+                VStack {
+                    SLHairline()
+                    Spacer()
+                    SLHairline()
+                }
+            }
+            .accessibilityLabel("Verloop van je gewicht over \(progress.points.count) wegingen")
+
+            let labels = chartLabels
+            HStack(spacing: 0) {
+                ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+                    Text(label)
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                        .foregroundStyle(SL.Ink.tertiary)
+                    if index < labels.count - 1 { Spacer(minLength: SL.Space.s2) }
+                }
+            }
+            .padding(.top, 10)
+            .accessibilityHidden(true)
+        }
+        .padding(.bottom, SL.Space.s8)
+    }
+
+    private var entries: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("WEGINGEN")
+                .slMeta(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.tertiary)
+                .padding(.bottom, SL.Space.s1)
+                .accessibilityAddTraits(.isHeader)
+
+            ForEach(Array(progress.entries.enumerated()), id: \.element.id) { index, entry in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(app.display.shortDate(entry.date)).slBody(SL.Weight.medium)
+                    Spacer(minLength: SL.Space.s4)
+                    Text(app.display.kg(entry.weightKg)).slLead()
+                    if let change = entry.change {
+                        Text(app.display.signedDelta(change))
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.tertiary)
+                            .frame(minWidth: 44, alignment: .trailing)
+                    } else {
+                        Text("").frame(minWidth: 44)
+                    }
+                }
+                .padding(.vertical, 14)
+                .overlay(alignment: .bottom) {
+                    if index < progress.entries.count - 1 { SLHairline() }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.bottom, SL.Space.s6)
+    }
+
+    private var range: ClosedRange<Double> {
+        let values = progress.points.map { ($0.weightKg as NSDecimalNumber).doubleValue }
+        let low = values.min() ?? 0
+        let high = values.max() ?? 1
+        let padding = max((high - low) * 0.25, 0.5)
+        return (low - padding)...(high + padding)
+    }
+
+    private var chartLabels: [String] {
+        let points = progress.points
+        guard let first = points.first, let last = points.last else { return [] }
+        guard points.count > 2 else {
+            return [app.display.shortDate(first.date), app.display.shortDate(last.date)]
+        }
+        return [first, points[points.count / 2], last].map { app.display.shortDate($0.date) }
+    }
+
+    /// Weighing in lives in the web app until a screen for it is designed, so
+    /// the empty state says where the numbers come from rather than offering
+    /// an action this app does not have.
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            Text("Nog geen wegingen").slLead()
+            Text("Wegingen die je opslaat verschijnen hier, met hun verloop.")
+                .slBody()
+                .foregroundStyle(SL.Ink.secondary)
+        }
+        .padding(.top, SL.Space.s2)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func reload() {
+        guard let state = app.state else {
+            progress = BodyProgress.empty
+            return
+        }
+        progress = BodyProgress.make(metrics: LegacyAdapter.metrics(from: state))
+    }
+}
