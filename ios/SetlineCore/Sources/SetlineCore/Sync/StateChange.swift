@@ -20,6 +20,15 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case removeProgramReplacement(id: String)
         case addCustomExercise(CustomExercise)
         case hideWarmup(exerciseID: String)
+        /// One date of the schedule, scoped per program (`personal:2026-09-17`).
+        case setScheduleDay(key: String, dayID: String)
+        /// Explicitly back to the program's default week for that date.
+        case removeScheduleOverride(key: String)
+        /// One meal, by its own id.
+        case upsertNutritionEntry(JSONValue)
+        case removeNutritionEntry(id: String)
+        /// One nutrition target, by field.
+        case setTarget(field: String, value: Decimal)
     }
 
     /// Identifies the change itself, so a sync can clear exactly the changes
@@ -52,11 +61,13 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
+        case scheduleKey, dayID, entry, field, value
     }
 
     private enum KindName: String, Codable {
         case upsertSession, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
+        case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry, setTarget
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,6 +91,22 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             kind = .addCustomExercise(try container.decode(CustomExercise.self, forKey: .exercise))
         case .hideWarmup:
             kind = .hideWarmup(exerciseID: try container.decode(String.self, forKey: .exerciseID))
+        case .setScheduleDay:
+            kind = .setScheduleDay(
+                key: try container.decode(String.self, forKey: .scheduleKey),
+                dayID: try container.decode(String.self, forKey: .dayID)
+            )
+        case .removeScheduleOverride:
+            kind = .removeScheduleOverride(key: try container.decode(String.self, forKey: .scheduleKey))
+        case .upsertNutritionEntry:
+            kind = .upsertNutritionEntry(try container.decode(JSONValue.self, forKey: .entry))
+        case .removeNutritionEntry:
+            kind = .removeNutritionEntry(id: try container.decode(String.self, forKey: .targetID))
+        case .setTarget:
+            kind = .setTarget(
+                field: try container.decode(String.self, forKey: .field),
+                value: try container.decode(Decimal.self, forKey: .value)
+            )
         }
     }
 
@@ -112,6 +139,23 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case .hideWarmup(let exerciseID):
             try container.encode(KindName.hideWarmup, forKey: .kind)
             try container.encode(exerciseID, forKey: .exerciseID)
+        case .setScheduleDay(let key, let dayID):
+            try container.encode(KindName.setScheduleDay, forKey: .kind)
+            try container.encode(key, forKey: .scheduleKey)
+            try container.encode(dayID, forKey: .dayID)
+        case .removeScheduleOverride(let key):
+            try container.encode(KindName.removeScheduleOverride, forKey: .kind)
+            try container.encode(key, forKey: .scheduleKey)
+        case .upsertNutritionEntry(let entry):
+            try container.encode(KindName.upsertNutritionEntry, forKey: .kind)
+            try container.encode(entry, forKey: .entry)
+        case .removeNutritionEntry(let entryID):
+            try container.encode(KindName.removeNutritionEntry, forKey: .kind)
+            try container.encode(entryID, forKey: .targetID)
+        case .setTarget(let field, let value):
+            try container.encode(KindName.setTarget, forKey: .kind)
+            try container.encode(field, forKey: .field)
+            try container.encode(value, forKey: .value)
         }
     }
 

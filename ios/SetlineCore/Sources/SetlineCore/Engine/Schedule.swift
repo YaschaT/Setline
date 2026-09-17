@@ -48,6 +48,21 @@ public enum Schedule {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 
+    /// Overrides are scoped per program, exactly as the web app scopes them:
+    /// `personal:2026-09-17`, or `science-ppl-ul:2026-09-17`.
+    public static func programKey(mode: String, sciencePlanID: String) -> String {
+        mode == "personal" ? "personal" : "science-\(sciencePlanID)"
+    }
+
+    public static func overrideKey(
+        for date: Date,
+        mode: String,
+        sciencePlanID: String,
+        calendar: Calendar = .current
+    ) -> String {
+        "\(programKey(mode: mode, sciencePlanID: sciencePlanID)):\(dateKey(date, calendar: calendar))"
+    }
+
     public static func weekdayLabel(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "nl_BE")

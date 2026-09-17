@@ -1,0 +1,109 @@
+{
+  "name": "Meals and targets are shared per entry and per field",
+  "why": "iOS writes one meal by its id and one target by its field. A meal it edits keeps the fields iOS does not model, a meal it deletes leaves a record so an older copy cannot put it back, and everything the web owns beside them — its own meals, the other targets, its sessions — is untouched.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-17T12:00:00.000Z",
+      "remote": {
+        "nutritionEntries": [
+          { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12, "source": "zoekopdracht" }
+        ],
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 },
+        "sessions": [
+          { "id": "w-1", "date": "2026-09-15T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ]
+      },
+      "ops": [
+        { "kind": "upsertNutritionEntry", "createdAt": "2026-09-17T11:58:00Z",
+          "entry": { "id": "ios-1", "date": "2026-09-17", "meal": "Lunch", "name": "Kip, rijst, broccoli", "calories": 740, "protein": 52, "carbs": 80, "fat": 14 } }
+      ],
+      "expected": {
+        "nutritionEntries": [
+          { "id": "ios-1", "date": "2026-09-17", "meal": "Lunch", "name": "Kip, rijst, broccoli", "calories": 740, "protein": 52, "carbs": 80, "fat": 14 },
+          { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12, "source": "zoekopdracht" }
+        ],
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 },
+        "sessions": [
+          { "id": "w-1", "date": "2026-09-15T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ]
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-17T12:30:00.000Z",
+      "ops": [
+        { "kind": "upsertNutritionEntry", "createdAt": "2026-09-17T12:29:00Z",
+          "entry": { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout, magere kwark", "calories": 610, "protein": 48, "carbs": 74, "fat": 13 } },
+        { "kind": "setTarget", "createdAt": "2026-09-17T12:29:30Z", "field": "protein", "value": 170 }
+      ],
+      "expected": {
+        "nutritionEntries": [
+          { "id": "ios-1", "date": "2026-09-17", "meal": "Lunch", "name": "Kip, rijst, broccoli", "calories": 740, "protein": 52, "carbs": 80, "fat": 14 },
+          { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout, magere kwark", "calories": 610, "protein": 48, "carbs": 74, "fat": 13, "source": "zoekopdracht" }
+        ],
+        "targets": { "calories": 2250, "protein": 170, "carbs": 240, "fat": 70 },
+        "sessions": [
+          { "id": "w-1", "date": "2026-09-15T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ]
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-17T13:00:00.000Z",
+      "ops": [
+        { "kind": "removeNutritionEntry", "createdAt": "2026-09-17T12:59:00Z", "targetID": "ios-1" }
+      ],
+      "expected": {
+        "nutritionEntries": [
+          { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout, magere kwark", "calories": 610, "protein": 48, "carbs": 74, "fat": 13, "source": "zoekopdracht" }
+        ],
+        "targets": { "calories": 2250, "protein": 170, "carbs": 240, "fat": 70 },
+        "sessions": [
+          { "id": "w-1", "date": "2026-09-15T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "syncTombstones": { "nutritionEntries": { "ios-1": "2026-09-17T12:59:00.000Z" } }
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-17T13:10:00.000Z",
+      "ancestry": {
+        "nutritionEntries": [
+          { "id": "ios-1", "date": "2026-09-17", "meal": "Lunch", "name": "Kip, rijst, broccoli", "calories": 740, "protein": 52, "carbs": 80, "fat": 14 },
+          { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12, "source": "zoekopdracht" }
+        ],
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 }
+      },
+      "snapshot": {
+        "nutritionEntries": [
+          { "id": "ios-1", "date": "2026-09-17", "meal": "Lunch", "name": "Kip, rijst, broccoli", "calories": 740, "protein": 52, "carbs": 80, "fat": 14 },
+          { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout", "calories": 520, "protein": 35, "carbs": 70, "fat": 12, "source": "zoekopdracht" },
+          { "id": "web-2", "date": "2026-09-17", "meal": "Snack", "name": "Whey, banaan", "calories": 310, "protein": 28, "carbs": 40, "fat": 4 }
+        ],
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 }
+      },
+      "expected": {
+        "nutritionEntries": [
+          { "id": "web-1", "date": "2026-09-17", "meal": "Ontbijt", "name": "Havermout, magere kwark", "calories": 610, "protein": 48, "carbs": 74, "fat": 13, "source": "zoekopdracht" },
+          { "id": "web-2", "date": "2026-09-17", "meal": "Snack", "name": "Whey, banaan", "calories": 310, "protein": 28, "carbs": 40, "fat": 4 }
+        ],
+        "targets": { "calories": 2250, "protein": 170, "carbs": 240, "fat": 70 },
+        "sessions": [
+          { "id": "w-1", "date": "2026-09-15T16:00:00.000Z", "dayId": "push", "dayLabel": "Push", "completion": 100,
+            "results": [{ "exerciseId": "flat-bench", "name": "Flat bench press",
+              "sets": [{ "weight": "100", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false }] }] }
+        ],
+        "syncTombstones": { "nutritionEntries": { "ios-1": "2026-09-17T12:59:00.000Z" } }
+      }
+    }
+  ]
+}

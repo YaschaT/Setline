@@ -87,6 +87,31 @@ public enum StateMerge {
             var hidden = Set((raw[LegacyAdapter.hiddenWarmupsKey]?.arrayValue ?? []).compactMap(\.stringValue))
             hidden.insert(exerciseID)
             raw[LegacyAdapter.hiddenWarmupsKey] = .array(hidden.sorted().map { .string($0) })
+
+        case .setScheduleDay(let key, let dayID):
+            // One date, never the map: a day the web moved stays moved.
+            var overrides = raw["scheduleOverrides"]?.objectValue ?? [:]
+            overrides[key] = .string(dayID)
+            raw["scheduleOverrides"] = .object(overrides)
+
+        case .removeScheduleOverride(let key):
+            // Explicit: this date goes back to the program's default week.
+            // A date nobody mentions is never removed by any of this.
+            guard var overrides = raw["scheduleOverrides"]?.objectValue else { return }
+            overrides.removeValue(forKey: key)
+            raw["scheduleOverrides"] = .object(overrides)
+
+        case .upsertNutritionEntry(let entry):
+            upsertItem(entry, in: &raw, collection: "nutritionEntries", fields: nutritionFields, createdAt: change.createdAt)
+
+        case .removeNutritionEntry(let entryID):
+            removeItem(entryID, in: &raw, collection: "nutritionEntries", at: change.createdAt)
+
+        case .setTarget(let field, let value):
+            // One field. Targets the app does not model stay as they are.
+            var targets = raw["targets"]?.objectValue ?? [:]
+            targets[field] = .number(value)
+            raw["targets"] = .object(targets)
         }
     }
 
@@ -177,6 +202,73 @@ public enum StateMerge {
         }
         merged["results"] = .array(results)
         return merged
+    }
+
+    // MARK: - Shared collections, by id
+
+    /// The fields a meal carries, and therefore the ones iOS may rewrite.
+    static let nutritionFields: Set<String> = ["id", "date", "meal", "name", "calories", "protein", "carbs", "fat"]
+
+    /// Writes one item into a shared collection without touching its
+    /// neighbours, and without resurrecting something already deleted.
+    static func upsertItem(
+        _ item: JSONValue,
+        in raw: inout [String: JSONValue],
+        collection: String,
+        fields: Set<String>,
+        createdAt: Date
+    ) {
+        guard case .object(let incoming) = item, let id = incoming["id"]?.stringValue else { return }
+        guard !isOutrankedByDeletion(id: id, collection: collection, createdAt: createdAt, in: &raw) else { return }
+
+        var items = raw[collection]?.arrayValue ?? []
+        if let index = items.firstIndex(where: { $0["id"]?.stringValue == id }), case .object(let stored) = items[index] {
+            var merged = incoming
+            for (key, value) in stored where !fields.contains(key) && merged[key] == nil {
+                merged[key] = value
+            }
+            items[index] = .object(merged)
+        } else {
+            items.insert(.object(incoming), at: 0)
+        }
+        raw[collection] = .array(items)
+    }
+
+    /// Removes one item and records the deletion, so a client still holding an
+    /// older copy cannot put it back.
+    static func removeItem(_ id: String, in raw: inout [String: JSONValue], collection: String, at deletedAt: Date) {
+        var items = raw[collection]?.arrayValue ?? []
+        items.removeAll { $0["id"]?.stringValue == id }
+        raw[collection] = .array(items)
+
+        var tombstones = raw[tombstonesKey]?.objectValue ?? [:]
+        var deleted = tombstones[collection]?.objectValue ?? [:]
+        deleted[id] = .string(LegacyAdapter.isoString(deletedAt))
+        tombstones[collection] = .object(deleted)
+        raw[tombstonesKey] = .object(tombstones)
+    }
+
+    /// A change made before someone deleted the item loses to the deletion;
+    /// one made after it is a new decision and clears the record.
+    static func isOutrankedByDeletion(
+        id: String,
+        collection: String,
+        createdAt: Date,
+        in raw: inout [String: JSONValue]
+    ) -> Bool {
+        var tombstones = raw[tombstonesKey]?.objectValue ?? [:]
+        var deleted = tombstones[collection]?.objectValue ?? [:]
+        guard let deletedAt = deleted[id]?.stringValue.flatMap(LegacyAdapter.isoDate) else { return false }
+        guard createdAt >= deletedAt else { return true }
+
+        deleted.removeValue(forKey: id)
+        if deleted.isEmpty {
+            tombstones.removeValue(forKey: collection)
+        } else {
+            tombstones[collection] = .object(deleted)
+        }
+        raw[tombstonesKey] = .object(tombstones)
+        return false
     }
 
     // MARK: - iOS-owned lists

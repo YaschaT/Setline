@@ -41,6 +41,31 @@ merges its page state against the state it provably started from
 (`lib/state-merge.ts`). Both clients are held to the scenarios in
 `tests/fixtures/sync`.
 
+### Who owns what
+
+Ownership is per key, and for the keys both apps write, per entry inside it —
+one date, one meal, one target field. **iOS never replaces a shared key
+wholesale**; it names the entry it changed and leaves the rest of the key as it
+found it, including entries written by a web version this app has never seen.
+
+| Key | Written by | How it changes |
+| --- | --- | --- |
+| `plan`, `planMode`, `sciencePlanId` | web | whole value. iOS reads it; a plan change will get its own operation before iOS writes one |
+| `scheduleOverrides` | both, per date | `setScheduleDay(key:dayID:)` and `removeScheduleOverride(key:)`. Keys are scoped per program (`personal:2026-09-17`), so a date under another plan is another plan's business |
+| `nutritionEntries` | both, per entry | upsert or remove by `id`. An upsert keeps the fields iOS does not model |
+| `targets` | both, per field | `setTarget(field:value:)`. The other three fields keep their value |
+| `sessions` | both, per session | iOS writes the session it logged; within a session, `results` merge per exercise, so neither app drops the other's |
+| `metrics`, `completed`, `performance`, `chatMessages`, `recoveryDraft` | web | iOS reads `metrics`; it writes none of these |
+| `iosActiveSession`, `iosPainFlags`, `iosProgramReplacements`, `iosCustomExercises`, `iosHiddenWarmups` | iOS | the web app does not read them, and carries them through untouched |
+| `syncTombstones`, `syncReset` | both | deletions and resets, written by whichever app performed one |
+
+Two rules hold for every row. A key or entry that is simply **absent** from what
+a client sends is not a deletion — it is silence, and the stored value stands. A
+**deletion** is a thing a client says out loud: the entry goes, and a tombstone
+records when, so a slower client cannot bring it back. Unknown keys and unknown
+fields are always carried through; neither app is the authority on what the
+other stores.
+
 ### Known technical debt
 
 - **Device clocks decide deletions and resets.** A deletion record

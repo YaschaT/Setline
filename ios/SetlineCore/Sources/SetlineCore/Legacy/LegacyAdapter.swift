@@ -203,16 +203,30 @@ public enum LegacyAdapter {
         )
     }
 
-    /// Date → canonical day id. Tolerates both key shapes the web app has
-    /// used: a bare `"2026-08-28"` in older exports, and the newer
-    /// `"personal:2026-08-28"` scoped by program.
+    /// Date → canonical day id, for the program the account is currently on.
+    ///
+    /// Overrides are scoped per program (`personal:2026-08-28`), so the ones
+    /// belonging to a plan the account is not running must not be read — the
+    /// web app scopes the same way, and the two must agree on which day it is.
+    /// A bare `"2026-08-28"` is an older export, and the web app still honours
+    /// it on the two programs that predate the scoping.
     public static func scheduleOverrides(from state: LegacyState) -> [String: String] {
+        let (mode, scienceID) = planMode(from: state)
+        return scheduleOverrides(from: state, programKey: Schedule.programKey(mode: mode, sciencePlanID: scienceID))
+    }
+
+    public static func scheduleOverrides(from state: LegacyState, programKey: String) -> [String: String] {
         guard let object = state["scheduleOverrides"]?.objectValue else { return [:] }
+        let honoursBareKeys = programKey == "personal" || programKey == "science-ppl-ul"
         var result: [String: String] = [:]
         for (key, value) in object {
             guard let day = value.stringValue else { continue }
-            let dateKey = key.contains(":") ? String(key.split(separator: ":").last ?? "") : key
-            result[dateKey] = day
+            if let separator = key.firstIndex(of: ":") {
+                guard String(key[key.startIndex..<separator]) == programKey else { continue }
+                result[String(key[key.index(after: separator)...])] = day
+            } else if honoursBareKeys, result[key] == nil {
+                result[key] = day
+            }
         }
         return result
     }

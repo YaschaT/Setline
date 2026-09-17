@@ -1,0 +1,44 @@
+{
+  "name": "Clearing one date is explicit, and carrying an old copy does not undo it",
+  "why": "Removing an override puts that date back on the program's default week. A tab that still holds the old entry without having changed it does not write it back, and every other date stays exactly as it was.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-17T19:00:00.000Z",
+      "remote": {
+        "scheduleOverrides": {
+          "personal:2026-09-16": "legs",
+          "personal:2026-09-17": "lower"
+        },
+        "iosHiddenWarmups": ["pec-fly"]
+      },
+      "ops": [
+        { "kind": "removeScheduleOverride", "createdAt": "2026-09-17T18:59:00Z", "scheduleKey": "personal:2026-09-16" }
+      ],
+      "expected": {
+        "scheduleOverrides": { "personal:2026-09-17": "lower" },
+        "iosHiddenWarmups": ["pec-fly"]
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-17T19:05:00.000Z",
+      "ancestry": {
+        "scheduleOverrides": {
+          "personal:2026-09-16": "legs",
+          "personal:2026-09-17": "lower"
+        }
+      },
+      "snapshot": {
+        "scheduleOverrides": {
+          "personal:2026-09-16": "legs",
+          "personal:2026-09-17": "lower"
+        }
+      },
+      "expected": {
+        "scheduleOverrides": { "personal:2026-09-17": "lower" },
+        "iosHiddenWarmups": ["pec-fly"]
+      }
+    }
+  ]
+}

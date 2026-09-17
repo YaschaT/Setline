@@ -1,0 +1,29 @@
+{
+  "name": "Two clients editing the same date resolve to the later write",
+  "why": "Both clients apply their change to the state as it stands and write only if nobody wrote in between, so the same date ends up holding whichever edit was applied last — deterministically, whichever client it came from.",
+  "steps": [
+    {
+      "client": "web",
+      "now": "2026-09-17T18:00:00.000Z",
+      "remote": { "scheduleOverrides": { "personal:2026-09-18": "rest" } },
+      "ancestry": { "scheduleOverrides": { "personal:2026-09-18": "rest" } },
+      "snapshot": { "scheduleOverrides": { "personal:2026-09-18": "pull" } },
+      "expected": { "scheduleOverrides": { "personal:2026-09-18": "pull" } }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-17T18:05:00.000Z",
+      "ops": [
+        { "kind": "setScheduleDay", "createdAt": "2026-09-17T18:04:00Z", "scheduleKey": "personal:2026-09-18", "dayID": "upper" }
+      ],
+      "expected": { "scheduleOverrides": { "personal:2026-09-18": "upper" } }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-17T18:20:00.000Z",
+      "ancestry": { "scheduleOverrides": { "personal:2026-09-18": "pull" } },
+      "snapshot": { "scheduleOverrides": { "personal:2026-09-18": "legs" } },
+      "expected": { "scheduleOverrides": { "personal:2026-09-18": "legs" } }
+    }
+  ]
+}
