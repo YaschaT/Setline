@@ -414,6 +414,20 @@ final class AppState {
         await commit([.upsert(finished), .activeSession(nil)])
     }
 
+    /// Records changes the user made outside a workout — a rearranged week,
+    /// a meal, a target. Entry-wise, never a key at a time.
+    func record(_ changes: [StateChange]) async {
+        await commit(changes)
+    }
+
+    /// Which program the account is running, which is what scopes a schedule
+    /// override: a date under a plan you are not on is not your date.
+    var programKey: String {
+        guard let state else { return "personal" }
+        let (mode, scienceID) = LegacyAdapter.planMode(from: state)
+        return Schedule.programKey(mode: mode, sciencePlanID: scienceID)
+    }
+
     // MARK: - Today
 
     var todayCanonicalDay: String {

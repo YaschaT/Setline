@@ -12,6 +12,7 @@ struct TrainingHomeView: View {
     let onResume: (WorkoutDay, ActiveSessionSnapshot) -> Void
 
     @State private var confirmsEnd = false
+    @State private var planningWeek = false
 
     private var isFirstRun: Bool { app.sessions.isEmpty }
 
@@ -43,6 +44,9 @@ struct TrainingHomeView: View {
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.bottom, SL.Space.s3)
         }
+        .fullScreenCover(isPresented: $planningWeek) {
+            WeekPlanView(onClose: { planningWeek = false })
+        }
         .alert("Sessie beëindigen?", isPresented: $confirmsEnd) {
             Button("Annuleer", role: .cancel) {}
             Button("Beëindigen") { Task { await app.endActiveSession() } }
@@ -64,9 +68,7 @@ struct TrainingHomeView: View {
     }
 
     private var weekLabel: String {
-        guard let first = app.sessions.last?.date else { return "Week 1" }
-        let weeks = Calendar.current.dateComponents([.weekOfYear], from: first, to: Date()).weekOfYear ?? 0
-        return "Week \(max(1, weeks + 1))"
+        "Week \(WeekPlan.number(firstSession: app.sessions.last?.date))"
     }
 
     /// Radius 22, `raised` fill with the stronger hairline — 09 is louder
@@ -78,7 +80,7 @@ struct TrainingHomeView: View {
                 SLEyebrow(text: "Vandaag · \(longDateLabel)")
                 Spacer()
                 if let day = app.todayDay {
-                    Text("±\(estimatedMinutes(day)) min")
+                    Text("±\(WeekPlan.minutes(of: day)) min")
                         .slMeta().slNumerals()
                         .foregroundStyle(SL.Ink.secondary)
                 }
@@ -169,15 +171,6 @@ struct TrainingHomeView: View {
         return formatter.string(from: Date()).replacingOccurrences(of: ".", with: "")
     }
 
-    private func estimatedMinutes(_ day: WorkoutDay) -> Int {
-        // Planned sets times the rest each one's role prescribes, plus about
-        // 40 s under the bar. Presented as an estimate, never as a promise.
-        let seconds = day.exercises.reduce(0) { total, planned in
-            total + planned.targetSets * (RestPrescription.forRole(planned.role).defaultSeconds + 40)
-        }
-        return max(1, seconds / 60)
-    }
-
     /// 08 labels the strip and uses 72-high tiles; 09 drops the label and
     /// tightens to 64.
     private var weekStrip: some View {
@@ -266,17 +259,24 @@ struct TrainingHomeView: View {
         return string
     }
 
+    /// The way into the week (artboard 19): the plan row is the control.
     private var planFooter: some View {
         VStack(spacing: 0) {
             SLHairline()
-            HStack {
-                Text("Plan · \(planName)").slBody().foregroundStyle(SL.Ink.secondary)
-                Spacer()
-                Text("Bekijk plan")
-                    .slBody()
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .slHitTarget()
+            Button { planningWeek = true } label: {
+                HStack {
+                    Text("Plan · \(planName)").slBody().foregroundStyle(SL.Ink.secondary)
+                    Spacer()
+                    Text("Wijzig")
+                        .slBody()
+                        .foregroundStyle(SL.Ink.tertiary)
+                        .slHitTarget()
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Plan · \(planName)")
+            .accessibilityHint("Dubbeltik om de week te wijzigen")
             .padding(.top, SL.Space.s4)
         }
     }
