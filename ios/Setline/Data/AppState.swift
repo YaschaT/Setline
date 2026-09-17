@@ -94,6 +94,7 @@ final class AppState {
             let demo = stored ?? DemoData.state()
             apply(demo)
             if stored == nil { store?.markSynced(demo, pending: [], at: Date(), for: DemoData.session.email) }
+            lastSyncedAt = store?.lastSyncedAt(for: DemoData.session.email) ?? Date()
             sync = .synced(Date())
             return
         }
@@ -237,8 +238,10 @@ final class AppState {
         if DemoData.isEnabled {
             // Demo data never leaves the device.
             pendingChanges = []
-            if let state, let session { store?.markSynced(state, pending: [], at: Date(), for: session.email) }
-            sync = .synced(Date())
+            let syncedAt = Date()
+            if let state, let session { store?.markSynced(state, pending: [], at: syncedAt, for: session.email) }
+            lastSyncedAt = syncedAt
+            sync = .synced(syncedAt)
             return
         }
         #endif

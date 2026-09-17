@@ -57,6 +57,8 @@ struct RootView: View {
                             running = RunningSession(day: day, snapshot: snapshot)
                         }
                     )
+                case .account:
+                    AccountView()
                 default:
                     PlaceholderView(tab: tab)
                 }
