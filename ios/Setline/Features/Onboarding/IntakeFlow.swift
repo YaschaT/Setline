@@ -217,32 +217,14 @@ struct IntakeFlow: View {
         }
     }
 
+    /// Artboard 06: a plate you have is a selected chip, one you do not is
+    /// the dashed "off" chip — the shared component, not a local copy.
     private func plateChip(_ plate: Decimal) -> some View {
         let selected = plates.contains(plate)
-        return Button {
+        return SLChip(title: NumberDisplay.dutch.number(plate), look: selected ? .selected : .off) {
             if selected { plates.remove(plate) } else { plates.insert(plate) }
-        } label: {
-            Text(NumberDisplay.dutch.number(plate))
-                .slBody(selected ? SL.Weight.semibold : SL.Weight.regular)
-                .slNumerals()
-                .foregroundStyle(selected ? SL.Ink.primary : SL.Ink.tertiary)
-                .padding(.horizontal, 18)
-                .frame(minHeight: SL.Space.hitMin)
-                .background(
-                    RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .fill(selected ? SL.Surface.raised2 : .clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .strokeBorder(
-                            SL.Surface.hairlineStrong,
-                            style: StrokeStyle(lineWidth: 1, dash: selected ? [] : [4, 4])
-                        )
-                )
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("\(NumberDisplay.dutch.kg(plate)) schijf")
-        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
     }
 
     private var platesConsequence: String {

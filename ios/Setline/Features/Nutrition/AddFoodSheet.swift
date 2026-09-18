@@ -263,26 +263,7 @@ struct AddFoodSheet: View {
     private var mealPicker: some View {
         SLFlow {
             ForEach(Meal.allCases, id: \.self) { option in
-                Button { meal = option } label: {
-                    Text(option.rawValue)
-                        .slBody(meal == option ? SL.Weight.semibold : SL.Weight.regular)
-                        .foregroundStyle(meal == option ? SL.Ink.primary : SL.Ink.tertiary)
-                        .padding(.horizontal, 18)
-                        .frame(minHeight: SL.Space.hitMin)
-                        .background(
-                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                                .fill(meal == option ? SL.Surface.raised2 : .clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                                .strokeBorder(
-                                    SL.Surface.hairlineStrong,
-                                    style: StrokeStyle(lineWidth: 1, dash: meal == option ? [] : [4, 4])
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(meal == option ? [.isSelected, .isButton] : .isButton)
+                SLChip(title: option.rawValue, look: meal == option ? .selected : .off) { meal = option }
             }
         }
     }

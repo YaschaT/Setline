@@ -669,16 +669,7 @@ struct SwapSheet: View {
 
             FlowRow(spacing: SL.Space.s2) {
                 ForEach(PainRegion.allCases, id: \.self) { region in
-                    Button { step = .painTiming(region) } label: {
-                        Text(region.label)
-                            .slBody().foregroundStyle(SL.Ink.primary)
-                            .padding(.horizontal, SL.Space.s4)
-                            .frame(minHeight: SL.Space.hitMin)
-                            .background(Capsule().fill(SL.Surface.raised2))
-                            .overlay(Capsule().strokeBorder(SL.Surface.hairline, lineWidth: 1))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
+                    SLChip(title: region.label, size: .large) { step = .painTiming(region) }
                 }
             }
             .padding(.top, SL.Space.s5)
@@ -703,21 +694,32 @@ struct SwapSheet: View {
                 .slTitle().foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s3)
 
+            // 31a draws the answers as option cards — radius 20, 17pt — the
+            // same component the intake uses, not bordered rows.
             VStack(spacing: SL.Space.s2) {
                 ForEach(PainTiming.allCases, id: \.self) { timing in
                     Button { step = .painOptions(region, timing) } label: {
-                        HStack {
-                            Text(timing.label).slBody().foregroundStyle(SL.Ink.primary)
-                            Spacer()
-                        }
-                        .padding(SL.Space.s4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .slCard(radius: SL.Radius.md)
+                        Text(timing.label)
+                            .slLead()
+                            .foregroundStyle(SL.Ink.primary)
+                            .padding(.vertical, SL.Space.s4)
+                            .padding(.horizontal, 18)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                                    .fill(SL.Surface.raised)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                                    .strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
                 }
             }
-            .padding(.top, SL.Space.s5)
+            .padding(.top, SL.Space.s4)
 
             Button { step = .painOptions(region, nil) } label: {
                 Text("Overslaan").slBody().foregroundStyle(SL.Ink.tertiary)
@@ -834,7 +836,7 @@ struct SwapSheet: View {
             FlowRow(spacing: SL.Space.s2) {
                 ForEach(Self.escalationSignals, id: \.self) { signal in
                     let picked = signals.contains(signal)
-                    Button {
+                    SLChip(title: signal, look: picked ? .selected : .unselected) {
                         withAnimation(.easeOut(duration: SL.Motion.base)) {
                             if signal == Self.noneOfThese {
                                 signals = picked ? [] : [signal]
@@ -843,23 +845,7 @@ struct SwapSheet: View {
                                 if picked { signals.remove(signal) } else { signals.insert(signal) }
                             }
                         }
-                    } label: {
-                        Text(signal)
-                            .slBody(picked ? SL.Weight.semibold : SL.Weight.regular)
-                            .foregroundStyle(picked ? SL.Ink.primary : SL.Ink.secondary)
-                            .padding(.horizontal, SL.Space.s4)
-                            .frame(minHeight: SL.Space.hitMin)
-                            .background(Capsule().fill(picked ? SL.Surface.raised2 : .clear))
-                            .overlay(
-                                Capsule().strokeBorder(
-                                    SL.Surface.hairlineStrong,
-                                    style: StrokeStyle(lineWidth: 1, dash: picked ? [] : [4, 4])
-                                )
-                            )
-                            .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(picked ? [.isSelected, .isButton] : .isButton)
                 }
             }
             .padding(.top, SL.Space.s3)
