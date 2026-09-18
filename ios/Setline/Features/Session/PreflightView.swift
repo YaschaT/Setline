@@ -8,6 +8,8 @@ struct PreflightView: View {
     let onBegin: () -> Void
     let onClose: () -> Void
 
+    @State private var changingWeek = false
+
     var body: some View {
         ZStack {
             SL.Surface.ground.ignoresSafeArea()
@@ -21,11 +23,15 @@ struct PreflightView: View {
                     }
                     .buttonStyle(.plain)
                     Spacer()
-                    // No editing exists yet, so the header does not offer it.
-                    Text("\(day.exercises.count) oefeningen")
-                        .slBody(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .slHitTarget()
+                    // Artboard 10's Wijzig: change which session today is,
+                    // through the week agenda — the one approved place for it.
+                    Button { changingWeek = true } label: {
+                        Text("Wijzig").slBody(SL.Weight.medium)
+                            .foregroundStyle(SL.Ink.secondary)
+                            .slHitTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Dubbeltik om een andere sessie op vandaag te zetten")
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.top, SL.Space.s3)
@@ -43,12 +49,6 @@ struct PreflightView: View {
                             .padding(.bottom, SL.Space.s6)
 
                         exerciseCard
-
-                        Text("Gewichten komen uit je vorige sessie. Alles is tijdens de sessie aanpasbaar.")
-                            .slMeta()
-                            .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
-                            .foregroundStyle(SL.Ink.tertiary)
-                            .padding(.top, SL.Space.s4)
                     }
                     .padding(.horizontal, SL.Space.gutterSession)
                     .padding(.top, 28)
@@ -56,13 +56,32 @@ struct PreflightView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $changingWeek) {
+            WeekPlanView(onClose: {
+                changingWeek = false
+                // If today now holds a different session, this pre-flight is
+                // describing the wrong one: step back to the week's new today.
+                if app.todayDay?.id != day.id { onClose() }
+            })
+        }
         .safeAreaInset(edge: .bottom) {
-            Button(action: onBegin) { Text("Beginnen") }
-                .buttonStyle(SLPrimaryButtonStyle())
-                .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, SL.Space.s3)
-                .padding(.bottom, SL.Space.s3)
-                .background(SL.Surface.ground)
+            // The footnote sits in the commit block, directly above the pill as
+            // artboard 10 draws it, so a long plan can never push it out of
+            // sight behind the button.
+            VStack(alignment: .leading, spacing: SL.Space.s3) {
+                Text("Gewichten komen uit je vorige sessie. Alles is tijdens de sessie aanpasbaar.")
+                    .slMeta()
+                    .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.tertiary)
+                Button(action: onBegin) { Text("Beginnen") }
+                    .buttonStyle(SLPrimaryButtonStyle())
+            }
+            .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.top, SL.Space.s3)
+            .padding(.bottom, SL.Space.s3)
+            .frame(maxWidth: .infinity)
+            .background(SL.Surface.ground)
         }
     }
 

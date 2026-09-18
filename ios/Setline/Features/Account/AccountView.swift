@@ -22,6 +22,7 @@ struct AccountView: View {
     @State private var planningWeek = false
     @State private var editingTargets = false
     @State private var choosingProgram = false
+    @State private var rirEverySet = RIRPreference.everySet
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -208,6 +209,11 @@ struct AccountView: View {
                 }
             }
             row("Rusttimer", detail: summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: " · "))
+            // 12R: "Per set vragen zet je aan in Account." This is where.
+            row("RIR vragen", detail: rirEverySet ? "Bij elke set" : "Bij de laatste set van een oefening") {
+                rirEverySet.toggle()
+                RIRPreference.everySet = rirEverySet
+            }
         }
     }
 

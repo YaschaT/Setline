@@ -135,3 +135,12 @@ final class FatigueTests: XCTestCase {
         XCTAssertNil(LegacyAdapter.deload(from: cleared))
     }
 }
+
+/// Addendum 12R and the review's PR treatment, as the row model states them.
+final class SetRowReserveTests: XCTestCase {
+
+    func testAReportedReserveTakesTheComparisonColumn() {
+        XCTAssertFalse(SetDelta.reserve(1).describesTheSet, "it compares nothing, it reports")
+        XCTAssertNotEqual(SetDelta.reserve(1), SetDelta.reserve(2))
+    }
+}

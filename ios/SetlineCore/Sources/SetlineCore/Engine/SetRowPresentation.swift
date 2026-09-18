@@ -28,6 +28,10 @@ public enum SetDelta: Hashable, Sendable {
     /// A set added during this session, where the column would otherwise
     /// be empty.
     case added
+    /// "RIR 1" — the reserve the lifter reported, shown where a comparison
+    /// would otherwise sit (addendum 12R). A record or a description of what
+    /// the set was still outranks it.
+    case reserve(Int)
     /// A warm-up row carries no delta and no status dot.
     case none
 
@@ -37,7 +41,7 @@ public enum SetDelta: Hashable, Sendable {
     public var describesTheSet: Bool {
         switch self {
         case .failed, .paused, .partial, .pausedAndPartial: return true
-        case .reference, .difference, .personalRecord, .calibration, .baseline, .added, .none: return false
+        case .reference, .difference, .personalRecord, .calibration, .baseline, .added, .reserve, .none: return false
         }
     }
 }
@@ -169,6 +173,8 @@ public enum SetRowPresenter {
                     earlierInSession: Array(sets.prefix(offset))
                 ) {
                     delta = .personalRecord
+                } else if let reserve = set.rirReported {
+                    delta = .reserve(reserve)
                 } else if let prior = referenceSet, let priorWeight = prior.weightKg, let weight = set.weightKg {
                     delta = .difference(formatter.signedDelta(weight - priorWeight))
                 } else {

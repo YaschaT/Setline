@@ -136,6 +136,9 @@ struct SLSetRow: View {
 
     private var repsColor: Color {
         if row.isWarmup { return SL.Ink.secondary }
+        // The review: a PR row carries its reps figure in lime, at the moment
+        // it happens — the value that beat your own previous data.
+        if row.delta == .personalRecord { return SL.Signal.action }
         return row.status == .written ? SL.Ink.primary : SL.Ink.tertiary
     }
 
@@ -192,6 +195,11 @@ struct SLSetRow: View {
                 .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
                 .foregroundStyle(SL.Ink.tertiary)
                 .lineLimit(1).minimumScaleFactor(0.7)
+        case .reserve(let rir):
+            Text("RIR \(rir)")
+                .slMeta().slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
         case .added:
             // Quiet on purpose: the row is an ordinary working set, and says
             // where it came from only where nothing else needs the column.
@@ -229,6 +237,7 @@ struct SLSetRow: View {
         case .pausedAndPartial(let count): parts.append("set met pauze, \(count) partiële reps")
         case .calibration: parts.append("kalibratieset")
         case .baseline: parts.append("basis voor deze oefening")
+        case .reserve(let rir): parts.append("RIR \(rir)")
         case .added: parts.append("alleen voor deze sessie")
         case .none: break
         }

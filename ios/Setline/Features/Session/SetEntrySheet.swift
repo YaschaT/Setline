@@ -78,7 +78,19 @@ struct SetEntrySheet: View {
     /// RIR is the third, optional tap. By default an exercise asks it on its
     /// last prescribed set (addendum 11R) and on any set added after it.
     /// Per-set entry is an Account setting.
-    private var asksForRIR: Bool { isCalibration || slot.model.asksForRIR(at: setIndex) }
+    private var asksForRIR: Bool {
+        isCalibration || RIRPreference.everySet || slot.model.asksForRIR(at: setIndex)
+    }
+
+    /// 11R while the reserve is still empty; 12R once it is set, which is when
+    /// it is worth saying where asking on every set is switched on.
+    private var footnote: String {
+        guard asksForRIR else { return "Gewicht en reps zijn een volledige set." }
+        if rir != nil, !RIRPreference.everySet {
+            return "Per set vragen zet je aan in Account."
+        }
+        return "Gewicht en reps zijn een volledige set. RIR mag leeg blijven."
+    }
 
     /// A set added during this session rather than prescribed.
     private var isAddedSet: Bool {
@@ -218,9 +230,7 @@ struct SetEntrySheet: View {
             .buttonStyle(SLPrimaryButtonStyle())
             .disabled(weight <= 0 || reps <= 0)
 
-            Text(asksForRIR
-                 ? "Gewicht en reps zijn een volledige set. RIR mag leeg blijven."
-                 : "Gewicht en reps zijn een volledige set.")
+            Text(footnote)
                 .slMeta()
                 .foregroundStyle(SL.Ink.secondary)
                 .multilineTextAlignment(.center)

@@ -80,7 +80,7 @@ struct SLFloatingTimer: View {
         .padding(.vertical, SL.Space.s4)
     }
 
-    // MARK: Collapsed — time, progress, skip. Nothing else.
+    // MARK: Collapsed — time, progress, Klaar. Nothing else.
 
     private var collapsed: some View {
         HStack(spacing: SL.Space.s4) {
@@ -95,7 +95,7 @@ struct SLFloatingTimer: View {
             .accessibilityLabel("Timer uitklappen")
 
             Button(action: onSkip) {
-                Text("Overslaan")
+                Text("Klaar")
                     .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
                     .foregroundStyle(SL.Ink.primary)
                     .padding(.horizontal, SL.Space.s3)
@@ -149,7 +149,7 @@ struct SLFloatingTimer: View {
     /// lime block below it, the timer reads as its own surface again.
     private var skipButton: some View {
         Button(action: onSkip) {
-            Text("Overslaan")
+            Text("Klaar")
                 .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
                 .foregroundStyle(SL.Ink.primary)
                 .frame(maxWidth: .infinity)
