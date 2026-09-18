@@ -57,6 +57,9 @@ final class AppState {
     /// Exercises the user typed in themselves.
     private(set) var customExercises: [CustomExercise] = []
 
+    private(set) var nutritionEntries: [NutritionEntry] = []
+    private(set) var targets: NutritionTargets?
+
     let display = NumberDisplay.dutch
     private let client: SupabaseClient
     private var store: LocalStore?
@@ -199,6 +202,8 @@ final class AppState {
         plan = PlanCatalog.personal
         sessions = []
         scheduleOverrides = [:]
+        nutritionEntries = []
+        targets = nil
         activeSession = nil
         hiddenWarmups = []
         painFlags = []
@@ -317,6 +322,8 @@ final class AppState {
         painFlags = LegacyAdapter.painFlags(from: next).active()
         programReplacements = LegacyAdapter.programReplacements(from: next)
         customExercises = LegacyAdapter.customExercises(from: next)
+        nutritionEntries = LegacyAdapter.nutritionEntries(from: next)
+        targets = LegacyAdapter.targets(from: next)
         plan = applyReplacements(to: plan)
     }
 
@@ -418,6 +425,20 @@ final class AppState {
     /// a meal, a target. Entry-wise, never a key at a time.
     func record(_ changes: [StateChange]) async {
         await commit(changes)
+    }
+
+    /// Logs one item of food, or rewrites one already logged. The rest of the
+    /// account's food is not this entry's business.
+    func log(food entry: NutritionEntry) async {
+        await record([StateChange(.upsertNutritionEntry(entry.json))])
+    }
+
+    func removeFood(id: String) async {
+        await record([StateChange(.removeNutritionEntry(id: id))])
+    }
+
+    func nutrition(on date: Date = Date()) -> NutritionDay {
+        NutritionDay.make(entries: nutritionEntries, on: date, targets: targets)
     }
 
     /// Which program the account is running, which is what scopes a schedule

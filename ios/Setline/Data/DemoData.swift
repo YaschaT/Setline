@@ -105,16 +105,40 @@ enum DemoData {
             ])
         }
 
+        // A day's eating, with the handoff's own numbers: 1.840 of 2.250 kcal
+        // eaten, so 410 left, and macros that add up to 142 · 188 · 61.
+        let todayKey = Schedule.dateKey(Date())
+        let food: [(String, String, Double, Double, Double, Double)] = [
+            ("Havermout, magere kwark", "Ontbijt", 520, 38, 60, 14),
+            ("Kip, rijst, broccoli", "Lunch", 740, 58, 82, 22),
+            ("Whey, banaan", "Pre-workout", 310, 32, 30, 5),
+            ("Volkoren boterham, kaas", "Snack", 270, 14, 16, 20),
+        ]
+        let nutritionEntries = food.enumerated().map { index, item -> JSONValue in
+            let (name, meal, calories, protein, carbs, fat) = item
+            return .object([
+                "id": .string("demo-food-\(index)"),
+                "date": .string(todayKey),
+                "meal": .string(meal),
+                "name": .string(name),
+                "calories": .number(Decimal(calories)),
+                "protein": .number(Decimal(protein)),
+                "carbs": .number(Decimal(carbs)),
+                "fat": .number(Decimal(fat)),
+            ])
+        }
+
         var raw: [String: JSONValue] = [
             "planMode": .string("personal"),
             "sciencePlanId": .string("ppl-ul"),
             "sessions": .array(sessions),
             "metrics": .array(metrics),
             "scheduleOverrides": overrides,
+            "nutritionEntries": .array(nutritionEntries),
             "targets": .object([
-                "calories": .number(2750),
-                "protein": .number(175),
-                "carbs": .number(350),
+                "calories": .number(2250),
+                "protein": .number(165),
+                "carbs": .number(240),
                 "fat": .number(70),
             ]),
             "updatedAt": .string(LegacyAdapter.isoString(Date())),

@@ -28,6 +28,15 @@ public struct NumberDisplay: Sendable {
     /// "102,5"
     public func number(_ value: Decimal) -> String { decimal(value) }
 
+    /// "1.840" — a whole number, grouped.
+    public func whole(_ value: Decimal) -> String { decimal(value, maxFractionDigits: 0) }
+
+    /// "1.840 kcal" — energy is always whole.
+    public func kcal(_ value: Decimal) -> String { "\(decimal(value, maxFractionDigits: 0)) kcal" }
+
+    /// "142 g" — macros, to the tenth at most.
+    public func grams(_ value: Decimal) -> String { "\(decimal(value, maxFractionDigits: 1)) g" }
+
     /// "6.480 kg" — volume, always whole kilos.
     public func volumeKg(_ value: Decimal) -> String { "\(decimal(value, maxFractionDigits: 0)) kg" }
 
@@ -59,4 +68,30 @@ public struct NumberDisplay: Sendable {
 
     /// "53 min"
     public func minutes(_ seconds: Int) -> String { "\(seconds / 60) min" }
+}
+
+/// What a reader is allowed to type into a number field.
+///
+/// `.decimalPad` governs the on-screen keyboard only; a hardware keyboard can
+/// send anything at all, so the field itself has to hold the line.
+public enum NumberInput {
+
+    /// Digits plus at most one decimal separator, always written as a comma.
+    public static func numericOnly(_ text: String) -> String {
+        var seenSeparator = false
+        return String(text.compactMap { character -> Character? in
+            if character.isNumber { return character }
+            if character == "," || character == "." {
+                if seenSeparator { return nil }
+                seenSeparator = true
+                return ","
+            }
+            return nil
+        })
+    }
+
+    /// What that text is worth, once it has been filtered.
+    public static func value(_ text: String) -> Double {
+        Double(numericOnly(text).replacingOccurrences(of: ",", with: ".")) ?? 0
+    }
 }

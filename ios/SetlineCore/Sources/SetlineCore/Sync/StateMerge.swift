@@ -229,7 +229,9 @@ public enum StateMerge {
             }
             items[index] = .object(merged)
         } else {
-            items.insert(.object(incoming), at: 0)
+            // Appended, because the web app appends: a day's food reads in the
+            // order it was eaten on both clients or on neither.
+            items.append(.object(incoming))
         }
         raw[collection] = .array(items)
     }

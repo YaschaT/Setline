@@ -347,20 +347,6 @@ struct SetEntrySheet: View {
         }
     }
 
-    /// Digits plus at most one decimal separator.
-    static func numericOnly(_ text: String) -> String {
-        var seenSeparator = false
-        return String(text.compactMap { character -> Character? in
-            if character.isNumber { return character }
-            if character == "," || character == "." {
-                if seenSeparator { return nil }
-                seenSeparator = true
-                return ","
-            }
-            return nil
-        })
-    }
-
     private var pauseChipLabel: String {
         guard let seconds = slot.planned.modifiers.pauseSeconds, paused else { return "Pauze" }
         return "Pauze \(Int(seconds))s"
@@ -447,7 +433,7 @@ struct SetEntrySheet: View {
                     // `.decimalPad` governs the on-screen keyboard only; a
                     // hardware keyboard can send anything. Keep the field to
                     // digits and one separator so nothing else can land in it.
-                    let filtered = Self.numericOnly(new)
+                    let filtered = NumberInput.numericOnly(new)
                     if filtered != new { keypadText = filtered }
                     weight = Decimal(string: filtered.replacingOccurrences(of: ",", with: ".")) ?? 0
                 }

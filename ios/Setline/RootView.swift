@@ -57,6 +57,8 @@ struct RootView: View {
                             running = RunningSession(day: day, snapshot: snapshot)
                         }
                     )
+                case .voeding:
+                    NutritionHomeView()
                 case .progressie:
                     ProgressHomeView()
                 case .account:

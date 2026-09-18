@@ -153,6 +153,27 @@ public enum LegacyAdapter {
         )
     }
 
+    /// Everything the account has logged as food, in the order it was written.
+    public static func nutritionEntries(from state: LegacyState) -> [NutritionEntry] {
+        guard let array = state["nutritionEntries"]?.arrayValue else { return [] }
+        return array.compactMap { value in
+            guard let object = value.objectValue,
+                  let id = object["id"]?.stringValue,
+                  let date = object["date"]?.stringValue
+            else { return nil }
+            return NutritionEntry(
+                id: id,
+                date: date,
+                meal: object["meal"]?.stringValue ?? Meal.snack.rawValue,
+                name: object["name"]?.stringValue ?? "",
+                calories: object["calories"]?.doubleValue ?? 0,
+                protein: object["protein"]?.doubleValue ?? 0,
+                carbs: object["carbs"]?.doubleValue ?? 0,
+                fat: object["fat"]?.doubleValue ?? 0
+            )
+        }
+    }
+
     public static func planMode(from state: LegacyState) -> (mode: String, sciencePlanID: String) {
         (
             state["planMode"]?.stringValue ?? "personal",

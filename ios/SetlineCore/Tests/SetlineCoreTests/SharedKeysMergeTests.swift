@@ -180,3 +180,18 @@ final class SharedKeysMergeTests: XCTestCase {
         XCTAssertEqual(try StateChange.decoder.decode([StateChange].self, from: data), changes)
     }
 }
+
+extension SharedKeysMergeTests {
+
+    func testNewlyLoggedFoodGoesAtTheEndWhereTheWebAppPutsIts() throws {
+        let stored = JSONValue.object(["id": .string("m1"), "name": .string("Havermout")])
+        let after = StateMerge.apply(
+            [StateChange(.upsertNutritionEntry(.object(["id": .string("m2"), "name": .string("Skyr")])), createdAt: now)],
+            to: LegacyState(raw: ["nutritionEntries": .array([stored])]), now: now
+        )
+        XCTAssertEqual(
+            after["nutritionEntries"]?.arrayValue?.compactMap { $0["id"]?.stringValue },
+            ["m1", "m2"]
+        )
+    }
+}
