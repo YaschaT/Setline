@@ -60,6 +60,9 @@ struct SwapSheet: View {
     let onClose: () -> Void
 
     @State private var step: SwapStep = .alternatives
+    /// 31c's self-check. Deliberately not stored: SETLINE keeps nothing you
+    /// did not enter yourself.
+    @State private var signals: Set<String> = []
     /// "The machine is taken." Independent of pain: both can be true at once.
     @State private var occupied = false
     @State private var customName = ""
@@ -659,7 +662,7 @@ struct SwapSheet: View {
             Text("Waar voel je het?")
                 .slTitle().foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s3)
-            Text("Twee korte vragen, allebei optioneel. SETLINE gebruikt dit alleen om betere alternatieven voor te stellen.")
+            Text("Beide vragen zijn optioneel. SETLINE stelt geen diagnose en houdt niets bij dat je niet zelf invult.")
                 .slMeta().foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
@@ -696,7 +699,7 @@ struct SwapSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             backLink { step = .painRegion }
 
-            Text("Wanneer merk je het?")
+            Text("Wanneer?")
                 .slTitle().foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s3)
 
@@ -736,18 +739,29 @@ struct SwapSheet: View {
         return VStack(alignment: .leading, spacing: 0) {
             backLink { step = region.map { SwapStep.painTiming($0) } ?? .painRegion }
 
-            Text("Zo kun je verder trainen")
+            // 31b heads the card with what was answered — "Schouder, tijdens
+            // de beweging" — so the four options read as a reply to it.
+            Text(Self.painHeading(region, timing))
                 .slTitle().foregroundStyle(SL.Ink.primary)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, SL.Space.s3)
 
-            Text("Richtlijn: milde klachten die tijdens de set niet toenemen en de dag erna weg zijn, zijn meestal geen reden om te stoppen.")
+            Text("Vier manieren om verder te trainen. Kies wat vandaag past.")
                 .slMeta().foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 8)
 
             VStack(spacing: SL.Space.s2) {
+                painOption("Beperk de beweging tot waar het pijnvrij is", "Zelfde gewicht, kortere baan. Wordt gelogd als partiële reps.") {
+                    record(region, timing)
+                    onOutcome(.limitRange)
+                }
+                painOption("Minder gewicht, zelfde reps", "Je kiest zelf hoeveel minder. Geen verhoging deze sessie.") {
+                    record(region, timing)
+                    onOutcome(.reduceLoad)
+                }
                 painOption(
-                    "Wissel de oefening",
+                    "Vervang deze oefening",
                     narrows
                         ? "Zonder oefeningen die je \(region?.sentenceName ?? "") belasten."
                         : "Deze lijst verandert er niet door."
@@ -755,26 +769,15 @@ struct SwapSheet: View {
                     record(region, timing)
                     step = .alternatives
                 }
-                painOption("Beperk de beweging tot waar het pijnvrij is", "Je volgende set opent met Partieel aan.") {
-                    record(region, timing)
-                    onOutcome(.limitRange)
-                }
-                painOption("Verlaag het gewicht", "Zelfde oefening, twee stappen lichter.") {
-                    record(region, timing)
-                    onOutcome(.reduceLoad)
-                }
-                painOption("Sla deze oefening over", "Geen straf voor je progressie.") {
+                painOption("Sla deze oefening over", "De rest van de sessie blijft staan.") {
                     record(region, timing)
                     onOutcome(.skipExercise)
                 }
             }
             .padding(.top, SL.Space.s5)
 
-            if timing?.warrantsFollowUp == true {
-                Text("Laat dit nakijken als het aanhoudt.")
-                    .slMeta().foregroundStyle(SL.Ink.secondary)
-                    .padding(.top, SL.Space.s4)
-            }
+            guideline.padding(.top, SL.Space.s5)
+            escalation.padding(.top, SL.Space.s5)
 
             if region != nil {
                 Text("We onthouden dit \(PainFlag.lifetimeDays) dagen. Verwijderen kan bovenaan Wissel.")
@@ -793,6 +796,98 @@ struct SwapSheet: View {
             .padding(.top, SL.Space.s3)
         }
     }
+
+    /// "Schouder, tijdens de beweging" when both were answered, one of the two
+    /// when only one was, and a plain heading when neither was.
+    static func painHeading(_ region: PainRegion?, _ timing: PainTiming?) -> String {
+        switch (region, timing) {
+        case let (region?, timing?): return "\(region.label), \(timing.label.lowercased())"
+        case let (region?, nil): return region.label
+        case let (nil, timing?): return timing.label
+        case (nil, nil): return "Verder trainen"
+        }
+    }
+
+    /// 31b · stated once, as a guideline, never as personal advice.
+    private var guideline: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SLEyebrow(text: "ALGEMENE RICHTLIJN")
+            Text("Lichte pijn tijdens de oefening hoeft niet te betekenen dat je stopt, zolang ze de volgende ochtend weggezakt is en van week tot week niet toeneemt. Twijfel je, of wordt het erger? Laat het nakijken.")
+                .slMeta()
+                .lineSpacing(SL.TypeSize.meta * 0.5)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.secondary)
+        }
+    }
+
+    /// 31c · a self-check, not a question. Nothing here is stored, and the
+    /// guidance appears only once a signal is ticked. No red, no warning icon,
+    /// no severity scale, and never the name of a condition.
+    private var escalation: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SLEyebrow(text: "GEEN VRAAG, EEN KEUZE")
+            Text("Klopt een van deze?")
+                .slBody(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, 6)
+
+            FlowRow(spacing: SL.Space.s2) {
+                ForEach(Self.escalationSignals, id: \.self) { signal in
+                    let picked = signals.contains(signal)
+                    Button {
+                        withAnimation(.easeOut(duration: SL.Motion.base)) {
+                            if signal == Self.noneOfThese {
+                                signals = picked ? [] : [signal]
+                            } else {
+                                signals.remove(Self.noneOfThese)
+                                if picked { signals.remove(signal) } else { signals.insert(signal) }
+                            }
+                        }
+                    } label: {
+                        Text(signal)
+                            .slBody(picked ? SL.Weight.semibold : SL.Weight.regular)
+                            .foregroundStyle(picked ? SL.Ink.primary : SL.Ink.secondary)
+                            .padding(.horizontal, SL.Space.s4)
+                            .frame(minHeight: SL.Space.hitMin)
+                            .background(Capsule().fill(picked ? SL.Surface.raised2 : .clear))
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    SL.Surface.hairlineStrong,
+                                    style: StrokeStyle(lineWidth: 1, dash: picked ? [] : [4, 4])
+                                )
+                            )
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(picked ? [.isSelected, .isButton] : .isButton)
+                }
+            }
+            .padding(.top, SL.Space.s3)
+
+            if signals.contains(where: { $0 != Self.noneOfThese }) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Laat dit nakijken door een arts of kinesist.")
+                        .slBody(SL.Weight.medium)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("De vier trainingsopties blijven staan. SETLINE beslist niets voor je en noemt geen aandoening.")
+                        .slMeta()
+                        .lineSpacing(SL.TypeSize.meta * 0.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .padding(.top, SL.Space.s4)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private static let noneOfThese = "Geen daarvan"
+
+    private static let escalationSignals = [
+        "Scherp of plots", "Tintelingen", "Krachtverlies", "Zwelling",
+        "Al meer dan 2 weken", noneOfThese,
+    ]
 
     private func painOption(_ title: String, _ detail: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {

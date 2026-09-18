@@ -5,17 +5,18 @@ import Foundation
 /// The list is short on purpose: it exists to reach the `LoadTag`s the
 /// ranking can act on, not to build a symptom vocabulary.
 public enum PainRegion: String, Codable, Sendable, CaseIterable {
-    case shoulder, elbow, wrist, lowerBack, hip, knee, other
+    case shoulder, elbow, upperBack, lowerBack, hip, knee, wrist, other
 
     public var label: String {
         switch self {
         case .shoulder: return "Schouder"
         case .elbow: return "Elleboog"
-        case .wrist: return "Pols"
+        case .upperBack: return "Bovenrug"
         case .lowerBack: return "Onderrug"
         case .hip: return "Heup"
         case .knee: return "Knie"
-        case .other: return "Ergens anders"
+        case .wrist: return "Handgewricht"
+        case .other: return "Elders"
         }
     }
 
@@ -26,6 +27,7 @@ public enum PainRegion: String, Codable, Sendable, CaseIterable {
         switch self {
         case .shoulder: return "schouder"
         case .elbow: return "elleboog"
+        case .upperBack: return "bovenrug"
         case .wrist: return "pols"
         case .lowerBack: return "onderrug"
         case .hip: return "heup"
@@ -44,7 +46,9 @@ public enum PainRegion: String, Codable, Sendable, CaseIterable {
         case .wrist: return [.wristExtension]
         case .lowerBack: return [.axialSpinalLoad, .lumbarFlexion]
         case .knee: return [.deepKneeFlexion]
-        case .hip, .other: return []
+        // No attribute tag speaks for these yet: the flag is still stored, it
+        // simply does not narrow the list.
+        case .upperBack, .hip, .other: return []
         }
     }
 }
@@ -55,9 +59,9 @@ public enum PainTiming: String, Codable, Sendable, CaseIterable {
 
     public var label: String {
         switch self {
-        case .duringSet: return "Tijdens de set"
+        case .duringSet: return "Tijdens de beweging"
         case .afterTraining: return "Na de training"
-        case .outsideTheGym: return "Ook buiten de sportzaal"
+        case .outsideTheGym: return "De hele tijd"
         }
     }
 
