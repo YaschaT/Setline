@@ -45,6 +45,7 @@ enum SwapStep: Equatable {
 /// program change and `Ik voel iets`.
 struct SwapSheet: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     let exercise: Exercise
     let origin: Exercise?
@@ -100,8 +101,9 @@ struct SwapSheet: View {
         .scrollDismissesKeyboard(.interactively)
         // The custom step takes the full height *before* the keyboard arrives:
         // a detent cannot grow while the keyboard is up, and the button has to
-        // stay reachable above it.
-        .presentationDetents(step == .custom ? [.large] : [.height(height)])
+        // stay reachable above it. At accessibility sizes no step fits its
+        // measured height, so every step opens full, as the set sheet does.
+        .presentationDetents(step == .custom || typeSize.isAccessibilitySize ? [.large] : [.height(height)])
         .presentationBackground(SL.Surface.raised)
         .presentationDragIndicator(.hidden)
         .slRespondsToTextSize()
@@ -333,13 +335,15 @@ struct SwapSheet: View {
             onOutcome(.substitute(alternative.exercise, reason))
         } label: {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+                // At accessibility sizes the fit label takes its own line, so
+                // it never squeezes the name into one word per line.
+                fitLayout {
                     Text(alternative.exercise.name)
                         .slLead()
                         .foregroundStyle(SL.Ink.primary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: SL.Space.s2)
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
                     Text(SubstitutionCopy.fit(alternative))
                         .slMeta(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.tertiary)
@@ -363,6 +367,12 @@ struct SwapSheet: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(alternative.exercise.name), \(SubstitutionCopy.fit(alternative))")
         .accessibilityHint(SubstitutionCopy.carryOver)
+    }
+
+    private var fitLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
     }
 
     /// Zero results is a real answer, not a failure. Say what is true and
