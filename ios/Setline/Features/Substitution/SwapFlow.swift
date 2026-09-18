@@ -34,10 +34,30 @@ enum SwapStep: Equatable {
     case browse
     case custom
     case scope(String)
-    case painRegion
-    case painTiming(PainRegion)
+    /// 31a: where and when, on one page. Both optional.
+    case painQuestions
     /// A `nil` region: the user preferred not to say, and nothing is stored.
     case painOptions(PainRegion?, PainTiming?)
+
+    /// 31a and 31b are pages of their own on the ground, not sheet steps.
+    var isPainPage: Bool {
+        switch self {
+        case .painQuestions, .painOptions: return true
+        case .alternatives, .browse, .custom, .scope: return false
+        }
+    }
+
+    /// Each step opens at its own top.
+    var key: String {
+        switch self {
+        case .alternatives: return "alternatives"
+        case .browse: return "browse"
+        case .custom: return "custom"
+        case .scope(let id): return "scope-\(id)"
+        case .painQuestions: return "pain-questions"
+        case .painOptions: return "pain-options"
+        }
+    }
 }
 
 /// Artboard 15R. Fixed order: reorder first, then up to three alternatives,
@@ -64,6 +84,9 @@ struct SwapSheet: View {
     /// 31c's self-check. Deliberately not stored: SETLINE keeps nothing you
     /// did not enter yourself.
     @State private var signals: Set<String> = []
+    /// 31a's answers, kept while moving between its page and 31b's.
+    @State private var painRegion: PainRegion?
+    @State private var painTiming: PainTiming?
     /// "The machine is taken." Independent of pain: both can be true at once.
     @State private var occupied = false
     @State private var customName = ""
@@ -83,28 +106,41 @@ struct SwapSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                grabber
+                if !step.isPainPage { grabber }
                 switch step {
                 case .alternatives: alternativesStep
                 case .browse: browseStep
                 case .custom: customStep
                 case .scope(let id): scopeStep(substituteID: id)
-                case .painRegion: painRegionStep
-                case .painTiming(let region): painTimingStep(region)
+                case .painQuestions: painQuestionsStep
                 case .painOptions(let region, let timing): painOptionsStep(region, timing)
                 }
             }
-            .padding(.horizontal, SL.Space.gutterEntry)
+            .padding(.horizontal, step.isPainPage ? SL.Space.gutterSession : SL.Space.gutterEntry)
             .padding(.bottom, SL.Space.s8)
         }
+        .id(step.key)
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if step == .painQuestions {
+                Button { step = .painOptions(painRegion, painTiming) } label: { Text("Verder") }
+                    .buttonStyle(SLPrimaryButtonStyle())
+                    .padding(.horizontal, SL.Space.gutterSession)
+                    .padding(.top, SL.Space.s3)
+                    .padding(.bottom, SL.Space.s2)
+                    .background(SL.Surface.ground)
+            }
+        }
         // The custom step takes the full height *before* the keyboard arrives:
         // a detent cannot grow while the keyboard is up, and the button has to
         // stay reachable above it. At accessibility sizes no step fits its
         // measured height, so every step opens full, as the set sheet does.
-        .presentationDetents(step == .custom || typeSize.isAccessibilitySize ? [.large] : [.height(height)])
-        .presentationBackground(SL.Surface.raised)
+        // 31a and 31b are drawn as full pages on the ground.
+        .presentationDetents(
+            step == .custom || step.isPainPage || typeSize.isAccessibilitySize ? [.large] : [.height(height)]
+        )
+        .presentationBackground(step.isPainPage ? SL.Surface.ground : SL.Surface.raised)
         .presentationDragIndicator(.hidden)
         .slRespondsToTextSize()
         .onChange(of: step) { _, newStep in
@@ -154,9 +190,7 @@ struct SwapSheet: View {
         case .browse: return 680
         case .custom: return 520
         case .scope: return 460
-        case .painRegion: return 420
-        case .painTiming: return 360
-        case .painOptions: return 640
+        case .painQuestions, .painOptions: return 720
         }
     }
 
@@ -417,7 +451,12 @@ struct SwapSheet: View {
             // Below the hairline on purpose. A permanent program change must
             // never share a surface or a shape with the temporary swap above.
             secondaryLink("Vervang in schema", muted: true) { step = .scope(exercise.id) }
-            secondaryLink("Ik voel iets", muted: true) { step = .painRegion }
+            secondaryLink("Ik voel iets", muted: true) {
+                painRegion = nil
+                painTiming = nil
+                signals = []
+                step = .painQuestions
+            }
         }
     }
 
@@ -666,102 +705,138 @@ struct SwapSheet: View {
 
     // MARK: - 31a / 31b / 31c
 
-    private var painRegionStep: some View {
+    /// 31a and 31b: plain text actions in `text2`, no chevron.
+    private func painHeader(back: @escaping () -> Void, skip: (() -> Void)? = nil) -> some View {
+        HStack {
+            Button(action: back) {
+                Text("Terug").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Spacer(minLength: SL.Space.s4)
+            if let skip {
+                Button(action: skip) {
+                    Text("Overslaan").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, SL.Space.s3)
+    }
+
+    /// 31a · both questions on one page, both optional. `Verder` goes on with
+    /// whatever is picked, `Overslaan` with nothing; neither stores anything
+    /// until one of 31b's options is chosen.
+    private var painQuestionsStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            backLink { step = .alternatives }
+            painHeader(back: { step = .alternatives }, skip: { step = .painOptions(nil, nil) })
+
             Text("Waar voel je het?")
-                .slTitle().foregroundStyle(SL.Ink.primary)
-                .padding(.top, SL.Space.s3)
-            Text("Beide vragen zijn optioneel. SETLINE stelt geen diagnose en houdt niets bij dat je niet zelf invult.")
-                .slMeta().foregroundStyle(SL.Ink.secondary)
+                .slDisplay()
+                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, SL.Space.s5)
+                .accessibilityAddTraits(.isHeader)
+            Text("Beide vragen zijn optioneel. SETLINE stelt geen diagnose en houdt niets bij dat je niet zelf invult.")
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.top, SL.Space.s2)
 
             FlowRow(spacing: SL.Space.s2) {
                 ForEach(PainRegion.allCases, id: \.self) { region in
-                    SLChip(title: region.label, size: .large) { step = .painTiming(region) }
+                    SLChip(title: region.label, size: .large, look: painRegion == region ? .selected : .unselected) {
+                        painRegion = painRegion == region ? nil : region
+                    }
                 }
             }
             .padding(.top, SL.Space.s5)
 
-            // Not saying is a complete answer. Nothing is stored for it —
-            // no invented "ergens anders".
-            Button { step = .painOptions(nil, nil) } label: {
-                Text("Liever niet zeggen").slBody().foregroundStyle(SL.Ink.tertiary)
-                    .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.top, SL.Space.s3)
-        }
-    }
-
-    private func painTimingStep(_ region: PainRegion) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            backLink { step = .painRegion }
-
             Text("Wanneer?")
-                .slTitle().foregroundStyle(SL.Ink.primary)
-                .padding(.top, SL.Space.s3)
+                .slTitle()
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, SL.Space.s8)
+                .accessibilityAddTraits(.isHeader)
 
-            // 31a draws the answers as option cards — radius 20, 17pt — the
-            // same component the intake uses, not bordered rows.
             VStack(spacing: SL.Space.s2) {
                 ForEach(PainTiming.allCases, id: \.self) { timing in
-                    Button { step = .painOptions(region, timing) } label: {
-                        Text(timing.label)
-                            .slLead()
-                            .foregroundStyle(SL.Ink.primary)
-                            .padding(.vertical, SL.Space.s4)
-                            .padding(.horizontal, 18)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
-                                    .fill(SL.Surface.raised)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
-                                    .strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)
-                            )
-                            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
+                    timingCard(timing)
                 }
             }
             .padding(.top, SL.Space.s4)
-
-            Button { step = .painOptions(region, nil) } label: {
-                Text("Overslaan").slBody().foregroundStyle(SL.Ink.tertiary)
-                    .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.top, SL.Space.s3)
         }
     }
 
-    /// Four ways to keep training. None of them is framed as giving up, the
-    /// guideline is stated once — as a guideline — and there is always a way
-    /// back or out that stores nothing.
+    /// 31a's answer card: radius 20, 17pt. Picked, it takes the raised2 fill,
+    /// the .28 edge and the filled dot; otherwise it stays on `raised`.
+    private func timingCard(_ timing: PainTiming) -> some View {
+        let picked = painTiming == timing
+        return Button {
+            painTiming = picked ? nil : timing
+        } label: {
+            HStack(spacing: SL.Space.s3) {
+                Text(timing.label)
+                    .slLead(picked ? SL.Weight.semibold : SL.Weight.medium)
+                    .foregroundStyle(picked ? SL.Ink.primary : SL.Ink.secondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if picked {
+                    Circle().fill(SL.Ink.primary).frame(width: 22, height: 22)
+                }
+            }
+            .padding(.vertical, SL.Space.s4)
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(TimingSurface(picked: picked))
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
+        .accessibilityAddTraits(picked ? [.isSelected, .isButton] : .isButton)
+    }
+
+    private struct TimingSurface: ViewModifier {
+        let picked: Bool
+        func body(content: Content) -> some View {
+            if picked {
+                content.slCard(radius: SL.Radius.option, selected: true)
+            } else {
+                content.slCardStrong(radius: SL.Radius.option)
+            }
+        }
+    }
+
+    /// 31b · four ways to keep training. None of them is framed as giving up,
+    /// and the guideline is stated once — as a guideline.
     private func painOptionsStep(_ region: PainRegion?, _ timing: PainTiming?) -> some View {
         let narrows = region.map {
             app.painWouldChangeList(region: $0, for: exercise.id, occupied: occupied, excluding: sessionExerciseIDs)
         } ?? false
         return VStack(alignment: .leading, spacing: 0) {
-            backLink { step = region.map { SwapStep.painTiming($0) } ?? .painRegion }
+            painHeader(back: { step = .painQuestions })
 
-            // 31b heads the card with what was answered — "Schouder, tijdens
+            // 31b heads the page with what was answered — "Schouder, tijdens
             // de beweging" — so the four options read as a reply to it.
             Text(Self.painHeading(region, timing))
-                .slTitle().foregroundStyle(SL.Ink.primary)
+                .slDisplay()
+                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, SL.Space.s3)
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, SL.Space.s4)
+                .accessibilityAddTraits(.isHeader)
 
             Text("Vier manieren om verder te trainen. Kies wat vandaag past.")
-                .slMeta().foregroundStyle(SL.Ink.secondary)
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.top, SL.Space.s2)
 
             VStack(spacing: SL.Space.s2) {
                 painOption("Beperk de beweging tot waar het pijnvrij is", "Zelfde gewicht, kortere baan. Wordt gelogd als partiële reps.") {
@@ -772,11 +847,15 @@ struct SwapSheet: View {
                     record(region, timing)
                     onOutcome(.reduceLoad)
                 }
+                // The artboard's promise holds exactly when the region removes
+                // something from this list: the ranking then also lifts the
+                // more stable variants (TRAINING_LOGIC §14.2). Otherwise it says
+                // the list stays as it was.
                 painOption(
                     "Vervang deze oefening",
                     narrows
-                        ? "Zonder oefeningen die je \(region?.sentenceName ?? "") belasten."
-                        : "Deze lijst verandert er niet door."
+                        ? "Terug naar de wisselsheet, met stabielere varianten bovenaan."
+                        : "Terug naar de wisselsheet. Deze lijst verandert er niet door."
                 ) {
                     record(region, timing)
                     step = .alternatives
@@ -786,26 +865,10 @@ struct SwapSheet: View {
                     onOutcome(.skipExercise)
                 }
             }
-            .padding(.top, SL.Space.s5)
+            .padding(.top, 14)
 
-            guideline.padding(.top, SL.Space.s5)
-            escalation.padding(.top, SL.Space.s5)
-
-            if region != nil {
-                Text("We onthouden dit \(PainFlag.lifetimeDays) dagen. Verwijderen kan bovenaan Wissel.")
-                    .slMeta().foregroundStyle(SL.Ink.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, SL.Space.s3)
-            }
-
-            Button(action: onClose) {
-                Text(region == nil ? "Sluiten" : "Sluiten zonder opslaan")
-                    .slBody().foregroundStyle(SL.Ink.tertiary)
-                    .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.top, SL.Space.s3)
+            guideline.padding(.top, SL.Space.s6)
+            escalation.padding(.top, SL.Space.s6)
         }
     }
 
@@ -820,59 +883,80 @@ struct SwapSheet: View {
         }
     }
 
-    /// 31b · stated once, as a guideline, never as personal advice.
+    /// 31b · stated once, below a hairline, as a guideline — never as personal
+    /// advice.
     private var guideline: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLEyebrow(text: "ALGEMENE RICHTLIJN")
             Text("Lichte pijn tijdens de oefening hoeft niet te betekenen dat je stopt, zolang ze de volgende ochtend weggezakt is en van week tot week niet toeneemt. Twijfel je, of wordt het erger? Laat het nakijken.")
-                .slMeta()
-                .lineSpacing(SL.TypeSize.meta * 0.5)
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
+                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : 320, alignment: .leading)
         }
+        .padding(.top, SL.Space.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { SLHairline() }
     }
 
-    /// 31c · a self-check, not a question. Nothing here is stored, and the
-    /// guidance appears only once a signal is ticked. No red, no warning icon,
-    /// no severity scale, and never the name of a condition.
+    /// 31c · a self-check, not a question, in the same card shape as every
+    /// other proposal. Nothing here is stored, and the guidance card appears
+    /// only once a signal is ticked. No red, no warning icon, no severity
+    /// scale, and never the name of a condition.
     private var escalation: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: "GEEN VRAAG, EEN KEUZE")
-            Text("Klopt een van deze?")
-                .slBody(SL.Weight.medium)
-                .foregroundStyle(SL.Ink.primary)
-                .padding(.top, 6)
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            VStack(alignment: .leading, spacing: 0) {
+                SLEyebrow(text: "GEEN VRAAG, EEN KEUZE")
+                Text("Klopt een van deze?")
+                    .slLead()
+                    .foregroundStyle(SL.Ink.primary)
+                    .padding(.top, 10)
+                    .padding(.bottom, SL.Space.s3)
 
-            FlowRow(spacing: SL.Space.s2) {
-                ForEach(Self.escalationSignals, id: \.self) { signal in
-                    let picked = signals.contains(signal)
-                    SLChip(title: signal, look: picked ? .selected : .unselected) {
-                        withAnimation(.easeOut(duration: SL.Motion.base)) {
-                            if signal == Self.noneOfThese {
-                                signals = picked ? [] : [signal]
-                            } else {
-                                signals.remove(Self.noneOfThese)
-                                if picked { signals.remove(signal) } else { signals.insert(signal) }
+                FlowRow(spacing: 6) {
+                    ForEach(Self.escalationSignals, id: \.self) { signal in
+                        let picked = signals.contains(signal)
+                        SLChip(
+                            title: signal,
+                            look: picked ? .selected : signal == Self.noneOfThese ? .quiet : .check
+                        ) {
+                            withAnimation(.easeOut(duration: SL.Motion.base)) {
+                                if signal == Self.noneOfThese {
+                                    signals = picked ? [] : [signal]
+                                } else {
+                                    signals.remove(Self.noneOfThese)
+                                    if picked { signals.remove(signal) } else { signals.insert(signal) }
+                                }
                             }
                         }
                     }
                 }
             }
-            .padding(.top, SL.Space.s3)
+            .padding(SL.Space.s5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .slCardStrong(fill: SL.Surface.raised2)
 
             if signals.contains(where: { $0 != Self.noneOfThese }) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
+                    SLEyebrow(text: "ALLEEN NA EEN AANGEVINKT SIGNAAL")
                     Text("Laat dit nakijken door een arts of kinesist.")
-                        .slBody(SL.Weight.medium)
+                        .slLead()
+                        .lineSpacing(SL.TypeSize.lead * 0.4)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
+                        .padding(.top, 10)
                     Text("De vier trainingsopties blijven staan. SETLINE beslist niets voor je en noemt geen aandoening.")
-                        .slMeta()
-                        .lineSpacing(SL.TypeSize.meta * 0.5)
+                        .slBody()
+                        .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
+                        .padding(.top, SL.Space.s2)
                 }
-                .padding(.top, SL.Space.s4)
+                .padding(SL.Space.s5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .slCardStrong()
+                .accessibilityElement(children: .combine)
                 .transition(.opacity)
             }
         }
@@ -885,21 +969,27 @@ struct SwapSheet: View {
         "Al meer dan 2 weken", noneOfThese,
     ]
 
+    /// 31b's option card: radius 20, raised2, the .16 edge; 17pt title over a
+    /// 13pt line.
     private func painOption(_ title: String, _ detail: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+            VStack(alignment: .leading, spacing: SL.Space.s1) {
+                Text(title).slLead().foregroundStyle(SL.Ink.primary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(detail).slMeta().foregroundStyle(SL.Ink.secondary)
+                    .lineSpacing(SL.TypeSize.meta * 0.2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(SL.Space.s4)
+            .padding(.vertical, SL.Space.s4)
+            .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .slCard(radius: SL.Radius.md)
+            .slCard(radius: SL.Radius.option, loud: true)
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
         }
         .buttonStyle(.plain)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
     }
 
     /// A flag is only ever stored for a region the user actually named.
