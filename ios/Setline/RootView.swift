@@ -102,6 +102,11 @@ struct RootView: View {
                 }
             }
             .padding(.bottom, SL.Metric.tabBarHeight + SL.Space.tabInset)
+            // Scrolled content stops at the status bar: the clock always sits
+            // on the ground, as every artboard draws it.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: 0).background(SL.Surface.ground)
+            }
 
             SLTabBar(selection: $tab)
                 .padding(.bottom, SL.Space.tabInset)
@@ -145,5 +150,3 @@ struct RootView: View {
         await app.save(session: session)
     }
 }
-
-extension WorkoutDay: @retroactive Identifiable {}
