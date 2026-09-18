@@ -34,20 +34,35 @@ struct SLStepper: View {
     private var buttonFill: Color { level == .onRaised ? SL.Surface.raised : SL.Surface.raised2 }
     private var valueSize: CGFloat { level == .onRaised ? SL.TypeSize.display : SL.TypeSize.title }
 
+    /// The number, and — where the design gives it one — the destination
+    /// behind it. No underline or tint marks it: this design says what a
+    /// gesture does in words, not in decoration, and the value has to keep
+    /// every one of its own characters at every text size.
     @ViewBuilder
-    private var value: some View {
+    private func value(fills: Bool) -> some View {
         let text = Text(display)
             .font(.sl(valueSize, SL.Weight.semibold))
             .monospacedDigit()
             .foregroundStyle(disabledNote == nil ? SL.Ink.primary : SL.Ink.tertiary)
 
         if let onTapValue {
-            Button(action: onTapValue) { text.underline(true, pattern: .dot) }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(label) \(display)")
-                .accessibilityHint("Dubbeltik voor de schijvencalculator")
+            Button(action: onTapValue) {
+                text
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .fixedSize(horizontal: false, vertical: fills)
+                    .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(label) \(display)")
+            .accessibilityHint("Dubbeltik voor de schijvencalculator")
         } else {
             text
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .fixedSize(horizontal: false, vertical: fills)
+                .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
         }
     }
 
@@ -63,9 +78,7 @@ struct SLStepper: View {
                 // between two buttons it truncated to "1…" — the one value this
                 // control exists to show. It is never shrunk or cut; the
                 // controls move to their own row instead.
-                value
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                value(fills: true)
                     .padding(.top, 6)
                 HStack(spacing: SL.Space.s2) {
                     control("−", expands: true, action: onDecrement)
@@ -76,9 +89,7 @@ struct SLStepper: View {
                 HStack(spacing: 0) {
                     control("−", action: onDecrement)
                     Spacer(minLength: 0)
-                    value
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                    value(fills: false)
                     Spacer(minLength: 0)
                     control("+", action: onIncrement)
                 }
