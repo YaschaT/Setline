@@ -59,6 +59,8 @@ final class AppState {
 
     private(set) var nutritionEntries: [NutritionEntry] = []
     private(set) var targets: NutritionTargets?
+    private(set) var plateInventory: PlateInventory = .default
+    private(set) var experience: Experience?
 
     let display = NumberDisplay.dutch
     private let client: SupabaseClient
@@ -119,8 +121,18 @@ final class AppState {
         await authenticate { try await self.client.signIn(email: email, password: password) }
     }
 
+    /// True for exactly as long as it takes to walk a new account through
+    /// onboarding. A returning sign-in never sets it, which is why signing in
+    /// goes straight to the week you came for.
+    private(set) var isNewAccount = false
+
     func signUp(email: String, password: String) async {
         await authenticate { try await self.client.signUp(email: email, password: password) }
+        isNewAccount = authError == nil && session != nil
+    }
+
+    func finishOnboarding() {
+        isNewAccount = false
     }
 
     func sendPasswordReset(email: String) async {
@@ -163,6 +175,7 @@ final class AppState {
     /// Leaves the account on this device. Its local copy and any pending
     /// changes stay stored under that account, and sync when it signs in again.
     func signOut() {
+        isNewAccount = false
         Keychain.remove(Self.sessionKey)
         session = nil
         auth = nil
@@ -204,6 +217,8 @@ final class AppState {
         scheduleOverrides = [:]
         nutritionEntries = []
         targets = nil
+        plateInventory = .default
+        experience = nil
         activeSession = nil
         hiddenWarmups = []
         painFlags = []
@@ -332,6 +347,8 @@ final class AppState {
         customExercises = LegacyAdapter.customExercises(from: next)
         nutritionEntries = LegacyAdapter.nutritionEntries(from: next)
         targets = LegacyAdapter.targets(from: next)
+        plateInventory = LegacyAdapter.plateInventory(from: next)
+        experience = LegacyAdapter.experience(from: next)
         plan = applyReplacements(to: plan)
     }
 

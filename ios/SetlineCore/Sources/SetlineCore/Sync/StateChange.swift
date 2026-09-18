@@ -30,6 +30,8 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         /// One nutrition target, by field.
         case setTarget(field: String, value: Decimal)
         case setProgram(mode: String, sciencePlanID: String?)
+        case setExperience(String)
+        case setEquipment(plates: [Decimal], barKg: Decimal)
     }
 
     /// Identifies the change itself, so a sync can clear exactly the changes
@@ -62,14 +64,14 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
-        case scheduleKey, dayID, entry, field, value, mode, sciencePlanID
+        case scheduleKey, dayID, entry, field, value, mode, sciencePlanID, experience, plates, barKg
     }
 
     private enum KindName: String, Codable {
         case upsertSession, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry, setTarget
-        case setProgram
+        case setProgram, setExperience, setEquipment
     }
 
     public init(from decoder: Decoder) throws {
@@ -113,6 +115,13 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             kind = .setProgram(
                 mode: try container.decode(String.self, forKey: .mode),
                 sciencePlanID: try container.decodeIfPresent(String.self, forKey: .sciencePlanID)
+            )
+        case .setExperience:
+            kind = .setExperience(try container.decode(String.self, forKey: .experience))
+        case .setEquipment:
+            kind = .setEquipment(
+                plates: try container.decode([Decimal].self, forKey: .plates),
+                barKg: try container.decode(Decimal.self, forKey: .barKg)
             )
         }
     }
@@ -167,6 +176,13 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             try container.encode(KindName.setProgram, forKey: .kind)
             try container.encode(mode, forKey: .mode)
             try container.encodeIfPresent(sciencePlanID, forKey: .sciencePlanID)
+        case .setExperience(let level):
+            try container.encode(KindName.setExperience, forKey: .kind)
+            try container.encode(level, forKey: .experience)
+        case .setEquipment(let plates, let barKg):
+            try container.encode(KindName.setEquipment, forKey: .kind)
+            try container.encode(plates, forKey: .plates)
+            try container.encode(barKg, forKey: .barKg)
         }
     }
 

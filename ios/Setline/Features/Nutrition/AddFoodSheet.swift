@@ -61,6 +61,8 @@ struct AddFoodSheet: View {
                 .disabled(!isLoggable)
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.bottom, SL.Space.s3)
+                .frame(maxWidth: .infinity)
+                .background(SL.Surface.raised)
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)

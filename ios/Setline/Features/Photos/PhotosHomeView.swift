@@ -64,6 +64,8 @@ struct PhotosHomeView: View {
             .buttonStyle(SLPrimaryButtonStyle())
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.bottom, SL.Space.s3)
+            .frame(maxWidth: .infinity)
+            .background(SL.Surface.ground)
         }
         .task {
             guard !loaded else { return }

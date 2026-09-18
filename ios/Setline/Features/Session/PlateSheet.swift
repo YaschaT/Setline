@@ -15,9 +15,15 @@ struct PlateSheet: View {
     let onChoose: (Decimal) -> Void
     let onClose: () -> Void
 
+    @Environment(AppState.self) private var app
+
     private let display = NumberDisplay.dutch
 
-    private var solution: PlateMath.Solution { PlateMath.solve(target: target) }
+    private var rack: PlateInventory { app.plateInventory }
+
+    private var solution: PlateMath.Solution {
+        PlateMath.solve(target: target, bar: rack.barKg, plates: rack.plates)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -36,7 +42,7 @@ struct PlateSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 SLEyebrow(text: "SCHIJVEN PER KANT")
                 Spacer()
-                Text("stang \(display.kg(PlateMath.defaultBar))")
+                Text("stang \(display.kg(rack.barKg))")
                     .slMeta().slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
             }
@@ -112,7 +118,7 @@ struct PlateSheet: View {
     }
 
     private func plateBar(_ plate: Decimal) -> some View {
-        let heaviest = (PlateMath.defaultPlates.max() ?? 20) as NSDecimalNumber
+        let heaviest = (rack.plates.max() ?? 20) as NSDecimalNumber
         let height = 28 + 60 * CGFloat(truncating: plate as NSDecimalNumber) / CGFloat(truncating: heaviest)
         return Capsule()
             .fill(SL.Signal.action)
@@ -121,7 +127,7 @@ struct PlateSheet: View {
 
     private var nearby: some View {
         HStack(spacing: 6) {
-            ForEach(PlateMath.nearby(target: target), id: \.self) { load in
+            ForEach(PlateMath.nearby(target: target, bar: rack.barKg, plates: rack.plates), id: \.self) { load in
                 let selected = load == solution.total
                 Button { onChoose(load) } label: {
                     Text(display.number(load))

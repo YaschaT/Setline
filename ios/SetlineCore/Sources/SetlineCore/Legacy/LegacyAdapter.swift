@@ -174,6 +174,19 @@ public enum LegacyAdapter {
         }
     }
 
+    /// How long the account has been lifting, if it ever said.
+    public static func experience(from state: LegacyState) -> Experience? {
+        state["experienceLevel"]?.stringValue.flatMap(Experience.init(rawValue:))
+    }
+
+    /// The rack this account actually has, or the set the design assumes.
+    public static func plateInventory(from state: LegacyState) -> PlateInventory {
+        guard let plates = state["plates"]?.arrayValue?.compactMap(\.decimalValue), !plates.isEmpty else {
+            return .default
+        }
+        return PlateInventory(plates: plates, barKg: state["barWeightKg"]?.decimalValue ?? PlateMath.defaultBar)
+    }
+
     public static func planMode(from state: LegacyState) -> (mode: String, sciencePlanID: String) {
         (
             state["planMode"]?.stringValue ?? "personal",

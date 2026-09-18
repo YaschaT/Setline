@@ -44,6 +44,8 @@ struct TrainingHomeView: View {
             }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.bottom, SL.Space.s3)
+            .frame(maxWidth: .infinity)
+            .background(SL.Surface.ground)
         }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })

@@ -35,6 +35,8 @@ struct NutritionHomeView: View {
                 .buttonStyle(SLPrimaryButtonStyle())
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.bottom, SL.Space.s3)
+                .frame(maxWidth: .infinity)
+                .background(SL.Surface.ground)
         }
         .sheet(isPresented: $adding) {
             AddFoodSheet(date: Date()) { entry in

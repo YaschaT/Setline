@@ -230,6 +230,45 @@ final class SharedKeysMergeTests: XCTestCase {
         XCTAssertEqual(ProgramCatalog.current(in: personal, plan: PlanCatalog.personal).mode, "personal")
     }
 
+    // MARK: What intake answers
+
+    func testTheExperienceAnswerIsKeptOnItsOwnKey() {
+        let after = StateMerge.apply(
+            [StateChange(.setExperience("week"), createdAt: now)],
+            to: state(["planMode": .string("personal")]), now: now
+        )
+        XCTAssertEqual(after["experienceLevel"], .string("week"))
+        XCTAssertEqual(after["planMode"], .string("personal"))
+        XCTAssertEqual(LegacyAdapter.experience(from: LegacyState(raw: after.raw)), .week)
+    }
+
+    func testTheRackIsKeptAsTwoKeysAndReadBackHeaviestFirst() throws {
+        let after = StateMerge.apply(
+            [StateChange(.setEquipment(plates: [5, 20, 1.25], barKg: 15), createdAt: now)],
+            to: state([:]), now: now
+        )
+        XCTAssertEqual(after["plates"]?.arrayValue?.compactMap(\.decimalValue), [5, 20, 1.25])
+        XCTAssertEqual(after["barWeightKg"], .number(15))
+
+        let inventory = LegacyAdapter.plateInventory(from: LegacyState(raw: after.raw))
+        XCTAssertEqual(inventory.plates, [20, 5, 1.25])
+        XCTAssertEqual(inventory.barKg, 15)
+        XCTAssertEqual(inventory.smallestJump, 2.5)
+    }
+
+    func testAnAccountThatNeverAnsweredGetsTheSetTheDesignAssumes() {
+        let inventory = LegacyAdapter.plateInventory(from: LegacyState(raw: [:]))
+        XCTAssertEqual(inventory, .default)
+        XCTAssertNil(LegacyAdapter.experience(from: LegacyState(raw: [:])))
+    }
+
+    func testTheRackDecidesWhatTheCalculatorCanMake() {
+        let sparse = PlateInventory(plates: [20, 10], barKg: 20)
+        let solution = PlateMath.solve(target: 55, bar: sparse.barKg, plates: sparse.plates)
+        XCTAssertEqual(solution.total, 60, "20 kg steps, so 55 is not on the menu")
+        XCTAssertEqual(sparse.smallestJump, 20)
+    }
+
     // MARK: Storage
 
     func testTheNewOperationsSurviveBeingStoredOnTheDevice() throws {
@@ -241,6 +280,8 @@ final class SharedKeysMergeTests: XCTestCase {
             StateChange(.setTarget(field: "calories", value: 2300), createdAt: now),
             StateChange(.setProgram(mode: "science", sciencePlanID: "upper-lower"), createdAt: now),
             StateChange(.setProgram(mode: "personal", sciencePlanID: nil), createdAt: now),
+            StateChange(.setExperience("block"), createdAt: now),
+            StateChange(.setEquipment(plates: [20, 10], barKg: 15), createdAt: now),
         ]
         let data = try StateChange.encoder.encode(changes)
         XCTAssertEqual(try StateChange.decoder.decode([StateChange].self, from: data), changes)

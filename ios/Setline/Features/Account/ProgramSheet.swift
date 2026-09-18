@@ -63,6 +63,8 @@ struct ProgramSheet: View {
                 .disabled(selection.id == current.id)
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.bottom, SL.Space.s3)
+                .frame(maxWidth: .infinity)
+                .background(SL.Surface.ground)
         }
         .slRespondsToTextSize()
     }

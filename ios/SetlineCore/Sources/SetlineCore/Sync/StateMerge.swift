@@ -115,6 +115,15 @@ public enum StateMerge {
             raw["planMode"] = .string(mode)
             if let sciencePlanID { raw["sciencePlanId"] = .string(sciencePlanID) }
 
+        case .setExperience(let level):
+            // One key. The web app does not read it yet and must not lose it:
+            // a key nobody mentions is a key nobody deletes.
+            raw["experienceLevel"] = .string(level)
+
+        case .setEquipment(let plates, let barKg):
+            raw["plates"] = .array(plates.map { .number($0) })
+            raw["barWeightKg"] = .number(barKg)
+
         case .setTarget(let field, let value):
             // One field. Targets the app does not model stay as they are.
             var targets = raw["targets"]?.objectValue ?? [:]

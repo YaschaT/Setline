@@ -1,0 +1,142 @@
+import SwiftUI
+import SetlineCore
+
+/// The frame every intake step sits in (artboards 03–06).
+///
+/// Step row, a 2px track that fills a quarter at a time, the question, and one
+/// commit pill. Every step can be skipped, and skipping the lot leaves the
+/// account on the plan it already has.
+struct IntakeStep<Content: View>: View {
+    let step: Int
+    let total: Int
+    let title: String
+    let subtitle: String
+    /// What this answer produces, restated. Load-bearing copy, not decoration.
+    let consequence: String
+    let commit: String
+    let onSkip: () -> Void
+    let onCommit: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("\(step)/\(total)")
+                    .font(.system(size: SL.TypeSize.meta, weight: SL.Weight.semibold, design: .monospaced))
+                    .foregroundStyle(SL.Ink.tertiary)
+                Spacer()
+                Button { onSkip() } label: {
+                    Text("Overslaan")
+                        .slBody(SL.Weight.medium)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .slHitTarget()
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, SL.Space.gutterEntry)
+            .padding(.top, SL.Space.s3)
+
+            track
+                .padding(.horizontal, SL.Space.gutterEntry)
+                .padding(.top, SL.Space.s2)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .slDisplay()
+                        .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.primary)
+
+                    Text(subtitle)
+                        .slBody()
+                        .lineSpacing(SL.TypeSize.body * 0.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .padding(.top, 10)
+
+                    content().padding(.top, SL.Space.s6)
+
+                    Text(consequence)
+                        .slBody()
+                        .lineSpacing(SL.TypeSize.body * 0.45)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .padding(.top, SL.Space.s6)
+                }
+                .padding(.horizontal, SL.Space.gutterEntry)
+                .padding(.top, 36)
+                .padding(.bottom, SL.Space.s8)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(SL.Surface.ground.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            Button { onCommit() } label: { Text(commit) }
+                .buttonStyle(SLPrimaryButtonStyle())
+                .padding(.horizontal, SL.Space.gutterEntry)
+                .padding(.bottom, SL.Space.s3)
+                .frame(maxWidth: .infinity)
+                .background(SL.Surface.ground)
+        }
+        .slRespondsToTextSize()
+    }
+
+    private var track: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(SL.Surface.hairline)
+                Capsule()
+                    .fill(SL.Signal.action)
+                    .frame(width: proxy.size.width * CGFloat(step) / CGFloat(total))
+            }
+        }
+        .frame(height: 2)
+        .accessibilityElement()
+        .accessibilityLabel("Stap \(step) van \(total)")
+    }
+}
+
+/// The option card artboards 04 and 05 share: a title, what it means, and a
+/// filled circle on the trailing edge when it is the one chosen.
+struct IntakeOption: View {
+    let title: String
+    let detail: String
+    let selected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: SL.Space.s4) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).slLead().foregroundStyle(SL.Ink.primary)
+                    Text(detail)
+                        .slMeta()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(selected ? SL.Ink.secondary : SL.Ink.tertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Circle()
+                    .fill(selected ? SL.Ink.primary : .clear)
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().strokeBorder(selected ? .clear : SL.Surface.hairlineStrong, lineWidth: 1))
+            }
+            .padding(.vertical, SL.Space.s4)
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                    .fill(selected ? SL.Surface.raised2 : SL.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                    .strokeBorder(selected ? SL.Surface.selection : SL.Surface.hairline, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityLabel("\(title), \(detail)")
+    }
+}

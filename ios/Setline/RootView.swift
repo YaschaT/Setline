@@ -11,8 +11,18 @@ struct RootView: View {
     /// Which way the reader came in from the cold open, and therefore which
     /// side of the one identity screen opens.
     @State private var entry: Entry?
+    @State private var onboarded = false
 
     private enum Entry { case beginning, returning }
+
+    /// `-SetlineOnboarding` walks the new-account flow without making one.
+    private var showsOnboarding: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-SetlineOnboarding") && !onboarded
+        #else
+        false
+        #endif
+    }
 
     /// `-SetlineColdOpen` shows the way in without signing anybody out.
     private var showsColdOpen: Bool {
@@ -32,7 +42,12 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if app.isSignedIn, !showsColdOpen {
+            if app.isSignedIn, app.isNewAccount || showsOnboarding {
+                OnboardingFlow(onFinish: {
+                    onboarded = true
+                    app.finishOnboarding()
+                })
+            } else if app.isSignedIn, !showsColdOpen {
                 signedIn
             } else if let entry {
                 SignInView(registering: entry == .beginning)

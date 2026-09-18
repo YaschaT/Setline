@@ -1,0 +1,68 @@
+{
+  "name": "Intake answers the web app does not read still survive its saves",
+  "why": "Experience level and the plate inventory are iOS's to write and the web app has no field for either. A client never deletes a key it does not know about, so both have to come back untouched after the web app saves its own thirteen keys over the top.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-18T10:00:00.000Z",
+      "remote": {
+        "planMode": "personal",
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 }
+      },
+      "ops": [
+        { "kind": "setExperience", "createdAt": "2026-09-18T09:59:00Z", "experience": "week" },
+        {
+          "kind": "setEquipment",
+          "createdAt": "2026-09-18T09:59:30Z",
+          "plates": [20, 15, 10, 5, 2.5, 1.25],
+          "barKg": 20
+        }
+      ],
+      "expected": {
+        "planMode": "personal",
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 },
+        "experienceLevel": "week",
+        "plates": [20, 15, 10, 5, 2.5, 1.25],
+        "barWeightKg": 20
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-18T10:05:00.000Z",
+      "ancestry": {
+        "planMode": "personal",
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 }
+      },
+      "snapshot": {
+        "planMode": "personal",
+        "targets": { "calories": 2400, "protein": 175, "carbs": 240, "fat": 70 }
+      },
+      "expected": {
+        "planMode": "personal",
+        "targets": { "calories": 2400, "protein": 175, "carbs": 240, "fat": 70 },
+        "experienceLevel": "week",
+        "plates": [20, 15, 10, 5, 2.5, 1.25],
+        "barWeightKg": 20
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-18T10:10:00.000Z",
+      "ops": [
+        {
+          "kind": "setEquipment",
+          "createdAt": "2026-09-18T10:09:00Z",
+          "plates": [20, 15, 10, 5],
+          "barKg": 15
+        }
+      ],
+      "expected": {
+        "planMode": "personal",
+        "targets": { "calories": 2400, "protein": 175, "carbs": 240, "fat": 70 },
+        "experienceLevel": "week",
+        "plates": [20, 15, 10, 5],
+        "barWeightKg": 15
+      }
+    }
+  ]
+}

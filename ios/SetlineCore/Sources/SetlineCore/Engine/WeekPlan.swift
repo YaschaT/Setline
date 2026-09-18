@@ -198,7 +198,9 @@ public struct WeekDraft: Equatable, Sendable {
         assign(displaced, to: source)
     }
 
-    private mutating func assign(_ canonical: String, to key: String) {
+    /// Puts a day on a date, writing it down only where it differs from the
+    /// plan's own shape.
+    public mutating func assign(_ canonical: String, to key: String) {
         guard let index = keys.firstIndex(of: key) else { return }
         if canonical == WeekPlan.defaultDay(for: dates[index], calendar: calendar) {
             overrides.removeValue(forKey: key)
