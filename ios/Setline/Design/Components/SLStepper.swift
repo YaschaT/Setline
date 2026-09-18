@@ -20,6 +20,9 @@ struct SLStepper: View {
     /// Set when no plate can produce the next increment:
     /// "GEWICHT · UIT (geen schijven)".
     var disabledNote: String?
+    /// Tapping the value itself, where the design gives it a destination —
+    /// the weight field opens the plate calculator (artboard 14).
+    var onTapValue: (() -> Void)?
     let onDecrement: () -> Void
     let onIncrement: () -> Void
 
@@ -30,6 +33,23 @@ struct SLStepper: View {
     private var buttonRadius: CGFloat { level == .onRaised ? SL.Radius.md : SL.Radius.sm }
     private var buttonFill: Color { level == .onRaised ? SL.Surface.raised : SL.Surface.raised2 }
     private var valueSize: CGFloat { level == .onRaised ? SL.TypeSize.display : SL.TypeSize.title }
+
+    @ViewBuilder
+    private var value: some View {
+        let text = Text(display)
+            .font(.sl(valueSize, SL.Weight.semibold))
+            .monospacedDigit()
+            .foregroundStyle(disabledNote == nil ? SL.Ink.primary : SL.Ink.tertiary)
+
+        if let onTapValue {
+            Button(action: onTapValue) { text.underline(true, pattern: .dot) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(label) \(display)")
+                .accessibilityHint("Dubbeltik voor de schijvencalculator")
+        } else {
+            text
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,10 +63,7 @@ struct SLStepper: View {
                 // between two buttons it truncated to "1…" — the one value this
                 // control exists to show. It is never shrunk or cut; the
                 // controls move to their own row instead.
-                Text(display)
-                    .font(.sl(valueSize, SL.Weight.semibold))
-                    .slNumerals()
-                    .foregroundStyle(disabledNote == nil ? SL.Ink.primary : SL.Ink.tertiary)
+                value
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 6)
@@ -59,10 +76,7 @@ struct SLStepper: View {
                 HStack(spacing: 0) {
                     control("−", action: onDecrement)
                     Spacer(minLength: 0)
-                    Text(display)
-                        .font(.sl(valueSize, SL.Weight.semibold))
-                        .slNumerals()
-                        .foregroundStyle(disabledNote == nil ? SL.Ink.primary : SL.Ink.tertiary)
+                    value
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Spacer(minLength: 0)

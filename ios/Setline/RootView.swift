@@ -84,8 +84,6 @@ struct RootView: View {
                     PhotosHomeView()
                 case .account:
                     AccountView()
-                default:
-                    PlaceholderView(tab: tab)
                 }
             }
             .padding(.bottom, SL.Metric.tabBarHeight + SL.Space.tabInset)

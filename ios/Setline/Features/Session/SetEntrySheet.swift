@@ -27,6 +27,7 @@ struct SetEntrySheet: View {
     @State private var partialReps: Int?
     @State private var showsKeypad = false
     @State private var keypadText = ""
+    @State private var showsPlates = false
     @State private var confirmsRemoval = false
     @FocusState private var keypadFocused: Bool
 
@@ -160,6 +161,19 @@ struct SetEntrySheet: View {
         .presentationDetents(isAccessibilityLayout ? [.large] : [.height(sheetHeight)])
         .presentationBackground(SL.Surface.raised)
         .presentationDragIndicator(.hidden)
+        .sheet(isPresented: $showsPlates) {
+            PlateSheet(
+                exercise: slot.exercise.name,
+                setNumber: setIndex + 1,
+                reps: reps,
+                target: weight,
+                onChoose: { load in
+                    weight = load
+                    showsPlates = false
+                },
+                onClose: { showsPlates = false }
+            )
+        }
         .alert("Set \(setIndex + 1) verwijderen?", isPresented: $confirmsRemoval) {
             Button("Annuleer", role: .cancel) {}
             Button("Verwijder", role: .destructive) { onRemove?() }
@@ -175,6 +189,7 @@ struct SetEntrySheet: View {
         SLStepper(
             label: "Gewicht",
             display: display.number(weight),
+            onTapValue: { showsPlates = true },
             onDecrement: { weight = max(0, weight - increment) },
             onIncrement: { weight += increment }
         )

@@ -67,6 +67,22 @@ records when, so a slower client cannot bring it back. Unknown keys and unknown
 fields are always carried through; neither app is the authority on what the
 other stores.
 
+### Not built for this release
+
+- **Onboarding beyond the cold open.** Artboards 02a, 02b and the four intake
+  steps are not here. Two of intake's four answers have nowhere to live —
+  `user_state` stores no experience level and no plate inventory — so building
+  the screens would mean inventing storage the web app does not read.
+- **Passkeys, Apple and Google.** Artboard 02 asks for all three; none is
+  configured against this Supabase project, and a button that cannot work is
+  worse than an honest e-mail field. Sign-in is e-mail and password.
+- **Recovery (18), the free-session counter and paywall (25a/25b), and the
+  ≥1024 layouts (26/27).** Recovery needs HealthKit and only appears when the
+  numbers justify a proposal; the commercial screens need StoreKit products;
+  the wide layouts are iPad.
+
+All of these are release gaps for a public V1, not defects in what is here.
+
 ### Known technical debt
 
 - **Device clocks decide deletions and resets.** A deletion record

@@ -1,0 +1,159 @@
+import SwiftUI
+import SetlineCore
+
+/// Artboard 14 · the plate calculator.
+///
+/// Reached from the weight field, and it answers one question: what goes on
+/// each side. Where the asked-for weight is not something these plates can
+/// make, it says the closest they can — being right is the entire point of the
+/// screen.
+struct PlateSheet: View {
+    let exercise: String
+    let setNumber: Int
+    let reps: Int
+    let target: Decimal
+    let onChoose: (Decimal) -> Void
+    let onClose: () -> Void
+
+    private let display = NumberDisplay.dutch
+
+    private var solution: PlateMath.Solution { PlateMath.solve(target: target) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Capsule()
+                .fill(SL.Surface.hairlineStrong)
+                .frame(width: 36, height: 5)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, SL.Space.s4)
+
+            Text(exercise).slTitle().foregroundStyle(SL.Ink.primary)
+            Text("Set \(setNumber) · \(display.kg(target)) × \(reps)")
+                .slBody().slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.top, SL.Space.s1)
+
+            HStack(alignment: .firstTextBaseline) {
+                SLEyebrow(text: "SCHIJVEN PER KANT")
+                Spacer()
+                Text("stang \(display.kg(PlateMath.defaultBar))")
+                    .slMeta().slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .padding(.top, SL.Space.s5)
+
+            perSide.padding(.top, SL.Space.s2)
+            stack.padding(.top, SL.Space.s4)
+            nearby.padding(.top, SL.Space.s3)
+
+            Text(footnote)
+                .slMeta()
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.tertiary)
+                .padding(.top, SL.Space.s4)
+
+            Button { onClose() } label: { Text("Sluiten") }
+                .buttonStyle(SLOutlineButtonStyle())
+                .padding(.top, SL.Space.s4)
+        }
+        .padding(.horizontal, SL.Space.gutterSession)
+        .padding(.top, SL.Space.s4)
+        .padding(.bottom, SL.Space.s6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SL.Surface.raised)
+        .presentationDetents([.height(520), .large])
+        .presentationBackground(SL.Surface.raised)
+        .presentationDragIndicator(.hidden)
+        .slRespondsToTextSize()
+    }
+
+    private var perSide: some View {
+        (Text(solution.perSide.isEmpty ? "Geen schijven" : solution.perSide.map(display.number).joined(separator: " · "))
+            .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
+            .foregroundStyle(SL.Ink.primary)
+         + Text("  = \(display.kg(solution.total)) totaal")
+            .font(.sl(SL.TypeSize.lead, SL.Weight.medium))
+            .foregroundStyle(SL.Ink.tertiary))
+            .slNumerals()
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel(
+                solution.perSide.isEmpty
+                    ? "Geen schijven, \(display.kg(solution.total)) totaal"
+                    : "Per kant \(solution.perSide.map(display.kg).joined(separator: ", ")), \(display.kg(solution.total)) totaal"
+            )
+    }
+
+    /// The loaded bar, drawn from the answer rather than decorating it.
+    private var stack: some View {
+        HStack(spacing: 4) {
+            sleeve(width: 52)
+            ForEach(Array(solution.perSide.reversed().enumerated()), id: \.offset) { _, plate in
+                plateBar(plate)
+            }
+            sleeve(width: 26)
+            Capsule().fill(SL.Ink.tertiary).frame(width: 10, height: 30)
+            sleeve(width: 26)
+            ForEach(Array(solution.perSide.enumerated()), id: \.offset) { _, plate in
+                plateBar(plate)
+            }
+            sleeve(width: 52)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(SL.Space.s4)
+        .background(
+            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                .fill(SL.Surface.raised2)
+        )
+        .accessibilityHidden(true)
+    }
+
+    private func sleeve(width: CGFloat) -> some View {
+        Capsule().fill(SL.Ink.tertiary).frame(width: width, height: 6)
+    }
+
+    private func plateBar(_ plate: Decimal) -> some View {
+        let heaviest = (PlateMath.defaultPlates.max() ?? 20) as NSDecimalNumber
+        let height = 28 + 60 * CGFloat(truncating: plate as NSDecimalNumber) / CGFloat(truncating: heaviest)
+        return Capsule()
+            .fill(SL.Signal.action)
+            .frame(width: 14, height: height)
+    }
+
+    private var nearby: some View {
+        HStack(spacing: 6) {
+            ForEach(PlateMath.nearby(target: target), id: \.self) { load in
+                let selected = load == solution.total
+                Button { onChoose(load) } label: {
+                    Text(display.number(load))
+                        .slBody(SL.Weight.semibold)
+                        .slNumerals()
+                        .foregroundStyle(selected ? SL.Ink.primary : SL.Ink.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .background(
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                                .fill(SL.Surface.raised2)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                                .strokeBorder(selected ? SL.Surface.selection : .clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(display.kg(load))
+                .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+            }
+        }
+    }
+
+    private var footnote: String {
+        var parts: [String] = []
+        if let unused = solution.unused { parts.append("\(display.kg(unused)) niet nodig") }
+        parts.append(
+            solution.isExact
+                ? "haalbaar met jouw schijven"
+                : "dichtste haalbare gewicht met jouw schijven"
+        )
+        return parts.joined(separator: " · ")
+    }
+}
