@@ -32,6 +32,7 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case setProgram(mode: String, sciencePlanID: String?)
         case setExperience(String)
         case setEquipment(plates: [Decimal], barKg: Decimal)
+        case setDeload(JSONValue)
     }
 
     /// Identifies the change itself, so a sync can clear exactly the changes
@@ -64,14 +65,14 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
-        case scheduleKey, dayID, entry, field, value, mode, sciencePlanID, experience, plates, barKg
+        case scheduleKey, dayID, entry, field, value, mode, sciencePlanID, experience, plates, barKg, deload
     }
 
     private enum KindName: String, Codable {
         case upsertSession, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry, setTarget
-        case setProgram, setExperience, setEquipment
+        case setProgram, setExperience, setEquipment, setDeload
     }
 
     public init(from decoder: Decoder) throws {
@@ -123,6 +124,8 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
                 plates: try container.decode([Decimal].self, forKey: .plates),
                 barKg: try container.decode(Decimal.self, forKey: .barKg)
             )
+        case .setDeload:
+            kind = .setDeload(try container.decodeIfPresent(JSONValue.self, forKey: .deload) ?? .null)
         }
     }
 
@@ -183,6 +186,9 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             try container.encode(KindName.setEquipment, forKey: .kind)
             try container.encode(plates, forKey: .plates)
             try container.encode(barKg, forKey: .barKg)
+        case .setDeload(let deload):
+            try container.encode(KindName.setDeload, forKey: .kind)
+            try container.encode(deload, forKey: .deload)
         }
     }
 

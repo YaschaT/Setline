@@ -92,6 +92,15 @@ public struct PlannedExercise: Codable, Hashable, Identifiable, Sendable {
     }
 
     public var targetSets: Int { sets.count }
+
+    /// The same exercise with fewer sets, for a lighter week. Keeps the first
+    /// `count` prescriptions, so the heaviest work is what survives.
+    public func lightened(setsTo count: Int) -> PlannedExercise {
+        guard count > 0, count < sets.count else { return self }
+        var copy = self
+        copy.sets = Array(sets.prefix(count))
+        return copy
+    }
     /// The rep target used for double progression: the top of each set's range.
     public var repTargets: [Int] { sets.map(\.repRange.upperBound) }
 }

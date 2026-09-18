@@ -187,6 +187,31 @@ public enum LegacyAdapter {
         return PlateInventory(plates: plates, barKg: state["barWeightKg"]?.decimalValue ?? PlateMath.defaultBar)
     }
 
+    /// A lighter week the account accepted. iOS-namespaced: the web app does
+    /// not read it and carries it through untouched.
+    public static let deloadKey = "iosDeload"
+
+    public static func deload(from state: LegacyState) -> Deload? {
+        guard let object = state[deloadKey]?.objectValue,
+              let started = object["startedAt"]?.stringValue.flatMap(isoDate)
+        else { return nil }
+        return Deload(
+            startedAt: started,
+            days: object["days"]?.intValue ?? 5,
+            setReduction: object["setReduction"]?.doubleValue ?? 0.4,
+            rirIncrease: object["rirIncrease"]?.intValue ?? 2
+        )
+    }
+
+    public static func json(_ deload: Deload) -> JSONValue {
+        .object([
+            "startedAt": .string(isoString(deload.startedAt)),
+            "days": .number(Decimal(deload.days)),
+            "setReduction": .number(Decimal(deload.setReduction)),
+            "rirIncrease": .number(Decimal(deload.rirIncrease)),
+        ])
+    }
+
     public static func planMode(from state: LegacyState) -> (mode: String, sciencePlanID: String) {
         (
             state["planMode"]?.stringValue ?? "personal",

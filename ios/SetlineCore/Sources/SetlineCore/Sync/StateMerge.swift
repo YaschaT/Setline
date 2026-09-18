@@ -124,6 +124,10 @@ public enum StateMerge {
             raw["plates"] = .array(plates.map { .number($0) })
             raw["barWeightKg"] = .number(barKg)
 
+        case .setDeload(let deload):
+            // A lighter week, or `null` to end one early. iOS's own key.
+            raw[LegacyAdapter.deloadKey] = deload
+
         case .setTarget(let field, let value):
             // One field. Targets the app does not model stay as they are.
             var targets = raw["targets"]?.objectValue ?? [:]

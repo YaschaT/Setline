@@ -83,9 +83,13 @@ final class SessionRunner {
         let historyFor: @MainActor (PlannedExercise) -> ExerciseHistory = { app.history(for: $0) }
         self.exerciseNamed = exerciseNamed
         self.historyFor = historyFor
+        // A lighter week cuts sets, never exercises, so progression state
+        // survives it (TRAINING_LOGIC §11.2).
+        let deload = app.activeDeload
         self.slots = day.exercises.enumerated().map { index, planned in
+            let prescribed = deload.map { planned.lightened(setsTo: $0.sets(from: planned.targetSets)) } ?? planned
             var slot = Self.resolve(
-                SessionSlot(position: index, plan: planned, exerciseName: exerciseNamed(planned.exerciseID).name),
+                SessionSlot(position: index, plan: prescribed, exerciseName: exerciseNamed(prescribed.exerciseID).name),
                 exerciseNamed: exerciseNamed,
                 historyFor: historyFor
             )

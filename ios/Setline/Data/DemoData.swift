@@ -144,6 +144,43 @@ enum DemoData {
             "updatedAt": .string(LegacyAdapter.isoString(Date())),
         ]
 
+        // `-SetlineFatigued` seeds two recent push sessions in which reps fall
+        // at the same load on two exercises and RIR falls on a third — the two
+        // signals artboard 18R proposes on.
+        if ProcessInfo.processInfo.arguments.contains("-SetlineFatigued") {
+            let tired: [JSONValue] = [(2, 5, 11, 0), (5, 6, 12, 2)].map { offset, bench, fly, rir in
+                let date = calendar.date(byAdding: .day, value: -offset, to: Date())!
+                func result(_ id: String, _ load: String, _ reps: Int, _ rir: Int?) -> JSONValue {
+                    var set: [String: JSONValue] = [
+                        "weight": .string(load),
+                        "reps": .string("\(reps)"),
+                        "pausedReps": .string(""),
+                        "pauseSeconds": .string(""),
+                        "pauseEnabled": .bool(false),
+                    ]
+                    if let rir { set["rir"] = .number(Decimal(rir)) }
+                    return .object([
+                        "exerciseId": .string(id),
+                        "name": .string(ExerciseCatalog.exercise(id)?.name ?? id),
+                        "sets": .array([.object(set)]),
+                    ])
+                }
+                return .object([
+                    "id": .string("demo-tired-\(offset)"),
+                    "date": .string(LegacyAdapter.isoString(date)),
+                    "dayId": .string("push"),
+                    "dayLabel": .string("Push"),
+                    "completion": .number(100),
+                    "results": .array([
+                        result("flat-bench", "100", bench, nil),
+                        result("pec-fly", "55", fly, nil),
+                        result("pressdown", "35", 12, rir),
+                    ]),
+                ])
+            }
+            raw["sessions"] = .array(tired + sessions)
+        }
+
         // `-SetlinePausedYesterday` seeds a paused Pull session dated
         // yesterday, so the across-a-date-boundary resume can be exercised
         // without touching the device clock.

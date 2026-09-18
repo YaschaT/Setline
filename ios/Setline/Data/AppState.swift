@@ -61,6 +61,7 @@ final class AppState {
     private(set) var targets: NutritionTargets?
     private(set) var plateInventory: PlateInventory = .default
     private(set) var experience: Experience?
+    private(set) var deload: Deload?
 
     let display = NumberDisplay.dutch
     private let client: SupabaseClient
@@ -219,6 +220,7 @@ final class AppState {
         targets = nil
         plateInventory = .default
         experience = nil
+        deload = nil
         activeSession = nil
         hiddenWarmups = []
         painFlags = []
@@ -358,6 +360,7 @@ final class AppState {
         targets = LegacyAdapter.targets(from: next)
         plateInventory = LegacyAdapter.plateInventory(from: next)
         experience = LegacyAdapter.experience(from: next)
+        deload = LegacyAdapter.deload(from: next)
         plan = applyReplacements(to: plan)
     }
 
@@ -474,6 +477,40 @@ final class AppState {
     func nutrition(on date: Date = Date()) -> NutritionDay {
         NutritionDay.make(entries: nutritionEntries, on: date, targets: targets)
     }
+
+    // MARK: - Fatigue
+
+    /// What the last week of logged sets says (TRAINING_LOGIC §11). Read fresh
+    /// rather than stored: it is a view of the sessions, not a fact about them.
+    var fatigue: Fatigue.Reading {
+        Fatigue.read(sessions: sessions, display: display)
+    }
+
+    /// The lighter week now running, if one is.
+    var activeDeload: Deload? {
+        deload.flatMap { $0.isActive(on: Date()) ? $0 : nil }
+    }
+
+    /// Shown only when two signals agree, nothing is already running, and the
+    /// last proposal was not waved away this week.
+    var proposesDeload: Bool {
+        guard activeDeload == nil, fatigue.proposes else { return false }
+        guard let dismissed = UserDefaults.standard.object(forKey: Self.deloadDismissedKey) as? Date else { return true }
+        return (Calendar.current.dateComponents([.day], from: dismissed, to: Date()).day ?? .max) >= Fatigue.windowDays
+    }
+
+    func applyDeload() async {
+        let proposal = Deload(startedAt: Date())
+        await record([StateChange(.setDeload(LegacyAdapter.json(proposal)))])
+    }
+
+    /// Waving it away is remembered on the device for a week; the reading that
+    /// produced it is not changed by being ignored.
+    func dismissDeload() {
+        UserDefaults.standard.set(Date(), forKey: Self.deloadDismissedKey)
+    }
+
+    private static let deloadDismissedKey = "setline.deload.dismissed"
 
     /// Which program the account is running, which is what scopes a schedule
     /// override: a date under a plan you are not on is not your date.

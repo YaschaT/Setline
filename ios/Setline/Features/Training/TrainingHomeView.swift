@@ -22,7 +22,19 @@ struct TrainingHomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if isOffline { reassurance.padding(.bottom, SL.Space.s5) }
+                    if app.proposesDeload {
+                        DeloadCard(
+                            reading: app.fatigue,
+                            proposal: Deload(startedAt: Date()),
+                            onApply: { Task { await app.applyDeload() } },
+                            onDismiss: { withAnimation(.easeOut(duration: SL.Motion.base)) { app.dismissDeload() } }
+                        )
+                        .padding(.bottom, SL.Space.s5)
+                    }
                     todayCard
+                        // 18R: with a proposal on screen the session card steps
+                        // back, so the proposal is the one loud thing.
+                        .opacity(app.proposesDeload ? 0.6 : 1)
                     weekStrip.padding(.top, SL.Space.s8)
                     if let insight { insightCard(insight).padding(.top, SL.Space.s8) }
                     planFooter.padding(.top, SL.Space.s8)
