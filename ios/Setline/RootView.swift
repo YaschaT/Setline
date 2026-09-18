@@ -50,7 +50,7 @@ struct RootView: View {
             } else if app.isSignedIn, !showsColdOpen {
                 signedIn
             } else if let entry {
-                SignInView(registering: entry == .beginning)
+                SignInView(registering: entry == .beginning, onBack: { self.entry = nil })
             } else {
                 ColdOpenView(
                     onBegin: { entry = .beginning },

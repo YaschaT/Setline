@@ -17,9 +17,12 @@ struct SignInView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var isRegistering: Bool
+    /// Review 01's `Terug`: back to the cold open, or out of signing in again.
+    private let onBack: (() -> Void)?
 
-    init(registering: Bool = false) {
+    init(registering: Bool = false, onBack: (() -> Void)? = nil) {
         _isRegistering = State(initialValue: registering)
+        self.onBack = onBack
     }
     @FocusState private var focused: Field?
 
@@ -31,6 +34,18 @@ struct SignInView: View {
             SL.Surface.ground.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
+                if let onBack {
+                    Button(action: onBack) {
+                        Text("Terug")
+                            .slBody(SL.Weight.medium)
+                            .foregroundStyle(SL.Ink.secondary)
+                            .frame(minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, SL.Space.s6)
+                }
+
                 Text(isRegistering ? "Registreren" : "Aanmelden")
                     .slDisplay()
                     .foregroundStyle(SL.Ink.primary)
@@ -108,7 +123,9 @@ struct SignInView: View {
                 .padding(.top, SL.Space.s2)
             }
             .padding(.horizontal, SL.Space.gutterEntry)
-            .padding(.top, SL.Space.s10)
+            // 12 to `Terug`, 40 from it to the title — the same 40 when there
+            // is nothing to go back to.
+            .padding(.top, onBack == nil ? SL.Space.s10 : 0)
             // The artboard's bottom block sits 98 from the frame bottom, which
             // already clears the home indicator — so the safe-area inset is
             // subtracted rather than added to it.

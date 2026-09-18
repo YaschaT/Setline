@@ -313,7 +313,7 @@ struct AccountView: View {
     /// Signing in again after the session expired. The account keeps its local
     /// copy and everything still queued, so nothing has to be redone.
     private var reauthentication: some View {
-        SignInView()
+        SignInView(onBack: { reauthenticating = false })
             .onChange(of: app.sync) { _, state in
                 if case .sessionExpired = state { return }
                 reauthenticating = false
