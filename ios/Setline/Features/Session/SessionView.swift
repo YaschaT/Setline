@@ -147,6 +147,7 @@ struct SessionView: View {
                 hasLoggedSets: runner.hasLoggedSets(slotIndex: runner.currentIndex),
                 hasOpenSets: !runner.current.isComplete,
                 sessionExerciseIDs: runner.sessionExerciseIDs,
+                dayLabel: runner.day.short,
                 onOutcome: { handle($0) },
                 onRecordPain: { flag in Task { await app.record(pain: flag) } },
                 onClose: { showsSwap = false }

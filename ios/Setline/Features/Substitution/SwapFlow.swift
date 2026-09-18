@@ -33,6 +33,9 @@ enum SwapStep: Equatable {
     case alternatives
     case browse
     case custom
+    /// Choosing what goes into the program, before 15Rb asks how far.
+    case replacePick
+    /// 15Rb, with the substitute chosen.
     case scope(String)
     /// 31a: where and when, on one page. Both optional.
     case painQuestions
@@ -43,7 +46,7 @@ enum SwapStep: Equatable {
     var isPainPage: Bool {
         switch self {
         case .painQuestions, .painOptions: return true
-        case .alternatives, .browse, .custom, .scope: return false
+        case .alternatives, .browse, .custom, .replacePick, .scope: return false
         }
     }
 
@@ -53,6 +56,7 @@ enum SwapStep: Equatable {
         case .alternatives: return "alternatives"
         case .browse: return "browse"
         case .custom: return "custom"
+        case .replacePick: return "replace-pick"
         case .scope(let id): return "scope-\(id)"
         case .painQuestions: return "pain-questions"
         case .painOptions: return "pain-options"
@@ -76,6 +80,8 @@ struct SwapSheet: View {
     let hasOpenSets: Bool
     /// Exercises already in today's session, never offered as substitutes.
     let sessionExerciseIDs: Set<String>
+    /// Today's training day, as 15Rb names it ("Push").
+    let dayLabel: String
     let onOutcome: (SwapOutcome) -> Void
     let onRecordPain: (PainFlag) -> Void
     let onClose: () -> Void
@@ -92,11 +98,10 @@ struct SwapSheet: View {
     @State private var customName = ""
     @State private var customEquipment: Equipment = .machineSelectorised
     @State private var customIsCompound = false
+    /// 15Rb opens on the narrowest reach. A program change still waits for an
+    /// explicit yes — `Vervangen` — because it is the one action here that
+    /// outlives the session (TRAINING_LOGIC §12.4).
     @State private var scope: ReplacementScope = .thisDay
-    /// A program change waits for an explicit yes. It is the one action here
-    /// that outlives the session, and `Alle keren` reaches into plans the
-    /// user has not opened yet.
-    @State private var pendingReplacement: Exercise?
     @FocusState private var nameFocused: Bool
 
     private var alternatives: [RankedAlternative] {
@@ -111,6 +116,7 @@ struct SwapSheet: View {
                 case .alternatives: alternativesStep
                 case .browse: browseStep
                 case .custom: customStep
+                case .replacePick: replacePickStep
                 case .scope(let id): scopeStep(substituteID: id)
                 case .painQuestions: painQuestionsStep
                 case .painOptions(let region, let timing): painOptionsStep(region, timing)
@@ -147,28 +153,6 @@ struct SwapSheet: View {
             guard newStep == .custom else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { nameFocused = true }
         }
-        .alert(
-            "Vervang \(exercise.name.lowercased()) door \(pendingReplacement?.name.lowercased() ?? "")?",
-            isPresented: Binding(
-                get: { pendingReplacement != nil },
-                set: { if !$0 { pendingReplacement = nil } }
-            )
-        ) {
-            Button("Annuleer", role: .cancel) { pendingReplacement = nil }
-            Button("Vervang") {
-                guard let exercise = pendingReplacement else { return }
-                pendingReplacement = nil
-                // Close the sheet ourselves rather than relying on the
-                // outcome handler to do it: dismissing an alert and the sheet
-                // underneath it in the same frame can leave the sheet standing
-                // over a session that has already changed.
-                let chosen = scope
-                onClose()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { onOutcome(.replaceInProgram(exercise, chosen)) }
-            }
-        } message: {
-            Text(confirmationMessage)
-        }
     }
 
     /// Fixed for the life of each step. It never changes while a keyboard is
@@ -189,7 +173,8 @@ struct SwapSheet: View {
             return min(value, 720)
         case .browse: return 680
         case .custom: return 520
-        case .scope: return 460
+        case .replacePick: return min(260 + CGFloat(max(alternatives.count, 1)) * 64, 640)
+        case .scope: return 640
         case .painQuestions, .painOptions: return 720
         }
     }
@@ -450,7 +435,7 @@ struct SwapSheet: View {
 
             // Below the hairline on purpose. A permanent program change must
             // never share a surface or a shape with the temporary swap above.
-            secondaryLink("Vervang in schema", muted: true) { step = .scope(exercise.id) }
+            secondaryLink("Vervang in schema", muted: true) { step = .replacePick }
             secondaryLink("Ik voel iets", muted: true) {
                 painRegion = nil
                 painTiming = nil
@@ -619,88 +604,156 @@ struct SwapSheet: View {
 
     // MARK: - 15Rb
 
-    private func scopeStep(substituteID: String) -> some View {
+    /// Choosing what goes into the program. 15Rb opens with the choice
+    /// already made, so this step borrows the list's shape and says plainly
+    /// that it reaches past today.
+    private var replacePickStep: some View {
         VStack(alignment: .leading, spacing: 0) {
             backLink { step = .alternatives }
             Text("Vervang in schema")
                 .slTitle().foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s3)
-            Text("Dit verandert je schema, niet alleen vandaag. Kies eerst een alternatief; daarna vraagt SETLINE hoe ver de vervanging reikt.")
+            Text("Dit verandert je schema, niet alleen vandaag. Kies wat \(exercise.name.lowercased()) vervangt.")
                 .slMeta().foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
 
-            SLEyebrow(text: "Hoe ver reikt dit?").padding(.top, SL.Space.s5).padding(.bottom, SL.Space.s2)
-            VStack(spacing: SL.Space.s2) {
-                ForEach(ReplacementScope.allCases, id: \.self) { option in
-                    scopeRow(option)
-                }
-            }
-
-            if scope == .always {
-                Text("Alle keren verandert ook schema's waar je later naar wisselt.")
-                    .slMeta().foregroundStyle(SL.Signal.attention)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, SL.Space.s3)
-            }
-
-            SLEyebrow(text: "Vervang door").padding(.top, SL.Space.s5).padding(.bottom, SL.Space.s2)
             VStack(spacing: SL.Space.s2) {
                 ForEach(alternatives) { alternative in
-                    Button { pendingReplacement = alternative.exercise } label: {
-                        HStack {
+                    Button {
+                        scope = .thisDay
+                        step = .scope(alternative.exercise.id)
+                    } label: {
+                        fitLayout {
                             Text(alternative.exercise.name).slBody(SL.Weight.medium)
                                 .foregroundStyle(SL.Ink.primary)
-                            Spacer()
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
                             Text(SubstitutionCopy.fit(alternative)).slMeta()
                                 .foregroundStyle(SL.Ink.tertiary)
                         }
                         .padding(SL.Space.s4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .slCard(radius: SL.Radius.md)
+                        .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
                 if alternatives.isEmpty {
                     Text("Geen alternatief om vast in te plannen.")
                         .slBody().foregroundStyle(SL.Ink.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .padding(.top, SL.Space.s5)
         }
     }
 
-    /// A program change can be undone from the session until the workout ends
-    /// — the toast straight after, then the line under the exercise name — so
-    /// the confirmation promises exactly that and no more.
-    private var confirmationMessage: String {
-        let reach: String
-        switch scope {
-        case .thisDay: reach = "Dit verandert deze trainingsdag in je schema."
-        case .thisPlan: reach = "Dit verandert elke plek in dit schema."
-        case .always: reach = "Dit verandert elk schema, ook schema's waar je later naar wisselt."
+    /// Artboard 15Rb. The substitute is chosen; what is left is how far the
+    /// change reaches and the one explicit yes. The reach is TRAINING_LOGIC
+    /// §12.4's — future occurrences of this day, this plan, or everywhere —
+    /// described in this plan's own names.
+    private func scopeStep(substituteID: String) -> some View {
+        let substitute = app.exercise(substituteID)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Vervang door \(substitute.name.lowercased())")
+                .slDisplay()
+                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.primary)
+                .accessibilityAddTraits(.isHeader)
+            Text("Kies waarvoor dit geldt. Je historiek van \(exercise.name.lowercased()) blijft bewaard.")
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.top, 10)
+
+            VStack(spacing: SL.Space.s2) {
+                ForEach(ReplacementScope.allCases, id: \.self) { option in
+                    scopeRow(option)
+                }
+            }
+            .padding(.top, SL.Space.s5)
+
+            Button {
+                // Close the sheet first, then change the session under it.
+                let chosen = scope
+                onClose()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    onOutcome(.replaceInProgram(substitute, chosen))
+                }
+            } label: {
+                Text("Vervangen")
+            }
+            .buttonStyle(SLPrimaryButtonStyle())
+            .padding(.top, SL.Space.s5)
+
+            Button { step = .alternatives } label: {
+                Text("Annuleer")
+                    .slBody(SL.Weight.medium)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: SL.Metric.tertiaryHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, SL.Space.s2)
         }
-        return "\(reach) Vandaag gebruik je de nieuwe oefening meteen. Tot je deze training afrondt, kun je het ongedaan maken."
     }
 
+    /// 15Rb's scope card: radius 20, a 17pt name over a 13pt line. The picked
+    /// one takes raised2, the .28 edge and the filled dot.
     private func scopeRow(_ option: ReplacementScope) -> some View {
-        Button { scope = option } label: {
-            HStack(alignment: .top, spacing: SL.Space.s3) {
-                Image(systemName: scope == option ? "largecircle.fill.circle" : "circle")
-                    .font(.sl(SL.TypeSize.lead, SL.Weight.regular))
-                    .foregroundStyle(scope == option ? SL.Signal.action : SL.Ink.tertiary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(option.label).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                    Text(option.detail).slMeta().foregroundStyle(SL.Ink.secondary)
+        let picked = scope == option
+        return Button { scope = option } label: {
+            HStack(spacing: SL.Space.s3) {
+                VStack(alignment: .leading, spacing: SL.Space.s1) {
+                    Text(option.label).slLead().foregroundStyle(SL.Ink.primary)
+                    Text(scopeDetail(option))
+                        .slMeta()
+                        .foregroundStyle(picked ? SL.Ink.secondary : SL.Ink.tertiary)
+                        .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
+                if picked {
+                    Circle().fill(SL.Ink.primary).frame(width: 22, height: 22)
+                }
             }
-            .padding(SL.Space.s4)
+            .padding(.vertical, SL.Space.s4)
+            .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .slCard(radius: SL.Radius.md)
+            .modifier(OptionSurface(picked: picked))
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(scope == option ? [.isSelected, .isButton] : .isButton)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
+        .accessibilityAddTraits(picked ? [.isSelected, .isButton] : .isButton)
+    }
+
+    /// What each reach covers here, in this plan's own names: "Push, vanaf
+    /// vandaag", "Push en Push B, tot je het plan wijzigt".
+    private func scopeDetail(_ option: ReplacementScope) -> String {
+        switch option {
+        case .thisDay:
+            return "\(dayLabel), vanaf vandaag"
+        case .thisPlan:
+            let days = app.plan
+                .filter { $0.exercises.contains { $0.exerciseID == exercise.id } }
+                .map(\.short)
+            return "\(Self.dutchList(days.isEmpty ? [dayLabel] : days)), tot je het plan wijzigt"
+        case .always:
+            return "Overal waar \(exercise.name.lowercased()) staat, ook in toekomstige plannen"
+        }
+    }
+
+    /// "Push", "Push en Pull", "Push, Pull en Benen".
+    static func dutchList(_ items: [String]) -> String {
+        guard let last = items.last else { return "" }
+        guard items.count > 1 else { return last }
+        return items.dropLast().joined(separator: ", ") + " en " + last
     }
 
     // MARK: - 31a / 31b / 31c
@@ -793,7 +846,7 @@ struct SwapSheet: View {
             .padding(.vertical, SL.Space.s4)
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(TimingSurface(picked: picked))
+            .modifier(OptionSurface(picked: picked))
             .contentShape(RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -801,7 +854,7 @@ struct SwapSheet: View {
         .accessibilityAddTraits(picked ? [.isSelected, .isButton] : .isButton)
     }
 
-    private struct TimingSurface: ViewModifier {
+    private struct OptionSurface: ViewModifier {
         let picked: Bool
         func body(content: Content) -> some View {
             if picked {

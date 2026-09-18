@@ -14,10 +14,13 @@ struct SLUndoToast: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: SL.Space.s3) {
+            // One line stays within the 44pt the undo button sets; a message
+            // that wraps gets room above and below instead of touching the edge.
             Text(message)
                 .slMeta()
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 10)
             Spacer(minLength: SL.Space.s2)
             if let onUndo {
                 Button(action: onUndo) {
