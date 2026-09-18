@@ -19,6 +19,8 @@ struct AccountView: View {
     @State private var exports: [URL] = []
     @State private var confirmSignOut = false
     @State private var reauthenticating = false
+    @State private var planningWeek = false
+    @State private var editingTargets = false
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -47,6 +49,17 @@ struct AccountView: View {
         .task { buildExports() }
         .onChange(of: app.sessions.count) { _, _ in buildExports() }
         .sheet(isPresented: $reauthenticating) { reauthentication }
+        .fullScreenCover(isPresented: $planningWeek) {
+            WeekPlanView(onClose: { planningWeek = false })
+        }
+        .sheet(isPresented: $editingTargets) {
+            TargetsSheet(targets: summary.targets) { changes in
+                editingTargets = false
+                Task { await app.record(changes) }
+            } onClose: {
+                editingTargets = false
+            }
+        }
         .confirmationDialog("Uitloggen?", isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button("Uitloggen", role: .destructive) { app.signOut() }
             Button("Annuleer", role: .cancel) {}
@@ -166,10 +179,12 @@ struct AccountView: View {
         VStack(spacing: 0) {
             row(summary.planName)
             if !summary.trainingDays.isEmpty {
-                row("Trainingsdagen · \(summary.trainingDays.joined(separator: " "))")
+                row("Trainingsdagen · \(summary.trainingDays.joined(separator: " "))") { planningWeek = true }
             }
             if let targets = summary.targets {
-                row("Dagdoelen · \(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g")
+                row("Dagdoelen · \(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g") {
+                    editingTargets = true
+                }
             }
             row("Rusttimer", detail: summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: " · "))
         }
@@ -245,17 +260,27 @@ struct AccountView: View {
 
     /// A plan row: what it says now, and — once there is a destination — the
     /// `Wijzig` that leads there.
-    private func row(_ title: String, detail: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).slBody().foregroundStyle(detail == nil ? SL.Ink.secondary : SL.Ink.primary)
-            if let detail {
-                Text(detail).slMeta().foregroundStyle(SL.Ink.secondary)
+    private func row(_ title: String, detail: String? = nil, change: (() -> Void)? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s4) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).slBody().foregroundStyle(detail == nil ? SL.Ink.secondary : SL.Ink.primary)
+                if let detail {
+                    Text(detail).slMeta().foregroundStyle(SL.Ink.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if change != nil {
+                Text("Wijzig").slBody().foregroundStyle(SL.Ink.tertiary)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, SL.Space.s4)
         .overlay(alignment: .bottom) { SLHairline() }
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(change == nil ? [] : .isButton)
+        .accessibilityHint(change == nil ? "" : "Dubbeltik om te wijzigen")
+        .onTapGesture { change?() }
     }
 
     /// Signing in again after the session expired. The account keeps its local
