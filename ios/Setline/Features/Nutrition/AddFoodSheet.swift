@@ -10,6 +10,7 @@ import SetlineCore
 /// stays editable afterwards, because a database is a starting point and the
 /// packet in your hand is the authority.
 struct AddFoodSheet: View {
+    @Environment(AppState.self) private var app
     let date: Date
     let onLog: (NutritionEntry) -> Void
     let onClose: () -> Void
@@ -194,7 +195,7 @@ struct AddFoodSheet: View {
         searching = true
         searchNote = nil
         Task {
-            let outcome = await search.search(asked)
+            let outcome = await search.search(asked, accessToken: app.session?.accessToken)
             await MainActor.run {
                 searching = false
                 switch outcome {

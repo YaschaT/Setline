@@ -24,3 +24,20 @@ struct SupabaseConfig: Sendable {
         return SupabaseConfig(url: url, anonKey: key)
     }
 }
+
+/// Where the web app lives, which is where the shared product search is.
+///
+/// Missing means the search is simply unavailable and says so — the app never
+/// invents a second search of its own to fill the gap.
+struct WebAppConfig: Sendable {
+    let url: URL
+
+    static func fromBundle(_ bundle: Bundle = .main) -> WebAppConfig? {
+        guard
+            let raw = bundle.object(forInfoDictionaryKey: "SETLINE_WEB_URL") as? String,
+            !raw.isEmpty, !raw.hasPrefix("$("),
+            let url = URL(string: raw.hasPrefix("http") ? raw : "https://\(raw)")
+        else { return nil }
+        return WebAppConfig(url: url)
+    }
+}

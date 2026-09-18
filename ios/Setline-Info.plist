@@ -49,5 +49,7 @@
 	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SETLINE_WEB_URL</key>
+	<string>$(SETLINE_WEB_URL)</string>
 </dict>
 </plist>

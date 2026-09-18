@@ -1,0 +1,76 @@
+{
+  "why": "One backend ranks a search; every client shows that ranking as it came. The upstream payload here is a trimmed Open Food Facts response, and `expected` is exactly what /api/food-search returns for it — the web app renders it, and SetlineCore decodes the same bytes in FoodSearchContractTests.",
+  "query": "skyr",
+  "upstream": {
+    "products": [
+      {
+        "code": "3033490004743",
+        "product_name": "Skyr nature",
+        "brands": "Yoplait, General Mills",
+        "countries_tags": ["en:france"],
+        "nutriments": { "energy-kcal_100g": 57, "proteins_100g": 9.5, "carbohydrates_100g": 4, "fat_100g": 0.2 }
+      },
+      {
+        "code": "5400141000009",
+        "product_name": "Skyr naturel",
+        "product_name_nl": "Skyr naturel",
+        "brands": "Boni, Colruyt",
+        "image_front_small_url": "https://images.example/boni.jpg",
+        "countries_tags": ["en:belgium"],
+        "nutriments": { "energy-kcal_100g": 63, "proteins_100g": 11, "carbohydrates_100g": 3.8, "fat_100g": 0.2 }
+      },
+      {
+        "code": "0000000000001",
+        "product_name": "",
+        "nutriments": { "energy-kcal_100g": 100 }
+      },
+      {
+        "code": "0000000000002",
+        "product_name": "Skyr onmogelijk",
+        "nutriments": { "energy-kcal_100g": 4000 }
+      }
+    ]
+  },
+  "expected": {
+    "query": "skyr",
+    "disclaimer": "Controleer verpakkingswaarden; Open Food Facts-data is community-beheerd.",
+    "results": [
+      {
+        "id": "generic-magere-skyr-0",
+        "name": "Magere skyr",
+        "brand": "Generiek",
+        "imageUrl": "",
+        "calories": 63,
+        "protein": 11,
+        "carbs": 3.8,
+        "fat": 0.2,
+        "source": "Generiek",
+        "sourceNote": "Gemiddelde schatting per 100 g"
+      },
+      {
+        "id": "off-5400141000009",
+        "name": "Skyr naturel",
+        "brand": "Boni",
+        "imageUrl": "https://images.example/boni.jpg",
+        "calories": 63,
+        "protein": 11,
+        "carbs": 3.8,
+        "fat": 0.2,
+        "source": "Open Food Facts",
+        "sourceNote": "Belgisch product · per 100 g"
+      },
+      {
+        "id": "off-3033490004743",
+        "name": "Skyr nature",
+        "brand": "Yoplait",
+        "imageUrl": "",
+        "calories": 57,
+        "protein": 9.5,
+        "carbs": 4,
+        "fat": 0.2,
+        "source": "Open Food Facts",
+        "sourceNote": "Waarden per 100 g"
+      }
+    ]
+  }
+}

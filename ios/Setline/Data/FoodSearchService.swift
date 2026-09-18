@@ -1,63 +1,72 @@
 import Foundation
 import SetlineCore
 
-/// Looks a product up in Open Food Facts, from the phone.
+/// Asks the web app's product search, as this account.
 ///
-/// The web app asks its own server, which asks Open Food Facts; this app asks
-/// Open Food Facts directly, because that route is behind a session cookie iOS
-/// does not hold. The query, the filtering and the ordering are the server's
-/// own (`FoodSearch`), so the two apps agree for as long as both are kept in
-/// step.
+/// One search serves both clients (`lib/food-search.ts`, behind
+/// `/api/food-search`). The web app arrives there with its session cookie;
+/// this app arrives with its Supabase access token, which the endpoint checks
+/// with Supabase before answering. Nothing about the search is reimplemented
+/// here, so the two cannot answer the same question differently.
 actor FoodSearchService {
 
     enum Outcome: Equatable {
-        /// Everything the search found.
         case found([FoodProduct])
-        /// The database could not be reached, so only the generic table.
+        /// Answered, but only from the generic table — Open Food Facts was out
+        /// of reach at the far end.
         case partial([FoodProduct], note: String)
         case failed(String)
     }
 
     private let session: URLSession
+    private let config: WebAppConfig?
 
-    init(session: URLSession = .shared) {
+    init(session: URLSession = .shared, config: WebAppConfig? = WebAppConfig.fromBundle()) {
         self.session = session
+        self.config = config
     }
 
-    func search(_ query: String) async -> Outcome {
+    func search(_ query: String, accessToken: String?) async -> Outcome {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= FoodSearch.shortestQuery else {
             return .failed("Typ minstens twee tekens.")
         }
-
-        let generic = FoodSearch.generic(matching: trimmed)
-
-        guard let url = FoodSearch.endpoint(for: trimmed) else {
-            return generic.isEmpty
-                ? .failed("Dit product kon niet worden opgezocht.")
-                : .partial(generic, note: Self.unreachable)
+        guard let config else {
+            return .failed("Zoeken is niet ingesteld op dit toestel. Vul de waarden zelf in.")
+        }
+        guard let accessToken else {
+            return .failed("Meld je opnieuw aan om producten te zoeken.")
+        }
+        guard let url = URL(string: FoodSearch.path(for: trimmed), relativeTo: config.url) else {
+            return .failed(Self.unreachable)
         }
 
-        var request = URLRequest(url: url, timeoutInterval: 8)
+        var request = URLRequest(url: url, timeoutInterval: 12)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Setline/1.0 (iOS; privé trainingslogboek)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
         do {
             let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+            if status == 401 {
+                return .failed("Meld je opnieuw aan om producten te zoeken.")
             }
-            let products = try FoodSearch.products(from: data)
-            let results = FoodSearch.merged(generic: generic, products: products)
-            return results.isEmpty
-                ? .failed("Niets gevonden voor \(trimmed). Vul de waarden zelf in.")
+            guard (200..<300).contains(status) else {
+                return .failed(FoodSearch.message(from: data) ?? Self.unreachable)
+            }
+
+            let results = try FoodSearch.results(from: data)
+            guard !results.isEmpty else {
+                return .failed("Niets gevonden voor \(trimmed). Vul de waarden zelf in.")
+            }
+            return FoodSearch.isPartial(data)
+                ? .partial(results, note: "Productdatabase tijdelijk niet bereikbaar; generieke schattingen getoond.")
                 : .found(results)
         } catch {
-            return generic.isEmpty
-                ? .failed("\(Self.unreachable) Vul de waarden zelf in.")
-                : .partial(generic, note: Self.unreachable)
+            return .failed("\(Self.unreachable) Vul de waarden zelf in.")
         }
     }
 
-    private static let unreachable = "Productdatabase niet bereikbaar."
+    private static let unreachable = "Zoeken lukte niet."
 }
