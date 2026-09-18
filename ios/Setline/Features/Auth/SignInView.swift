@@ -16,7 +16,11 @@ struct SignInView: View {
 
     @State private var email = ""
     @State private var password = ""
-    @State private var isRegistering = false
+    @State private var isRegistering: Bool
+
+    init(registering: Bool = false) {
+        _isRegistering = State(initialValue: registering)
+    }
     @FocusState private var focused: Field?
 
     private enum Field { case email, password }

@@ -8,6 +8,20 @@ struct RootView: View {
     @State private var tab: SLTab = .training
     @State private var preflightDay: WorkoutDay?
     @State private var running: RunningSession?
+    /// Which way the reader came in from the cold open, and therefore which
+    /// side of the one identity screen opens.
+    @State private var entry: Entry?
+
+    private enum Entry { case beginning, returning }
+
+    /// `-SetlineColdOpen` shows the way in without signing anybody out.
+    private var showsColdOpen: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-SetlineColdOpen") && entry == nil
+        #else
+        false
+        #endif
+    }
 
     /// A session in progress, optionally resumed from a paused snapshot.
     struct RunningSession: Identifiable {
@@ -18,10 +32,15 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if app.isSignedIn {
+            if app.isSignedIn, !showsColdOpen {
                 signedIn
+            } else if let entry {
+                SignInView(registering: entry == .beginning)
             } else {
-                SignInView()
+                ColdOpenView(
+                    onBegin: { entry = .beginning },
+                    onSignIn: { entry = .returning }
+                )
             }
         }
         .preferredColorScheme(.dark)

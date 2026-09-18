@@ -20,12 +20,10 @@ enum RestNotifier {
         let mine = generation
         Task { @MainActor in
             let center = UNUserNotificationCenter.current()
-            var status = await center.notificationSettings().authorizationStatus
-            if status == .notDetermined {
-                // Asked when the first rest starts, where the reason is obvious.
-                _ = try? await center.requestAuthorization(options: [.alert, .sound])
-                status = await center.notificationSettings().authorizationStatus
-            }
+            // Never asked from here. Permission is earned on the sheet that
+            // explains what the notification is for (artboard 07); until that
+            // has happened there is simply nothing to schedule.
+            let status = await center.notificationSettings().authorizationStatus
             guard mine == generation else { return }
             guard status == .authorized || status == .provisional else { return }
             let interval = fireDate.timeIntervalSinceNow
@@ -43,6 +41,16 @@ enum RestNotifier {
                 trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
             ))
         }
+    }
+
+    static func status() async -> UNAuthorizationStatus {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    /// The OS prompt, asked for once the reader has been told what it is for.
+    @discardableResult
+    static func request() async -> Bool {
+        (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
     }
 
     static func cancel() {

@@ -17,6 +17,7 @@ struct SessionView: View {
     @State private var toast: SessionToast?
     /// Proposal cards opened with `Toon` at accessibility text sizes.
     @State private var expandedProposals: Set<Int> = []
+    @State private var asksAboutNotifications = false
 
     /// What just happened, and how to take it back.
     struct SessionToast: Identifiable {
@@ -116,6 +117,7 @@ struct SessionView: View {
                         runner.log(slotIndex: editing.slot, setIndex: editing.set, entry: entry)
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         closeEntry()
+                        Task { await askAboutNotificationsIfWorthIt() }
                     },
                     onClose: { closeEntry() },
                     onRemove: runner.isAddedSet(slotIndex: editing.slot, setIndex: editing.set)
@@ -123,6 +125,19 @@ struct SessionView: View {
                         : nil
                 )
             }
+        }
+        .sheet(isPresented: $asksAboutNotifications) {
+            RestNotificationSheet(
+                restLabel: runner.restTimer.map { RestPrescription(defaultSeconds: $0.targetSeconds, range: $0.targetSeconds...$0.targetSeconds).displayLabel } ?? "2:00",
+                onAllow: {
+                    asksAboutNotifications = false
+                    Task {
+                        await RestNotifier.request()
+                        if let timer = runner.restTimer { RestNotifier.schedule(at: timer.fireDate) }
+                    }
+                },
+                onDecline: { asksAboutNotifications = false }
+            )
         }
         .sheet(isPresented: $showsSwap) {
             SwapSheet(
@@ -163,6 +178,28 @@ struct SessionView: View {
                 }
             )
         }
+    }
+
+    /// Artboard 07: asked in the one moment where the answer is obvious — a
+    /// set is logged, the rest is running, and the phone is about to go in a
+    /// pocket. Asked once per install, and never if the reader has already
+    /// answered the OS.
+    private func askAboutNotificationsIfWorthIt() async {
+        let key = "setline.notifications.asked"
+        #if DEBUG
+        // `-SetlineAskNotifications` shows the sheet whatever the simulator
+        // has already been told, so its wording and layout stay checkable.
+        let forced = ProcessInfo.processInfo.arguments.contains("-SetlineAskNotifications")
+        #else
+        let forced = false
+        #endif
+        guard forced || !UserDefaults.standard.bool(forKey: key) else { return }
+        guard runner.restTimer != nil else { return }
+        if !forced {
+            guard await RestNotifier.status() == .notDetermined else { return }
+        }
+        UserDefaults.standard.set(true, forKey: key)
+        asksAboutNotifications = true
     }
 
     private func closeEntry() {
