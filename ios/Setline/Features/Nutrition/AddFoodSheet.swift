@@ -1,19 +1,27 @@
 import SwiftUI
 import SetlineCore
 
-/// Logging one item of food by hand.
+/// Logging one item of food.
 ///
 /// The handoff draws artboard 21 but not this sheet, so it is assembled from
 /// the components the handoff does define — sheet, chip, field, primary pill —
-/// and asks for exactly the fields the account stores, no more. Searching a
-/// product is the web app's own screen and needs its endpoint; nothing here
-/// invents a food database or guesses a number the reader did not type.
+/// and asks for exactly the fields the account stores, no more. A product can
+/// be looked up, which fills the fields for a portion you name; every number
+/// stays editable afterwards, because a database is a starting point and the
+/// packet in your hand is the authority.
 struct AddFoodSheet: View {
     let date: Date
     let onLog: (NutritionEntry) -> Void
     let onClose: () -> Void
 
     @State private var meal: Meal = .likely(at: Date())
+    @State private var query = ""
+    @State private var results: [FoodProduct] = []
+    @State private var searchNote: String?
+    @State private var searching = false
+    @State private var chosen: FoodProduct?
+    @State private var grams = "100"
+    private let search = FoodSearchService()
     @State private var name = ""
     @State private var calories = ""
     @State private var protein = ""
@@ -21,14 +29,15 @@ struct AddFoodSheet: View {
     @State private var fat = ""
     @FocusState private var focused: Field?
 
-    private enum Field: Hashable { case name, calories, protein, carbs, fat }
+    private enum Field: Hashable { case query, grams, name, calories, protein, carbs, fat }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    mealPicker
+                    lookup
+                    mealPicker.padding(.top, SL.Space.s5)
                     fields.padding(.top, SL.Space.s5)
                     if let energyNote {
                         Text(energyNote)
@@ -71,6 +80,155 @@ struct AddFoodSheet: View {
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s5)
+    }
+
+    // MARK: - Looking it up
+
+    @ViewBuilder
+    private var lookup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: SL.Space.s2) {
+                // A product name is not prose: autocorrect turns "skyr" into
+                // "Skye" and searches for the wrong thing.
+                field("Zoek product", text: $query, field: .query, corrects: false)
+                    .submitLabel(.search)
+                    .onSubmit { run() }
+                Button { run() } label: {
+                    Text(searching ? "…" : "Zoek")
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(query.trimmingCharacters(in: .whitespaces).count >= FoodSearch.shortestQuery
+                            ? SL.Ink.primary : SL.Ink.tertiary)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .background(
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                                .fill(SL.Surface.raised2)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(searching || query.trimmingCharacters(in: .whitespaces).count < FoodSearch.shortestQuery)
+            }
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                    .fill(SL.Surface.ground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                    .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+            )
+
+            if let searchNote {
+                Text(searchNote)
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .padding(.top, SL.Space.s3)
+            }
+
+            if !results.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(results.enumerated()), id: \.element.id) { index, product in
+                        if index > 0 { SLHairline().padding(.horizontal, 14) }
+                        Button { choose(product) } label: { resultRow(product) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                .padding(6)
+                .padding(.top, 0)
+                .background(
+                    RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                        .fill(SL.Surface.ground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                        .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+                )
+                .padding(.top, SL.Space.s3)
+
+                Text("Controleer de verpakking; Open Food Facts wordt door gebruikers bijgehouden.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .padding(.top, SL.Space.s3)
+            }
+
+            if chosen != nil {
+                field("Hoeveelheid", text: $grams, field: .grams, unit: "g", numeric: true)
+                    .background(
+                        RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                            .fill(SL.Surface.ground)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                            .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+                    )
+                    .padding(.top, SL.Space.s3)
+                    .onChange(of: grams) { _, _ in fill() }
+            }
+        }
+    }
+
+    private func resultRow(_ product: FoodProduct) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(product.name).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                Text("\(product.brand) · \(product.note)")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(NumberDisplay.dutch.kcal(Decimal(product.calories)))
+                .slBody().slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, SL.Space.s3)
+        .frame(minHeight: SL.Space.hitMin)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Dubbeltik om de waarden over te nemen")
+    }
+
+    private func run() {
+        let asked = query
+        searching = true
+        searchNote = nil
+        Task {
+            let outcome = await search.search(asked)
+            await MainActor.run {
+                searching = false
+                switch outcome {
+                case let .found(products):
+                    results = products
+                    searchNote = nil
+                case let .partial(products, note):
+                    results = products
+                    searchNote = note
+                case let .failed(message):
+                    results = []
+                    searchNote = message
+                }
+            }
+        }
+    }
+
+    private func choose(_ product: FoodProduct) {
+        chosen = product
+        grams = "100"
+        results = []
+        searchNote = nil
+        focused = nil
+        fill()
+    }
+
+    private func fill() {
+        guard let chosen else { return }
+        let draft = FoodSearch.portion(of: chosen, grams: NumberInput.value(grams))
+        name = draft.name
+        calories = draft.calories > 0 ? NumberDisplay.dutch.whole(Decimal(draft.calories)) : ""
+        protein = NumberDisplay.dutch.number(Decimal(draft.protein))
+        carbs = NumberDisplay.dutch.number(Decimal(draft.carbs))
+        fat = NumberDisplay.dutch.number(Decimal(draft.fat))
     }
 
     private var mealPicker: some View {
@@ -128,15 +286,16 @@ struct AddFoodSheet: View {
         text: Binding<String>,
         field: Field,
         unit: String? = nil,
-        numeric: Bool = false
+        numeric: Bool = false,
+        corrects: Bool = true
     ) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             SLEyebrow(text: label.uppercased(), size: SL.TypeSize.micro)
             HStack(spacing: SL.Space.s2) {
                 TextField("", text: text)
                     .keyboardType(numeric ? .decimalPad : .default)
-                    .textInputAutocapitalization(numeric ? .never : .sentences)
-                    .autocorrectionDisabled(numeric)
+                    .textInputAutocapitalization(numeric || !corrects ? .never : .sentences)
+                    .autocorrectionDisabled(numeric || !corrects)
                     .onChange(of: text.wrappedValue) { _, new in
                         guard numeric else { return }
                         let filtered = NumberInput.numericOnly(new)

@@ -63,13 +63,13 @@ public enum Meal: String, CaseIterable, Sendable {
     case snack = "Snack"
 
     /// What is most likely being logged at this hour — the meal picker opens
-    /// there, and is one tap from anything else.
+    /// there, and is one tap from anything else. The hours are the web app's
+    /// own, so the same clock gives the same answer in both.
     public static func likely(at date: Date, calendar: Calendar = .current) -> Meal {
         switch calendar.component(.hour, from: date) {
-        case ..<10: return .ontbijt
-        case ..<15: return .lunch
-        case ..<21: return .avondeten
-        default: return .snack
+        case ..<11: return .ontbijt
+        case ..<16: return .lunch
+        default: return .avondeten
         }
     }
 }

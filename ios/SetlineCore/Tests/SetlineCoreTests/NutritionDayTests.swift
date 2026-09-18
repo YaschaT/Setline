@@ -102,9 +102,10 @@ final class NutritionDayTests: XCTestCase {
             Meal.likely(at: LegacyAdapter.isoDate(String(format: "2026-09-17T%02d:00:00.000Z", hour))!, calendar: calendar)
         }
         XCTAssertEqual(meal(8), .ontbijt)
+        XCTAssertEqual(meal(10), .ontbijt, "the web app's own boundary")
         XCTAssertEqual(meal(13), .lunch)
         XCTAssertEqual(meal(19), .avondeten)
-        XCTAssertEqual(meal(23), .snack)
+        XCTAssertEqual(meal(23), .avondeten)
     }
 }
 
