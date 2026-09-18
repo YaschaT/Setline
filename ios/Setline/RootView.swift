@@ -61,6 +61,8 @@ struct RootView: View {
                     NutritionHomeView()
                 case .progressie:
                     ProgressHomeView()
+                case .fotos:
+                    PhotosHomeView()
                 case .account:
                     AccountView()
                 default:
