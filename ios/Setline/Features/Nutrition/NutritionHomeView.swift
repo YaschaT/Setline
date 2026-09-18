@@ -11,6 +11,7 @@ struct NutritionHomeView: View {
 
     @State private var adding = false
     @State private var removing: NutritionEntry?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var day: NutritionDay { app.nutrition() }
 
@@ -79,11 +80,17 @@ struct NutritionHomeView: View {
 
     // MARK: - What is left
 
+    /// At accessibility sizes the ring goes and the number gets the whole row,
+    /// the same choice the stepper makes: the figure this screen exists to
+    /// show is never squeezed to keep an ornament that says the same thing as
+    /// the line underneath it.
     private var remainder: some View {
         HStack(spacing: SL.Space.s5) {
-            NutritionRing(fraction: day.consumed)
-                .frame(width: 104, height: 104)
-                .accessibilityHidden(true)
+            if !typeSize.isAccessibilitySize {
+                NutritionRing(fraction: day.consumed)
+                    .frame(width: 104, height: 104)
+                    .accessibilityHidden(true)
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 SLEyebrow(text: day.hasTarget ? "NOG TE ETEN" : "VANDAAG GEGETEN")

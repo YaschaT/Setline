@@ -15,6 +15,7 @@ struct ProgressHomeView: View {
     }
 
     @State private var segment: Segment = .kracht
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -42,8 +43,14 @@ struct ProgressHomeView: View {
         .slRespondsToTextSize()
     }
 
+    /// Three across, until three across would mean "Histori…". At accessibility
+    /// sizes they take a row each and keep their names.
     private var segmentControl: some View {
-        HStack(spacing: 0) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 0))
+
+        return layout {
             ForEach(Segment.allCases) { item in
                 Button {
                     segment = item
@@ -51,8 +58,9 @@ struct ProgressHomeView: View {
                     Text(item.rawValue)
                         .slBody(segment == item ? SL.Weight.semibold : SL.Weight.medium)
                         .foregroundStyle(segment == item ? SL.Ink.primary : SL.Ink.secondary)
+                        .lineLimit(1)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .background(
                             RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
                                 .fill(segment == item ? SL.Surface.raised2 : .clear)

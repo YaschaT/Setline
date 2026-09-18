@@ -15,6 +15,7 @@ struct PhotosHomeView: View {
     @State private var removing: CheckIn?
     @State private var failure: String?
     @State private var loaded = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private let store = CheckInStore()
 
@@ -132,13 +133,16 @@ struct PhotosHomeView: View {
                         .strokeBorder(loud ? SL.Surface.hairlineStrong : SL.Surface.hairline, lineWidth: 1)
                 )
 
-            HStack {
+            // Side by side until the pair stops lining up, then the date sits
+            // above the weight and both columns keep the same shape.
+            captionLayout {
                 Text(label(shown.date)).slMeta().foregroundStyle(SL.Ink.tertiary)
-                Spacer()
+                if !typeSize.isAccessibilitySize { Spacer() }
                 if let weight = shown.weightKg {
                     Text(app.display.kg(weight)).slMeta(SL.Weight.semibold).slNumerals().foregroundStyle(SL.Ink.primary)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 10)
         }
         .accessibilityElement(children: .combine)
@@ -153,6 +157,12 @@ struct PhotosHomeView: View {
     /// A rectangle takes the size it is offered and nothing more; the picture
     /// fills it from the inside. Letting the image itself size the view lets a
     /// 4.000pt-wide photo decide how wide the screen is.
+    private var captionLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+    }
+
     private func picture(_ checkIn: CheckIn) -> some View {
         Rectangle()
             .fill(SL.Surface.raised2)
