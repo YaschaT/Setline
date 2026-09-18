@@ -144,6 +144,13 @@ enum DemoData {
             "updatedAt": .string(LegacyAdapter.isoString(Date())),
         ]
 
+        // `-SetlineFirstRun` keeps the plan and drops the history, so the
+        // first-run home (artboard 08) is reachable.
+        if ProcessInfo.processInfo.arguments.contains("-SetlineFirstRun") {
+            raw["sessions"] = .array([])
+            return LegacyState(raw: raw)
+        }
+
         // `-SetlineFatigued` seeds two recent push sessions in which reps fall
         // at the same load on two exercises and RIR falls on a third — the two
         // signals artboard 18R proposes on.

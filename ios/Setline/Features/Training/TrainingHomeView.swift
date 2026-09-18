@@ -8,6 +8,7 @@ import SetlineCore
 /// the review pushed it back for exactly that reason.
 struct TrainingHomeView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
     let onStart: (WorkoutDay) -> Void
     let onResume: (WorkoutDay, ActiveSessionSnapshot) -> Void
 
@@ -50,9 +51,13 @@ struct TrainingHomeView: View {
                         // 18R: with a proposal on screen the session card steps
                         // back, so the proposal is the one loud thing.
                         .opacity(app.proposesDeload ? 0.6 : 1)
-                    weekStrip.padding(.top, SL.Space.s8)
+                    // 08 sets the labelled strip 24 below the card; 09's
+                    // groups sit 32 apart.
+                    weekStrip.padding(.top, isFirstRun ? SL.Space.s6 : SL.Space.s8)
                     if let insight { insightCard(insight).padding(.top, SL.Space.s8) }
-                    planFooter.padding(.top, SL.Space.s8)
+                    // 08 has nothing to change yet; the plan row arrives with
+                    // the first session.
+                    if !isFirstRun { planFooter.padding(.top, SL.Space.s8) }
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.top, SL.Space.s5)
@@ -255,6 +260,49 @@ struct TrainingHomeView: View {
     /// than 08 by its border, not by a raised fill.
     @ViewBuilder
     private var todayCard: some View {
+        if isFirstRun, let day = app.todayDay {
+            firstRunCard(day)
+        } else {
+            sessionCard
+        }
+    }
+
+    /// Artboard 08: no data yet, so nothing to compare against — a 34pt name,
+    /// one count line, the quiet hairline, and what the first session does.
+    private func firstRunCard(_ day: WorkoutDay) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SLEyebrow(text: "Vandaag · \(weekdayLabel)")
+            Text(day.short)
+                .slDisplay()
+                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, SL.Space.s2)
+                .padding(.bottom, SL.Space.s1)
+            Text(firstRunCounts(day))
+                .slBody().slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+            SLHairline().padding(.vertical, SL.Space.s5)
+            Text("Nog geen sessies gelogd. Je eerste sessie zet de startgewichten; daarna rekent SETLINE de progressie zelf.")
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : 270, alignment: .leading)
+
+            if let paused = app.resumableSession { pausedRow(paused) }
+        }
+        .padding(SL.Space.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slCard()
+    }
+
+    /// "5 oefeningen · 18 sets · ±52 min".
+    private func firstRunCounts(_ day: WorkoutDay) -> String {
+        let exercises = day.exercises.count == 1 ? "1 oefening" : "\(day.exercises.count) oefeningen"
+        return "\(exercises) · \(WeekPlan.sets(of: day)) sets · ±\(WeekPlan.minutes(of: day)) min"
+    }
+
+    private var sessionCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 SLEyebrow(text: "Vandaag · \(longDateLabel)")
@@ -294,15 +342,6 @@ struct TrainingHomeView: View {
                         .slBody().slNumerals()
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.top, SL.Space.s3)
-                }
-
-
-                if isFirstRun {
-                    SLHairline().padding(.vertical, SL.Space.s5)
-                    Text("Nog geen sessies gelogd. Je eerste sessie zet de startgewichten; na drie vergelijkbare sessies per oefening komen de voorstellen en records.")
-                        .slBody()
-                        .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
-                        .foregroundStyle(SL.Ink.secondary)
                 }
             } else {
                 Text("Rustdag")
@@ -344,6 +383,14 @@ struct TrainingHomeView: View {
         }
     }
 
+    /// 08's eyebrow names the day only: "VANDAAG · MAANDAG".
+    private var weekdayLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.dateFormat = "EEEE"
+        return formatter.string(from: Date())
+    }
+
     private var longDateLabel: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "nl_BE")
@@ -351,12 +398,12 @@ struct TrainingHomeView: View {
         return formatter.string(from: Date()).replacingOccurrences(of: ".", with: "")
     }
 
-    /// 08 labels the strip and uses 72-high tiles; 09 drops the label and
-    /// tightens to 64.
+    /// 08 labels the strip and uses 72-high tiles 6 apart; 09 drops the
+    /// label and tightens to 64, 5 apart.
     private var weekStrip: some View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
             if isFirstRun { SLEyebrow(text: "Deze week") }
-            HStack(spacing: 5) {
+            HStack(spacing: isFirstRun ? 6 : 5) {
                 ForEach(Schedule.mondayFirstWeek(containing: Date()), id: \.self) { date in
                     dayTile(date)
                 }
@@ -370,17 +417,20 @@ struct TrainingHomeView: View {
         let isRest = canonical == "rest"
         let day = Calendar.current.component(.day, from: date)
 
-        return VStack(spacing: 4) {
+        // 08 marks today by its tile alone — the letter stays `text2` and the
+        // edge .16 — where 09 also lifts the letter and takes the .28 edge.
+        let marksLetter = isToday && !isFirstRun
+        return VStack(spacing: isFirstRun ? 6 : 4) {
             Text(Schedule.weekdayLabel(date))
                 .font(.system(
                     size: SL.TypeSize.micro,
-                    weight: isToday ? SL.Weight.semibold : SL.Weight.regular
+                    weight: marksLetter ? SL.Weight.semibold : SL.Weight.regular
                 ))
-                .foregroundStyle(isToday ? SL.Ink.primary : (isRest ? SL.Ink.tertiary : SL.Ink.secondary))
+                .foregroundStyle(marksLetter ? SL.Ink.primary : (isRest ? SL.Ink.tertiary : SL.Ink.secondary))
             Text("\(day)")
                 .font(.system(
                     size: SL.TypeSize.lead,
-                    weight: isToday ? SL.Weight.semibold : (isRest ? SL.Weight.regular : SL.Weight.medium)
+                    weight: isToday ? SL.Weight.semibold : (isRest && !isFirstRun ? SL.Weight.regular : SL.Weight.medium)
                 ))
                 .slNumerals()
                 .foregroundStyle(isToday ? SL.Ink.primary : (isRest ? SL.Ink.tertiary : SL.Ink.primary))
@@ -394,7 +444,7 @@ struct TrainingHomeView: View {
         .overlay(
             RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                 .strokeBorder(
-                    isToday ? SL.Surface.selection : SL.Surface.hairline,
+                    isToday ? (isFirstRun ? SL.Surface.hairlineStrong : SL.Surface.selection) : SL.Surface.hairline,
                     style: StrokeStyle(lineWidth: 1, dash: isRest ? [4, 4] : [])
                 )
         )
