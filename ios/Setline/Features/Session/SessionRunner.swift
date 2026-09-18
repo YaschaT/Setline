@@ -247,10 +247,12 @@ final class SessionRunner {
         return .calibrated(baseline: first)
     }
 
-    func columnHeader(slotIndex: Int) -> String {
+    /// `nil` before the calibration set: artboard 28 draws that grid without
+    /// a header, because its columns have nothing to compare yet.
+    func columnHeader(slotIndex: Int) -> String? {
         switch gridMode(slotIndex: slotIndex) {
         case .history: return columnHeaderDate
-        case .calibrationPending: return "doel"
+        case .calibrationPending: return nil
         case .calibrated: return "vs set 1"
         }
     }
@@ -757,7 +759,9 @@ final class SessionRunner {
             reference: slot.history.mostRecent,
             history: slot.history,
             activeIndex: nextIndex(in: slot),
-            mode: gridMode(slotIndex: slotIndex)
+            mode: gridMode(slotIndex: slotIndex),
+            // The number every other surface names a set's target by.
+            targetReps: slot.planned.sets.map(\.repRange.upperBound)
         )
     }
 

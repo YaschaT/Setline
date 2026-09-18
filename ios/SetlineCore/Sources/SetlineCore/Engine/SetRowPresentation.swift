@@ -61,6 +61,16 @@ public enum SetGridMode: Hashable, Sendable {
     }
 }
 
+/// What the weight slot holds, which decides how loud it is.
+public enum SetRowWeightKind: Hashable, Sendable {
+    /// "102,5 kg".
+    case value
+    /// "— kg": nothing entered and nothing proposed, as on 28's first row.
+    case missing
+    /// "volgt uit set 1": the row waits on the calibration set (artboard 28).
+    case awaitingCalibration
+}
+
 public enum SetRowStatus: String, Sendable {
     case warmup
     case nextUp
@@ -80,6 +90,10 @@ public struct SetRowPresentation: Hashable, Sendable {
     public let isWarmup: Bool
     /// A working set added during this session rather than prescribed.
     public let isAdded: Bool
+    public let weightKind: SetRowWeightKind
+    /// The reps slot shows what the set aims at rather than what was done —
+    /// artboard 28, before the calibration set gives the grid a reference.
+    public let repsIsTarget: Bool
 
     public init(
         index: Int,
@@ -89,7 +103,9 @@ public struct SetRowPresentation: Hashable, Sendable {
         delta: SetDelta,
         status: SetRowStatus,
         isWarmup: Bool,
-        isAdded: Bool = false
+        isAdded: Bool = false,
+        weightKind: SetRowWeightKind = .value,
+        repsIsTarget: Bool = false
     ) {
         self.index = index
         self.indexLabel = indexLabel
@@ -99,6 +115,8 @@ public struct SetRowPresentation: Hashable, Sendable {
         self.status = status
         self.isWarmup = isWarmup
         self.isAdded = isAdded
+        self.weightKind = weightKind
+        self.repsIsTarget = repsIsTarget
     }
 }
 
@@ -112,6 +130,8 @@ public enum SetRowPresenter {
     ///   - reference: the comparable session the delta column names.
     ///   - activeIndex: the row that is next up.
     ///   - mode: what the trailing column compares against.
+    ///   - targetReps: each prescribed row's target, which artboard 28 shows
+    ///     in the reps slot while the grid has nothing else to say there.
     public static func rows(
         sets: [LoggedSet],
         warmups: [LoggedSet] = [],
@@ -119,6 +139,7 @@ public enum SetRowPresenter {
         history: ExerciseHistory,
         activeIndex: Int?,
         mode: SetGridMode = .history,
+        targetReps: [Int] = [],
         formatter: NumberDisplay = .dutch
     ) -> [SetRowPresentation] {
         var rows: [SetRowPresentation] = []
@@ -186,7 +207,7 @@ public enum SetRowPresenter {
                 delta = .none
             }
 
-            let repsLabel: String
+            var repsLabel: String
             switch status {
             case .written: repsLabel = "\(set.reps)"
             case .nextUp: repsLabel = "—"
@@ -195,18 +216,31 @@ public enum SetRowPresenter {
             }
 
             var weightLabel = set.weightKg.map(formatter.kg) ?? "— kg"
+            var weightKind: SetRowWeightKind = set.weightKg == nil ? .missing : .value
+            var repsIsTarget = false
             var resolvedDelta = delta
 
             switch mode {
             case .history:
                 break
             case .calibrationPending:
-                // Artboard 28: set 1 asks for a weight, the rest wait for it.
+                // Artboard 28: set 1 asks for a weight, the rest wait for it,
+                // and every open row shows the reps it aims at — set 1 the
+                // calibration target, the others their own prescription.
                 if offset == 0 {
-                    if !set.isLogged { resolvedDelta = .calibration }
+                    if !set.isLogged {
+                        resolvedDelta = .calibration
+                        repsLabel = "\(Calibration.targetReps)"
+                        repsIsTarget = true
+                    }
                 } else if !set.isLogged {
                     weightLabel = "volgt uit set 1"
+                    weightKind = .awaitingCalibration
                     resolvedDelta = .none
+                    if targetReps.indices.contains(offset) {
+                        repsLabel = "\(targetReps[offset])"
+                        repsIsTarget = true
+                    }
                 }
             case .calibrated(let baseline):
                 // Artboard 28b: everything compares to the calibration set —
@@ -238,7 +272,9 @@ public enum SetRowPresenter {
                     delta: resolvedDelta,
                     status: status,
                     isWarmup: false,
-                    isAdded: set.origin == .sessionAdded
+                    isAdded: set.origin == .sessionAdded,
+                    weightKind: weightKind,
+                    repsIsTarget: repsIsTarget
                 )
             )
         }

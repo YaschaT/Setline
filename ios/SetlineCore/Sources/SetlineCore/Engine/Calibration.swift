@@ -39,14 +39,16 @@ public enum Calibration {
         history.appearances.isEmpty
     }
 
+    /// - Parameter origin: the exercise this one stands in for, lowercased,
+    ///   when it was swapped in.
     public static func prompt(for exercise: Exercise, substitutedFrom origin: String? = nil) -> CalibrationPrompt {
-        // The origin belongs in the body, not the label: the exercise header
-        // already says what this was swapped from, and saying it twice costs
-        // two lines above the first set row.
+        // The label joins the header's eyebrow ("Gewisseld van squat · geen
+        // historiek"), so the card itself opens on the set, as artboard 28
+        // draws it.
         let context = "Geen historiek"
-        let body = origin == nil
-            ? "SETLINE stelt hier geen gewicht voor: er is nog niets om mee te vergelijken. Je sets, reps en RIR blijven behouden."
-            : "SETLINE stelt hier geen gewicht voor: \(exercise.name.lowercased()) is een andere oefening. Je sets, reps en RIR blijven behouden."
+        let body = origin.map {
+            "SETLINE stelt hier geen gewicht voor: \(exercise.name.lowercased()) is een andere oefening dan \($0). Je sets, reps en RIR blijven behouden."
+        } ?? "SETLINE stelt hier geen gewicht voor: er is nog niets om mee te vergelijken. Je sets, reps en RIR blijven behouden."
         return CalibrationPrompt(
             contextLabel: context,
             headline: "Kies een gewicht waarmee je \(targetReps) reps haalt met \(targetRIR) in reserve.",

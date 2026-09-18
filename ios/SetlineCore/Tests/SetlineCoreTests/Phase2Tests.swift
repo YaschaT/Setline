@@ -38,6 +38,12 @@ final class CalibrationTests: XCTestCase {
         XCTAssertEqual(prompt.contextLabel, "Geen historiek")
     }
 
+    func testASwappedInExerciseSaysWhatItIsDifferentFrom() {
+        let prompt = Calibration.prompt(for: bench, substitutedFrom: "squat")
+        XCTAssertTrue(prompt.body.contains("een andere oefening dan squat"), prompt.body)
+        XCTAssertTrue(Calibration.prompt(for: bench).body.contains("nog niets om mee te vergelijken"))
+    }
+
     func testRemainingSetsPrefillFromTheCalibrationSet() {
         let set = LoggedSet(index: 0, weightKg: 80, reps: 8, rirReported: 2)
         let prefill = Calibration.prefill(after: set, exercise: bench)
@@ -90,6 +96,21 @@ final class CalibrationTests: XCTestCase {
         )
         XCTAssertEqual(pending[0].delta, .calibration)
         XCTAssertEqual(pending[1].weightLabel, "volgt uit set 1")
+        XCTAssertEqual(pending[1].weightKind, .awaitingCalibration)
+        XCTAssertEqual(pending[0].weightKind, .missing)
+
+        // Artboard 28: every open row shows what it aims at — set 1 the
+        // calibration target, the rest their own prescription.
+        let aimed = SetRowPresenter.rows(
+            sets: sets, reference: nil, history: empty, activeIndex: 0,
+            mode: .calibrationPending, targetReps: [6, 8, 8]
+        )
+        XCTAssertEqual(aimed.map(\.repsLabel), ["8", "8", "8"])
+        XCTAssertTrue(aimed.allSatisfy(\.repsIsTarget))
+        let unprescribed = SetRowPresenter.rows(
+            sets: sets, reference: nil, history: empty, activeIndex: 0, mode: .calibrationPending
+        )
+        XCTAssertEqual(unprescribed.map(\.repsLabel), ["8", "·", "·"])
 
         let baseline = LoggedSet(index: 0, weightKg: 80, reps: 8)
         let after = SetRowPresenter.rows(

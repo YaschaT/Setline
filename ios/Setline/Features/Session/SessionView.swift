@@ -395,8 +395,9 @@ struct SessionView: View {
                 exerciseHeader
                 if let prompt = runner.calibrationPrompt(slotIndex: runner.currentIndex) {
                     calibrationCard(prompt).padding(.top, SL.Space.s5)
-                } else if let summary = runner.calibrationSummary(slotIndex: runner.currentIndex) {
-                    calibratedSummary(summary).padding(.top, SL.Space.s5)
+                } else if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
+                    // 28b: set 1 is named in the header and the reference it
+                    // starts is named under the grid — nothing to propose yet.
                 } else if runner.showsProposal {
                     if typeSize.isAccessibilitySize && !expandedProposals.contains(runner.currentIndex) {
                         compactProposal.padding(.top, SL.Space.s5)
@@ -413,6 +414,9 @@ struct SessionView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, SL.Space.s4)
                         .transition(.opacity)
+                }
+                if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
+                    referenceFooter.padding(.top, SL.Space.s8)
                 }
                 upNext.padding(.top, SL.Space.s5)
             }
@@ -453,8 +457,12 @@ struct SessionView: View {
             .contentShape(Rectangle())
             .onLongPressGesture { showsSwap = true }
 
+            // 28: before the calibration set, "geen historiek" is said once,
+            // on the line that already says where the exercise came from.
+            let calibrating = runner.calibrationPrompt(slotIndex: runner.currentIndex) != nil
+            let noHistory = calibrating ? " · geen historiek" : ""
             if let origin = runner.substitutedOrigin(slotIndex: runner.currentIndex) {
-                undoLine("Gewisseld van \(origin.name)", accessibility: "Wissel naar \(origin.name) ongedaan maken")
+                undoLine("Gewisseld van \(origin.name)\(noHistory)", accessibility: "Wissel naar \(origin.name) ongedaan maken")
             } else if let replacement = runner.latestUndo(slotIndex: runner.currentIndex)?.replacement {
                 // A program change stays reversible here until the workout
                 // ends. The toast is the quick way back; this one is still
@@ -462,7 +470,7 @@ struct SessionView: View {
                 // belongs to program settings.
                 let origin = app.exercise(replacement.originExerciseID)
                 undoLine(
-                    "Vervangt \(origin.name) in je schema",
+                    "Vervangt \(origin.name) in je schema\(noHistory)",
                     accessibility: "Vervanging van \(origin.name) in je schema ongedaan maken"
                 )
             }
@@ -485,10 +493,11 @@ struct SessionView: View {
                             .slNumerals()
                             .foregroundStyle(SL.Ink.primary)
                     }
-                } else {
-                    Text("Geen historiek voor deze oefening.")
-                        .slBody()
-                        .foregroundStyle(SL.Ink.secondary)
+                } else if let summary = runner.calibrationSummary(slotIndex: runner.currentIndex) {
+                    calibratedLine(summary)
+                } else if runner.substitutedOrigin(slotIndex: runner.currentIndex) == nil,
+                          runner.latestUndo(slotIndex: runner.currentIndex)?.replacement == nil {
+                    SLEyebrow(text: "Geen historiek")
                 }
             }
             .padding(.top, 10)
@@ -647,46 +656,62 @@ struct SessionView: View {
     /// replaces — the app asks for a weight instead of proposing one.
     private func calibrationCard(_ prompt: CalibrationPrompt) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: prompt.contextLabel)
-            SLEyebrow(text: "Set 1 · kalibratie").padding(.top, 10)
+            SLEyebrow(text: "Set 1 · kalibratie")
             Text(prompt.headline)
                 .slTitle()
                 .lineSpacing(SL.TypeSize.title * 0.3)
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
+                .padding(.top, 10)
             Text(prompt.body)
-                .slMeta()
-                .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
                 .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 14)
+                .padding(.top, SL.Space.s3)
         }
         .padding(SL.Space.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
         .slCardStrong(fill: SL.Surface.raised2)
     }
 
-    /// Artboard 28b, plus the one honest extra: say so when the set was easy
-    /// enough that the next one starts a step higher.
-    private func calibratedSummary(_ summary: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: "Gekalibreerd op")
-            Text(summary)
-                .slLead().slNumerals()
-                .foregroundStyle(SL.Ink.primary)
-                .padding(.top, 4)
+    /// Artboard 28b's header line — "GEKALIBREERD OP  80 kg × 8 · RIR 2" — plus
+    /// the one honest extra: say so when the set was easy enough that the
+    /// next one starts a step higher.
+    private func calibratedLine(_ summary: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                SLEyebrow(text: "Gekalibreerd op")
+                Text(summary)
+                    .slLead().slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+            }
             if runner.didStepUpAfterCalibration(slotIndex: runner.currentIndex) {
                 Text("RIR 3 of meer: set 2 staat één stap hoger. Pas aan als dat niet klopt.")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
             }
         }
-        .padding(SL.Space.s4)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// 28b, under a hairline below the grid: what the calibration set starts.
+    private var referenceFooter: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Referentie opbouwen · sessie 1 van \(ExerciseHistory.sessionsBeforeReference)")
+                .slLead()
+                .foregroundStyle(SL.Ink.primary)
+            Text("Na drie sessies rekent SETLINE progressie voor \(runner.current.exercise.name.lowercased()). Tot dan geen voorstel en geen record.")
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, SL.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .slCard(radius: SL.Radius.lg)
+        .overlay(alignment: .top) { SLHairline() }
+        .accessibilityElement(children: .combine)
     }
 
     private func toneLabel(_ tone: ProposalTone) -> String {

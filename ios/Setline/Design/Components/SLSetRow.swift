@@ -22,13 +22,16 @@ enum SLSetColumn {
 
 /// The set grid's container: radius 22, `raised`, hairline, 8pt of padding,
 /// with the rows nested inside at radius 12 — the concentric rule.
+///
+/// A `nil` label drops the column header, as artboard 28 does before the
+/// calibration set: there is nothing yet for the columns to compare.
 struct SLSetGrid<Content: View>: View {
-    let referenceLabel: String
+    let referenceLabel: String?
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            if let referenceLabel { header(referenceLabel) }
             content
         }
         .padding(8)
@@ -48,7 +51,7 @@ struct SLSetGrid<Content: View>: View {
             .minimumScaleFactor(0.7)
     }
 
-    private var header: some View {
+    private func header(_ referenceLabel: String) -> some View {
         HStack(spacing: 0) {
             headerCell("SET").frame(width: SLSetColumn.index, alignment: .leading)
             headerCell("GEWICHT").frame(maxWidth: .infinity, alignment: .leading)
@@ -86,11 +89,11 @@ struct SLSetRow: View {
                     .frame(width: SLSetColumn.index, alignment: .leading)
 
                 Text(row.weightLabel)
-                    .font(.sl(row.isWarmup ? SL.TypeSize.lead : SL.TypeSize.title, row.isWarmup ? SL.Weight.medium : SL.Weight.semibold))
+                    .font(weightFont)
                     .slNumerals()
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                    .foregroundStyle(row.isWarmup ? SL.Ink.secondary : SL.Ink.primary)
+                    .foregroundStyle(weightColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(row.repsLabel)
@@ -118,7 +121,7 @@ struct SLSetRow: View {
             .frame(minHeight: row.isWarmup ? 48 : SL.Metric.setRowHeight)
             .background(
                 RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                    .fill(row.isWarmup ? Color.clear : SL.Surface.raised2)
+                    .fill(fill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
@@ -139,13 +142,42 @@ struct SLSetRow: View {
         // The review: a PR row carries its reps figure in lime, at the moment
         // it happens — the value that beat your own previous data.
         if row.delta == .personalRecord { return SL.Signal.action }
-        return row.status == .written ? SL.Ink.primary : SL.Ink.tertiary
+        if row.status == .written { return SL.Ink.primary }
+        // 28: on the row up next, the target is the number to read.
+        return row.repsIsTarget && row.status == .nextUp ? SL.Ink.primary : SL.Ink.tertiary
     }
 
-    /// Only the next-up row carries a border; a written row is fill alone.
+    /// "volgt uit set 1" is a sentence, not a value, and 28 sets it as one.
+    private var weightFont: Font {
+        if row.isWarmup { return .sl(SL.TypeSize.lead, SL.Weight.medium) }
+        if row.weightKind == .awaitingCalibration { return .sl(SL.TypeSize.body, SL.Weight.regular) }
+        return .sl(SL.TypeSize.title, SL.Weight.semibold)
+    }
+
+    /// The component sheet: a pending row's weight waits in tertiary; the row
+    /// up next and a written row carry it in full.
+    private var weightColor: Color {
+        if row.isWarmup { return SL.Ink.secondary }
+        if row.weightKind != .value || row.status == .pending { return SL.Ink.tertiary }
+        return SL.Ink.primary
+    }
+
+    /// Pending rows stay on the grid's own `raised` surface; only the row up
+    /// next and the rows already written are lifted to raised2.
+    private var fill: Color {
+        if row.isWarmup { return .clear }
+        return row.status == .pending ? SL.Surface.raised : SL.Surface.raised2
+    }
+
+    /// The next-up row carries the .28 edge and a pending row the faint .08;
+    /// a written row is fill alone.
     private var borderColor: Color {
         if row.isWarmup { return SL.Surface.hairlineStrong }
-        return row.status == .nextUp ? SL.Surface.selection : .clear
+        switch row.status {
+        case .nextUp: return SL.Surface.selection
+        case .pending: return SL.Surface.hairline
+        case .written, .warmup: return .clear
+        }
     }
 
     private var toneColor: Color? {
