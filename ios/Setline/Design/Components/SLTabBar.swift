@@ -41,7 +41,12 @@ struct SLTabBar: View {
                 Button { selection = tab } label: {
                     VStack(spacing: 5) {
                         Image(systemName: tab.symbol)
-                            .font(.sl(20, SL.Weight.regular))
+                            // Deliberately unscaled, like the 11pt label beside
+                            // it. The handoff fixes this bar at 56 high with a
+                            // 20pt icon; letting the icon follow Dynamic Type
+                            // while the label stays put burst the bar open and
+                            // struck the labels through at accessibility sizes.
+                            .font(.system(size: 20, weight: SL.Weight.regular))
                             .symbolVariant(selection == tab ? .fill : .none)
                             .foregroundStyle(selection == tab ? SL.Signal.action : SL.Ink.tertiary)
                             .frame(height: 20)
