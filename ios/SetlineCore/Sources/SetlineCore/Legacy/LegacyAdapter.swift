@@ -15,7 +15,7 @@ public enum LegacyAdapter {
         return rows.compactMap(session(from:))
     }
 
-    static func session(from value: JSONValue) -> TrainingSession? {
+    public static func session(from value: JSONValue) -> TrainingSession? {
         guard let object = value.objectValue,
               let id = object["id"]?.stringValue,
               let dateString = object["date"]?.stringValue,

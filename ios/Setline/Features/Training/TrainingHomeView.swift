@@ -17,11 +17,26 @@ struct TrainingHomeView: View {
     private var isFirstRun: Bool { app.sessions.isEmpty }
 
     var body: some View {
+        Group {
+            if isOffline { offlineBody } else { onlineBody }
+        }
+        .fullScreenCover(isPresented: $planningWeek) {
+            WeekPlanView(onClose: { planningWeek = false })
+        }
+        .alert("Sessie beëindigen?", isPresented: $confirmsEnd) {
+            Button("Annuleer", role: .cancel) {}
+            Button("Beëindigen") { Task { await app.endActiveSession() } }
+        } message: {
+            Text(endMessage)
+        }
+        .slRespondsToTextSize()
+    }
+
+    private var onlineBody: some View {
         VStack(spacing: 0) {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if isOffline { reassurance.padding(.bottom, SL.Space.s5) }
                     if app.proposesDeload {
                         DeloadCard(
                             reading: app.fatigue,
@@ -59,55 +74,175 @@ struct TrainingHomeView: View {
             .frame(maxWidth: .infinity)
             .background(SL.Surface.ground)
         }
-        .fullScreenCover(isPresented: $planningWeek) {
-            WeekPlanView(onClose: { planningWeek = false })
-        }
-        .alert("Sessie beëindigen?", isPresented: $confirmsEnd) {
-            Button("Annuleer", role: .cancel) {}
-            Button("Beëindigen") { Task { await app.endActiveSession() } }
-        } message: {
-            Text(endMessage)
-        }
-        .slRespondsToTextSize()
     }
 
     /// 09: padding 16/20/0, title 21/600, week label 13 `text3`.
-    ///
-    /// 24 replaces it when there is no connection: sync failure is a state of
-    /// the data, so it is stated in the header's own voice — no colour, no
-    /// alert, and the session below carries on exactly as it was.
-    @ViewBuilder
     private var header: some View {
-        if isOffline {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Offline · alles wordt lokaal bewaard")
-                    .slTitle()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(SL.Ink.primary)
-                if let waiting {
-                    Text(waiting).slMeta().slNumerals().foregroundStyle(SL.Ink.tertiary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s4)
-            .accessibilityElement(children: .combine)
-        } else {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Training").slTitle().foregroundStyle(SL.Ink.primary)
-                Spacer()
-                Text(weekLabel).slMeta().foregroundStyle(SL.Ink.tertiary)
-            }
-            .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s4)
+        HStack(alignment: .firstTextBaseline) {
+            Text("Training").slTitle().foregroundStyle(SL.Ink.primary)
+            Spacer()
+            Text(weekLabel).slMeta().foregroundStyle(SL.Ink.tertiary)
         }
+        .padding(.horizontal, SL.Space.gutterSession)
+        .padding(.top, SL.Space.s4)
     }
 
     private var isOffline: Bool { app.sync == .offline }
 
+    // MARK: - Artboard 24 · offline
+
+    /// Sync failure is a state of the data, not a red box: the header becomes
+    /// a card saying so, the loud element is the reassurance, today's session
+    /// is still one tap away, and what waits is listed as what it is.
+    private var offlineBody: some View {
+        VStack(spacing: 0) {
+            offlineBanner
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.top, SL.Space.s3)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    SLEyebrow(text: "TRAINING")
+                    Text("Niets verloren.")
+                        .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
+                        .lineSpacing(SL.TypeSize.displayXL * 0.04)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.primary)
+                        .padding(.top, SL.Space.s2)
+                    Text(offlineReassurance)
+                        .slBody()
+                        .lineSpacing(SL.TypeSize.body * 0.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(maxWidth: 320, alignment: .leading)
+                        .padding(.top, 10)
+
+                    compactToday.padding(.top, SL.Space.s5)
+
+                    if !queue.isEmpty {
+                        SLEyebrow(text: "IN DE WACHTRIJ").padding(.top, SL.Space.s6)
+                        VStack(spacing: 0) {
+                            ForEach(Array(queue.enumerated()), id: \.offset) { _, row in
+                                queueRow(row)
+                            }
+                        }
+                    }
+
+                    Text("SETLINE schrijft eerst lokaal en synct daarna. Exporteren werkt ook offline.")
+                        .slMeta()
+                        .lineSpacing(SL.TypeSize.meta * 0.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(SL.Ink.tertiary)
+                        .padding(.top, SL.Space.s5)
+                }
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.top, SL.Space.s5)
+                .padding(.bottom, SL.Space.s6)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            // Artboard 24 keeps lime off this screen: retrying is the action,
+            // and it is a secondary one.
+            Button { Task { await app.syncNow() } } label: {
+                Text(app.sync == .syncing ? "Bezig met syncen…" : "Nu opnieuw proberen")
+            }
+            .buttonStyle(SLOutlineButtonStyle())
+            .disabled(app.sync == .syncing)
+            .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.bottom, SL.Space.s3)
+            .frame(maxWidth: .infinity)
+            .background(SL.Surface.ground)
+        }
+    }
+
+    private var offlineBanner: some View {
+        HStack(spacing: SL.Space.s3) {
+            Circle().fill(SL.Signal.attention).frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Offline · alles wordt lokaal bewaard")
+                    .slBody(SL.Weight.medium)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.primary)
+                if let waiting {
+                    Text(waiting).slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, SL.Space.s3)
+        .padding(.horizontal, 14)
+        .background(
+            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                .fill(SL.Surface.raised2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                .strokeBorder(SL.Signal.attention.opacity(0.4), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Today, still one tap from starting: being offline never stops a
+    /// session, because logging is local.
+    @ViewBuilder
+    private var compactToday: some View {
+        let paused = app.resumableSession
+        let day = paused.flatMap { app.day(for: $0) } ?? app.todayDay
+        Button {
+            if let paused, let resumed = app.day(for: paused) {
+                onResume(resumed, paused)
+            } else if let day {
+                onStart(day)
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: SL.Space.s1) {
+                    SLEyebrow(text: "Vandaag · \(longDateLabel)")
+                    Text(day?.short ?? "Rustdag").slTitle().foregroundStyle(SL.Ink.primary)
+                }
+                Spacer(minLength: SL.Space.s3)
+                if let day {
+                    Text("\(WeekPlan.sets(of: day)) sets").slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
+                }
+            }
+            .padding(.vertical, SL.Space.s4)
+            .padding(.horizontal, SL.Space.s5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .slCard()
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(day == nil)
+        .accessibilityHint(paused != nil ? "Dubbeltik om je sessie te hervatten" : "Dubbeltik om te beginnen")
+    }
+
+    private func queueRow(_ row: SyncQueue.Row) -> some View {
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                Text(row.detail).slMeta().slNumerals().foregroundStyle(SL.Ink.tertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("Wacht").slMeta().foregroundStyle(SL.Signal.attention)
+        }
+        .padding(.vertical, 14)
+        .overlay(alignment: .bottom) { SLHairline() }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var queue: [SyncQueue.Row] {
+        SyncQueue.rows(from: app.pendingChanges, display: app.display)
+    }
+
+    private var offlineReassurance: String {
+        queue.isEmpty
+            ? "Alles staat op dit toestel. Loggen werkt offline; syncen gebeurt zodra er verbinding is."
+            : "Wat hieronder wacht, staat op dit toestel. Loggen werkt offline; syncen gebeurt zodra er verbinding is."
+    }
+
     /// What is still on this device only, counted rather than estimated.
     private var waiting: String? {
-        let count = app.pendingChanges.count
+        let count = queue.count
         guard count > 0 else { return nil }
         return count == 1 ? "1 wijziging wacht op sync" : "\(count) wijzigingen wachten op sync"
     }
@@ -302,22 +437,6 @@ struct TrainingHomeView: View {
             string[range].foregroundColor = SL.Signal.action
         }
         return string
-    }
-
-    /// 24: the point of the screen is that nothing is at risk, said once.
-    private var reassurance: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
-            Text("Niets verloren.").slLead().foregroundStyle(SL.Ink.primary)
-            Text("Alles wat je logt staat op dit toestel. Loggen werkt offline; syncen gebeurt zodra er verbinding is.")
-                .slBody()
-                .lineSpacing(SL.TypeSize.body * 0.5)
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SL.Ink.secondary)
-        }
-        .padding(SL.Space.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .slCard(radius: SL.Radius.lg)
-        .accessibilityElement(children: .combine)
     }
 
     /// The way into the week (artboard 19): the plan row is the control.
