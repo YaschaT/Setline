@@ -166,6 +166,70 @@ final class SharedKeysMergeTests: XCTestCase {
         XCTAssertEqual(overrides, ["2026-09-17": "rest"])
     }
 
+    // MARK: Programme
+
+    private var editedPlan: JSONValue {
+        .array([.object([
+            "id": .string("push"),
+            "label": .string("Maandag · Push"),
+            "short": .string("Push"),
+            "exercises": .array([.object(["id": .string("flat-bench"), "name": .string("Bankdrukken")])]),
+        ])])
+    }
+
+    func testChangingProgrammeMovesTwoFieldsAndLeavesThePlanAlone() {
+        let before = state([
+            "planMode": .string("personal"),
+            "sciencePlanId": .string("ppl-ul"),
+            "plan": editedPlan,
+            "sessions": .array([.object(["id": .string("w-1")])]),
+        ])
+        let after = StateMerge.apply(
+            [StateChange(.setProgram(mode: "science", sciencePlanID: "upper-lower"), createdAt: now)],
+            to: before, now: now
+        )
+        XCTAssertEqual(after["planMode"], .string("science"))
+        XCTAssertEqual(after["sciencePlanId"], .string("upper-lower"))
+        XCTAssertEqual(after["plan"], editedPlan, "a science programme is not stored in `plan`")
+        XCTAssertEqual(after["sessions"]?.arrayValue?.count, 1)
+    }
+
+    func testGoingBackToYourOwnPlanRemembersWhichScienceProgrammeItWas() {
+        let after = StateMerge.apply(
+            [StateChange(.setProgram(mode: "personal", sciencePlanID: nil), createdAt: now)],
+            to: state(["planMode": .string("science"), "sciencePlanId": .string("full-body")]),
+            now: now
+        )
+        XCTAssertEqual(after["planMode"], .string("personal"))
+        XCTAssertEqual(after["sciencePlanId"], .string("full-body"))
+    }
+
+    func testTheEditedPlanIsOnlyReadOnYourOwnProgramme() {
+        let personal = LegacyAdapter.plan(from: state([
+            "planMode": .string("personal"), "plan": editedPlan,
+        ]))
+        XCTAssertEqual(personal.map(\.id), ["push"], "the account's own plan")
+
+        let science = LegacyAdapter.plan(from: state([
+            "planMode": .string("science"), "sciencePlanId": .string("upper-lower"), "plan": editedPlan,
+        ]))
+        XCTAssertEqual(science.map(\.id), PlanCatalog.scienceUpperLower.map(\.id), "the programme's own days")
+    }
+
+    func testEveryProgrammeTheAccountCanBeOnIsNamed() {
+        let programs = ProgramCatalog.all(personalPlan: PlanCatalog.personal)
+        XCTAssertEqual(programs.map(\.name), ["Push / Pull / Benen", "PPL + Upper / Lower", "Upper / Lower", "Full body"])
+        XCTAssertEqual(programs.map(\.id), ["personal", "science-ppl-ul", "science-upper-lower", "science-full-body"])
+    }
+
+    func testTheCurrentProgrammeIsTheOneTheAccountSays() {
+        let science = LegacyState(raw: ["planMode": .string("science"), "sciencePlanId": .string("full-body")])
+        XCTAssertEqual(ProgramCatalog.current(in: science, plan: PlanCatalog.personal).name, "Full body")
+
+        let personal = LegacyState(raw: ["planMode": .string("personal")])
+        XCTAssertEqual(ProgramCatalog.current(in: personal, plan: PlanCatalog.personal).mode, "personal")
+    }
+
     // MARK: Storage
 
     func testTheNewOperationsSurviveBeingStoredOnTheDevice() throws {
@@ -175,6 +239,8 @@ final class SharedKeysMergeTests: XCTestCase {
             StateChange(.upsertNutritionEntry(.object(["id": .string("m1")])), createdAt: now),
             StateChange(.removeNutritionEntry(id: "m1"), createdAt: now),
             StateChange(.setTarget(field: "calories", value: 2300), createdAt: now),
+            StateChange(.setProgram(mode: "science", sciencePlanID: "upper-lower"), createdAt: now),
+            StateChange(.setProgram(mode: "personal", sciencePlanID: nil), createdAt: now),
         ]
         let data = try StateChange.encoder.encode(changes)
         XCTAssertEqual(try StateChange.decoder.decode([StateChange].self, from: data), changes)

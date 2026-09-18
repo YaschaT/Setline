@@ -29,6 +29,7 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case removeNutritionEntry(id: String)
         /// One nutrition target, by field.
         case setTarget(field: String, value: Decimal)
+        case setProgram(mode: String, sciencePlanID: String?)
     }
 
     /// Identifies the change itself, so a sync can clear exactly the changes
@@ -61,13 +62,14 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
-        case scheduleKey, dayID, entry, field, value
+        case scheduleKey, dayID, entry, field, value, mode, sciencePlanID
     }
 
     private enum KindName: String, Codable {
         case upsertSession, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry, setTarget
+        case setProgram
     }
 
     public init(from decoder: Decoder) throws {
@@ -106,6 +108,11 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             kind = .setTarget(
                 field: try container.decode(String.self, forKey: .field),
                 value: try container.decode(Decimal.self, forKey: .value)
+            )
+        case .setProgram:
+            kind = .setProgram(
+                mode: try container.decode(String.self, forKey: .mode),
+                sciencePlanID: try container.decodeIfPresent(String.self, forKey: .sciencePlanID)
             )
         }
     }
@@ -156,6 +163,10 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             try container.encode(KindName.setTarget, forKey: .kind)
             try container.encode(field, forKey: .field)
             try container.encode(value, forKey: .value)
+        case .setProgram(let mode, let sciencePlanID):
+            try container.encode(KindName.setProgram, forKey: .kind)
+            try container.encode(mode, forKey: .mode)
+            try container.encodeIfPresent(sciencePlanID, forKey: .sciencePlanID)
         }
     }
 

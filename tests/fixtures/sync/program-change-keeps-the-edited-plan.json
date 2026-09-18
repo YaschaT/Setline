@@ -1,0 +1,151 @@
+{
+  "name": "Changing programme moves two fields and keeps the plan",
+  "why": "A programme change says which plan the week is built from; it is not a rewrite. The account's own edited `plan` belongs to personal mode and must survive a trip through a science programme intact, along with its sessions, its meals and the overrides of both programmes — which are scoped per programme and therefore never collide.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-18T09:00:00.000Z",
+      "remote": {
+        "planMode": "personal",
+        "sciencePlanId": "ppl-ul",
+        "plan": [
+          {
+            "id": "push",
+            "label": "Maandag · Push",
+            "short": "Push",
+            "exercises": [{ "id": "flat-bench", "name": "Bankdrukken", "prescription": "4 × 8" }]
+          }
+        ],
+        "scheduleOverrides": {
+          "personal:2026-09-18": "push",
+          "science-upper-lower:2026-09-18": "upper"
+        },
+        "sessions": [
+          {
+            "id": "w-1",
+            "date": "2026-09-15T16:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": []
+          }
+        ],
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 }
+      },
+      "ops": [
+        {
+          "kind": "setProgram",
+          "createdAt": "2026-09-18T08:59:00Z",
+          "mode": "science",
+          "sciencePlanID": "upper-lower"
+        }
+      ],
+      "expected": {
+        "planMode": "science",
+        "sciencePlanId": "upper-lower",
+        "plan": [
+          {
+            "id": "push",
+            "label": "Maandag · Push",
+            "short": "Push",
+            "exercises": [{ "id": "flat-bench", "name": "Bankdrukken", "prescription": "4 × 8" }]
+          }
+        ],
+        "scheduleOverrides": {
+          "personal:2026-09-18": "push",
+          "science-upper-lower:2026-09-18": "upper"
+        },
+        "sessions": [
+          {
+            "id": "w-1",
+            "date": "2026-09-15T16:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": []
+          }
+        ],
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 }
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-18T09:05:00.000Z",
+      "ancestry": {
+        "planMode": "personal",
+        "sciencePlanId": "ppl-ul",
+        "targets": { "calories": 2250, "protein": 165, "carbs": 240, "fat": 70 }
+      },
+      "snapshot": {
+        "planMode": "personal",
+        "sciencePlanId": "ppl-ul",
+        "targets": { "calories": 2400, "protein": 165, "carbs": 240, "fat": 70 }
+      },
+      "expected": {
+        "planMode": "science",
+        "sciencePlanId": "upper-lower",
+        "plan": [
+          {
+            "id": "push",
+            "label": "Maandag · Push",
+            "short": "Push",
+            "exercises": [{ "id": "flat-bench", "name": "Bankdrukken", "prescription": "4 × 8" }]
+          }
+        ],
+        "scheduleOverrides": {
+          "personal:2026-09-18": "push",
+          "science-upper-lower:2026-09-18": "upper"
+        },
+        "sessions": [
+          {
+            "id": "w-1",
+            "date": "2026-09-15T16:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": []
+          }
+        ],
+        "targets": { "calories": 2400, "protein": 165, "carbs": 240, "fat": 70 }
+      }
+    },
+    {
+      "client": "ios",
+      "now": "2026-09-18T09:10:00.000Z",
+      "ops": [
+        {
+          "kind": "setProgram",
+          "createdAt": "2026-09-18T09:09:00Z",
+          "mode": "personal"
+        }
+      ],
+      "expected": {
+        "planMode": "personal",
+        "sciencePlanId": "upper-lower",
+        "plan": [
+          {
+            "id": "push",
+            "label": "Maandag · Push",
+            "short": "Push",
+            "exercises": [{ "id": "flat-bench", "name": "Bankdrukken", "prescription": "4 × 8" }]
+          }
+        ],
+        "scheduleOverrides": {
+          "personal:2026-09-18": "push",
+          "science-upper-lower:2026-09-18": "upper"
+        },
+        "sessions": [
+          {
+            "id": "w-1",
+            "date": "2026-09-15T16:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": []
+          }
+        ],
+        "targets": { "calories": 2400, "protein": 165, "carbs": 240, "fat": 70 }
+      }
+    }
+  ]
+}

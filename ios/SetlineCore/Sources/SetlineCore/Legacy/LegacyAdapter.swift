@@ -182,9 +182,13 @@ public enum LegacyAdapter {
     }
 
     /// The saved plan, if the user edited theirs, otherwise the catalogue's.
+    ///
+    /// `plan` holds the account's *personal* plan and only that: on a science
+    /// programme the web app reads the programme's own days and leaves `plan`
+    /// untouched, so reading it here would show a plan the account is not on.
     public static func plan(from state: LegacyState) -> [WorkoutDay] {
         let (mode, scienceID) = planMode(from: state)
-        guard let days = state["plan"]?.arrayValue, !days.isEmpty else {
+        guard mode == "personal", let days = state["plan"]?.arrayValue, !days.isEmpty else {
             return PlanCatalog.plan(mode: mode, sciencePlanID: scienceID)
         }
         let parsed = days.compactMap(workoutDay(from:))

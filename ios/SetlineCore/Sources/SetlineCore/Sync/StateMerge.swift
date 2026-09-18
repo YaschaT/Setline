@@ -107,6 +107,14 @@ public enum StateMerge {
         case .removeNutritionEntry(let entryID):
             removeItem(entryID, in: &raw, collection: "nutritionEntries", at: change.createdAt)
 
+        case .setProgram(let mode, let sciencePlanID):
+            // Which programme the account is on, and nothing more. The plan it
+            // edited itself is left exactly as the web app wrote it, because a
+            // science programme is not stored in `plan` at all — and switching
+            // back has to find that plan intact.
+            raw["planMode"] = .string(mode)
+            if let sciencePlanID { raw["sciencePlanId"] = .string(sciencePlanID) }
+
         case .setTarget(let field, let value):
             // One field. Targets the app does not model stay as they are.
             var targets = raw["targets"]?.objectValue ?? [:]

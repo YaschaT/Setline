@@ -21,6 +21,7 @@ struct AccountView: View {
     @State private var reauthenticating = false
     @State private var planningWeek = false
     @State private var editingTargets = false
+    @State private var choosingProgram = false
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -51,6 +52,21 @@ struct AccountView: View {
         .sheet(isPresented: $reauthenticating) { reauthentication }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })
+        }
+        .fullScreenCover(isPresented: $choosingProgram) {
+            ProgramSheet(
+                programs: ProgramCatalog.all(personalPlan: app.plan),
+                current: ProgramCatalog.current(in: app.state ?? LegacyState(raw: [:]), plan: app.plan),
+                onSave: { program in
+                    choosingProgram = false
+                    Task {
+                        await app.record([
+                            StateChange(.setProgram(mode: program.mode, sciencePlanID: program.sciencePlanID))
+                        ])
+                    }
+                },
+                onClose: { choosingProgram = false }
+            )
         }
         .sheet(isPresented: $editingTargets) {
             TargetsSheet(targets: summary.targets) { changes in
@@ -177,7 +193,7 @@ struct AccountView: View {
 
     private var planRows: some View {
         VStack(spacing: 0) {
-            row(summary.planName)
+            row(summary.planName) { choosingProgram = true }
             if !summary.trainingDays.isEmpty {
                 row("Trainingsdagen · \(summary.trainingDays.joined(separator: " "))") { planningWeek = true }
             }
