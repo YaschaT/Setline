@@ -64,6 +64,7 @@ struct SLTabBar: View {
                             .fill(selection == tab ? SL.Surface.raised2 : .clear)
                     )
                     .contentShape(Rectangle())
+                    .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.label)

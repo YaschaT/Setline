@@ -121,6 +121,32 @@ struct AddFoodSheet: View {
                     .strokeBorder(SL.Surface.hairline, lineWidth: 1)
             )
 
+            // The component sheet's loading state, on the one operation here
+            // that really waits on a network: a tonal row, never a spinner and
+            // never a pulse, so reduced motion sees exactly the same thing.
+            if searching {
+                HStack(spacing: SL.Space.s3) {
+                    RoundedRectangle(cornerRadius: SL.Radius.sm, style: .continuous)
+                        .fill(SL.Surface.raised2)
+                        .frame(width: 120, height: 12)
+                    Spacer()
+                    Text("Zoeken…").slMeta().foregroundStyle(SL.Ink.tertiary)
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: SL.Space.hitMin)
+                .background(
+                    RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                        .fill(SL.Surface.ground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                        .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+                )
+                .padding(.top, SL.Space.s3)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Zoeken")
+            }
+
             if let searchNote {
                 Text(searchNote)
                     .slMeta()

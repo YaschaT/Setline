@@ -205,6 +205,7 @@ struct SLPrimaryButtonStyle: ButtonStyle {
                 .easeOut(duration: SL.Motion.duration(SL.Motion.fast, reduceMotion: reduceMotion)),
                 value: configuration.isPressed
             )
+            .slFocusRing(Capsule())
     }
 }
 
@@ -230,6 +231,7 @@ struct SLOutlineButtonStyle: ButtonStyle {
                 )
             )
             .opacity(configuration.isPressed ? 0.86 : 1)
+            .slFocusRing(Capsule())
     }
 }
 
@@ -258,4 +260,29 @@ extension View {
 
     /// Every numeric value in this design uses tabular figures.
     func slNumerals() -> some View { self.monospacedDigit() }
+}
+
+/// The component sheet's focus state: a 2pt lime ring, 2pt outside the shape,
+/// no glow. Drawn only while the control holds keyboard or remote focus, so it
+/// never shows for touch.
+private struct SLFocusRing<RingShape: InsettableShape>: ViewModifier {
+    @Environment(\.isFocused) private var isFocused
+    let shape: RingShape
+
+    func body(content: Content) -> some View {
+        content.overlay(
+            shape
+                .inset(by: -(SL.Metric.focusRingOffset + SL.Metric.focusRingWidth))
+                .strokeBorder(SL.Signal.action, lineWidth: SL.Metric.focusRingWidth)
+                .opacity(isFocused ? 1 : 0)
+                .allowsHitTesting(false)
+        )
+    }
+}
+
+extension View {
+    /// Our ring instead of the system's, on anything that can take focus.
+    func slFocusRing<RingShape: InsettableShape>(_ shape: RingShape) -> some View {
+        modifier(SLFocusRing(shape: shape)).focusEffectDisabled()
+    }
 }
