@@ -241,6 +241,14 @@ final class AppState {
         guard session != nil else { return }
         #if DEBUG
         if DemoData.isEnabled {
+            #if DEBUG
+            // `-SetlineOffline` holds the demo in the state artboard 24 draws,
+            // which is otherwise only reachable by losing a real connection.
+            if ProcessInfo.processInfo.arguments.contains("-SetlineOffline") {
+                sync = .offline
+                return
+            }
+            #endif
             // Demo data never leaves the device.
             pendingChanges = []
             let syncedAt = Date()

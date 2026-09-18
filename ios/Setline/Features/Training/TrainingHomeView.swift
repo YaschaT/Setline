@@ -21,6 +21,7 @@ struct TrainingHomeView: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if isOffline { reassurance.padding(.bottom, SL.Space.s5) }
                     todayCard
                     weekStrip.padding(.top, SL.Space.s8)
                     if let insight { insightCard(insight).padding(.top, SL.Space.s8) }
@@ -57,14 +58,44 @@ struct TrainingHomeView: View {
     }
 
     /// 09: padding 16/20/0, title 21/600, week label 13 `text3`.
+    ///
+    /// 24 replaces it when there is no connection: sync failure is a state of
+    /// the data, so it is stated in the header's own voice — no colour, no
+    /// alert, and the session below carries on exactly as it was.
+    @ViewBuilder
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Training").slTitle().foregroundStyle(SL.Ink.primary)
-            Spacer()
-            Text(weekLabel).slMeta().foregroundStyle(SL.Ink.tertiary)
+        if isOffline {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Offline · alles wordt lokaal bewaard")
+                    .slTitle()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.primary)
+                if let waiting {
+                    Text(waiting).slMeta().slNumerals().foregroundStyle(SL.Ink.tertiary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.top, SL.Space.s4)
+            .accessibilityElement(children: .combine)
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Training").slTitle().foregroundStyle(SL.Ink.primary)
+                Spacer()
+                Text(weekLabel).slMeta().foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.top, SL.Space.s4)
         }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.top, SL.Space.s4)
+    }
+
+    private var isOffline: Bool { app.sync == .offline }
+
+    /// What is still on this device only, counted rather than estimated.
+    private var waiting: String? {
+        let count = app.pendingChanges.count
+        guard count > 0 else { return nil }
+        return count == 1 ? "1 wijziging wacht op sync" : "\(count) wijzigingen wachten op sync"
     }
 
     private var weekLabel: String {
@@ -257,6 +288,22 @@ struct TrainingHomeView: View {
             string[range].foregroundColor = SL.Signal.action
         }
         return string
+    }
+
+    /// 24: the point of the screen is that nothing is at risk, said once.
+    private var reassurance: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            Text("Niets verloren.").slLead().foregroundStyle(SL.Ink.primary)
+            Text("Alles wat je logt staat op dit toestel. Loggen werkt offline; syncen gebeurt zodra er verbinding is.")
+                .slBody()
+                .lineSpacing(SL.TypeSize.body * 0.5)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.secondary)
+        }
+        .padding(SL.Space.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slCard(radius: SL.Radius.lg)
+        .accessibilityElement(children: .combine)
     }
 
     /// The way into the week (artboard 19): the plan row is the control.
