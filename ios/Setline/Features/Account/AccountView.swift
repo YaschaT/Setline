@@ -80,7 +80,7 @@ struct AccountView: View {
             Button("Uitloggen", role: .destructive) { app.signOut() }
             Button("Annuleer", role: .cancel) {}
         } message: {
-            Text("\(app.pendingChanges.count) wijzigingen staan alleen op dit toestel. Ze blijven bewaard en syncen zodra je opnieuw aanmeldt.")
+            Text("\(changes(app.pendingChanges.count)) \(verb(app.pendingChanges.count, "staat", "staan")) alleen op dit toestel. \(verb(app.pendingChanges.count, "Hij blijft", "Ze blijven")) bewaard en synct zodra je opnieuw aanmeldt.")
         }
     }
 
@@ -160,12 +160,12 @@ struct AccountView: View {
     private var syncDetail: String {
         switch standing {
         case .synced(let date):
-            return "\(Self.relative.localizedString(for: date, relativeTo: Date())) · \(sessionsSafe) staan veilig"
+            return "\(Self.relative.localizedString(for: date, relativeTo: Date())) · \(sessionsSafe) \(verb(summary.sessionCount, "staat", "staan")) veilig"
         case .waiting(let count):
-            return "\(changes(count)) staan op dit toestel en syncen zodra er verbinding is."
+            return "\(changes(count)) \(verb(count, "staat", "staan")) op dit toestel en synct zodra er verbinding is."
         case .offline(let count):
             return count > 0
-                ? "Alles wordt lokaal bewaard · \(changes(count)) wachten op sync"
+                ? "Alles wordt lokaal bewaard · \(changes(count)) \(verb(count, "wacht", "wachten")) op sync"
                 : "Alles wordt lokaal bewaard."
         case .expired:
             return "Meld je opnieuw aan om te synchroniseren. Je werk blijft op dit toestel."
@@ -176,6 +176,11 @@ struct AccountView: View {
 
     private func changes(_ count: Int) -> String {
         count == 1 ? "1 wijziging" : "\(count) wijzigingen"
+    }
+
+    /// One change stays; two stay. The count decides the verb, not the noun.
+    private func verb(_ count: Int, _ singular: String, _ plural: String) -> String {
+        count == 1 ? singular : plural
     }
 
     private var sessionsSafe: String {

@@ -85,15 +85,16 @@ export function genericMatches(query: string): FoodResult[] {
     }));
 }
 
+/**
+ * Open Food Facts' current search. Its predecessor, `/cgi/search.pl`, answers
+ * 503 and the v2 endpoint ignores the search term and returns whatever is
+ * popular, so neither can be asked what a word means.
+ */
 export function endpointFor(query: string) {
-  const endpoint = new URL("https://world.openfoodfacts.org/cgi/search.pl");
-  endpoint.searchParams.set("search_terms", query);
-  endpoint.searchParams.set("search_simple", "1");
-  endpoint.searchParams.set("action", "process");
-  endpoint.searchParams.set("json", "1");
-  endpoint.searchParams.set("page_size", "15");
-  endpoint.searchParams.set("lc", "nl");
-  endpoint.searchParams.set("cc", "be");
+  const endpoint = new URL("https://search.openfoodfacts.org/search");
+  endpoint.searchParams.set("q", query);
+  endpoint.searchParams.set("page_size", String(MAX_RESULTS));
+  endpoint.searchParams.set("lang", "nl");
   endpoint.searchParams.set(
     "fields",
     "code,product_name,product_name_nl,brands,nutriments,image_front_small_url,countries_tags",
@@ -101,21 +102,27 @@ export function endpointFor(query: string) {
   return endpoint;
 }
 
-type Payload = {
-  products?: Array<{
-    code?: string;
-    product_name?: string;
-    product_name_nl?: string;
-    brands?: string;
-    image_front_small_url?: string;
-    countries_tags?: string[];
-    nutriments?: Record<string, unknown>;
-  }>;
+type Hit = {
+  code?: string;
+  product_name?: string | null;
+  product_name_nl?: string | null;
+  /** An array on the search index, a comma-joined string on the older APIs. */
+  brands?: string[] | string | null;
+  image_front_small_url?: string | null;
+  countries_tags?: string[];
+  nutriments?: Record<string, unknown>;
 };
+
+type Payload = { hits?: Hit[]; products?: Hit[] };
+
+function firstBrand(brands: Hit["brands"]) {
+  const value = Array.isArray(brands) ? brands[0] : brands?.split(",")[0];
+  return value?.trim() || "Merk onbekend";
+}
 
 /** Belgian products first; anything nameless or implausibly dense is dropped. */
 export function productsFrom(payload: Payload): FoodResult[] {
-  return (payload.products ?? [])
+  return (payload.hits ?? payload.products ?? [])
     .map((product): (FoodResult & { belgian: boolean }) | null => {
       const name = (product.product_name_nl || product.product_name || "").trim();
       const nutrients = product.nutriments ?? {};
@@ -125,7 +132,7 @@ export function productsFrom(payload: Payload): FoodResult[] {
       return {
         id: `off-${product.code || slug(name)}`,
         name,
-        brand: (product.brands || "Merk onbekend").split(",")[0].trim(),
+        brand: firstBrand(product.brands),
         imageUrl: product.image_front_small_url || "",
         calories,
         protein: numberOrZero(nutrients.proteins_100g),

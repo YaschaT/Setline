@@ -257,10 +257,19 @@ final class AppState {
         #if DEBUG
         if DemoData.isEnabled {
             #if DEBUG
-            // `-SetlineOffline` holds the demo in the state artboard 24 draws,
-            // which is otherwise only reachable by losing a real connection.
-            if ProcessInfo.processInfo.arguments.contains("-SetlineOffline") {
+            // The three states a demo cannot reach on its own: no connection,
+            // work still queued, and a sign-in that has run out.
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-SetlineOffline") {
                 sync = .offline
+                return
+            }
+            if arguments.contains("-SetlineExpired") {
+                sync = .sessionExpired
+                return
+            }
+            if arguments.contains("-SetlinePending") {
+                sync = .idle
                 return
             }
             #endif

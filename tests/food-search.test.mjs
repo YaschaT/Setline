@@ -101,11 +101,31 @@ test("a query nothing generic matches, with the database down, is an honest fail
   assert.equal(outcome.body.error, "FOOD_SEARCH_ERROR");
 });
 
-test("the endpoint asks Open Food Facts for Belgian, Dutch-language results", async () => {
+test("the endpoint asks the search index that still answers", async () => {
   const endpoint = search.endpointFor("skyr");
-  assert.equal(endpoint.searchParams.get("cc"), "be");
-  assert.equal(endpoint.searchParams.get("lc"), "nl");
-  assert.equal(endpoint.searchParams.get("search_terms"), "skyr");
+  assert.equal(endpoint.origin, "https://search.openfoodfacts.org");
+  assert.equal(endpoint.searchParams.get("q"), "skyr");
+  assert.equal(endpoint.searchParams.get("lang"), "nl");
+  assert.equal(endpoint.searchParams.get("page_size"), String(search.MAX_RESULTS));
+});
+
+test("a brand arrives as a list on the index and as text on the older APIs", async () => {
+  const asList = await search.searchFood("skyr", upstream({
+    hits: [{ code: "1", product_name: "Skyr", brands: ["Boni", "Colruyt"], nutriments: { "energy-kcal_100g": 63 } }],
+  }));
+  const asText = await search.searchFood("skyr", upstream({
+    products: [{ code: "1", product_name: "Skyr", brands: "Boni, Colruyt", nutriments: { "energy-kcal_100g": 63 } }],
+  }));
+  const brand = (outcome) => outcome.body.results.find((product) => product.id === "off-1").brand;
+  assert.equal(brand(asList), "Boni");
+  assert.equal(brand(asText), "Boni", "the older shape still reads");
+});
+
+test("a product with no brand at all is still offered", async () => {
+  const outcome = await search.searchFood("skyr", upstream({
+    hits: [{ code: "1", product_name: "Skyr", nutriments: { "energy-kcal_100g": 63 } }],
+  }));
+  assert.equal(outcome.body.results.find((product) => product.id === "off-1").brand, "Merk onbekend");
 });
 
 
