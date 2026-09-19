@@ -9,6 +9,7 @@ import SetlineCore
 /// `Sessie afronden` never forces a save.
 struct SessionCompleteView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
     let runner: SessionRunner
     let previous: TrainingSession?
     /// Back to the session without saving — a mis-tap on `Sessie afronden`,
@@ -65,10 +66,14 @@ struct SessionCompleteView: View {
         let summary = runner.volumeSummary(previous: previous)
         return VStack(alignment: .leading, spacing: 0) {
             SLEyebrow(text: "Volume")
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+            // A number never breaks across lines: at accessibility sizes the
+            // change moves under it instead of squeezing it.
+            volumeLayout {
                 Text(app.display.volumeKg(summary.volume))
                     .slDisplay(SL.TypeSize.displayXL)
                     .slNumerals()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .foregroundStyle(SL.Ink.primary)
                 if let delta = summary.delta, delta > 0 {
                     Text(app.display.signedDelta(delta))
@@ -83,6 +88,12 @@ struct SessionCompleteView: View {
         .padding(.bottom, SL.Space.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .bottom) { SLHairline() }
+    }
+
+    private var volumeLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
     }
 
     /// Plain blocks separated by hairlines — no cards. The highest-ranked
