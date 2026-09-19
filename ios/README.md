@@ -69,19 +69,64 @@ other stores.
 
 ### Not built for this release
 
-- **Onboarding beyond the cold open.** Artboards 02a, 02b and the four intake
-  steps are not here. Two of intake's four answers have nowhere to live —
-  `user_state` stores no experience level and no plate inventory — so building
-  the screens would mean inventing storage the web app does not read.
-- **Passkeys, Apple and Google.** Artboard 02 asks for all three; none is
-  configured against this Supabase project, and a button that cannot work is
-  worse than an honest e-mail field. Sign-in is e-mail and password.
-- **Recovery (18), the free-session counter and paywall (25a/25b), and the
-  ≥1024 layouts (26/27).** Recovery needs HealthKit and only appears when the
-  numbers justify a proposal; the commercial screens need StoreKit products;
-  the wide layouts are iPad.
+Deferred — StoreKit and iPad:
+
+- **The free-session counter and paywall (25a/25b).** They need StoreKit
+  products, which do not exist yet.
+- **The ≥1024 layouts (26/27).** They are iPad.
+
+Deferred until its rule is designed:
+
+- **Voeding's protein suggestion (21).** The artboard shows "NOG 23 G PROTEÏNE
+  → 250 g magere kwark · 24 g · 145 kcal" and Review 05 styles the block, but
+  neither says how the food is chosen. Nothing picks a food until that rule is
+  designed; Voeding shows no suggestion.
+
+Not built, by design:
+
+- **Passkeys, Apple and Google.** Base artboard 02 still draws them, but Review
+  01 redrew identity as e-mail and password, and none of the three is
+  configured against this Supabase project. A button that cannot work is worse
+  than an honest e-mail field.
+- **Base 18's sleep-and-HRV recovery card.** Addendum 18R replaced it with a
+  deload proposal built from logged sets, which is here. HealthKit is out of
+  scope.
 
 All of these are release gaps for a public V1, not defects in what is here.
+
+### Where the app differs from the design, on purpose
+
+- **05** has no "Eigen plan" option: there is no plan editor behind it.
+- **09** has no "Herstel · slaap, HRV" line (HealthKit is out of scope), and its
+  progression line says "+5 kg sinds 28 aug." without the artboard's second
+  sentence, "Vandaag 50 kg × 8."
+- **10**: pre-flight's `Wijzig` opens the week agenda, the one place today's
+  session can be changed.
+- **14**: the plate calculator adds correctly where the artboard's own example
+  does not.
+- **15Rb**: the scope captions say what each reach changes ("Push, vanaf
+  vandaag", "Push, tot je het plan wijzigt") instead of "Maandag 7 sep, deze
+  sessie" — a change for today only is a swap (TRAINING_LOGIC §12.4).
+- **16R**: a set is removed from its entry sheet, and only a set added during
+  the session; there is no swipe. Planned sets stay, because completion feeds
+  §11's fatigue signal. The partial marker names its count ("partieel +2").
+- **17R** adds `Terug`, so a mis-tap on `Sessie afronden` never forces a save.
+- **19** has no advisory line, on request.
+- **23**: the Rusttimer row has no `Wijzig`, because rest follows each
+  exercise's role (13R) and there is nothing to set; `Account verwijderen` is
+  hidden, on request.
+- **29 / 29b** disagree on READY's headline; the card uses 29b's per-tone
+  headlines with 29's steppers.
+- **30**: the pill stays "Begin set 1". Warm-ups are a reference strip and are
+  never logged (§7), so "Begin met opwarmen" would promise an action that does
+  not exist.
+- **31b**: "Vervang deze oefening" uses the artboard's "met stabielere varianten
+  bovenaan" only when the region actually narrows the list; otherwise it says
+  the list does not change.
+- **Tab bar**: SF Symbols stand in for the mock's Material Symbols at the same
+  20pt, and the bar keeps its size at large text sizes instead of overflowing.
+- **Onboarding** runs after registration only; a returning sign-in goes
+  straight in.
 
 ### Known technical debt
 
