@@ -97,9 +97,7 @@ All of these are release gaps for a public V1, not defects in what is here.
 ### Where the app differs from the design, on purpose
 
 - **05** has no "Eigen plan" option: there is no plan editor behind it.
-- **09** has no "Herstel · slaap, HRV" line (HealthKit is out of scope), and its
-  progression line says "+5 kg sinds 28 aug." without the artboard's second
-  sentence, "Vandaag 50 kg × 8."
+- **09** has no "Herstel · slaap, HRV" line (HealthKit is out of scope).
 - **10**: pre-flight's `Wijzig` opens the week agenda, the one place today's
   session can be changed.
 - **14**: the plate calculator adds correctly where the artboard's own example

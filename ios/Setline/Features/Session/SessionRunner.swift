@@ -87,7 +87,7 @@ final class SessionRunner {
         // survives it (TRAINING_LOGIC §11.2).
         let deload = app.activeDeload
         self.slots = day.exercises.enumerated().map { index, planned in
-            let prescribed = deload.map { planned.lightened(setsTo: $0.sets(from: planned.targetSets)) } ?? planned
+            let prescribed = Self.prescribed(planned, deload: deload)
             var slot = Self.resolve(
                 SessionSlot(position: index, plan: prescribed, exerciseName: exerciseNamed(prescribed.exerciseID).name),
                 exerciseNamed: exerciseNamed,
@@ -138,7 +138,34 @@ final class SessionRunner {
     }
 
     private static func prefillWeight(_ slot: ExerciseSlot) -> Decimal? {
-        slot.proposal.weightKg ?? slot.history.mostRecent?.sets.first?.weightKg
+        prefillWeight(proposal: slot.proposal, history: slot.history)
+    }
+
+    /// The proposal's weight, or the previous session's when there is none.
+    private static func prefillWeight(proposal: ProgressionProposal, history: ExerciseHistory) -> Decimal? {
+        proposal.weightKg ?? history.mostRecent?.sets.first?.weightKg
+    }
+
+    /// The plan a session works from: a lighter week cuts sets, never
+    /// exercises.
+    private static func prescribed(_ planned: PlannedExercise, deload: Deload?) -> PlannedExercise {
+        deload.map { planned.lightened(setsTo: $0.sets(from: planned.targetSets)) } ?? planned
+    }
+
+    /// What a session started now would open this exercise with: the same
+    /// weight and per-set rep targets the rows are prefilled with. Artboard
+    /// 09's "Vandaag 50 kg × 8." reads this, so the home screen never names a
+    /// target the session does not start from.
+    static func openingTarget(for planned: PlannedExercise, app: AppState) -> (weightKg: Decimal, reps: [Int])? {
+        let prescribed = prescribed(planned, deload: app.activeDeload)
+        let history = app.history(for: prescribed)
+        let proposal = ProgressionEngine.proposal(
+            planned: prescribed, exercise: app.exercise(prescribed.exerciseID), history: history
+        )
+        guard let weight = prefillWeight(proposal: proposal, history: history),
+              let reps = proposal.setTargets, !reps.isEmpty
+        else { return nil }
+        return (weight, reps)
     }
 
     // MARK: - Pause and resume

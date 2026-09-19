@@ -453,7 +453,8 @@ struct TrainingHomeView: View {
     }
 
     /// The one lime accent on this screen: a value that beats the user's own
-    /// previous data.
+    /// previous data, then today's plan for the same exercise — artboard 09's
+    /// "Bankdrukken staat +5 kg sinds 26 aug. Vandaag 50 kg × 8."
     private var insight: (text: String, highlight: String)? {
         guard let day = app.todayDay else { return nil }
         for planned in day.exercises {
@@ -466,7 +467,11 @@ struct TrainingHomeView: View {
             else { continue }
             let name = app.exercise(planned.exerciseID).name
             let delta = "\(app.display.signedDelta(latest - oldest)) kg"
-            return ("\(name) staat \(delta) sinds \(app.display.shortDate(since)).", delta)
+            var text = "\(name) staat \(delta) sinds \(app.display.shortDate(since))."
+            if let today = SessionRunner.openingTarget(for: planned, app: app) {
+                text += " Vandaag \(app.display.kg(today.weightKg)) × \(ProgressionEngine.repsLabel(today.reps))."
+            }
+            return (text, delta)
         }
         return nil
     }
