@@ -144,3 +144,48 @@ final class SetRowReserveTests: XCTestCase {
         XCTAssertNotEqual(SetDelta.reserve(1), SetDelta.reserve(2))
     }
 }
+
+/// The home card's set count and the session that opens must agree, in a
+/// normal week and in a lighter one.
+final class SessionPrescriptionTests: XCTestCase {
+
+    private let day = PlanCatalog.personal.first { $0.id == "push" }!
+
+    /// What a session holds when it opens: one slot per exercise, built from
+    /// the prescription, counted by the rows the program prescribed.
+    private func openedSessionSetCount(deload: Deload?) -> Int {
+        day.exercises.enumerated().reduce(0) { total, item in
+            let slot = SessionSlot(
+                position: item.offset,
+                plan: SessionPrescription.planned(item.element, deload: deload),
+                exerciseName: item.element.exerciseID
+            )
+            return total + slot.prescribedSetCount
+        }
+    }
+
+    func testANormalWeekCountsThePlanAsWritten() {
+        let count = SessionPrescription.setCount(of: day, deload: nil)
+        XCTAssertEqual(count, WeekPlan.sets(of: day))
+        XCTAssertEqual(count, openedSessionSetCount(deload: nil))
+    }
+
+    func testALighterWeekCountsTheSetsTheSessionOpensWith() {
+        let deload = Deload(startedAt: Date())
+        let count = SessionPrescription.setCount(of: day, deload: deload)
+        XCTAssertEqual(count, openedSessionSetCount(deload: deload))
+        XCTAssertLessThan(count, WeekPlan.sets(of: day), "The full plan is not what the session opens with")
+        // Sets are cut, never exercises (§11.2).
+        let lightened = day.exercises.map { SessionPrescription.planned($0, deload: deload) }
+        XCTAssertEqual(lightened.map(\.exerciseID), day.exercises.map(\.exerciseID))
+        XCTAssertTrue(lightened.allSatisfy { $0.targetSets >= 1 })
+    }
+
+    func testASetAddedDuringTheSessionIsNotPartOfThePrescription() {
+        let planned = SessionPrescription.planned(day.exercises[0], deload: Deload(startedAt: Date()))
+        var slot = SessionSlot(position: 0, plan: planned, exerciseName: planned.exerciseID)
+        _ = slot.addSet()
+        XCTAssertEqual(slot.prescribedSetCount, planned.targetSets)
+        XCTAssertEqual(slot.setCount, planned.targetSets + 1)
+    }
+}

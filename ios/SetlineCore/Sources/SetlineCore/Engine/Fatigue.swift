@@ -175,3 +175,23 @@ public struct Deload: Equatable, Codable, Sendable {
 
     public static let footnote = "Gebaseerd op je laatste drie sessies, niet op de kalender."
 }
+
+/// The plan a session opened now works from.
+///
+/// A lighter week cuts sets, never exercises (TRAINING_LOGIC §11.2): every
+/// exercise stays and keeps its first sets. The session builds its rows from
+/// this, and whatever describes today's session before it opens counts from
+/// it too — never from the plan as written.
+public enum SessionPrescription {
+
+    public static func planned(_ planned: PlannedExercise, deload: Deload?) -> PlannedExercise {
+        guard let deload else { return planned }
+        return planned.lightened(setsTo: deload.sets(from: planned.targetSets))
+    }
+
+    /// Prescribed sets across a day, as a session opened now lays them out.
+    /// Sets added during a session are never part of a prescription.
+    public static func setCount(of day: WorkoutDay, deload: Deload?) -> Int {
+        day.exercises.reduce(0) { $0 + planned($1, deload: deload).targetSets }
+    }
+}

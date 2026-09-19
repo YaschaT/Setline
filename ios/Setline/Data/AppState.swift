@@ -649,7 +649,8 @@ final class AppState {
     /// "18 sets · doel 6.240 kg · laatst 3 sep"
     func todayMetaLine() -> String? {
         guard let day = todayDay else { return nil }
-        let setCount = day.exercises.reduce(0) { $0 + $1.targetSets }
+        // The sets the session will open with, a lighter week included.
+        let setCount = SessionPrescription.setCount(of: day, deload: activeDeload)
         var parts = ["\(setCount) sets"]
 
         let target = day.exercises.reduce(Decimal(0)) { total, planned in

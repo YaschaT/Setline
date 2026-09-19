@@ -207,7 +207,8 @@ struct TrainingHomeView: View {
                 }
                 Spacer(minLength: SL.Space.s3)
                 if let day {
-                    Text("\(WeekPlan.sets(of: day)) sets").slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
+                    Text("\(SessionPrescription.setCount(of: day, deload: app.activeDeload)) sets")
+                        .slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
                 }
             }
             .padding(.vertical, SL.Space.s4)
@@ -299,7 +300,8 @@ struct TrainingHomeView: View {
     /// "5 oefeningen · 18 sets · ±52 min".
     private func firstRunCounts(_ day: WorkoutDay) -> String {
         let exercises = day.exercises.count == 1 ? "1 oefening" : "\(day.exercises.count) oefeningen"
-        return "\(exercises) · \(WeekPlan.sets(of: day)) sets · ±\(WeekPlan.minutes(of: day)) min"
+        let sets = SessionPrescription.setCount(of: day, deload: app.activeDeload)
+        return "\(exercises) · \(sets) sets · ±\(WeekPlan.minutes(of: day)) min"
     }
 
     private var sessionCard: some View {
