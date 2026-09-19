@@ -79,6 +79,10 @@ struct RootView: View {
     }
 
     private var signedIn: some View {
+        GeometryReader { proxy in
+        // The bar rests on the home band: at the bottom safe area, or 21 from
+        // the edge on a phone without one — where every artboard draws it.
+        let lift = max(0, SL.Space.homeBand - proxy.safeAreaInsets.bottom)
         ZStack(alignment: .bottom) {
             SL.Surface.ground.ignoresSafeArea()
 
@@ -101,7 +105,7 @@ struct RootView: View {
                     AccountView()
                 }
             }
-            .padding(.bottom, SL.Metric.tabBarHeight + SL.Space.tabInset)
+            .padding(.bottom, SL.Metric.tabBarHeight + lift)
             // Scrolled content stops at the status bar: the clock always sits
             // on the ground, as every artboard draws it.
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -109,7 +113,9 @@ struct RootView: View {
             }
 
             SLTabBar(selection: $tab)
-                .padding(.bottom, SL.Space.tabInset)
+                .padding(.bottom, lift)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         // The session is a full-screen presentation over the tab shell, so
         // the tab bar is gone the moment it starts: mid-set there is one task.

@@ -166,7 +166,11 @@ enum SL {
         static let primaryPillHeight: CGFloat = 54
         static let tertiaryHeight:    CGFloat = 44
         static let setRowHeight:      CGFloat = 56
-        static let tabBarHeight:      CGFloat = 56
+        /// The tab bar as the design renders it: 56-high items inside 6 of
+        /// padding and a 1pt border. The HTML sizes boxes content-box, so its
+        /// `height:56px` bar draws 70 tall — the height seen in every artboard.
+        static let tabItemHeight:     CGFloat = 56
+        static let tabBarHeight:      CGFloat = 70
         static let segmentHeight:     CGFloat = 44
         static let chipHeight:        CGFloat = 44
         static let dayTileHeight:     CGFloat = 64   // 72 on the first-run home
