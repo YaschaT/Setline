@@ -160,7 +160,7 @@ struct SwapSheet: View {
     private var height: CGFloat {
         switch step {
         case .alternatives:
-            var value: CGFloat = 300                       // head + toggle + footer + rules
+            var value: CGFloat = 360                       // head + toggle + tools + footer
             value += CGFloat(app.activePainRegions.count) * 56
             if hasLoggedSets { value += 40 }
             if reorder != nil { value += 116 }
@@ -195,19 +195,35 @@ struct SwapSheet: View {
 
     private var alternativesStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Wissel \(exercise.name.lowercased())")
-                .slTitle()
-                .foregroundStyle(SL.Ink.primary)
-                .fixedSize(horizontal: false, vertical: true)
+            // 15R: the name at 34 with the way out on its first line.
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+                Text("\(exercise.name) wisselen")
+                    .slDisplay()
+                    .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                    .foregroundStyle(SL.Ink.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: SL.Space.s2)
+                Button(action: onClose) {
+                    Text("Sluiten")
+                        .slBody()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize()
+                        .slHitTarget()
+                }
+                .buttonStyle(.plain)
+            }
 
-            Text(SubstitutionCopy.carryOver)
+            Text("Behoud sets, reps en RIR — reset het gewicht.")
                 .slMeta()
+                .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
                 .foregroundStyle(SL.Ink.secondary)
-                .padding(.top, 6)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, SL.Space.s1)
 
             // Both contexts, always. "The machine is taken" is the reason this
             // sheet exists, and a pain flag never switches it off.
-            occupiedToggle.padding(.top, SL.Space.s4)
+            occupiedToggle.padding(.top, SL.Space.s2)
             painRows
 
             if hasLoggedSets {
@@ -228,7 +244,7 @@ struct SwapSheet: View {
             // Reorder comes first, because it is the only option that costs
             // the user nothing.
             if let reorder {
-                reorderCard(reorder).padding(.top, SL.Space.s5)
+                reorderCard(reorder).padding(.top, SL.Space.s3)
             }
 
             if !hasOpenSets {
@@ -238,20 +254,30 @@ struct SwapSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, SL.Space.s5)
             } else if alternatives.isEmpty {
-                emptyState.padding(.top, SL.Space.s5)
+                emptyState.padding(.top, 10)
             } else {
-                SLEyebrow(text: alternatives.count == 1 ? "Alternatief" : "Alternatieven")
-                    .padding(.top, SL.Space.s5)
-                    .padding(.bottom, SL.Space.s2)
-                VStack(spacing: SL.Space.s2) {
-                    ForEach(alternatives) { alternative in
-                        alternativeRow(alternative, among: alternatives)
-                    }
-                }
+                alternativesList(alternatives).padding(.top, 10)
             }
 
-            footer.padding(.top, SL.Space.s5)
+            footer.padding(.top, 10)
         }
+    }
+
+    /// 15R: one raised2 container, radius 20 with 8 of padding, the rows
+    /// inside it split by hairlines. The first answer's fit label is the only
+    /// one in full ink.
+    private func alternativesList(_ items: [RankedAlternative]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, alternative in
+                alternativeRow(alternative, among: items, leads: index == 0)
+                if index < items.count - 1 { SLHairline() }
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
+                .fill(SL.Surface.raised2)
+        )
     }
 
     private var occupiedToggle: some View {
@@ -320,32 +346,44 @@ struct SwapSheet: View {
         return "\(region.label) · Genoteerd. Dit verandert deze lijst niet."
     }
 
+    /// 15R: "Doe hack squat nu" over "Kom terug voor bankdrukken." Radius 16,
+    /// raised2 and the .16 edge, the swap glyph in front — no eyebrow, and no
+    /// lime: the card is an option, not a signal.
     private func reorderCard(_ plan: ReorderPlan) -> some View {
         Button { onOutcome(.reorder(plan)) } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                SLEyebrow(text: "Verander alleen de volgorde", color: SL.Signal.action)
-                Text(plan.headline)
-                    .slLead()
-                    .foregroundStyle(SL.Ink.primary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 8)
-                Text(plan.detail)
-                    .slMeta()
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.sl(SL.TypeSize.lead, SL.Weight.regular))
                     .foregroundStyle(SL.Ink.secondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Doe \(plan.candidate.name.lowercased()) nu")
+                        .slLead()
+                        .foregroundStyle(SL.Ink.primary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Kom terug voor \(plan.current.name.lowercased()).")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
-            .padding(SL.Space.s4)
+            .padding(.vertical, 14)
+            .padding(.horizontal, SL.Space.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .slCardStrong(fill: SL.Surface.raised2)
+            .slCardStrong(radius: SL.Radius.lg, fill: SL.Surface.raised2)
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(plan.headline). \(plan.detail)")
+        .accessibilityLabel("Doe \(plan.candidate.name) nu, kom terug voor \(plan.current.name)")
+        .accessibilityHint(plan.detail)
     }
 
-    private func alternativeRow(_ alternative: RankedAlternative, among peers: [RankedAlternative]) -> some View {
+    private func alternativeRow(
+        _ alternative: RankedAlternative, among peers: [RankedAlternative], leads: Bool = false
+    ) -> some View {
         Button {
             let reason = SwapContext(
                 currentExerciseID: exercise.id, role: .accessory,
@@ -364,26 +402,29 @@ struct SwapSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
                     Text(SubstitutionCopy.fit(alternative))
-                        .slMeta(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.tertiary)
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                        .foregroundStyle(leads ? SL.Ink.primary : SL.Ink.secondary)
                         .lineLimit(1)
                 }
                 Text(SubstitutionCopy.why(alternative, origin: exercise, alongside: peers))
                     .slMeta()
+                    .lineSpacing(SL.TypeSize.meta * 0.2)
                     .foregroundStyle(SL.Ink.secondary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
+                    .padding(.top, 3)
                 Text(SubstitutionCopy.carryOver)
-                    .slMeta()
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                     .foregroundStyle(SL.Ink.tertiary)
-                    .padding(.top, 6)
+                    .padding(.top, SL.Space.s1)
             }
-            .padding(SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .slCard(radius: SL.Radius.lg)
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
         .accessibilityLabel("\(alternative.exercise.name), \(SubstitutionCopy.fit(alternative))")
         .accessibilityHint(SubstitutionCopy.carryOver)
     }
@@ -428,21 +469,83 @@ struct SwapSheet: View {
             // Both of these swap today's open sets, so they only appear while
             // there are any.
             if hasOpenSets {
-                secondaryLink("Andere opties bekijken") { step = .browse }
-                secondaryLink("Eigen oefening") { step = .custom }
-                SLHairline().padding(.vertical, SL.Space.s3)
+                toolLayout {
+                    toolButton("Bladeren", systemImage: "magnifyingglass") { step = .browse }
+                    toolButton("Eigen oefening") { step = .custom }
+                }
             }
 
             // Below the hairline on purpose. A permanent program change must
             // never share a surface or a shape with the temporary swap above.
-            secondaryLink("Vervang in schema", muted: true) { step = .replacePick }
-            secondaryLink("Ik voel iets", muted: true) {
+            SLHairline().padding(.top, SL.Space.s4).padding(.bottom, SL.Space.s1)
+            footerLink("Vervang in schema", detail: "Wijzigt je plan, niet alleen vandaag") {
+                step = .replacePick
+            }
+            SLHairline().padding(.vertical, SL.Space.s1)
+            footerLink("Ik voel iets", detail: "Pijn of ongemak bij deze beweging") {
                 painRegion = nil
                 painTiming = nil
                 signals = []
                 step = .painQuestions
             }
         }
+    }
+
+    /// Side by side, as 15R draws them; stacked once the words would not fit.
+    private var toolLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: SL.Space.s2))
+            : AnyLayout(HStackLayout(spacing: SL.Space.s2))
+    }
+
+    /// 15R: 44 high, radius 12, raised2, 15/500 in `text2`.
+    private func toolButton(_ title: String, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                        .accessibilityHidden(true)
+                }
+                Text(title).slBody(SL.Weight.medium)
+            }
+            .foregroundStyle(SL.Ink.secondary)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: SL.Space.hitMin)
+            .background(
+                RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                    .fill(SL.Surface.raised2)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+    }
+
+    /// 15R's lower links: 15/500 in `text2` over a 12pt line saying what the
+    /// link reaches, with the chevron in `text3`.
+    private func footerLink(_ title: String, detail: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: SL.Space.s3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary)
+                    Text(detail)
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                        .foregroundStyle(SL.Ink.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, SL.Space.s2)
+            .frame(minHeight: SL.Space.hitMin)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(detail)
     }
 
     private func secondaryLink(
@@ -485,12 +588,9 @@ struct SwapSheet: View {
                     .padding(.top, SL.Space.s5)
             }
 
-            VStack(spacing: SL.Space.s2) {
-                ForEach(options) { option in
-                    alternativeRow(option, among: options)
-                }
+            if !options.isEmpty {
+                alternativesList(options).padding(.top, SL.Space.s4)
             }
-            .padding(.top, SL.Space.s4)
 
             secondaryLink("Eigen oefening") { step = .custom }
                 .padding(.top, SL.Space.s3)
