@@ -194,6 +194,7 @@ struct IntakeFlow: View {
             step: 4, total: 4,
             title: "Welke schijven heb je?",
             subtitle: "Hiermee rekent de schijvencalculator. Kilogram, uit je regio — wijzig het in Account als dat niet klopt.",
+            subtitleMeasure: 32,
             consequence: platesConsequence,
             commit: "Klaar",
             onSkip: { finish() },

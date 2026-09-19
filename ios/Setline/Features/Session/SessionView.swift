@@ -14,6 +14,8 @@ struct SessionView: View {
     @State private var showsComplete = false
     @State private var confirmsEarlyFinish = false
     @State private var showsSwap = false
+    /// 11–13's `Schijven`: the plate calculator for the set up next.
+    @State private var showsPlates = false
     @State private var toast: SessionToast?
     /// Proposal cards opened with `Toon` at accessibility text sizes.
     @State private var expandedProposals: Set<Int> = []
@@ -405,20 +407,28 @@ struct SessionView: View {
                         proposalCard.padding(.top, SL.Space.s5)
                     }
                 }
-                warmupSection.padding(.top, SL.Space.s5)
-                setRows.padding(.top, SL.Space.s5)
-                if let advice = runner.adviceLine(for: runner.currentIndex) {
-                    Text(advice)
-                        .slLead(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, SL.Space.s4)
-                        .transition(.opacity)
+                if showsLadder {
+                    // 30: the ladder 24 below the topset line, WERKSETS 24
+                    // below the ladder and 10 above the grid.
+                    warmupSection.padding(.top, SL.Space.s6)
                 }
+                setRows.padding(.top, showsLadder ? 10 : SL.Space.s5)
+                if showsLadder {
+                    Text(WarmupPlanner.footnote(
+                        topSetKg: runner.warmupLadder(slotIndex: runner.currentIndex).last?.weightKg ?? 0,
+                        formatter: app.display
+                    ))
+                    .slMeta()
+                    .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, SL.Space.s5)
+                }
+
                 if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
                     referenceFooter.padding(.top, SL.Space.s8)
                 }
-                upNext.padding(.top, SL.Space.s5)
+                afterGrid.padding(.top, SL.Space.s5)
             }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s4)
@@ -485,7 +495,14 @@ struct SessionView: View {
             }
 
             Group {
-                if let previous = runner.previousLine(for: runner.current) {
+                if showsLadder, let topSet = runner.topSetLabel(slotIndex: runner.currentIndex) {
+                    // 30: while the ladder shows, the top set takes the line
+                    // the previous session otherwise holds.
+                    HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                        SLEyebrow(text: "Topset vandaag")
+                        Text(topSet).slLead().slNumerals().foregroundStyle(SL.Ink.primary)
+                    }
+                } else if let previous = runner.previousLine(for: runner.current) {
                     HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
                         SLEyebrow(text: previous.label)
                         Text(previous.detail)
@@ -561,7 +578,7 @@ struct SessionView: View {
 
             Text(proposal.headline)
                 .slTitle()
-                .lineSpacing(SL.TypeSize.title * 0.3)
+                .slLineHeight(1.3, size: SL.TypeSize.title)
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10)
@@ -579,7 +596,7 @@ struct SessionView: View {
 
             Text(proposal.body)
                 .slMeta()
-                .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                 .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 14)
@@ -681,13 +698,13 @@ struct SessionView: View {
             SLEyebrow(text: "Set 1 · kalibratie")
             Text(prompt.headline)
                 .slTitle()
-                .lineSpacing(SL.TypeSize.title * 0.3)
+                .slLineHeight(1.3, size: SL.TypeSize.title)
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10)
             Text(prompt.body)
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, SL.Space.s3)
@@ -726,7 +743,7 @@ struct SessionView: View {
                 .foregroundStyle(SL.Ink.primary)
             Text("Na drie sessies rekent SETLINE progressie voor \(runner.current.exercise.name.lowercased()). Tot dan geen voorstel en geen record.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -745,70 +762,39 @@ struct SessionView: View {
         }
     }
 
+    /// Artboard 30's ladder: shown when there is one to show and nothing is
+    /// sitting above the grid — 29 shows no warm-up while a proposal is up,
+    /// and 11R–13R none once set 1 is written.
+    private var showsLadder: Bool {
+        !runner.warmupLadder(slotIndex: runner.currentIndex).isEmpty
+            && !runner.isWarmupCollapsed(slotIndex: runner.currentIndex)
+    }
+
     /// Artboard 30. Generated from today's top set, outside the working-set
     /// card, dashed, with no status dot and no rest timer — and no taps: it is
     /// a reference strip, not a log.
-    @ViewBuilder
     private var warmupSection: some View {
         let ladder = runner.warmupLadder(slotIndex: runner.currentIndex)
-        if !ladder.isEmpty {
-            if runner.isWarmupCollapsed(slotIndex: runner.currentIndex) {
-                Button { runner.showWarmup(slotIndex: runner.currentIndex) } label: {
-                    HStack(spacing: SL.Space.s2) {
-                        Text(runner.collapsedWarmupLabel(slotIndex: runner.currentIndex))
-                            .slMeta()
-                            .foregroundStyle(SL.Ink.tertiary)
-                        Text("Toon")
-                            .slMeta(SL.Weight.semibold)
-                            .foregroundStyle(SL.Ink.secondary)
-                        Spacer(minLength: 0)
-                    }
-                    .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                SLEyebrow(text: "Opwarmen · telt niet mee")
+                Spacer()
+                Button {
+                    Task { await app.hideWarmup(exerciseID: runner.current.planned.exerciseID) }
+                } label: {
+                    Text("Altijd verbergen").slMeta().foregroundStyle(SL.Ink.secondary).slHitTarget()
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(runner.collapsedWarmupLabel(slotIndex: runner.currentIndex)), tonen")
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let topSet = runner.topSetLabel(slotIndex: runner.currentIndex) {
-                        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                            SLEyebrow(text: "Topset vandaag")
-                            Text(topSet).slLead().slNumerals().foregroundStyle(SL.Ink.primary)
-                        }
-                        .padding(.bottom, SL.Space.s4)
-                    }
+            }
+            .padding(.bottom, 10)
 
-                    HStack {
-                        SLEyebrow(text: "Opwarmen · telt niet mee")
-                        Spacer()
-                        Button {
-                            Task { await app.hideWarmup(exerciseID: runner.current.planned.exerciseID) }
-                        } label: {
-                            Text("Altijd verbergen").slMeta().foregroundStyle(SL.Ink.tertiary).slHitTarget()
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.bottom, SL.Space.s2)
-
-                    VStack(spacing: SLSetColumn.rowGap) {
-                        ForEach(SetRowPresenter.warmupRows(ladder), id: \.index) { row in
-                            SLSetRow(row: row) {}
-                        }
-                    }
-
-                    Text(WarmupPlanner.footnote(
-                        topSetKg: ladder.last?.weightKg ?? 0,
-                        formatter: app.display
-                    ))
-                    .slMeta()
-                    .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, SL.Space.s3)
-
-                    SLEyebrow(text: "Werksets").padding(.top, SL.Space.s5)
+            VStack(spacing: SLSetColumn.rowGap) {
+                ForEach(SetRowPresenter.warmupRows(ladder), id: \.index) { row in
+                    SLSetRow(row: row) {}
                 }
             }
+
+            SLEyebrow(text: "Werksets").padding(.top, SL.Space.s6)
         }
     }
 
@@ -821,58 +807,126 @@ struct SessionView: View {
                     }
                 }
             }
-            addSetButton.padding(.top, SL.Space.s1)
+            gridFooter.padding(.top, 2)
         }
+        .sheet(isPresented: $showsPlates) { platesForNextSet }
     }
 
-    /// The grid's own footer: one more working set, for this session only.
-    ///
-    /// A text action, not a row — no fill, no dashes (those mean warm-up) and
-    /// no lime, so logging stays the screen's one commit action. The plus
-    /// sits in the set column, where the next number would be.
-    private var addSetButton: some View {
-        Button { addSet() } label: {
-            HStack(spacing: SL.Space.s2) {
-                Image(systemName: "plus")
-                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+    /// 11–13's grid footer: `Set toevoegen` as a dashed 44pt button, and
+    /// `Schijven` beside it for the set up next. Adding a set is for this
+    /// session only; the calculator appears only where plates load the bar.
+    private var gridFooter: some View {
+        footerLayout {
+            Button { addSet() } label: {
                 Text("Set toevoegen")
                     .slBody(SL.Weight.medium)
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(SL.Ink.secondary)
-            .padding(.horizontal, SLSetColumn.rowInset)
-            .frame(minHeight: SL.Space.hitMin)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Set toevoegen aan \(runner.current.exercise.name)")
-        .accessibilityHint("Alleen voor deze sessie. Je schema verandert niet.")
-    }
-
-    @ViewBuilder
-    private var upNext: some View {
-        if let next = runner.nextSlotIndex {
-            let slot = runner.slots[next]
-            VStack(alignment: .leading, spacing: SL.Space.s2) {
-                SLEyebrow(text: "Volgende")
-                Button { runner.advance() } label: {
-                    HStack {
-                        Text(slot.exercise.name).slBody().foregroundStyle(SL.Ink.secondary)
-                        Spacer()
-                        Text("\(slot.planned.targetSets) × \(slot.planned.sets.first?.repRange.upperBound ?? 0)")
-                            .slMeta().slNumerals()
-                            .foregroundStyle(SL.Ink.tertiary)
-                        Image(systemName: "chevron.right")
-                            .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
-                            .foregroundStyle(SL.Ink.tertiary)
-                    }
+                    .foregroundStyle(SL.Ink.secondary)
+                    .frame(maxWidth: .infinity)
                     .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                            .strokeBorder(SL.Surface.hairlineStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+            .accessibilityLabel("Set toevoegen aan \(runner.current.exercise.name)")
+            .accessibilityHint("Alleen voor deze sessie. Je schema verandert niet.")
+
+            if showsPlatesButton {
+                Button { showsPlates = true } label: {
+                    HStack(spacing: 6) {
+                        SLGlyph(name: .calculate, size: 18)
+                        Text("Schijven").slBody(SL.Weight.medium)
+                    }
+                    .foregroundStyle(SL.Ink.secondary)
+                    .padding(.horizontal, SL.Space.s3)
+                    .frame(minWidth: 110)
+                    .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : nil)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .background(
+                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                            .fill(SL.Surface.raised2)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Volgende oefening, \(slot.exercise.name)")
+                .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+                .accessibilityHint("Schijven per kant voor de volgende set")
             }
         }
+    }
+
+    private var footerLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 6))
+    }
+
+    /// Plates load the bar on a barbell, a smith and a plate-loaded machine,
+    /// and only a set with a weight has anything to load.
+    private var showsPlatesButton: Bool {
+        let loadsPlates: Set<Equipment> = [.barbell, .smith, .machinePlate]
+        guard loadsPlates.contains(runner.current.exercise.equipment),
+              runner.nextIndex(in: runner.current) != nil,
+              let weight = runner.proposedWeight(slotIndex: runner.currentIndex)
+        else { return false }
+        return weight > 0
+    }
+
+    /// Artboard 14, for the set up next. A load chosen here moves every open
+    /// row, as the proposal's weight stepper does.
+    @ViewBuilder
+    private var platesForNextSet: some View {
+        let index = runner.currentIndex
+        let next = runner.nextIndex(in: runner.current) ?? 0
+        let weight = runner.proposedWeight(slotIndex: index) ?? 0
+        PlateSheet(
+            exercise: runner.current.exercise.name,
+            setNumber: next + 1,
+            reps: runner.targetReps(slotIndex: index, setIndex: next)
+                ?? runner.current.planned.sets.first?.repRange.upperBound ?? 0,
+            target: weight,
+            onChoose: { load in
+                runner.adjustProposedWeight(slotIndex: index, by: load - weight)
+                showsPlates = false
+            },
+            onClose: { showsPlates = false }
+        )
+        .environment(app)
+    }
+
+    /// 11–13 under the grid, above a hairline: the advice line at 17/600 once
+    /// the exercise's last set is written, then "Volgende · Militair drukken ·
+    /// 4 × 8" at 13 — or that this was the session's last exercise.
+    private var afterGrid: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let advice = runner.adviceLine(for: runner.currentIndex) {
+                Text(advice)
+                    .slLead()
+                    .slLineHeight(1.4, size: SL.TypeSize.lead)
+                    .foregroundStyle(SL.Ink.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 6)
+                    .transition(.opacity)
+            }
+            Text(upNextLine)
+                .slMeta().slNumerals()
+                .foregroundStyle(SL.Ink.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, SL.Space.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { SLHairline() }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var upNextLine: String {
+        guard let next = runner.nextSlotIndex else { return "Laatste oefening van de sessie" }
+        let slot = runner.slots[next]
+        let reps = slot.planned.sets.first?.repRange.upperBound ?? 0
+        return "Volgende · \(slot.exercise.name) · \(slot.planned.targetSets) × \(reps)"
     }
 
     // MARK: Bottom bar
@@ -888,7 +942,10 @@ struct SessionView: View {
                 SLUndoToast(message: toast.message, onUndo: toast.undo, onDismiss: { self.toast = nil })
                     .transition(.opacity)
             }
-            if let timer = runner.restTimer {
+            // 13R and 11–13 put the rest timer where the pill stands: while
+            // the rest runs, its button is the one action. A finished session
+            // keeps `Sessie afronden` there instead — the rest is moot.
+            if let timer = runner.restTimer, !runner.isComplete {
                 SLFloatingTimer(
                     title: runner.restTitle,
                     remaining: timer.remaining(at: runner.now),
@@ -898,12 +955,14 @@ struct SessionView: View {
                     onToggleExpanded: { runner.toggleTimerExpanded() },
                     onSkip: { runner.endRest() }
                 )
+            } else {
+                primaryAction
             }
-            primaryAction
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s3)
-        .padding(.bottom, SL.Space.s3)
+        // The session artboards end the pill 42 above the frame's edge.
+        .padding(.bottom, SL.Space.sessionBlockBottom)
         .background(SL.Surface.ground)
     }
 

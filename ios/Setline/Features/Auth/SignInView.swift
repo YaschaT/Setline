@@ -49,15 +49,15 @@ struct SignInView: View {
                 Text(isRegistering ? "Registreren" : "Aanmelden")
                     .slDisplay()
                     .foregroundStyle(SL.Ink.primary)
-                    .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                    .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
 
                 Text("Je data blijft van jou en is altijd te exporteren.")
                     .slBody()
-                    .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                    .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                     .foregroundStyle(SL.Ink.secondary)
+                    .slMeasure(32, fontSize: SL.TypeSize.body)
                     .padding(.top, 10)
                     .padding(.bottom, 28)
-                    .frame(maxWidth: 300, alignment: .leading)
 
                 fieldGroup
 
@@ -126,10 +126,9 @@ struct SignInView: View {
             // 12 to `Terug`, 40 from it to the title — the same 40 when there
             // is nothing to go back to.
             .padding(.top, onBack == nil ? SL.Space.s10 : 0)
-            // The artboard's bottom block sits 98 from the frame bottom, which
-            // already clears the home indicator — so the safe-area inset is
-            // subtracted rather than added to it.
-            .padding(.bottom, max(SL.Space.s6, 98 - proxy.safeAreaInsets.bottom))
+            // Review 01's bottom block ends 98 above the frame's edge, home
+            // band included: 77 above the bottom safe area.
+            .padding(.bottom, SL.Space.entryBlockBottom)
         }
         }
     }

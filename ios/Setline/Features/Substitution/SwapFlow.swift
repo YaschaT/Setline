@@ -199,7 +199,7 @@ struct SwapSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
                 Text("\(exercise.name) wisselen")
                     .slDisplay()
-                    .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                    .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                     .foregroundStyle(SL.Ink.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
@@ -216,7 +216,7 @@ struct SwapSheet: View {
 
             Text("Behoud sets, reps en RIR — reset het gewicht.")
                 .slMeta()
-                .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                 .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, SL.Space.s1)
@@ -280,23 +280,13 @@ struct SwapSheet: View {
         )
     }
 
+    /// Whether the station is taken, in the component sheet's chip: selected
+    /// when on, the dashed "not on" chip when off. 15R draws the busy bench as
+    /// the reason for the sheet; this is how the list learns it.
     private var occupiedToggle: some View {
-        Button { occupied.toggle() } label: {
-            HStack(spacing: SL.Space.s2) {
-                Image(systemName: occupied ? "checkmark.circle.fill" : "circle")
-                    .font(.sl(SL.TypeSize.body, SL.Weight.regular))
-                    .foregroundStyle(occupied ? SL.Signal.action : SL.Ink.tertiary)
-                Text("Toestel of rek is bezet")
-                    .slBody(occupied ? SL.Weight.medium : SL.Weight.regular)
-                    .foregroundStyle(occupied ? SL.Ink.primary : SL.Ink.secondary)
-                Spacer(minLength: 0)
-            }
-            .frame(minHeight: SL.Space.hitMin)
-            .contentShape(Rectangle())
+        SLChip(title: "Toestel of rek is bezet", look: occupied ? .selected : .off) {
+            occupied.toggle()
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Toestel of rek is bezet")
-        .accessibilityAddTraits(occupied ? [.isSelected, .isButton] : .isButton)
         .accessibilityHint("Laat oefeningen op hetzelfde toestel weg")
     }
 
@@ -352,10 +342,8 @@ struct SwapSheet: View {
     private func reorderCard(_ plan: ReorderPlan) -> some View {
         Button { onOutcome(.reorder(plan)) } label: {
             HStack(spacing: SL.Space.s3) {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.sl(SL.TypeSize.lead, SL.Weight.regular))
+                SLGlyph(name: .swapVert, size: 20)
                     .foregroundStyle(SL.Ink.secondary)
-                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Doe \(plan.candidate.name.lowercased()) nu")
                         .slLead()
@@ -408,7 +396,7 @@ struct SwapSheet: View {
                 }
                 Text(SubstitutionCopy.why(alternative, origin: exercise, alongside: peers))
                     .slMeta()
-                    .lineSpacing(SL.TypeSize.meta * 0.2)
+                    .slLineHeight(1.4, size: SL.TypeSize.meta)
                     .foregroundStyle(SL.Ink.secondary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -470,7 +458,7 @@ struct SwapSheet: View {
             // there are any.
             if hasOpenSets {
                 toolLayout {
-                    toolButton("Bladeren", systemImage: "magnifyingglass") { step = .browse }
+                    toolButton("Bladeren", glyph: .search) { step = .browse }
                     toolButton("Eigen oefening") { step = .custom }
                 }
             }
@@ -499,13 +487,11 @@ struct SwapSheet: View {
     }
 
     /// 15R: 44 high, radius 12, raised2, 15/500 in `text2`.
-    private func toolButton(_ title: String, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
+    private func toolButton(_ title: String, glyph: SLGlyph.Name? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .font(.sl(SL.TypeSize.body, SL.Weight.medium))
-                        .accessibilityHidden(true)
+                if let glyph {
+                    SLGlyph(name: glyph, size: 18)
                 }
                 Text(title).slBody(SL.Weight.medium)
             }
@@ -535,8 +521,7 @@ struct SwapSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                SLGlyph(name: .chevronRight, size: 20)
                     .foregroundStyle(SL.Ink.tertiary)
                     .accessibilityHidden(true)
             }
@@ -557,8 +542,7 @@ struct SwapSheet: View {
                     .slBody(muted ? SL.Weight.regular : SL.Weight.medium)
                     .foregroundStyle(muted ? SL.Ink.tertiary : SL.Ink.secondary)
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                SLGlyph(name: .chevronRight, size: 20)
                     .foregroundStyle(SL.Ink.tertiary)
             }
             .frame(minHeight: SL.Space.hitMin)
@@ -597,16 +581,14 @@ struct SwapSheet: View {
         }
     }
 
+    /// `Terug` as every artboard sets it: 15/500 `text2`, no chevron.
     private func backLink(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: SL.Space.s2) {
-                Image(systemName: "chevron.left")
-                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
-                Text("Terug").slBody()
-            }
-            .foregroundStyle(SL.Ink.tertiary)
-            .frame(minHeight: SL.Space.hitMin)
-            .contentShape(Rectangle())
+            Text("Terug")
+                .slBody(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -666,10 +648,11 @@ struct SwapSheet: View {
             SLEyebrow(text: "Materiaal · optioneel").padding(.top, SL.Space.s6).padding(.bottom, SL.Space.s2)
             equipmentChips
 
-            Toggle(isOn: $customIsCompound) {
-                Text("Samengestelde oefening").slBody().foregroundStyle(SL.Ink.secondary)
+            // The component sheet's chip rather than a system switch: on is
+            // selected, off is the dashed "not on" chip.
+            SLChip(title: "Samengestelde oefening", look: customIsCompound ? .selected : .off) {
+                customIsCompound.toggle()
             }
-            .tint(SL.Signal.action)
             .padding(.top, SL.Space.s4)
         }
     }
@@ -759,13 +742,13 @@ struct SwapSheet: View {
         return VStack(alignment: .leading, spacing: 0) {
             Text("Vervang door \(substitute.name.lowercased())")
                 .slDisplay()
-                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
                 .accessibilityAddTraits(.isHeader)
             Text("Kies waarvoor dit geldt. Je historiek van \(exercise.name.lowercased()) blijft bewaard.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
                 .padding(.top, 10)
@@ -889,14 +872,14 @@ struct SwapSheet: View {
 
             Text("Waar voel je het?")
                 .slDisplay()
-                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s5)
                 .accessibilityAddTraits(.isHeader)
             Text("Beide vragen zijn optioneel. SETLINE stelt geen diagnose en houdt niets bij dat je niet zelf invult.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
                 .padding(.top, SL.Space.s2)
@@ -978,7 +961,7 @@ struct SwapSheet: View {
             // de beweging" — so the four options read as a reply to it.
             Text(Self.painHeading(region, timing))
                 .slDisplay()
-                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s4)
@@ -986,7 +969,7 @@ struct SwapSheet: View {
 
             Text("Vier manieren om verder te trainen. Kies wat vandaag past.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
                 .padding(.top, SL.Space.s2)
@@ -1043,10 +1026,10 @@ struct SwapSheet: View {
             SLEyebrow(text: "ALGEMENE RICHTLIJN")
             Text("Lichte pijn tijdens de oefening hoeft niet te betekenen dat je stopt, zolang ze de volgende ochtend weggezakt is en van week tot week niet toeneemt. Twijfel je, of wordt het erger? Laat het nakijken.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
-                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : 320, alignment: .leading)
+                .slMeasure(34, fontSize: SL.TypeSize.body)
         }
         .padding(.top, SL.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1095,13 +1078,13 @@ struct SwapSheet: View {
                     SLEyebrow(text: "ALLEEN NA EEN AANGEVINKT SIGNAAL")
                     Text("Laat dit nakijken door een arts of kinesist.")
                         .slLead()
-                        .lineSpacing(SL.TypeSize.lead * 0.4)
+                        .slLineHeight(1.4, size: SL.TypeSize.lead)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
                         .padding(.top, 10)
                     Text("De vier trainingsopties blijven staan. SETLINE beslist niets voor je en noemt geen aandoening.")
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                        .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.top, SL.Space.s2)
@@ -1131,7 +1114,7 @@ struct SwapSheet: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(detail).slMeta().foregroundStyle(SL.Ink.secondary)
-                    .lineSpacing(SL.TypeSize.meta * 0.2)
+                    .slLineHeight(1.4, size: SL.TypeSize.meta)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }

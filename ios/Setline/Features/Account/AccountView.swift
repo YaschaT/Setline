@@ -231,8 +231,10 @@ struct AccountView: View {
                             Text(exportDetail).slMeta().foregroundStyle(SL.Ink.secondary)
                         }
                         Spacer(minLength: SL.Space.s4)
+                        // 23: the design's `download` glyph at 18 beside
+                        // "Export", both lime — the screen's one action.
                         HStack(spacing: 6) {
-                            Image(systemName: "arrow.down.circle")
+                            SLGlyph(name: .download, size: 18)
                             Text("Export").slBody()
                         }
                         .foregroundStyle(SL.Signal.action)

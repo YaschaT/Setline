@@ -27,7 +27,7 @@ struct WeekPlanView: View {
                     Text(title)
                         .slDisplay()
                         .slNumerals()
-                        .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                        .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .foregroundStyle(SL.Ink.primary)
 
                     Text(subtitle)

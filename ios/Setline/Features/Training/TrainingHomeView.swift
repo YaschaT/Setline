@@ -39,28 +39,32 @@ struct TrainingHomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if app.proposesDeload {
+                        // 18R: the proposal is the one loud thing. Today steps
+                        // back to a plain block beneath it, and nothing else
+                        // competes until the proposal is answered.
                         DeloadCard(
                             reading: app.fatigue,
                             proposal: Deload(startedAt: Date()),
                             onApply: { Task { await app.applyDeload() } },
                             onDismiss: { withAnimation(.easeOut(duration: SL.Motion.base)) { app.dismissDeload() } }
                         )
-                        .padding(.bottom, SL.Space.s5)
+                        steppedBackToday
+                            .opacity(0.6)
+                            .padding(.top, SL.Space.s6)
+                    } else {
+                        todayCard
+                        // 08 sets the labelled strip 24 below the card; 09's
+                        // groups sit 32 apart.
+                        weekStrip.padding(.top, isFirstRun ? SL.Space.s6 : SL.Space.s8)
+                        if let insight { insightCard(insight).padding(.top, SL.Space.s8) }
+                        // 08 has nothing to change yet; the plan row arrives
+                        // with the first session.
+                        if !isFirstRun { planFooter.padding(.top, SL.Space.s8) }
                     }
-                    todayCard
-                        // 18R: with a proposal on screen the session card steps
-                        // back, so the proposal is the one loud thing.
-                        .opacity(app.proposesDeload ? 0.6 : 1)
-                    // 08 sets the labelled strip 24 below the card; 09's
-                    // groups sit 32 apart.
-                    weekStrip.padding(.top, isFirstRun ? SL.Space.s6 : SL.Space.s8)
-                    if let insight { insightCard(insight).padding(.top, SL.Space.s8) }
-                    // 08 has nothing to change yet; the plan row arrives with
-                    // the first session.
-                    if !isFirstRun { planFooter.padding(.top, SL.Space.s8) }
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, SL.Space.s5)
+                // 08 opens 24 below the header, 09 and 18R 20.
+                .padding(.top, isFirstRun ? SL.Space.s6 : SL.Space.s5)
                 .padding(.bottom, SL.Space.s6)
             }
         }
@@ -110,22 +114,22 @@ struct TrainingHomeView: View {
                     SLEyebrow(text: "TRAINING")
                     Text("Niets verloren.")
                         .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
-                        .lineSpacing(SL.TypeSize.displayXL * 0.04)
+                        .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
                         .padding(.top, SL.Space.s2)
                     Text(offlineReassurance)
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
-                        .frame(maxWidth: 320, alignment: .leading)
+                        .slMeasure(32, fontSize: SL.TypeSize.body)
                         .padding(.top, 10)
 
                     compactToday.padding(.top, SL.Space.s5)
 
                     if !queue.isEmpty {
-                        SLEyebrow(text: "IN DE WACHTRIJ").padding(.top, SL.Space.s6)
+                        SLEyebrow(text: "IN DE WACHTRIJ", weight: SL.Weight.regular).padding(.top, SL.Space.s6)
                         VStack(spacing: 0) {
                             ForEach(Array(queue.enumerated()), id: \.offset) { _, row in
                                 queueRow(row)
@@ -135,7 +139,7 @@ struct TrainingHomeView: View {
 
                     Text("SETLINE schrijft eerst lokaal en synct daarna. Exporteren werkt ook offline.")
                         .slMeta()
-                        .lineSpacing(SL.TypeSize.meta * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.meta)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.tertiary)
                         .padding(.top, SL.Space.s5)
@@ -151,7 +155,7 @@ struct TrainingHomeView: View {
             Button { Task { await app.syncNow() } } label: {
                 Text(app.sync == .syncing ? "Bezig met syncen…" : "Nu opnieuw proberen")
             }
-            .buttonStyle(SLOutlineButtonStyle())
+            .buttonStyle(SLOutlineButtonStyle(edge: SL.Surface.hairlineStrong))
             .disabled(app.sync == .syncing)
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.bottom, SL.Space.s3)
@@ -202,7 +206,7 @@ struct TrainingHomeView: View {
         } label: {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: SL.Space.s1) {
-                    SLEyebrow(text: "Vandaag · \(longDateLabel)")
+                    SLEyebrow(text: "Vandaag · \(longDateLabel)", weight: SL.Weight.regular)
                     Text(day?.short ?? "Rustdag").slTitle().foregroundStyle(SL.Ink.primary)
                 }
                 Spacer(minLength: SL.Space.s3)
@@ -268,6 +272,28 @@ struct TrainingHomeView: View {
         }
     }
 
+    /// 18R's today, beneath the proposal: an eyebrow, the day at 21, and its
+    /// exercises — no card, so the proposal stays the one loud thing.
+    private var steppedBackToday: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SLEyebrow(text: "Vandaag")
+            Text(app.todayDay?.short ?? "Rustdag")
+                .slTitle()
+                .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, SL.Space.s2)
+                .padding(.bottom, SL.Space.s1)
+            Text(app.todayDay.map { day in
+                day.exercises.map { app.exercise($0.exerciseID).name }.joined(separator: " · ")
+            } ?? "Geen sessie gepland vandaag.")
+                .slBody()
+                .foregroundStyle(SL.Ink.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
     /// Artboard 08: no data yet, so nothing to compare against — a 34pt name,
     /// one count line, the quiet hairline, and what the first session does.
     private func firstRunCard(_ day: WorkoutDay) -> some View {
@@ -275,7 +301,7 @@ struct TrainingHomeView: View {
             SLEyebrow(text: "Vandaag · \(weekdayLabel)")
             Text(day.short)
                 .slDisplay()
-                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                 .foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s2)
                 .padding(.bottom, SL.Space.s1)
@@ -285,10 +311,10 @@ struct TrainingHomeView: View {
             SLHairline().padding(.vertical, SL.Space.s5)
             Text("Nog geen sessies gelogd. Je eerste sessie zet de startgewichten; daarna rekent SETLINE de progressie zelf.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * (SL.LineHeight.body - 1))
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
-                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : 270, alignment: .leading)
+                .slMeasure(32, fontSize: SL.TypeSize.body)
 
             if let paused = app.resumableSession { pausedRow(paused) }
         }
@@ -321,7 +347,7 @@ struct TrainingHomeView: View {
                     Text(day.short)
                         .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
                         .foregroundStyle(SL.Ink.primary)
-                        .lineSpacing(SL.TypeSize.displayXL * 0.04)
+                        .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                     Spacer(minLength: 0)
                     Button { onStart(day) } label: {
                         Text("Bekijk")
@@ -481,7 +507,7 @@ struct TrainingHomeView: View {
     private func insightCard(_ insight: (text: String, highlight: String)) -> some View {
         Text(attributed(insight.text, liming: insight.highlight))
             .slLead(SL.Weight.medium)
-            .lineSpacing(SL.TypeSize.lead * 0.4)
+            .slLineHeight(1.4, size: SL.TypeSize.lead)
             .padding(SL.Space.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .slCard(radius: SL.Radius.lg)
@@ -514,6 +540,7 @@ struct TrainingHomeView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Plan · \(planName)")
             .accessibilityHint("Dubbeltik om de week te wijzigen")
+            // 09 sets the text 16 below the hairline.
             .padding(.top, SL.Space.s4)
         }
     }

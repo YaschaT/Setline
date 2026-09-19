@@ -41,7 +41,7 @@ struct PhotosHomeView: View {
 
                     Text("Foto's blijven op dit toestel. Nooit gedeeld, nooit geanalyseerd.")
                         .slMeta()
-                        .lineSpacing(SL.TypeSize.meta * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.meta)
                         .foregroundStyle(SL.Ink.tertiary)
                         .padding(.top, SL.Space.s5)
 
@@ -239,7 +239,7 @@ struct PhotosHomeView: View {
                 .foregroundStyle(SL.Ink.primary)
             Text("Een foto naast een latere foto laat zien wat de weegschaal niet vertelt.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * 0.5)
+                .slLineHeight(1.5, size: SL.TypeSize.body)
                 .foregroundStyle(SL.Ink.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

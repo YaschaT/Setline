@@ -25,13 +25,13 @@ struct ProgramSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Welke planvorm?")
                         .slDisplay()
-                        .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                        .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
                     Text("Je eigen plan blijft bewaard. Elk programma houdt zijn eigen week.")
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.top, SL.Space.s3)
@@ -45,7 +45,7 @@ struct ProgramSheet: View {
 
                     Text(consequence)
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * 0.45)
+                        .slLineHeight(1.45, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.top, SL.Space.s5)

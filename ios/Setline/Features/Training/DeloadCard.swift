@@ -18,7 +18,6 @@ struct DeloadCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("HERSTEL · VOORSTEL")
                     .font(.sl(SL.TypeSize.meta, SL.Weight.medium))
-                    .tracking(SL.TypeSize.meta * 0.08)
                     .foregroundStyle(SL.Signal.recovery)
                 Spacer(minLength: SL.Space.s3)
                 Button { onDismiss() } label: {
@@ -32,7 +31,7 @@ struct DeloadCard: View {
 
             Text(lead)
                 .slDisplay()
-                .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
                 .padding(.top, 10)
@@ -41,14 +40,14 @@ struct DeloadCard: View {
 
             Text(proposal.headline)
                 .slLead()
-                .lineSpacing(SL.TypeSize.lead * 0.4)
+                .slLineHeight(1.4, size: SL.TypeSize.lead)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s4)
 
             Text(proposal.detail)
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * 0.5)
+                .slLineHeight(1.5, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
                 .padding(.top, 6)

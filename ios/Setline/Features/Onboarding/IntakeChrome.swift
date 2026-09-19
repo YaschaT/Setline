@@ -11,6 +11,8 @@ struct IntakeStep<Content: View>: View {
     let total: Int
     let title: String
     let subtitle: String
+    /// 06 sets its subtitle to a 32ch measure; the other steps do not.
+    var subtitleMeasure: CGFloat? = nil
     /// What this answer produces, restated. Load-bearing copy, not decoration.
     let consequence: String
     let commit: String
@@ -44,22 +46,23 @@ struct IntakeStep<Content: View>: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
                         .slDisplay()
-                        .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                        .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
                     Text(subtitle)
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
+                        .slMeasure(subtitleMeasure ?? .infinity, fontSize: SL.TypeSize.body)
                         .padding(.top, 10)
 
                     content().padding(.top, SL.Space.s6)
 
                     Text(consequence)
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * 0.45)
+                        .slLineHeight(1.45, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.top, SL.Space.s6)

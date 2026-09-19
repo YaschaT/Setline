@@ -27,7 +27,7 @@ struct HowItWorksView: View {
                     Text("Elke week iets\nzwaarder tillen.")
                         .font(.sl(SL.TypeSize.displayL, SL.Weight.semibold))
                         .tracking(SL.TypeSize.displayL * -0.015)
-                        .lineSpacing(SL.TypeSize.displayL * 0.06)
+                        .slLineHeight(1.06, size: SL.TypeSize.displayL)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
                         .padding(.top, SL.Space.s4)
@@ -75,7 +75,7 @@ struct HowItWorksView: View {
                 Text(beat.title).slLead().foregroundStyle(SL.Ink.primary)
                 Text(attributed(beat.body, liming: beat.lime))
                     .slBody()
-                    .lineSpacing(SL.TypeSize.body * 0.45)
+                    .slLineHeight(1.45, size: SL.TypeSize.body)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -113,15 +113,16 @@ struct IntakeIntroView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Vier vragen en je\nplan staat er.")
                         .slDisplay()
-                        .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                        .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
                     Text("We vragen alleen wat het scherm van vandaag verandert. Ongeveer 40 seconden.")
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
+                        .slMeasure(32, fontSize: SL.TypeSize.body)
                         .padding(.top, 10)
 
                     VStack(spacing: 0) {
@@ -150,7 +151,7 @@ struct IntakeIntroView: View {
 
                     Text("Alles blijft later te wijzigen in Account. Overslaan geeft je het standaardplan.")
                         .slMeta()
-                        .lineSpacing(SL.TypeSize.meta * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.meta)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.tertiary)
                         .padding(.top, SL.Space.s5)

@@ -25,15 +25,16 @@ struct RestNotificationSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Rusttimer op de achtergrond")
                         .slDisplay()
-                        .lineSpacing(SL.TypeSize.display * (SL.LineHeight.display - 1))
+                        .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
                     Text("Je rust duurt \(restLabel). Met een melding hoef je de app niet open te houden en hoor je wanneer je weer moet.")
                         .slBody()
-                        .lineSpacing(SL.TypeSize.body * 0.5)
+                        .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
+                        .slMeasure(32, fontSize: SL.TypeSize.body)
                         .padding(.top, SL.Space.s3)
 
                     chip.padding(.top, SL.Space.s5)

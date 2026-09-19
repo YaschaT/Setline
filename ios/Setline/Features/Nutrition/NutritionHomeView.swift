@@ -100,7 +100,7 @@ struct NutritionHomeView: View {
                     .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
                     .slNumerals()
                     .foregroundStyle(SL.Ink.primary)
-                    .lineSpacing(SL.TypeSize.displayXL * 0.04)
+                    .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                     .padding(.top, SL.Space.s1)
                 Text(subline)
                     .slBody().slNumerals()

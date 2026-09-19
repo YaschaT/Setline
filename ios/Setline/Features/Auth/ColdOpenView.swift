@@ -24,21 +24,23 @@ struct ColdOpenView: View {
             Text("Til zwaarder,\nelke week.")
                 .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
                 .tracking(SL.TypeSize.displayXL * -0.015)
-                .lineSpacing(SL.TypeSize.displayXL * 0.04)
+                .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
 
             Text("Log je sets in twee taps. Je vorige sessie staat er al.")
                 .slBody()
-                .lineSpacing(SL.TypeSize.body * 0.5)
+                .slLineHeight(1.5, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
-                .frame(maxWidth: 320, alignment: .leading)
-                .padding(.top, SL.Space.s4)
+                .slMeasure(26, fontSize: SL.TypeSize.body)
+                .padding(.top, 14)
 
+            // 01's bottom block: 28 above the pill, 12 between the pill and
+            // the link, 98 below it in the frame.
             Button { onBegin() } label: { Text("Beginnen") }
                 .buttonStyle(SLPrimaryButtonStyle())
-                .padding(.top, SL.Space.s8)
+                .padding(.top, 28)
 
             Button { onSignIn() } label: {
                 Text("Ik heb al een account")
@@ -48,10 +50,10 @@ struct ColdOpenView: View {
                     .frame(minHeight: SL.Metric.tertiaryHeight)
             }
             .buttonStyle(.plain)
-            .padding(.top, SL.Space.s2)
+            .padding(.top, SL.Space.s3)
         }
         .padding(.horizontal, SL.Space.gutterEntry)
-        .padding(.bottom, SL.Space.s6)
+        .padding(.bottom, SL.Space.entryBlockBottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(SL.Surface.ground.ignoresSafeArea())
         .slRespondsToTextSize()

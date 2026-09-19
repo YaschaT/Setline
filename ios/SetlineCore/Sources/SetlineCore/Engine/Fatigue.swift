@@ -71,6 +71,7 @@ public enum Fatigue {
             let (newest, previous) = (sessions[0], sessions[1])
 
             var regressed: [Evidence] = []
+            var drifted: [Evidence] = []
             for result in newest.results {
                 guard let before = previous.results.first(where: { $0.exerciseID == result.exerciseID }) else { continue }
                 if let line = repsFell(from: before, to: result, display: display) {
@@ -78,12 +79,18 @@ public enum Fatigue {
                 }
                 if let line = effortDrifted(from: before, to: result, display: display) {
                     signals.insert(.effortDrift)
-                    evidence.append(Evidence(exerciseName: "RIR", detail: line))
+                    drifted.append(Evidence(exerciseName: "RIR", detail: line))
                 }
             }
             if regressed.count >= 2 {
                 signals.insert(.performanceRegression)
-                evidence.append(contentsOf: regressed.prefix(2))
+                // 18R's order: the first exercise that slipped, what the
+                // reserve did, then the next one.
+                evidence.append(regressed[0])
+                evidence.append(contentsOf: drifted)
+                evidence.append(contentsOf: regressed.dropFirst().prefix(1))
+            } else {
+                evidence.append(contentsOf: drifted)
             }
 
             if completionFell(newest) && completionFell(previous) {

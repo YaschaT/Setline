@@ -40,6 +40,7 @@ struct PreflightView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(day.short)
                             .slDisplay()
+                            .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                             .foregroundStyle(SL.Ink.primary)
 
                         Text(metaLine)
@@ -49,6 +50,13 @@ struct PreflightView: View {
                             .padding(.bottom, SL.Space.s6)
 
                         exerciseCard
+
+                        Text("Gewichten komen uit je vorige sessie. Alles is tijdens de sessie aanpasbaar.")
+                            .slMeta()
+                            .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(SL.Ink.tertiary)
+                            .padding(.top, SL.Space.s5)
                     }
                     .padding(.horizontal, SL.Space.gutterSession)
                     .padding(.top, 28)
@@ -65,23 +73,15 @@ struct PreflightView: View {
             })
         }
         .safeAreaInset(edge: .bottom) {
-            // The footnote sits in the commit block, directly above the pill as
-            // artboard 10 draws it, so a long plan can never push it out of
-            // sight behind the button.
-            VStack(alignment: .leading, spacing: SL.Space.s3) {
-                Text("Gewichten komen uit je vorige sessie. Alles is tijdens de sessie aanpasbaar.")
-                    .slMeta()
-                    .lineSpacing(SL.TypeSize.meta * (SL.LineHeight.body - 1))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(SL.Ink.tertiary)
-                Button(action: onBegin) { Text("Beginnen") }
-                    .buttonStyle(SLPrimaryButtonStyle())
-            }
-            .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s3)
-            .padding(.bottom, SL.Space.s3)
-            .frame(maxWidth: .infinity)
-            .background(SL.Surface.ground)
+            // 10's pill sits alone at the foot, 42 above the frame's edge; the
+            // footnote travels with the list it describes.
+            Button(action: onBegin) { Text("Beginnen") }
+                .buttonStyle(SLPrimaryButtonStyle())
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.top, SL.Space.s3)
+                .padding(.bottom, SL.Space.sessionBlockBottom)
+                .frame(maxWidth: .infinity)
+                .background(SL.Surface.ground)
         }
     }
 
@@ -91,8 +91,17 @@ struct PreflightView: View {
         if let goal = app.todayMetaLine()?.components(separatedBy: " · ").first(where: { $0.hasPrefix("doel") }) {
             parts.append(goal)
         }
-        parts.append("rust per oefening")
+        parts.append("rust \(restLabel)")
         return parts.joined(separator: " · ")
+    }
+
+    /// 10 states the rest ("rust 2:00"). Rest follows each exercise's role
+    /// (13R), so a day that mixes roles states its range: "rust 1:30–3:00".
+    private var restLabel: String {
+        let seconds = day.exercises.map { RestPrescription.forRole($0.role).defaultSeconds }
+        func clock(_ s: Int) -> String { "\(s / 60):" + String(format: "%02d", s % 60) }
+        guard let low = seconds.min(), let high = seconds.max() else { return clock(120) }
+        return low == high ? clock(low) : "\(clock(low))–\(clock(high))"
     }
 
     /// One container of radius 22 with 8pt of padding; rows at radius 12 with
@@ -132,10 +141,13 @@ struct PreflightView: View {
                     .foregroundStyle(SL.Ink.tertiary)
             }
             Spacer(minLength: SL.Space.s3)
+            // 10: a target heavier than last time is the one lime meaning on
+            // the screen — the weight that beats your own previous data.
+            let heavier = target.flatMap { t in previous.map { t > $0 } } ?? false
             Text(target.map(app.display.kg) ?? "—")
-                .font(.sl(SL.TypeSize.lead, SL.Weight.medium))
+                .font(.sl(SL.TypeSize.lead, heavier ? SL.Weight.semibold : SL.Weight.medium))
                 .slNumerals()
-                .foregroundStyle(SL.Ink.secondary)
+                .foregroundStyle(heavier ? SL.Signal.action : SL.Ink.secondary)
         }
         .padding(14)
         .accessibilityElement(children: .combine)
