@@ -38,6 +38,27 @@ extension Font {
 }
 
 extension View {
+    /// The artboards' measures — `max-width: 26ch`, `32ch`, `34ch` — as the
+    /// design renders them: one `ch` draws 0.5565 of the font size (26ch is
+    /// 217pt at 15pt). The measure grows with the text, so a line keeps its
+    /// length in characters at every size, and gives way to the full width
+    /// once that is narrower.
+    func slMeasure(_ characters: CGFloat, fontSize: CGFloat, alignment: Alignment = .leading) -> some View {
+        frame(
+            maxWidth: UIFontMetrics(forTextStyle: .body).scaledValue(for: characters * fontSize * 0.5565),
+            alignment: alignment
+        )
+    }
+
+    /// The design's CSS `line-height`: a line box of `factor × size`, scaled
+    /// with the text. On iOS 26 that is exact — including the display sizes,
+    /// where 1.04 and 1.1 are tighter than the font's own line. Before iOS 26
+    /// SwiftUI can only add space, so it adds what CSS would and cannot
+    /// tighten below the font's natural line.
+    func slLineHeight(_ factor: CGFloat, size: CGFloat) -> some View {
+        modifier(SLLineHeight(factor: factor, size: size))
+    }
+
     /// Makes a view re-render when the reader changes their text size.
     ///
     /// `UIFontMetrics` reads the current category at draw time; reading
@@ -53,5 +74,19 @@ private struct SLTextSizeObserver: ViewModifier {
 
     func body(content: Content) -> some View {
         content.id(dynamicTypeSize)
+    }
+}
+
+private struct SLLineHeight: ViewModifier {
+    let factor: CGFloat
+    let size: CGFloat
+
+    func body(content: Content) -> some View {
+        let scaled = UIFontMetrics(forTextStyle: .body).scaledValue(for: size)
+        if #available(iOS 26.0, *) {
+            content.lineHeight(.exact(points: scaled * factor))
+        } else {
+            content.lineSpacing(max(0, scaled * factor - UIFont.systemFont(ofSize: scaled).lineHeight))
+        }
     }
 }

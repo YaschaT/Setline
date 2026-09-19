@@ -13,10 +13,13 @@ struct SLEyebrow: View {
     let text: String
     var size: CGFloat = SL.TypeSize.meta
     var color: Color = SL.Ink.tertiary
+    /// Medium by default; a few artboards (24's queue and compact card) set
+    /// their eyebrow at regular weight.
+    var weight: Font.Weight = SL.Weight.medium
 
     var body: some View {
         Text(text.uppercased())
-            .font(.sl(size, SL.Weight.medium))
+            .font(.sl(size, weight))
             .foregroundStyle(color)
     }
 }
@@ -68,10 +71,11 @@ extension View {
         )
     }
 
-    /// Clears the 44pt floor without growing the visible element — the
-    /// system's stated way of handling small text controls.
+    /// Clears the 44pt floor without growing the layout. The artboards set a
+    /// text control — `Sluiten`, `Wijzig`, `Ongedaan maken` — at the height of
+    /// its text, in rows that are only as tall as the text; the tap area
+    /// reaches 14pt past the words instead of pushing the row apart.
     func slHitTarget() -> some View {
-        frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
-            .contentShape(Rectangle())
+        contentShape(Rectangle().inset(by: -14))
     }
 }

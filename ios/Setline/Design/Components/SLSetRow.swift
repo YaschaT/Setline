@@ -81,7 +81,21 @@ struct SLSetRow: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        // A warm-up row is a reference strip, not a control (30), so it is
+        // drawn plainly: a disabled button would fade it below `text2`.
+        if row.isWarmup {
+            rowContent
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(accessibilityText)
+        } else {
+            Button(action: onTap) { rowContent }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(accessibilityText)
+        }
+    }
+
+    private var rowContent: some View {
             HStack(spacing: 0) {
                 Text(row.indexLabel)
                     .font(.sl(row.isWarmup ? SL.TypeSize.meta : SL.TypeSize.body, SL.Weight.semibold))
@@ -130,18 +144,13 @@ struct SLSetRow: View {
                         style: StrokeStyle(lineWidth: 1, dash: row.isWarmup ? [4, 4] : [])
                     )
             )
-        }
-        .buttonStyle(.plain)
-        .disabled(row.isWarmup)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityText)
     }
 
     private var repsColor: Color {
         if row.isWarmup { return SL.Ink.secondary }
-        // The review: a PR row carries its reps figure in lime, at the moment
-        // it happens — the value that beat your own previous data.
-        if row.delta == .personalRecord { return SL.Signal.action }
+        // 16R and the live 11–13 keep a PR row's reps white: the lime is in
+        // the `PR` marker and its dot, stated once. (Review 04 had proposed
+        // lime reps; the main file did not take it.)
         if row.status == .written { return SL.Ink.primary }
         // 28: on the row up next, the target is the number to read.
         return row.repsIsTarget && row.status == .nextUp ? SL.Ink.primary : SL.Ink.tertiary

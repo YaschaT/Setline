@@ -16,6 +16,9 @@ struct PlateSheet: View {
     let onClose: () -> Void
 
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// 14's sheet hugs its content; the detent follows what was laid out.
+    @State private var contentHeight: CGFloat = 430
 
     private let display = NumberDisplay.dutch
 
@@ -33,12 +36,8 @@ struct PlateSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, SL.Space.s4)
 
-            Text(exercise).slTitle().foregroundStyle(SL.Ink.primary)
-            Text("Set \(setNumber) · \(display.kg(target)) × \(reps)")
-                .slBody().slNumerals()
-                .foregroundStyle(SL.Ink.secondary)
-                .padding(.top, SL.Space.s1)
-
+            // 14 opens on the answer: which set it is stays on the session
+            // behind the sheet. VoiceOver still hears it first.
             HStack(alignment: .firstTextBaseline) {
                 SLEyebrow(text: "SCHIJVEN PER KANT")
                 Spacer()
@@ -46,7 +45,8 @@ struct PlateSheet: View {
                     .slMeta().slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
             }
-            .padding(.top, SL.Space.s5)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(exercise), set \(setNumber), \(display.kg(target)) × \(reps). Schijven per kant, stang \(display.kg(rack.barKg))")
 
             perSide.padding(.top, SL.Space.s2)
             stack.padding(.top, SL.Space.s4)
@@ -59,15 +59,16 @@ struct PlateSheet: View {
                 .padding(.top, SL.Space.s4)
 
             Button { onClose() } label: { Text("Sluiten") }
-                .buttonStyle(SLOutlineButtonStyle())
+                .buttonStyle(SLOutlineButtonStyle(edge: SL.Surface.hairlineStrong))
                 .padding(.top, SL.Space.s4)
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s4)
-        .padding(.bottom, SL.Space.s6)
+        .padding(.bottom, SL.Space.sessionBlockBottom)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         .background(SL.Surface.raised)
-        .presentationDetents([.height(520), .large])
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.height(contentHeight), .large])
         .presentationBackground(SL.Surface.raised)
         .presentationDragIndicator(.hidden)
         .slRespondsToTextSize()
@@ -77,7 +78,7 @@ struct PlateSheet: View {
         (Text(solution.perSide.isEmpty ? "Geen schijven" : solution.perSide.map(display.number).joined(separator: " · "))
             .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
             .foregroundStyle(SL.Ink.primary)
-         + Text("  = \(display.kg(solution.total)) totaal")
+         + Text(" = \(display.kg(solution.total)) totaal")
             .font(.sl(SL.TypeSize.lead, SL.Weight.medium))
             .foregroundStyle(SL.Ink.tertiary))
             .slNumerals()
@@ -97,7 +98,7 @@ struct PlateSheet: View {
                 plateBar(plate)
             }
             sleeve(width: 26)
-            Capsule().fill(SL.Ink.tertiary).frame(width: 10, height: 30)
+            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(SL.Ink.secondary).frame(width: 10, height: 30)
             sleeve(width: 26)
             ForEach(Array(solution.perSide.enumerated()), id: \.offset) { _, plate in
                 plateBar(plate)
@@ -113,14 +114,17 @@ struct PlateSheet: View {
         .accessibilityHidden(true)
     }
 
+    /// 14's pieces are bars with a radius of 3, not capsules.
     private func sleeve(width: CGFloat) -> some View {
-        Capsule().fill(SL.Ink.tertiary).frame(width: width, height: 6)
+        RoundedRectangle(cornerRadius: 3, style: .continuous).fill(SL.Ink.tertiary).frame(width: width, height: 6)
     }
 
+    /// Heights through artboard 14's own example — 15 kg stands 88 tall, 2,5 kg
+    /// 44 — full height from 15 kg up and never lower than 30.
     private func plateBar(_ plate: Decimal) -> some View {
-        let heaviest = (rack.plates.max() ?? 20) as NSDecimalNumber
-        let height = 28 + 60 * CGFloat(truncating: plate as NSDecimalNumber) / CGFloat(truncating: heaviest)
-        return Capsule()
+        let kg = CGFloat(truncating: plate as NSDecimalNumber)
+        let height = min(88, max(30, 44 + 44 * (kg - 2.5) / 12.5))
+        return RoundedRectangle(cornerRadius: 3, style: .continuous)
             .fill(SL.Signal.action)
             .frame(width: 14, height: height)
     }
@@ -133,7 +137,8 @@ struct PlateSheet: View {
                     Text(display.number(load))
                         .slBody(SL.Weight.semibold)
                         .slNumerals()
-                        .foregroundStyle(selected ? SL.Ink.primary : SL.Ink.secondary)
+                        // 14 sets every load in white; the edge marks the one chosen.
+                        .foregroundStyle(SL.Ink.primary)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: SL.Space.hitMin)
                         .background(

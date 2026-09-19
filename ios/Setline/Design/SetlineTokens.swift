@@ -107,6 +107,12 @@ enum SL {
         static let gutterEntry:   CGFloat = 24
         static let tabInset:      CGFloat = 21
         static let homeBand:      CGFloat = 21
+        /// Entry screens end their bottom block 98 above the frame's edge,
+        /// which includes the 21 home band: 77 above the bottom safe area.
+        static let entryBlockBottom: CGFloat = 77
+        /// Session screens end their pill 42 above the frame's edge, home band
+        /// included: 21 above the bottom safe area.
+        static let sessionBlockBottom: CGFloat = 21
         static let hitMin:        CGFloat = 44
     }
 
@@ -217,6 +223,9 @@ struct SLPrimaryButtonStyle: ButtonStyle {
 struct SLOutlineButtonStyle: ButtonStyle {
     enum Emphasis { case secondary, tertiary }
     var emphasis: Emphasis = .secondary
+    /// An artboard's own edge where it differs from the emphasis — 24 draws
+    /// its secondary retry with the .16 edge.
+    var edge: Color? = nil
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -230,7 +239,7 @@ struct SLOutlineButtonStyle: ButtonStyle {
             .background(Capsule().fill(SL.Surface.raised2))
             .overlay(
                 Capsule().strokeBorder(
-                    emphasis == .secondary ? SL.Surface.selection : SL.Surface.hairlineStrong,
+                    edge ?? (emphasis == .secondary ? SL.Surface.selection : SL.Surface.hairlineStrong),
                     lineWidth: 1
                 )
             )
