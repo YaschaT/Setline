@@ -158,6 +158,10 @@ final class RecordsEngineTests: XCTestCase {
         )
         XCTAssertEqual(record?.type, .load)
         XCTAssertEqual(record?.headline, "Zwaarste ooit · 105 kg × 6")
+        // 17R: the previous best in full — unit, reps and the day it was
+        // first done ("Vorige beste 122,5 kg × 3 op 31 aug").
+        let first = history(threeSessions).appearances.map(\.date).min()!
+        XCTAssertEqual(record?.detail, "Vorige beste 100 kg × 6 op \(NumberDisplay.dutch.shortDate(first))")
     }
 
     func testRepPRAtAKnownLoad() {

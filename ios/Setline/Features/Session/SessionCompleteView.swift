@@ -3,7 +3,10 @@ import SetlineCore
 
 /// Artboard 17R. Four kinds of record, each stated once, as a fact.
 ///
-/// No confetti, no badge, no streak.
+/// No confetti, no badge, no streak. 17R replaced base 17's comparison line,
+/// per-exercise list and note link with the records themselves; the one
+/// addition is `Terug`, in the handoff's own back-link style, so a mis-tap on
+/// `Sessie afronden` never forces a save.
 struct SessionCompleteView: View {
     @Environment(AppState.self) private var app
     let runner: SessionRunner
@@ -19,7 +22,18 @@ struct SessionCompleteView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    Button(action: onBack) {
+                        Text("Terug")
+                            .slBody(SL.Weight.medium)
+                            .foregroundStyle(SL.Ink.secondary)
+                            .frame(minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Terug naar sessie")
+
                     SLEyebrow(text: "Afgerond · \(runner.completedSetCount)/\(runner.plannedSetCount) sets")
+                        .padding(.top, SL.Space.s5)
 
                     Text("\(runner.day.short) · \(app.display.minutes(runner.elapsedSeconds)) · \(app.display.shortDate(Date()))")
                         .slTitle()
@@ -29,32 +43,15 @@ struct SessionCompleteView: View {
                     volumeBlock
 
                     records.padding(.top, SL.Space.s5)
-
-                    summaryRows.padding(.top, SL.Space.s6)
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, SL.Space.s8)
+                .padding(.top, SL.Space.s3)
                 .padding(.bottom, SL.Space.s12)
             }
         }
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: SL.Space.s2) {
-                Button(action: onBack) {
-                    Text("Terug naar sessie")
-                        .slBody(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: SL.Space.hitMin)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                Button(action: onSave) { Text("Sessie opslaan") }
-                    .buttonStyle(SLPrimaryButtonStyle())
-                Text("Notitie toevoegen")
-                    .slBody()
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .frame(height: SL.Metric.tertiaryHeight)
-            }
+            Button(action: onSave) { Text("Sessie opslaan") }
+                .buttonStyle(SLPrimaryButtonStyle())
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s3)
             .padding(.bottom, SL.Space.s3)
@@ -81,13 +78,6 @@ struct SessionCompleteView: View {
                 }
             }
             .padding(.top, 6)
-
-            if let previous {
-                Text("Tegenover \(app.display.shortDate(previous.date))")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .padding(.top, SL.Space.s2)
-            }
         }
         .padding(.top, SL.Space.s2)
         .padding(.bottom, SL.Space.s5)
@@ -96,7 +86,8 @@ struct SessionCompleteView: View {
     }
 
     /// Plain blocks separated by hairlines — no cards. The highest-ranked
-    /// record takes the screen's one lime; the rest stay tertiary.
+    /// record takes the screen's one lime; the rest stay tertiary, and a
+    /// reference still being built never takes it.
     private var records: some View {
         let entries = runner.records()
         return VStack(alignment: .leading, spacing: SL.Space.s4) {
@@ -104,7 +95,7 @@ struct SessionCompleteView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     SLEyebrow(
                         text: entry.name,
-                        color: index == 0 ? SL.Signal.action : SL.Ink.tertiary
+                        color: index == 0 && !entry.record.buildsReference ? SL.Signal.action : SL.Ink.tertiary
                     )
                     Text(entry.record.headline)
                         .slTitle()
@@ -119,28 +110,5 @@ struct SessionCompleteView: View {
                 if index < entries.count - 1 { SLHairline() }
             }
         }
-    }
-
-    private var summaryRows: some View {
-        VStack(spacing: 0) {
-            // Every exercise that did work today, swapped-out ones included.
-            ForEach(Array(runner.allResults.enumerated()), id: \.offset) { _, result in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(result.name).slBody().foregroundStyle(SL.Ink.primary)
-                    Spacer()
-                    Text(summary(result.sets))
-                        .slBody().slNumerals()
-                        .foregroundStyle(SL.Ink.secondary)
-                }
-                .padding(.vertical, SL.Space.s3)
-                SLHairline()
-            }
-        }
-    }
-
-    private func summary(_ sets: [LoggedSet]) -> String {
-        guard let weight = sets.first?.weightKg else { return "" }
-        let reps = sets.map { "\($0.reps)" }.joined(separator: " · ")
-        return "\(app.display.kg(weight)) · \(reps)"
     }
 }

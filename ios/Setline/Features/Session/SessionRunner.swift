@@ -826,8 +826,10 @@ final class SessionRunner {
     }
 
     /// Records from every exercise that did work today, swapped-out ones too.
+    /// Highest-ranked first, as 17R lists them; exercises of equal rank keep
+    /// their session order.
     func records() -> [(name: String, record: ExerciseRecord)] {
-        slots.flatMap { slot -> [(name: String, record: ExerciseRecord)] in
+        let found = slots.flatMap { slot -> [(name: String, record: ExerciseRecord)] in
             slot.model.results.compactMap { result -> (name: String, record: ExerciseRecord)? in
                 let history = result.exerciseID == slot.planned.exerciseID
                     ? slot.history
@@ -841,6 +843,9 @@ final class SessionRunner {
                 return (result.name, record)
             }
         }
+        return found.enumerated()
+            .sorted { ($0.element.record.rank, -$0.offset) > ($1.element.record.rank, -$1.offset) }
+            .map(\.element)
     }
 
     #if DEBUG

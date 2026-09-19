@@ -74,6 +74,8 @@ final class CalibrationTests: XCTestCase {
         let record = RecordsEngine.record(for: calibration, history: empty)
         XCTAssertEqual(record?.type, .sessionBest)
         XCTAssertTrue(record?.headline.hasPrefix("Referentie opbouwen") == true)
+        XCTAssertEqual(record?.buildsReference, true)
+        XCTAssertLessThan(record?.rank ?? 0, RecordType.sessionBest.rawValue, "A reference being built ranks below every record")
 
         XCTAssertFalse(
             RecordsEngine.isLoadPR(set: calibration[0], history: empty, earlierInSession: []),

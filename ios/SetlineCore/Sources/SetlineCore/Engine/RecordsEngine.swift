@@ -14,12 +14,21 @@ public struct ExerciseRecord: Hashable, Sendable {
     public let type: RecordType
     public let headline: String
     public let detail: String
+    /// "Referentie opbouwen · sessie 2 van 3": said in a record's place while
+    /// the three-session gate is shut. It beats nothing, so it is never the
+    /// screen's lime and always comes last (17R).
+    public let buildsReference: Bool
 
-    public init(type: RecordType, headline: String, detail: String) {
+    public init(type: RecordType, headline: String, detail: String, buildsReference: Bool = false) {
         self.type = type
         self.headline = headline
         self.detail = detail
+        self.buildsReference = buildsReference
     }
+
+    /// 17R's order: load, rep, estimated strength, session best, and the
+    /// reference being built after all of them.
+    public var rank: Int { buildsReference ? -1 : type.rawValue }
 }
 
 public enum RecordsEngine {
@@ -41,7 +50,8 @@ public enum RecordsEngine {
             return ExerciseRecord(
                 type: .sessionBest,
                 headline: "Referentie opbouwen · sessie \(history.referenceSessionNumber) van \(ExerciseHistory.sessionsBeforeReference)",
-                detail: "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen."
+                detail: "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen.",
+                buildsReference: true
             )
         }
 
@@ -53,13 +63,11 @@ public enum RecordsEngine {
             let heaviestBefore = priorSets.compactMap(\.weightKg).max() ?? 0
             if heaviestNow > heaviestBefore + epsilon,
                let set = current.first(where: { ($0.weightKg ?? 0) == heaviestNow }) {
-                let previousBest = bestSet(at: heaviestBefore, in: priorSets)
                 return ExerciseRecord(
                     type: .load,
                     headline: "Zwaarste ooit · \(formatter.kg(heaviestNow)) × \(set.reps)",
-                    detail: previousBest.map { prior in
-                        "Vorige beste \(formatter.setReference(weightKg: prior.weightKg ?? 0, reps: prior.reps))"
-                    } ?? "Eerste keer op dit gewicht"
+                    detail: previousBest(at: heaviestBefore, in: history.appearances, formatter: formatter)
+                        ?? "Eerste keer op dit gewicht"
                 )
             }
         }
@@ -123,9 +131,21 @@ public enum RecordsEngine {
         )
     }
 
-    private static func bestSet(at load: Decimal, in sets: [LoggedSet]) -> LoggedSet? {
-        sets.filter { abs(($0.weightKg ?? 0) - load) <= Estimates.epsilonKg }
-            .max { $0.reps < $1.reps }
+    /// "Vorige beste 122,5 kg × 3 op 31 aug" — the most reps ever done at the
+    /// previous heaviest load, and the day it was done (17R).
+    private static func previousBest(
+        at load: Decimal, in appearances: [ExerciseAppearance], formatter: NumberDisplay
+    ) -> String? {
+        let candidates = appearances.flatMap { appearance in
+            appearance.sets
+                .filter { abs(($0.weightKg ?? 0) - load) <= Estimates.epsilonKg }
+                .map { (set: $0, date: appearance.date) }
+        }
+        // Most reps first; on a tie, the first time it was done.
+        guard let best = candidates.max(by: { lhs, rhs in
+            lhs.set.reps != rhs.set.reps ? lhs.set.reps < rhs.set.reps : lhs.date > rhs.date
+        }) else { return nil }
+        return "Vorige beste \(formatter.kg(best.set.weightKg ?? 0)) × \(best.set.reps) op \(formatter.shortDate(best.date))"
     }
 
     /// Σ load × reps over the working sets.
