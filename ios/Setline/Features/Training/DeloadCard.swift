@@ -62,6 +62,7 @@ struct DeloadCard: View {
         }
         .padding(SL.Space.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
                 .fill(SL.Surface.raised2)
@@ -109,7 +110,9 @@ struct DeloadCard: View {
     }
 
     private var actions: some View {
-        HStack(spacing: SL.Space.s2) {
+        // 18R lines the pair up at the top: `Niet nu` carries a border and
+        // stands 50 to the filled button's 48.
+        HStack(alignment: .top, spacing: SL.Space.s2) {
             Button { onApply() } label: {
                 Text("Toepassen")
                     .slBody(SL.Weight.semibold)
@@ -129,6 +132,7 @@ struct DeloadCard: View {
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 48)
+                    .slBorderBox()
                     .background(
                         RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                             .fill(SL.Surface.raised)

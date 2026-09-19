@@ -26,6 +26,7 @@ struct SLFloatingTimer: View {
             // large clock at accessibility sizes, so it stays expanded there.
             if isExpanded || typeSize.isAccessibilitySize { expanded } else { compact }
         }
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
                 .fill(SL.Surface.floatFill)
@@ -119,6 +120,8 @@ struct SLFloatingTimer: View {
             .buttonStyle(.plain)
             .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
         }
+        // 11–13: a 76-high row inside 6 of padding and the border — 90 across.
+        .frame(minHeight: 76)
         .padding(.leading, SL.Space.s5)
         .padding([.trailing, .vertical], 6)
     }
@@ -173,6 +176,8 @@ struct SLFloatingTimer: View {
                 .slNumerals()
                 .foregroundStyle(SL.Ink.primary)
                 .frame(width: 56, height: 56)
+                // 13R: 56 inside the .16 edge, 58 across.
+                .slBorderBox()
                 .background(
                     RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                         .fill(SL.Surface.raised)

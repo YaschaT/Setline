@@ -72,6 +72,7 @@ struct ProgressHomeView: View {
             }
         }
         .padding(4)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                 .fill(SL.Surface.raised)

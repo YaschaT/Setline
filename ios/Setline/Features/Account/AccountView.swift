@@ -96,6 +96,7 @@ struct AccountView: View {
             }
             Text(syncHeadline)
                 .slDisplay(SL.TypeSize.displayXL)
+                .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .padding(.top, SL.Space.s2)

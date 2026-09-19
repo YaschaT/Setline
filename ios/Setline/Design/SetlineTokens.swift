@@ -180,6 +180,11 @@ enum SL {
         static let segmentHeight:     CGFloat = 44
         static let chipHeight:        CGFloat = 44
         static let dayTileHeight:     CGFloat = 64   // 72 on the first-run home
+        /// The one border width. The HTML sizes boxes content-box, so a 1px
+        /// border sits outside the padding or `height` and adds to the box:
+        /// 19's row is 14 + 14 of padding and 1 + 1 of border, 68.5 tall with
+        /// its text 17 in. See `slBorderBox()`.
+        static let border:            CGFloat = 1
         static let pressedScale:      CGFloat = 0.97
         static let focusRingWidth:    CGFloat = 2
         static let focusRingOffset:   CGFloat = 2
@@ -236,6 +241,7 @@ struct SLOutlineButtonStyle: ButtonStyle {
             .foregroundStyle(emphasis == .secondary ? SL.Ink.primary : SL.Ink.secondary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: SL.Metric.primaryPillHeight)
+            .slBorderBox()
             .background(Capsule().fill(SL.Surface.raised2))
             .overlay(
                 Capsule().strokeBorder(
@@ -249,6 +255,19 @@ struct SLOutlineButtonStyle: ButtonStyle {
 }
 
 extension View {
+    /// Steps a bordered surface out by its border before the fill and the
+    /// stroke are drawn. A SwiftUI `strokeBorder` sits over the padding; the
+    /// artboards' CSS border sits outside it and adds to the size, so every
+    /// bordered box renders 2pt larger than its padding or `height` says,
+    /// with its content 1pt further in — 09's today card sets its text at
+    /// 20 + 1 + 20.
+    ///
+    /// Only for surfaces bordered in every state. A border that appears on
+    /// selection is drawn inside, so a control keeps its size when tapped.
+    func slBorderBox() -> some View {
+        padding(SL.Metric.border)
+    }
+
     /// Card / tile surface. `loud` raises the fill; `selected` strengthens the border.
     func slCard(
         radius: CGFloat = SL.Radius.xl,
@@ -256,6 +275,7 @@ extension View {
         selected: Bool = false
     ) -> some View {
         self
+            .slBorderBox()
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(loud || selected ? SL.Surface.raised2 : SL.Surface.raised)

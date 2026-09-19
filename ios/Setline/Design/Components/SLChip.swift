@@ -74,6 +74,7 @@ struct SLChip: View {
                 .foregroundStyle(look.ink)
                 .padding(.horizontal, horizontalPadding ?? size.padding)
                 .frame(minHeight: size.height)
+                .slBorderBox()
                 .background(
                     RoundedRectangle(cornerRadius: size.radius, style: .continuous)
                         .fill(look.fill)

@@ -35,8 +35,12 @@ struct LichaamSegmentView: View {
             Text("LICHAAMSGEWICHT")
                 .slMeta(SL.Weight.medium)
                 .foregroundStyle(SL.Ink.tertiary)
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                Text(app.display.kg(latest.weightKg)).slDisplay()
+            SLValueRow {
+                Text(app.display.kg(latest.weightKg))
+                    .slDisplay()
+                    .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                 if let change = progress.change {
                     Text("\(app.display.signedDelta(change.value)) / \(change.weeks) weken")
                         .slLead()

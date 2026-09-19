@@ -79,10 +79,14 @@ struct StrengthSegmentView: View {
                 .foregroundStyle(SL.Ink.tertiary)
 
             if let estimate = progress.estimate {
-                HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+                SLValueRow {
                     // An estimate is stated in the steps a gym actually has,
                     // as the artboard does: Epley's 63,33 reads as 63,5.
-                    Text(app.display.kg(Estimates.round(estimate, toIncrement: 0.5))).slDisplay()
+                    Text(app.display.kg(Estimates.round(estimate, toIncrement: 0.5)))
+                        .slDisplay()
+                        .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
                     if let change = progress.change {
                         Text("\(app.display.signedDelta(Estimates.round(change.value, toIncrement: 0.5))) in \(change.weeks) weken")
                             .slLead()
@@ -124,10 +128,12 @@ struct StrengthSegmentView: View {
             .chartYAxis(.hidden)
             .chartYScale(domain: chartRange(progress.points))
             .frame(height: 150)
-            .background(alignment: .top) {
-                VStack {
+            // Artboard 20's two rules: through the middle and along the base.
+            .background {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
                     SLHairline()
-                    Spacer()
+                    Spacer(minLength: 0)
                     SLHairline()
                 }
             }

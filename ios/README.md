@@ -96,23 +96,51 @@ All of these are release gaps for a public V1, not defects in what is here.
 
 ### Where the app differs from the design, on purpose
 
+Screen by screen:
+
 - **05** has no "Eigen plan" option: there is no plan editor behind it.
 - **09** has no "Herstel · slaap, HRV" line (HealthKit is out of scope).
 - **10**: pre-flight's `Wijzig` opens the week agenda, the one place today's
   session can be changed.
+- **11–13 / 11R–13R**: the session keeps a strip of the day's exercises under
+  its header. No artboard draws one, but it is the only way back to an earlier
+  exercise to correct a set.
+- **11R / 12R** draw the entry sheet without a tools row. The app keeps 12's
+  `Toetsenblok · Mislukt · Pauze-reps` and adds `Partieel`, because 16R's
+  failed, paused and partial sets are entered there.
+- **13R / 11–13**: the rest timer opens as 13R's card (`Overslaan`) and folds
+  to 11–13's compact row (`Klaar`) after three seconds; a tap switches between
+  them. At accessibility sizes it stays open.
 - **14**: the plate calculator adds correctly where the artboard's own example
   does not.
+- **15**: a `Wissel` pill sits beside the exercise name. Base 15 enters the swap
+  by holding the title, which still works, but a gesture nobody can see cannot
+  be the only way in.
+- **15R** adds the `Toestel of rek is bezet` chip, which sets the context the
+  alternatives are ranked by, and says so when sets already logged stay with
+  the original exercise.
 - **15Rb**: the scope captions say what each reach changes ("Push, vanaf
   vandaag", "Push, tot je het plan wijzigt") instead of "Maandag 7 sep, deze
   sessie" — a change for today only is a swap (TRAINING_LOGIC §12.4).
+- **16**: the undo sits above the commit pill rather than in its place, so the
+  one action stays reachable for the five seconds the undo lasts.
 - **16R**: a set is removed from its entry sheet, and only a set added during
   the session; there is no swipe. Planned sets stay, because completion feeds
   §11's fatigue signal. The partial marker names its count ("partieel +2").
 - **17R** adds `Terug`, so a mis-tap on `Sessie afronden` never forces a save.
 - **19** has no advisory line, on request.
+- **20**: Progressie's `Lichaam` and `Historiek` segments have no artboard; they
+  are built from 20's own parts. So are the other screens no artboard draws:
+  Voeding's add-food sheet, Account's programme and day-target sheets, Foto's
+  empty state and an expired sign-in (23's sync block with 24's retry).
+- **22** says "Foto's blijven op dit toestel" instead of "…tenzij je sync
+  aanzet": there is no photo sync to turn on.
 - **23**: the Rusttimer row has no `Wijzig`, because rest follows each
   exercise's role (13R) and there is nothing to set; `Account verwijderen` is
-  hidden, on request.
+  hidden, on request. `RIR vragen` is added: it is the setting 12R's footnote
+  points to ("Per set vragen zet je aan in Account").
+- **28b** draws a faint dot on the rows still to come; 29 and 30 draw none,
+  and the grid follows them.
 - **29 / 29b** disagree on READY's headline; the card uses 29b's per-tone
   headlines with 29's steppers.
 - **30**: the pill stays "Begin set 1". Warm-ups are a reference strip and are
@@ -121,10 +149,35 @@ All of these are release gaps for a public V1, not defects in what is here.
 - **31b**: "Vervang deze oefening" uses the artboard's "met stabielere varianten
   bovenaan" only when the region actually narrows the list; otherwise it says
   the list does not change.
-- **Tab bar**: SF Symbols stand in for the mock's Material Symbols at the same
-  20pt, and the bar keeps its size at large text sizes instead of overflowing.
 - **Onboarding** runs after registration only; a returning sign-in goes
   straight in.
+
+Across screens:
+
+- **Sheets** (07, 11R/12R, 14, 15R/15Rb, 31): iOS 26 draws a partial-height
+  sheet as a floating card — about 9pt in from the sides and bottom, rounded on
+  all four corners, its content at about 96% — and offers no way to attach it
+  to the edges. The artboards' edge-to-edge sheet with its .16 top edge would
+  need a hand-built panel, and the system sheet's VoiceOver behaviour,
+  drag-to-dismiss and keyboard handling with it.
+- **A border that appears on selection draws inside the control.** The mock
+  adds every 1px border outside the box, so its selected RIR, plate-load and
+  Progressie chips, its next-up set row and its newest check-in thumbnail are
+  2pt larger than their neighbours. Here they keep their size, so nothing moves
+  when it is tapped. Surfaces bordered in every state do take the extra 2pt
+  (`slBorderBox()`), as the mock renders them.
+- **Text below 20pt** is set with SF Pro's Text optical size and iOS's line
+  breaking, which avoids a lone word on a last line. The mock's browser draws
+  small text 3–5% narrower and keeps such orphans, so a line can break one word
+  earlier (03's title, 19's subtitle, 18R's footnote).
+- **Tab screens** keep 12pt between the commit pill and the tab bar. 08 and 09
+  draw the pill partly behind the bar, 21 and 22 flush against it.
+- **Tab bar**: the glyphs are the mock's own Material Symbols (exercise,
+  nutrition, trending_up, photo_camera, account_circle) as vector assets. The
+  bar keeps its size at large text sizes instead of overflowing.
+- **App icon**: the design has no icon artboard. The Home Screen icon is the
+  approved SETLINE wordmark (600 weight, .16em tracking, as the Review header
+  sets it) centred on the ground colour; there are no dark or tinted variants.
 
 ### Known technical debt
 

@@ -51,6 +51,7 @@ struct TargetsSheet: View {
                         field("Vet", text: $fat, macro: .fat, unit: "g")
                     }
                     .padding(6)
+                    .slBorderBox()
                     .background(
                         RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                             .fill(SL.Surface.ground)

@@ -84,9 +84,30 @@ private struct SLLineHeight: ViewModifier {
     func body(content: Content) -> some View {
         let scaled = UIFontMetrics(forTextStyle: .body).scaledValue(for: size)
         if #available(iOS 26.0, *) {
-            content.lineHeight(.exact(points: scaled * factor))
+            content
+                .lineHeight(.exact(points: scaled * factor))
+                // A line box tighter than the font's own line leaves the last
+                // line's descenders outside the text's frame, where they would
+                // be cut off; CSS lets them hang over, and so does this.
+                .textRenderer(SLOverhangRenderer(overhang: scaled * 0.3))
         } else {
             content.lineSpacing(max(0, scaled * factor - UIFont.systemFont(ofSize: scaled).lineHeight))
+        }
+    }
+}
+
+/// Draws text exactly as SwiftUI lays it out, with room past the frame for
+/// glyphs that hang outside a tightened line box.
+private struct SLOverhangRenderer: TextRenderer {
+    let overhang: CGFloat
+
+    var displayPadding: EdgeInsets {
+        EdgeInsets(top: overhang, leading: 0, bottom: overhang, trailing: 0)
+    }
+
+    func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+        for line in layout {
+            context.draw(line)
         }
     }
 }

@@ -68,9 +68,11 @@ struct SLStepper: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 11R and 29 set the label at 12, regular.
             SLEyebrow(
                 text: disabledNote.map { "\(label) · \($0)" } ?? label,
-                size: SL.TypeSize.micro
+                size: SL.TypeSize.micro,
+                weight: SL.Weight.regular
             )
 
             if typeSize.isAccessibilitySize {

@@ -112,6 +112,7 @@ struct AddFoodSheet: View {
                 .disabled(searching || query.trimmingCharacters(in: .whitespaces).count < FoodSearch.shortestQuery)
             }
             .padding(6)
+            .slBorderBox()
             .background(
                 RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                     .fill(SL.Surface.ground)
@@ -134,6 +135,7 @@ struct AddFoodSheet: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(minHeight: SL.Space.hitMin)
+                .slBorderBox()
                 .background(
                     RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                         .fill(SL.Surface.ground)
@@ -164,6 +166,7 @@ struct AddFoodSheet: View {
                 }
                 .padding(6)
                 .padding(.top, 0)
+                .slBorderBox()
                 .background(
                     RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                         .fill(SL.Surface.ground)
@@ -182,6 +185,7 @@ struct AddFoodSheet: View {
 
             if chosen != nil {
                 field("Hoeveelheid", text: $grams, field: .grams, unit: "g", numeric: true)
+                    .slBorderBox()
                     .background(
                         RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                             .fill(SL.Surface.ground)
@@ -281,6 +285,7 @@ struct AddFoodSheet: View {
             field("Vet", text: $fat, field: .fat, unit: "g", numeric: true)
         }
         .padding(6)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                 .fill(SL.Surface.ground)

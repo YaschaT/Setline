@@ -72,6 +72,8 @@ struct SessionCompleteView: View {
                 Text(app.display.volumeKg(summary.volume))
                     .slDisplay(SL.TypeSize.displayXL)
                     .slNumerals()
+                    // 17R: 44 on a 1.04 line.
+                    .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .foregroundStyle(SL.Ink.primary)

@@ -82,6 +82,7 @@ struct PlateSheet: View {
             .font(.sl(SL.TypeSize.lead, SL.Weight.medium))
             .foregroundStyle(SL.Ink.tertiary))
             .slNumerals()
+            .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel(
                 solution.perSide.isEmpty

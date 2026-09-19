@@ -156,6 +156,7 @@ struct SignInView: View {
             )
         }
         .padding(6)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                 .fill(SL.Surface.raised)

@@ -142,7 +142,7 @@ struct SetEntrySheet: View {
                 if isAccessibilityLayout {
                     VStack(spacing: SL.Space.s2) { steppers }
                 } else {
-                    HStack(spacing: SL.Space.s2) { steppers }
+                    SLFlexPair { steppers }
                 }
             }
             .padding(.bottom, SL.Space.s4)

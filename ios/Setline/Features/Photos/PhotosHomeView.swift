@@ -126,8 +126,10 @@ struct PhotosHomeView: View {
 
     private func slot(_ shown: CheckInGallery.Shown, loud: Bool) -> some View {
         VStack(spacing: 0) {
+            // 22 styles the frame `height: 234px; padding: 16px` with a 1px
+            // border, which the design renders 268 tall.
             picture(shown.checkIn)
-                .frame(height: 234)
+                .frame(height: 268)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
                 .overlay(
@@ -183,32 +185,44 @@ struct PhotosHomeView: View {
     private func difference(weeks: Int, change: Decimal) -> some View {
         VStack(spacing: 0) {
             SLHairline()
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+            // A number never breaks across lines: at accessibility sizes the
+            // label moves above it instead of squeezing it.
+            differenceLayout {
                 SLEyebrow(text: "\(weeks) WEKEN VERSCHIL")
-                Spacer()
+                if !typeSize.isAccessibilitySize { Spacer() }
                 Text("\(app.display.signedDelta(change)) kg")
                     .slDisplay()
                     .slNumerals()
+                    .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                     // Lime is the artboard's, for a number that moved the way a
                     // bulk is meant to move. Downwards it is stated, not judged.
                     .foregroundStyle(change > 0 ? SL.Signal.action : SL.Ink.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 14)
         }
+    }
+
+    private var differenceLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s1))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
     }
 
     // MARK: - Every check-in
 
     private var strip: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: "ALLE CHECK-INS")
+            SLEyebrow(text: "ALLE CHECK-INS", weight: SL.Weight.regular)
                 .padding(.bottom, SL.Space.s3)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 6) {
                     ForEach(gallery.all, id: \.checkIn.id) { shown in
                         let latest = shown.checkIn.id == gallery.latest?.checkIn.id
-                        VStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 6) {
                             picture(shown.checkIn)
                                 .frame(width: 64, height: 72)
                                 .clipShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))

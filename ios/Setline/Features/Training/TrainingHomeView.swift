@@ -180,6 +180,7 @@ struct TrainingHomeView: View {
         }
         .padding(.vertical, SL.Space.s3)
         .padding(.horizontal, 14)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                 .fill(SL.Surface.raised2)
@@ -374,6 +375,7 @@ struct TrainingHomeView: View {
             } else {
                 Text("Rustdag")
                     .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
+                    .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                     .foregroundStyle(SL.Ink.primary)
                     .padding(.top, SL.Space.s2)
                     .padding(.bottom, 6)
@@ -465,6 +467,8 @@ struct TrainingHomeView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(minHeight: isFirstRun ? 72 : SL.Metric.dayTileHeight)
+        // Every tile is edged, solid or dashed: 09 draws them 66 tall, 08 74.
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                 .fill(isToday ? SL.Surface.raised2 : (isRest ? Color.clear : SL.Surface.raised))

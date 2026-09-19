@@ -79,6 +79,7 @@ struct IntakeFlow: View {
                 .foregroundStyle(selected ? SL.Ink.primary : SL.Ink.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 56)
+                .slBorderBox()
                 .background(
                     RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                         .fill(selected ? SL.Surface.raised2 : SL.Surface.raised)
@@ -109,6 +110,7 @@ struct IntakeFlow: View {
             }
             .frame(maxWidth: .infinity)
             .frame(minHeight: 64)
+            .slBorderBox()
             .background(
                 RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                     .fill(selected ? SL.Surface.raised2 : SL.Surface.raised)

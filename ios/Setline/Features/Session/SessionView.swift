@@ -445,6 +445,7 @@ struct SessionView: View {
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
                 Text(runner.current.exercise.name)
                     .slDisplay()
+                    .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                     .foregroundStyle(SL.Ink.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: SL.Space.s2)
@@ -588,7 +589,7 @@ struct SessionView: View {
                     if typeSize.isAccessibilitySize {
                         VStack(spacing: SL.Space.s2) { proposalSteppers }
                     } else {
-                        HStack(spacing: SL.Space.s2) { proposalSteppers }
+                        SLFlexPair { proposalSteppers }
                     }
                 }
                 .padding(.top, SL.Space.s4)
@@ -823,6 +824,7 @@ struct SessionView: View {
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: SL.Space.hitMin)
+                    .slBorderBox()
                     .overlay(
                         RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
                             .strokeBorder(SL.Surface.hairlineStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
@@ -858,10 +860,12 @@ struct SessionView: View {
         }
     }
 
+    /// 11–13 sets the pair from the top: the dashed button's border adds to
+    /// it (46), `Schijven` has none (44).
     private var footerLayout: AnyLayout {
         typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 6))
-            : AnyLayout(HStackLayout(spacing: 6))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 6))
     }
 
     /// Plates load the bar on a barbell, a smith and a plate-loaded machine,

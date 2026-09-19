@@ -35,6 +35,7 @@ struct SLSetGrid<Content: View>: View {
             content
         }
         .padding(8)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
                 .fill(SL.Surface.raised)
@@ -133,6 +134,11 @@ struct SLSetRow: View {
             }
             .padding(.horizontal, SLSetColumn.rowInset)
             .frame(minHeight: row.isWarmup ? 48 : SL.Metric.setRowHeight)
+            // A warm-up row is dashed in every state, so its border adds to it
+            // (30: 50 tall). A work row is bordered only while it is up next;
+            // that edge draws inside, so the row does not grow when its turn
+            // comes.
+            .padding(row.isWarmup ? SL.Metric.border : 0)
             .background(
                 RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
                     .fill(fill)
@@ -178,14 +184,14 @@ struct SLSetRow: View {
         return row.status == .pending ? SL.Surface.raised : SL.Surface.raised2
     }
 
-    /// The next-up row carries the .28 edge and a pending row the faint .08;
-    /// a written row is fill alone.
+    /// Only the row up next is outlined. 28b, 29 and 30 — the addenda that
+    /// replace the live 11–13 — draw the rows still to come as bare raised
+    /// surfaces, like the ones already written.
     private var borderColor: Color {
         if row.isWarmup { return SL.Surface.hairlineStrong }
         switch row.status {
         case .nextUp: return SL.Surface.selection
-        case .pending: return SL.Surface.hairline
-        case .written, .warmup: return .clear
+        case .pending, .written, .warmup: return .clear
         }
     }
 

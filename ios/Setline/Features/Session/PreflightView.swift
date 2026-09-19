@@ -116,6 +116,7 @@ struct PreflightView: View {
             }
         }
         .padding(8)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
                 .fill(SL.Surface.raised)

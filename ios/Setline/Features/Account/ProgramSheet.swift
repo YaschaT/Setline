@@ -110,6 +110,7 @@ struct ProgramSheet: View {
             .padding(.vertical, SL.Space.s4)
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .slBorderBox()
             .background(
                 RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
                     .fill(selected ? SL.Surface.raised2 : SL.Surface.raised)

@@ -149,7 +149,7 @@ struct NutritionHomeView: View {
     private var logged: some View {
         VStack(alignment: .leading, spacing: 0) {
             SLHairline()
-            SLEyebrow(text: "VANDAAG GELOGD")
+            SLEyebrow(text: "VANDAAG GELOGD", weight: SL.Weight.regular)
                 .padding(.top, SL.Space.s4)
                 .padding(.bottom, SL.Space.s3)
 

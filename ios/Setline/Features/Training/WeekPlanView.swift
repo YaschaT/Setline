@@ -139,6 +139,7 @@ struct WeekPlanView: View {
         .padding(.vertical, 14)
         .padding(.horizontal, SL.Space.s4)
         .frame(minHeight: SL.Space.hitMin)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                 .fill(moved ? SL.Surface.raised : SL.Surface.raised2)
@@ -174,6 +175,7 @@ struct WeekPlanView: View {
             .padding(.vertical, 14)
             .padding(.horizontal, SL.Space.s4)
             .frame(minHeight: SL.Space.hitMin)
+            .slBorderBox()
             .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
         }
         .buttonStyle(.plain)

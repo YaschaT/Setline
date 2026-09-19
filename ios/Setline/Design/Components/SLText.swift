@@ -62,7 +62,8 @@ extension View {
     /// border — `slCard(loud:)` raises the fill instead, which is a different
     /// treatment.
     func slCardStrong(radius: CGFloat = SL.Radius.xl, fill: Color = SL.Surface.raised) -> some View {
-        background(
+        slBorderBox()
+        .background(
             RoundedRectangle(cornerRadius: radius, style: .continuous).fill(fill)
         )
         .overlay(
