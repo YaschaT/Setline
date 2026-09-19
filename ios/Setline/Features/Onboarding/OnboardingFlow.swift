@@ -20,6 +20,7 @@ struct OnboardingFlow: View {
                 HowItWorksView(onContinue: { stage = .intro })
             case .intro:
                 IntakeIntroView(
+                    onBack: { stage = .howItWorks },
                     onBegin: { stage = .intake },
                     onSkip: { onFinish() }
                 )

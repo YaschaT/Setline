@@ -61,6 +61,9 @@ struct SLChip: View {
     let title: String
     var size: Size = .regular
     var look: Look = .unselected
+    /// An artboard's own side padding where it differs from the size's —
+    /// 06's plate chips use 18.
+    var horizontalPadding: CGFloat? = nil
     let action: () -> Void
 
     var body: some View {
@@ -69,7 +72,7 @@ struct SLChip: View {
                 .font(.sl(SL.TypeSize.body, look.weight))
                 .slNumerals()
                 .foregroundStyle(look.ink)
-                .padding(.horizontal, size.padding)
+                .padding(.horizontal, horizontalPadding ?? size.padding)
                 .frame(minHeight: size.height)
                 .background(
                     RoundedRectangle(cornerRadius: size.radius, style: .continuous)

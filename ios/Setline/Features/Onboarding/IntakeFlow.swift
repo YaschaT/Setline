@@ -55,7 +55,7 @@ struct IntakeFlow: View {
                 }
 
                 SLEyebrow(text: "WELKE DAGEN")
-                    .padding(.top, SL.Space.s6)
+                    .padding(.top, SL.Space.s8)
                     .padding(.bottom, SL.Space.s3)
 
                 HStack(spacing: 6) {
@@ -126,7 +126,13 @@ struct IntakeFlow: View {
     private var daysConsequence: String {
         let chosen = weekdays.sorted().map { Self.weekdayNames[$0] }
         guard !chosen.isEmpty else { return "Kies minstens één dag, of sla over en houd je huidige week." }
-        return "\(Self.spelled(chosen.count)) \(chosen.count == 1 ? "dag" : "dagen"): \(chosen.joined(separator: " · "))."
+        let days = "\(Self.spelled(chosen.count)) \(chosen.count == 1 ? "dag" : "dagen"): \(chosen.joined(separator: " · "))."
+        // 03 closes on what a session costs: the plan's own estimate,
+        // averaged over its training days.
+        let minutes = app.plan.map { WeekPlan.minutes(of: $0) }
+        guard !minutes.isEmpty else { return days }
+        let average = Int((Double(minutes.reduce(0, +)) / Double(minutes.count)).rounded())
+        return "\(days) Gemiddeld ±\(average) min per sessie."
     }
 
     /// Keeps the two answers honest about each other: picking a number fills
@@ -195,7 +201,7 @@ struct IntakeFlow: View {
             title: "Welke schijven heb je?",
             subtitle: "Hiermee rekent de schijvencalculator. Kilogram, uit je regio — wijzig het in Account als dat niet klopt.",
             subtitleMeasure: 32,
-            consequence: platesConsequence,
+            consequence: "",
             commit: "Klaar",
             onSkip: { finish() },
             onCommit: { finish() }
@@ -204,16 +210,29 @@ struct IntakeFlow: View {
                 SLEyebrow(text: "SCHIJVEN IN JE GYM · KG")
                     .padding(.bottom, SL.Space.s3)
 
-                SLFlow {
+                SLFlow(spacing: 6) {
                     ForEach(PlateInventory.offered, id: \.self) { plate in
                         plateChip(plate)
                     }
                 }
                 .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
-                        .fill(SL.Surface.raised)
-                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .slCard(radius: SL.Radius.option)
+
+                // 06's close: the smallest jump at 17/600, the bar under it.
+                VStack(alignment: .leading, spacing: SL.Space.s1) {
+                    Text(platesHeadline)
+                        .slLead()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Stang \(NumberDisplay.dutch.kg(PlateMath.defaultBar)) · gebruikt door de schijvencalculator")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, SL.Space.s5)
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -222,18 +241,18 @@ struct IntakeFlow: View {
     /// the dashed "off" chip — the shared component, not a local copy.
     private func plateChip(_ plate: Decimal) -> some View {
         let selected = plates.contains(plate)
-        return SLChip(title: NumberDisplay.dutch.number(plate), look: selected ? .selected : .off) {
+        return SLChip(title: NumberDisplay.dutch.number(plate), look: selected ? .selected : .off, horizontalPadding: 18) {
             if selected { plates.remove(plate) } else { plates.insert(plate) }
         }
         .accessibilityLabel("\(NumberDisplay.dutch.kg(plate)) schijf")
     }
 
-    private var platesConsequence: String {
+    private var platesHeadline: String {
         let inventory = PlateInventory(plates: Array(plates), barKg: PlateMath.defaultBar)
         guard let jump = inventory.smallestJump else {
             return "Zonder schijven rekent de calculator niets uit. Kies er minstens één."
         }
-        return "Kleinste sprong · \(NumberDisplay.dutch.kg(jump)). Stang \(NumberDisplay.dutch.kg(PlateMath.defaultBar)) · gebruikt door de schijvencalculator."
+        return "Kleinste sprong · \(NumberDisplay.dutch.kg(jump))"
     }
 
     // MARK: Leaving

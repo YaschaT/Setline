@@ -19,38 +19,45 @@ struct HowItWorksView: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    SLEyebrow(text: "ZO WERKT HET")
+        // 02a: the kicker and headline at the top, the beats and footnote
+        // down by the pill, and the room between them flexible.
+        SLAnchoredScroll {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("ZO WERKT HET")
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.medium))
+                    .tracking(SL.TypeSize.meta * 0.14)
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .accessibilityAddTraits(.isHeader)
 
-                    Text("Elke week iets\nzwaarder tillen.")
-                        .font(.sl(SL.TypeSize.displayL, SL.Weight.semibold))
-                        .tracking(SL.TypeSize.displayL * -0.015)
-                        .slLineHeight(1.06, size: SL.TypeSize.displayL)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(SL.Ink.primary)
-                        .padding(.top, SL.Space.s4)
+                Text("Elke week iets\nzwaarder tillen.")
+                    .font(.sl(SL.TypeSize.displayL, SL.Weight.semibold))
+                    .tracking(SL.TypeSize.displayL * -0.015)
+                    .slLineHeight(1.06, size: SL.TypeSize.displayL)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.primary)
+                    .padding(.top, 14)
 
-                    VStack(spacing: 0) {
-                        ForEach(Array(beats.enumerated()), id: \.offset) { index, beat in
+                Spacer(minLength: SL.Space.s8)
+
+                VStack(spacing: 2) {
+                    ForEach(Array(beats.enumerated()), id: \.offset) { index, beat in
+                        VStack(spacing: 0) {
                             SLHairline()
                             beatRow(index: index, beat: beat)
                             if index == beats.count - 1 { SLHairline() }
                         }
                     }
-                    .padding(.top, SL.Space.s8)
-
-                    Text("Je hoeft niks te programmeren. Je hoeft alleen te komen.")
-                        .slMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .padding(.top, SL.Space.s5)
                 }
-                .padding(.horizontal, SL.Space.gutterEntry)
-                .padding(.top, SL.Space.s6)
-                .padding(.bottom, SL.Space.s8)
+
+                Text("Je hoeft niks te programmeren. Je hoeft alleen te komen.")
+                    .slMeta()
+                    .slLineHeight(1.5, size: SL.TypeSize.meta)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .padding(.top, SL.Space.s5)
             }
+            .padding(.horizontal, SL.Space.gutterEntry)
+            .padding(.top, SL.Space.s8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(SL.Surface.ground.ignoresSafeArea())
@@ -58,7 +65,8 @@ struct HowItWorksView: View {
             Button { onContinue() } label: { Text("Verder") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .padding(.horizontal, SL.Space.gutterEntry)
-                .padding(.bottom, SL.Space.s3)
+                .padding(.top, SL.Space.s6)
+                .padding(.bottom, SL.Space.entryBlockBottom)
                 .frame(maxWidth: .infinity)
                 .background(SL.Surface.ground)
         }
@@ -70,8 +78,9 @@ struct HowItWorksView: View {
             Text(String(format: "%02d", index + 1))
                 .font(.system(size: SL.TypeSize.meta, weight: SL.Weight.semibold, design: .monospaced))
                 .foregroundStyle(SL.Ink.tertiary)
+                .padding(.top, 3)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: SL.Space.s1) {
                 Text(beat.title).slLead().foregroundStyle(SL.Ink.primary)
                 Text(attributed(beat.body, liming: beat.lime))
                     .slBody()
@@ -97,6 +106,7 @@ struct HowItWorksView: View {
 
 /// Artboard 02b · what intake costs, and what each question changes.
 struct IntakeIntroView: View {
+    let onBack: () -> Void
     let onBegin: () -> Void
     let onSkip: () -> Void
 
@@ -109,7 +119,17 @@ struct IntakeIntroView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
+            Button(action: onBack) {
+                Text("Terug")
+                    .slBody(SL.Weight.medium)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, SL.Space.gutterEntry)
+
+            SLAnchoredScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Vier vragen en je\nplan staat er.")
                         .slDisplay()
@@ -123,7 +143,9 @@ struct IntakeIntroView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.secondary)
                         .slMeasure(32, fontSize: SL.TypeSize.body)
-                        .padding(.top, 10)
+                        .padding(.top, SL.Space.s3)
+
+                    Spacer(minLength: 28)
 
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
@@ -139,17 +161,9 @@ struct IntakeIntroView: View {
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
-                            .fill(SL.Surface.raised)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SL.Radius.option, style: .continuous)
-                            .strokeBorder(SL.Surface.hairline, lineWidth: 1)
-                    )
-                    .padding(.top, 28)
+                    .slCard()
 
-                    Text("Alles blijft later te wijzigen in Account. Overslaan geeft je het standaardplan.")
+                    Text("Alles blijft later te wijzigen in Account. Overslaan geeft je een standaardplan van vier dagen.")
                         .slMeta()
                         .slLineHeight(1.5, size: SL.TypeSize.meta)
                         .fixedSize(horizontal: false, vertical: true)
@@ -157,8 +171,9 @@ struct IntakeIntroView: View {
                         .padding(.top, SL.Space.s5)
                 }
                 .padding(.horizontal, SL.Space.gutterEntry)
-                .padding(.top, SL.Space.s6)
-                .padding(.bottom, SL.Space.s8)
+                // 02b: the title 36 below `Terug`'s text, which sits centred
+                // in its 44pt row — 22 below the row.
+                .padding(.top, 22)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -177,7 +192,8 @@ struct IntakeIntroView: View {
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, SL.Space.gutterEntry)
-            .padding(.bottom, SL.Space.s3)
+            .padding(.top, SL.Space.s6)
+            .padding(.bottom, SL.Space.entryBlockBottom)
             .frame(maxWidth: .infinity)
             .background(SL.Surface.ground)
         }

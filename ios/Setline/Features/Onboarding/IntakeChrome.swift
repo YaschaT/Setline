@@ -42,7 +42,9 @@ struct IntakeStep<Content: View>: View {
                 .padding(.horizontal, SL.Space.gutterEntry)
                 .padding(.top, SL.Space.s2)
 
-            ScrollView {
+            // 03–06: the question at the top, the answer and what it produces
+            // down by the pill, the room between them flexible (min 28).
+            SLAnchoredScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
                         .slDisplay()
@@ -58,18 +60,21 @@ struct IntakeStep<Content: View>: View {
                         .slMeasure(subtitleMeasure ?? .infinity, fontSize: SL.TypeSize.body)
                         .padding(.top, 10)
 
-                    content().padding(.top, SL.Space.s6)
+                    Spacer(minLength: 28)
 
-                    Text(consequence)
-                        .slBody()
-                        .slLineHeight(1.45, size: SL.TypeSize.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .padding(.top, SL.Space.s6)
+                    content()
+
+                    if !consequence.isEmpty {
+                        Text(consequence)
+                            .slBody()
+                            .slLineHeight(1.45, size: SL.TypeSize.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(SL.Ink.secondary)
+                            .padding(.top, SL.Space.s5)
+                    }
                 }
                 .padding(.horizontal, SL.Space.gutterEntry)
                 .padding(.top, 36)
-                .padding(.bottom, SL.Space.s8)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -78,7 +83,7 @@ struct IntakeStep<Content: View>: View {
             Button { onCommit() } label: { Text(commit) }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .padding(.horizontal, SL.Space.gutterEntry)
-                .padding(.bottom, SL.Space.s3)
+                .padding(.bottom, SL.Space.entryBlockBottom)
                 .frame(maxWidth: .infinity)
                 .background(SL.Surface.ground)
         }
@@ -110,8 +115,10 @@ struct IntakeOption: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .top, spacing: SL.Space.s4) {
-                VStack(alignment: .leading, spacing: 2) {
+            // 04 and 05: only the chosen card carries the 22pt filled circle,
+            // centred on the trailing edge; the others carry nothing.
+            HStack(alignment: .center, spacing: SL.Space.s4) {
+                VStack(alignment: .leading, spacing: SL.Space.s1) {
                     Text(title).slLead().foregroundStyle(SL.Ink.primary)
                     Text(detail)
                         .slMeta()
@@ -120,10 +127,11 @@ struct IntakeOption: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Circle()
-                    .fill(selected ? SL.Ink.primary : .clear)
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().strokeBorder(selected ? .clear : SL.Surface.hairlineStrong, lineWidth: 1))
+                if selected {
+                    Circle()
+                        .fill(SL.Ink.primary)
+                        .frame(width: 22, height: 22)
+                }
             }
             .padding(.vertical, SL.Space.s4)
             .padding(.horizontal, 18)
