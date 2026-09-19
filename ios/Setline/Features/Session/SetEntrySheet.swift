@@ -29,6 +29,10 @@ struct SetEntrySheet: View {
     @State private var keypadText = ""
     @State private var showsPlates = false
     @State private var confirmsRemoval = false
+    /// The sheet's height, measured once as it opens and then held: 11R's
+    /// sheet hugs its content, and a detent must never grow while the
+    /// keyboard is up.
+    @State private var openingHeight: CGFloat?
     @FocusState private var keypadFocused: Bool
 
     private let display = NumberDisplay.dutch
@@ -86,10 +90,14 @@ struct SetEntrySheet: View {
     /// it is worth saying where asking on every set is switched on.
     private var footnote: String {
         guard asksForRIR else { return "Gewicht en reps zijn een volledige set." }
-        if rir != nil, !RIRPreference.everySet {
-            return "Per set vragen zet je aan in Account."
-        }
+        if pointsToAccount { return "Per set vragen zet je aan in Account." }
         return "Gewicht en reps zijn een volledige set. RIR mag leeg blijven."
+    }
+
+    /// 12R: once RIR is set on the one set that asks, the footnote says where
+    /// to have it asked on every set.
+    private var pointsToAccount: Bool {
+        asksForRIR && rir != nil && !RIRPreference.everySet
     }
 
     /// A set added during this session rather than prescribed.
@@ -99,15 +107,15 @@ struct SetEntrySheet: View {
 
     private var canRemove: Bool { isAddedSet && onRemove != nil }
 
-    /// The sheet's height, fixed for as long as it is open.
+    /// The first frame's estimate, until the content has been measured.
     ///
-    /// It deliberately does not react to the keypad or the partial-rep row.
-    /// A detent that grows while the keyboard is up cannot be satisfied — the
-    /// sheet stops resizing and taps land nowhere, which is exactly what
-    /// happened to the `Partieel` chip. Anything that appears later scrolls
-    /// instead.
+    /// Either way the height is fixed for as long as the sheet is open: it
+    /// never reacts to the keypad or the partial-rep row. A detent that grows
+    /// while the keyboard is up cannot be satisfied — the sheet stops resizing
+    /// and taps land nowhere, which is exactly what happened to the `Partieel`
+    /// chip. Anything that appears later scrolls instead.
     private var sheetHeight: CGFloat {
-        var height: CGFloat = 412        // grabber, head, steppers, chips, pill, footnote
+        var height: CGFloat = 391        // grabber, head, steppers, chips, pill, footnote
         if asksForRIR { height += 86 }
         if isCalibration { height += 56 } // the keypad it opens on
         if canRemove { height += 52 }     // the quiet way back out
@@ -151,8 +159,12 @@ struct SetEntrySheet: View {
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s4)
-        .padding(.bottom, 42)
+        // 11R ends the sheet 42 above the frame's edge, home band included.
+        .padding(.bottom, SL.Space.sessionBlockBottom)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            if openingHeight == nil { openingHeight = height }
+        }
         }
         .scrollBounceBehavior(.basedOnSize)
         .background(SL.Surface.raised)
@@ -168,9 +180,13 @@ struct SetEntrySheet: View {
             }
         }
         .task {
-            if isCalibration { keypadFocused = true }
+            // The keyboard comes up once the sheet has settled on its measured
+            // height, never while that height is still being decided.
+            guard isCalibration else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            keypadFocused = true
         }
-        .presentationDetents(isAccessibilityLayout ? [.large] : [.height(sheetHeight)])
+        .presentationDetents(isAccessibilityLayout ? [.large] : [.height(openingHeight ?? sheetHeight)])
         .presentationBackground(SL.Surface.raised)
         .presentationDragIndicator(.hidden)
         .sheet(isPresented: $showsPlates) {
@@ -232,7 +248,9 @@ struct SetEntrySheet: View {
 
             Text(footnote)
                 .slMeta()
-                .foregroundStyle(SL.Ink.secondary)
+                // 11R sets its footnote in `text2`; 12R's pointer to Account
+                // steps back to `text3`.
+                .foregroundStyle(pointsToAccount ? SL.Ink.tertiary : SL.Ink.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.top, SL.Space.s3)
@@ -349,32 +367,31 @@ struct SetEntrySheet: View {
         }
     }
 
-    /// Four chips do not fit one 402pt row, and a horizontal scroller hid
-    /// the fourth behind a gesture nobody would go looking for mid-set. Two
-    /// rows of two: input on top, what happened to the set underneath, and
-    /// everything reachable without scrolling.
+    /// The sheet's tools as 12 and 11–13 draw them: one row of equal 44pt
+    /// buttons, 6 apart — `Toetsenblok`, `Mislukt`, `Pauze-reps`, and 16R's
+    /// `Partieel`. At accessibility sizes they take two rows so every label
+    /// stays whole.
     private var chips: some View {
-        VStack(spacing: SL.Space.s2) {
-            HStack(spacing: SL.Space.s2) {
-                chip("Toetsenblok", isOn: showsKeypad) {
-                    showsKeypad.toggle()
-                    keypadText = weight > 0 ? display.number(weight) : ""
-                    keypadFocused = showsKeypad
+        let toetsenblok = chip("Toetsenblok", isOn: showsKeypad) {
+            showsKeypad.toggle()
+            keypadText = weight > 0 ? display.number(weight) : ""
+            keypadFocused = showsKeypad
+        }
+        let mislukt = chip("Mislukt", isOn: failed) { failed.toggle() }
+        let pauze = chip("Pauze-reps", isOn: paused) { paused.toggle() }
+        let partieel = chip("Partieel", isOn: partialReps != nil) {
+            partialReps = partialReps == nil ? 1 : nil
+        }
+        return Group {
+            if isAccessibilityLayout {
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) { toetsenblok; mislukt }
+                    HStack(spacing: 6) { pauze; partieel }
                 }
-                chip("Mislukt", isOn: failed) { failed.toggle() }
-            }
-            HStack(spacing: SL.Space.s2) {
-                chip(pauseChipLabel, isOn: paused) { paused.toggle() }
-                chip("Partieel", isOn: partialReps != nil) {
-                    partialReps = partialReps == nil ? 1 : nil
-                }
+            } else {
+                HStack(spacing: 6) { toetsenblok; mislukt; pauze; partieel }
             }
         }
-    }
-
-    private var pauseChipLabel: String {
-        guard let seconds = slot.planned.modifiers.pauseSeconds, paused else { return "Pauze" }
-        return "Pauze \(Int(seconds))s"
     }
 
     /// Partial reps are a count, not a rep type — they are recorded beside the
@@ -417,30 +434,31 @@ struct SetEntrySheet: View {
         }
     }
 
+    /// raised2 at 13/500 in `text2`; on, the .28 edge and white — the same
+    /// selected state the RIR chips beside it use (12R).
     private func chip(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .slBody()
+                .slMeta(SL.Weight.medium)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .foregroundStyle(isOn ? SL.Ink.primary : SL.Ink.secondary)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: SL.Metric.chipHeight)
                 .background(
                     RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .fill(isOn ? SL.Surface.raised2 : Color.clear)
+                        .fill(SL.Surface.raised2)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .strokeBorder(
-                            isOn ? SL.Surface.selection : SL.Surface.hairline,
-                            style: StrokeStyle(lineWidth: 1, dash: isOn ? [] : [4, 4])
-                        )
+                        .strokeBorder(isOn ? SL.Surface.selection : .clear, lineWidth: 1)
                 )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+        .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
     }
 
     /// One tap away, for the rare jump. Never the default input.
