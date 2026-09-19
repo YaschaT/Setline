@@ -548,7 +548,7 @@ struct SessionView: View {
             HStack(alignment: .center) {
                 SLEyebrow(
                     text: proposal.label ?? toneLabel(proposal.tone),
-                    color: proposal.tone == .ready ? SL.Signal.action : SL.Ink.tertiary
+                    color: toneColor(proposal.tone)
                 )
                 Spacer()
                 Button {
@@ -586,7 +586,29 @@ struct SessionView: View {
         }
         .padding(SL.Space.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .slCardStrong(fill: SL.Surface.raised2)
+        .modifier(ToneSurface(tone: proposal.tone))
+    }
+
+    /// 29b: only the label's colour and the edge change between tones. READY
+    /// is lime on raised2; CLOSE is amber on raised with the .16 edge; the
+    /// quiet two stay tertiary on raised with the .08 edge.
+    private func toneColor(_ tone: ProposalTone) -> Color {
+        switch tone {
+        case .ready: return SL.Signal.action
+        case .close: return SL.Signal.attention
+        case .neutral, .noReference: return SL.Ink.tertiary
+        }
+    }
+
+    private struct ToneSurface: ViewModifier {
+        let tone: ProposalTone
+        func body(content: Content) -> some View {
+            switch tone {
+            case .ready: content.slCardStrong(fill: SL.Surface.raised2)
+            case .close: content.slCardStrong()
+            case .neutral, .noReference: content.slCard()
+            }
+        }
     }
 
     @ViewBuilder
@@ -614,7 +636,7 @@ struct SessionView: View {
         return VStack(alignment: .leading, spacing: 0) {
             SLEyebrow(
                 text: proposal.label ?? toneLabel(proposal.tone),
-                color: proposal.tone == .ready ? SL.Signal.action : SL.Ink.tertiary
+                color: toneColor(proposal.tone)
             )
             Text(compactProposalSummary)
                 .slLead()
@@ -638,7 +660,7 @@ struct SessionView: View {
         }
         .padding(SL.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .slCardStrong(fill: SL.Surface.raised2)
+        .modifier(ToneSurface(tone: proposal.tone))
     }
 
     private var compactProposalSummary: String {
