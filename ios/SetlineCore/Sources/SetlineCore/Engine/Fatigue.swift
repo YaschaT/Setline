@@ -167,6 +167,19 @@ public struct Deload: Equatable, Codable, Sendable {
         return date >= startedAt && date < ends
     }
 
+    /// Whether a lighter week covers a whole calendar day.
+    ///
+    /// `isActive(on:)` answers for an instant, which is what "is one running
+    /// right now" needs. A date in a week view is midnight, so a deload begun
+    /// at nine in the morning would not cover its own day. The dates a
+    /// calendar shows are days, and a lighter week covers days.
+    public func covers(_ date: Date, calendar: Calendar = .current) -> Bool {
+        let start = calendar.startOfDay(for: startedAt)
+        guard let ends = calendar.date(byAdding: .day, value: days, to: start) else { return false }
+        let day = calendar.startOfDay(for: date)
+        return day >= start && day < ends
+    }
+
     /// Sets are cut, never exercises, so progression state survives.
     public func sets(from planned: Int) -> Int {
         max(1, Int((Double(planned) * (1 - setReduction)).rounded()))
@@ -196,9 +209,22 @@ public enum SessionPrescription {
         return planned.lightened(setsTo: deload.sets(from: planned.targetSets))
     }
 
+    /// The day as a session opened now would lay it out: the same exercises,
+    /// in the same order, with the lighter week applied where one runs.
+    ///
+    /// Everything that previews a date — the card on Training, the Agenda row,
+    /// the workout preview — builds on this, so what a date shows and what it
+    /// opens with cannot drift apart.
+    public static func day(_ day: WorkoutDay, deload: Deload?) -> WorkoutDay {
+        guard deload != nil else { return day }
+        var effective = day
+        effective.exercises = day.exercises.map { planned($0, deload: deload) }
+        return effective
+    }
+
     /// Prescribed sets across a day, as a session opened now lays them out.
     /// Sets added during a session are never part of a prescription.
     public static func setCount(of day: WorkoutDay, deload: Deload?) -> Int {
-        day.exercises.reduce(0) { $0 + planned($1, deload: deload).targetSets }
+        WeekPlan.sets(of: self.day(day, deload: deload))
     }
 }

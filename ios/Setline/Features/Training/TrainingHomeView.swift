@@ -14,12 +14,78 @@ struct TrainingHomeView: View {
 
     @State private var confirmsEnd = false
     @State private var planningWeek = false
+    /// The date the strip is showing. `nil` is today, which is where every
+    /// visit starts and where `Terug naar vandaag` returns.
+    @State private var selectedKey: String?
+    @State private var path: [Route] = []
+    @State private var preview: AgendaDay?
+    @State private var openedSession: OpenedSession?
+    @State private var agendaAnchor = Date()
+    @State private var agendaSelection: String?
+
+    private enum Route: Hashable { case agenda }
+    private struct OpenedSession: Identifiable { let id: String }
 
     private var isFirstRun: Bool { app.sessions.isEmpty }
 
+    /// This week, read once: the same reading the Agenda and the preview use.
+    private var week: [AgendaDay] {
+        Agenda.week(
+            containing: Date(),
+            plan: app.plan,
+            overrides: app.scheduleOverrides,
+            sessions: app.sessions,
+            deload: app.activeDeload
+        )
+    }
+
+    private var today: AgendaDay? { week.first(where: \.isToday) }
+
+    private var selectedDay: AgendaDay? {
+        guard let selectedKey else { return today }
+        return week.first { $0.key == selectedKey } ?? today
+    }
+
+    private var showsToday: Bool { selectedDay.map(\.isToday) ?? true }
+
     var body: some View {
-        Group {
-            if isOffline { offlineBody } else { onlineBody }
+        // 32–34: the Agenda is a pushed screen, not a sixth tab. The tab bar
+        // stays and Training stays the active tab, so Training remains the
+        // one place a session starts from.
+        NavigationStack(path: $path) {
+            Group {
+                if isOffline { offlineBody } else { onlineBody }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .agenda:
+                    AgendaView(
+                        anchor: $agendaAnchor,
+                        selected: $agendaSelection,
+                        onClose: { path.removeAll() },
+                        onStart: { day in path.removeAll(); onStart(day) },
+                        onPreview: { preview = $0 },
+                        onOpenSession: { openedSession = OpenedSession(id: $0.id) },
+                        onPlanWeek: { planningWeek = true }
+                    )
+                    .toolbar(.hidden, for: .navigationBar)
+                }
+            }
+        }
+        .fullScreenCover(item: $preview) { day in
+            if let workout = day.plannedDay {
+                WorkoutPreviewView(
+                    day: day,
+                    workout: workout,
+                    onClose: { preview = nil },
+                    onPlanWeek: { preview = nil; planningWeek = true },
+                    onOpenAgenda: path.isEmpty ? { preview = nil; path = [.agenda] } : nil
+                )
+            }
+        }
+        .fullScreenCover(item: $openedSession) { opened in
+            SessionDetailView(sessionID: opened.id, onClose: { openedSession = nil })
         }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })
@@ -52,11 +118,26 @@ struct TrainingHomeView: View {
                             .opacity(0.6)
                             .padding(.top, SL.Space.s6)
                     } else {
-                        todayCard
+                        if showsToday {
+                            todayCard
+                        } else if let day = selectedDay {
+                            selectedCard(day)
+                        }
                         // 08 sets the labelled strip 24 below the card; 09's
                         // groups sit 32 apart.
                         weekStrip.padding(.top, isFirstRun ? SL.Space.s6 : SL.Space.s8)
-                        if let insight { insightCard(insight).padding(.top, SL.Space.s8) }
+                        if showsToday {
+                            if let insight { insightCard(insight).padding(.top, SL.Space.s8) }
+                        } else if let day = selectedDay {
+                            // 32b–32f put one line here instead of the insight
+                            // card: where the day sits, and what today holds.
+                            Text(contextLine(day))
+                                .slBody()
+                                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .foregroundStyle(SL.Ink.secondary)
+                                .padding(.top, SL.Space.s8)
+                        }
                         // 08 has nothing to change yet; the plan row arrives
                         // with the first session.
                         if !isFirstRun { planFooter.padding(.top, SL.Space.s8) }
@@ -69,13 +150,18 @@ struct TrainingHomeView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Group {
-                if let paused = app.resumableSession, let day = app.day(for: paused) {
-                    Button { onResume(day, paused) } label: { Text(resumeLabel(paused)) }
-                        .buttonStyle(SLPrimaryButtonStyle())
-                } else if let day = app.todayDay {
-                    Button { onStart(day) } label: { Text("Start \(day.short)") }
-                        .buttonStyle(SLPrimaryButtonStyle())
+            VStack(spacing: SL.Space.s2) {
+                if showsToday {
+                    if let paused = app.resumableSession, let day = app.day(for: paused) {
+                        Button { onResume(day, paused) } label: { Text(resumeLabel(paused)) }
+                            .buttonStyle(SLPrimaryButtonStyle())
+                    } else if let day = app.todayDay {
+                        Button { onStart(day) } label: { Text("Start \(day.short)") }
+                            .buttonStyle(SLPrimaryButtonStyle())
+                    }
+                } else if let day = selectedDay {
+                    // A day that is not today never starts anything: it opens.
+                    selectedActions(day)
                 }
             }
             .padding(.horizontal, SL.Space.gutterSession)
@@ -87,10 +173,19 @@ struct TrainingHomeView: View {
 
     /// 09: padding 16/20/0, title 21/600, week label 13 `text3`.
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
             Text("Training").slTitle().foregroundStyle(SL.Ink.primary)
-            Spacer()
+            Spacer(minLength: SL.Space.s2)
             Text(weekLabel).slMeta().foregroundStyle(SL.Ink.tertiary)
+            // 32a: the way into the Agenda, and the only one.
+            Button { path = [.agenda] } label: {
+                Text("Agenda")
+                    .slMeta(SL.Weight.semibold)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .slHitTarget()
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opent de agenda, waar je weken en dagen bekijkt")
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s4)
@@ -433,11 +528,15 @@ struct TrainingHomeView: View {
     private var weekStrip: some View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
             if isFirstRun { SLEyebrow(text: "Deze week") }
-            HStack(spacing: isFirstRun ? 6 : 5) {
-                ForEach(Schedule.mondayFirstWeek(containing: Date()), id: \.self) { date in
-                    dayTile(date)
+            DayStripView(
+                days: week,
+                selected: selectedDay?.key ?? "",
+                onSelect: { day in
+                    withAnimation(.easeOut(duration: SL.Motion.base)) {
+                        selectedKey = day.isToday ? nil : day.key
+                    }
                 }
-            }
+            )
         }
     }
 
@@ -524,6 +623,255 @@ struct TrainingHomeView: View {
             string[range].foregroundColor = SL.Signal.action
         }
         return string
+    }
+
+    // MARK: - A day that is not today (32b–32f)
+
+    /// One card, five readings. A date that holds a saved session is described
+    /// by that session; a date still to come by the programme. The two never
+    /// mix, because the programme may have changed since (32c).
+    private func selectedCard(_ day: AgendaDay) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                SLEyebrow(text: cardEyebrow(day), weight: SL.Weight.medium)
+                Spacer(minLength: SL.Space.s3)
+                if let trailing = cardTrailing(day) {
+                    Text(trailing).slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
+                }
+            }
+
+            Text(day.title ?? "Rustdag")
+                .slDisplay()
+                .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.top, 6)
+
+            cardBody(day).padding(.top, SL.Space.s3)
+
+            Text(cardFootnote(day))
+                .slMeta()
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.tertiary)
+                .padding(.top, SL.Space.s4)
+        }
+        .padding(SL.Space.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slCardStrong()
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func cardBody(_ day: AgendaDay) -> some View {
+        switch day.content {
+        case .session(let session):
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                Text(loggedSummary(session))
+                    .slBody().slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let previous = previousSession(before: session), let delta = volumeDelta(session, previous) {
+                    SLValueRow {
+                        Text("Tegenover \(app.display.shortDate(previous.date))")
+                            .slBody().foregroundStyle(SL.Ink.secondary)
+                        Text(app.display.signedDelta(delta))
+                            .slBody(SL.Weight.semibold).slNumerals()
+                            .foregroundStyle(delta > 0 ? SL.Signal.action : SL.Ink.secondary)
+                    }
+                }
+            }
+        case .planned(let workout):
+            VStack(alignment: .leading, spacing: SL.Space.s3) {
+                if let movedFrom = day.movedFrom {
+                    Text("Verplaatst van \(movedFrom) \(app.display.shortDate(day.date)).")
+                        .slBody().foregroundStyle(SL.Ink.secondary)
+                } else {
+                    Text(workout.exercises.map { app.exercise($0.exerciseID).name }.joined(separator: " · "))
+                        .slBody()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("\(WeekPlan.sets(of: workout)) sets · verwacht \(app.display.volumeKg(expectedVolume(workout, before: day.date)))")
+                    .slBody().slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+        case .missed:
+            Text("Geen sets opgeslagen. De dag is voorbij.")
+                .slBody()
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        case .rest:
+            Text(restSentence(day))
+                .slBody()
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func cardEyebrow(_ day: AgendaDay) -> String {
+        let date = "\(WeekPlan.fullWeekday(day.date)) \(app.display.shortDate(day.date))"
+        switch day.content {
+        case .session: return "\(date) · gelogd"
+        case .planned: return "\(date) · gepland"
+        case .missed, .rest: return date
+        }
+    }
+
+    private func cardTrailing(_ day: AgendaDay) -> String? {
+        switch day.content {
+        case .session(let session):
+            guard let seconds = session.durationSeconds, seconds > 0 else { return nil }
+            return app.display.minutes(seconds)
+        case .planned(let workout):
+            return "±\(WeekPlan.minutes(of: workout)) min"
+        case .missed(let workout):
+            return "gepland ±\(WeekPlan.minutes(of: workout)) min"
+        case .rest:
+            return nil
+        }
+    }
+
+    /// Each reading says where its numbers come from, in its own words.
+    private func cardFootnote(_ day: AgendaDay) -> String {
+        switch day.content {
+        case .session:
+            return "Opgeslagen sessie uit je historiek. Dit is wat je deed, niet wat er nu gepland staat."
+        case .planned:
+            if day.isMoved {
+                return "Alleen deze week. Vanaf volgende week staat de sessie weer op haar eigen dag."
+            }
+            guard let reference = lastSession(for: day) else {
+                return "Gewichten volgen uit je vorige sessie. Definitief op de dag zelf."
+            }
+            return "Gewichten volgen uit je sessie van \(app.display.shortDate(reference.date)). Definitief op de dag zelf."
+        case .missed:
+            return "SETLINE haalt niets in en verschuift niets. Je plan voor volgende week blijft staan."
+        case .rest:
+            return "Rustdagen komen uit je ingestelde trainingsdagen. Wijzig ze in de planning."
+        }
+    }
+
+    /// 32b–32f: outline, never lime. Only today commits.
+    @ViewBuilder
+    private func selectedActions(_ day: AgendaDay) -> some View {
+        switch day.content {
+        case .session(let session):
+            Button { openedSession = OpenedSession(id: session.id) } label: { Text("Bekijk sessie") }
+                .buttonStyle(SLOutlineButtonStyle())
+            backToToday
+        case .planned(let workout):
+            Button { preview = day } label: { Text("Bekijk \(workout.short)") }
+                .buttonStyle(SLOutlineButtonStyle())
+            if day.isMoved { planningLink } else { backToToday }
+        case .missed:
+            Button { preview = day } label: { Text("Bekijk wat gepland stond") }
+                .buttonStyle(SLOutlineButtonStyle())
+            planningLink
+        case .rest:
+            backToToday
+        }
+    }
+
+    private var backToToday: some View {
+        Button {
+            withAnimation(.easeOut(duration: SL.Motion.base)) { selectedKey = nil }
+        } label: {
+            Text("Terug naar vandaag")
+                .slBody(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var planningLink: some View {
+        Button { planningWeek = true } label: {
+            Text("Wijzig planning")
+                .slBody(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Where the day sits, and what today holds — 32b's "Over twee dagen" and
+    /// 32c's note that a day this week stayed unlogged.
+    private func contextLine(_ day: AgendaDay) -> String {
+        var parts: [String] = []
+        let days = Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: Date()),
+            to: Calendar.current.startOfDay(for: day.date)
+        ).day ?? 0
+
+        if days > 0 {
+            parts.append(days == 1 ? "Morgen." : "Over \(days) dagen.")
+        } else if let missed = week.first(where: { missedDay($0) && $0.key != day.key }) {
+            parts.append("\(WeekPlan.fullWeekday(missed.date).capitalized) \(app.display.shortDate(missed.date)) bleef ongelogd.")
+        }
+
+        if let today, case .planned(let workout) = today.content {
+            parts.append("Vandaag staat \(workout.short) klaar.")
+        } else if let today, today.isRest {
+            parts.append("Vandaag is een rustdag.")
+        } else if let today, let session = today.session {
+            parts.append("\(session.dayLabel) staat vandaag gelogd.")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func missedDay(_ day: AgendaDay) -> Bool {
+        if case .missed = day.content { return true }
+        return false
+    }
+
+    private func restSentence(_ day: AgendaDay) -> String {
+        guard let next = week.first(where: { $0.date > day.date && $0.plannedDay != nil }),
+              let workout = next.plannedDay
+        else { return "Geen sessie gepland." }
+        return "Geen sessie gepland. Volgende sessie \(WeekPlan.fullWeekday(next.date)) \(app.display.shortDate(next.date)) · \(workout.short)."
+    }
+
+    private func loggedSummary(_ session: TrainingSession) -> String {
+        let volume = RecordsEngine.volumeLoad(session.results.flatMap(\.sets))
+        if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
+            return "\(completed) van \(planned) sets · \(app.display.volumeKg(volume)) volume"
+        }
+        return "\(session.completion)% afgerond · \(app.display.volumeKg(volume)) volume"
+    }
+
+    /// The volume that day would come to at the weights it would open with —
+    /// the same reading the pre-flight card makes.
+    private func expectedVolume(_ workout: WorkoutDay, before date: Date) -> Decimal {
+        workout.exercises.reduce(Decimal(0)) { total, planned in
+            let history = app.history(for: planned, before: date)
+            let proposal = ProgressionEngine.proposal(
+                planned: planned, exercise: app.exercise(planned.exerciseID), history: history
+            )
+            guard let weight = proposal.weightKg ?? history.mostRecent?.sets.first?.weightKg else { return total }
+            let reps = planned.sets.reduce(0) { $0 + $1.repRange.upperBound }
+            return total + weight * Decimal(reps)
+        }
+    }
+
+    private func lastSession(for day: AgendaDay) -> TrainingSession? {
+        guard let workout = day.plannedDay else { return nil }
+        return app.sessions
+            .filter { $0.kind == .workout && $0.dayID == workout.id && $0.date < day.date }
+            .max { $0.date < $1.date }
+    }
+
+    private func previousSession(before session: TrainingSession) -> TrainingSession? {
+        app.sessions
+            .filter { $0.kind == .workout && $0.dayID == session.dayID && $0.date < session.date }
+            .max { $0.date < $1.date }
+    }
+
+    private func volumeDelta(_ session: TrainingSession, _ previous: TrainingSession) -> Decimal? {
+        let now = RecordsEngine.volumeLoad(session.results.flatMap(\.sets))
+        let before = RecordsEngine.volumeLoad(previous.results.flatMap(\.sets))
+        guard before > 0, now != before else { return nil }
+        return now - before
     }
 
     /// The way into the week (artboard 19): the plan row is the control.

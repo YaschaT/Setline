@@ -49,6 +49,12 @@ struct SessionDetailView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             summary(session)
                             exercises(session)
+                            Text("Opgeslagen zoals je hem deed. Wijzigingen in je plan raken deze sessie niet.")
+                                .slMeta()
+                                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .foregroundStyle(SL.Ink.tertiary)
+                                .padding(.top, SL.Space.s5)
                         }
                         .padding(.horizontal, SL.Space.gutterSession)
                         .padding(.top, SL.Space.s3)
@@ -123,8 +129,11 @@ struct SessionDetailView: View {
     // MARK: - What the day was
 
     private func summary(_ session: TrainingSession) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: completionLabel(session))
+        let volume = RecordsEngine.volumeLoad(results.flatMap(\.sets))
+        return VStack(alignment: .leading, spacing: 0) {
+            // 35: the date names the screen, the duration travels with the
+            // session's own name.
+            SLEyebrow(text: "Historiek · \(WeekPlan.fullWeekday(session.date)) \(app.display.shortDate(session.date))")
 
             Text(titleLine(session))
                 .slTitle()
@@ -133,15 +142,29 @@ struct SessionDetailView: View {
                 .padding(.top, SL.Space.s2)
 
             SLEyebrow(text: "Volume").padding(.top, SL.Space.s4)
-            Text(app.display.volumeKg(RecordsEngine.volumeLoad(results.flatMap(\.sets))))
-                .slDisplay(SL.TypeSize.displayXL)
-                .slNumerals()
-                .slLineHeight(1.04, size: SL.TypeSize.displayXL)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .foregroundStyle(SL.Ink.primary)
-                .padding(.top, 6)
-                .accessibilityLabel("Volume \(app.display.volumeKg(RecordsEngine.volumeLoad(results.flatMap(\.sets))))")
+            SLValueRow {
+                Text(app.display.volumeKg(volume))
+                    .slDisplay(SL.TypeSize.displayXL)
+                    .slNumerals()
+                    .slLineHeight(1.04, size: SL.TypeSize.displayXL)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .foregroundStyle(SL.Ink.primary)
+                if let delta = volumeDelta(session, volume) {
+                    Text(app.display.signedDelta(delta))
+                        .slLead()
+                        .slNumerals()
+                        .foregroundStyle(delta > 0 ? SL.Signal.action : SL.Ink.secondary)
+                }
+            }
+            .padding(.top, 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Volume \(app.display.volumeKg(volume))")
+
+            Text(againstLine(session))
+                .slBody().slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.top, SL.Space.s2)
 
             if let pending = pendingNote {
                 Text(pending)
@@ -159,16 +182,39 @@ struct SessionDetailView: View {
     /// not — the same rule Historiek's rows follow.
     private func completionLabel(_ session: TrainingSession) -> String {
         if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
-            return "Afgerond · \(completed)/\(planned) sets"
+            return "\(completed) van \(planned) sets"
         }
-        return "Afgerond · \(session.completion)%"
+        return "\(session.completion)% afgerond"
     }
 
     private func titleLine(_ session: TrainingSession) -> String {
         var parts = [session.dayLabel]
         if let seconds = session.durationSeconds, seconds > 0 { parts.append(app.display.minutes(seconds)) }
-        parts.append(app.display.shortDate(session.date))
         return parts.joined(separator: " · ")
+    }
+
+    /// 35: "Tegenover 29 aug · 17 van 17 sets" — what this session stands
+    /// against, and how much of its prescription it holds.
+    private func againstLine(_ session: TrainingSession) -> String {
+        var parts: [String] = []
+        if let previous = previousSession(session) {
+            parts.append("Tegenover \(app.display.shortDate(previous.date))")
+        }
+        parts.append(completionLabel(session))
+        return parts.joined(separator: " · ")
+    }
+
+    private func previousSession(_ session: TrainingSession) -> TrainingSession? {
+        app.sessions
+            .filter { $0.kind == .workout && $0.dayID == session.dayID && $0.date < session.date }
+            .max { $0.date < $1.date }
+    }
+
+    private func volumeDelta(_ session: TrainingSession, _ volume: Decimal) -> Decimal? {
+        guard let previous = previousSession(session) else { return nil }
+        let before = RecordsEngine.volumeLoad(previous.results.flatMap(\.sets))
+        guard before > 0, volume != before else { return nil }
+        return volume - before
     }
 
     /// A correction made offline waits like any other change; the screen says

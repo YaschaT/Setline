@@ -94,6 +94,33 @@ Not built, by design:
 
 All of these are release gaps for a public V1, not defects in what is here.
 
+### Browsing dates
+
+Three screens touch the calendar, and each owns one thing:
+
+- **Training** shows one day. The strip under the card selects it (32a–32f);
+  the card then describes today, a future day, a rest day, a day whose session
+  is saved, or a day that passed unlogged. Selecting is reading — it never
+  creates or saves a session, and the lime button stays Training's own: it
+  starts today's workout and nothing else.
+- **Agenda** (34a–34d) browses weeks. Previous and next move by a week, a row
+  expands in place, and every action it offers hands off: `Bekijk sessie` opens
+  the saved session, `Bekijk wat gepland stond` opens the preview (33), and
+  `Wijzig planning` opens week planning. It reads state and writes none.
+- **Historiek** lists sessions, and its detail screen (35) is the *only* screen
+  that shows a saved session. The Agenda and Training both open that same
+  screen; there is no second one.
+- **`WeekPlanView` remains the only place the schedule changes.** Both the
+  Agenda and the preview reach it by name (`Wijzig planning`), and neither
+  writes `scheduleOverrides` itself.
+
+All four read one set of sources: `WeekPlan`/`Schedule` for what a date holds,
+`scheduleOverrides` for what was moved, `sessions` for what was saved, and
+`SessionPrescription` for what a lighter week does to it. `Agenda.week(...)`
+resolves a date to exactly one of *saved session*, *planned day*, *planned but
+past* or *rest*, in that order, so a date that has a session is described by the
+session and never by today's programme.
+
 ### Where the app differs from the design, on purpose
 
 Screen by screen:
@@ -128,6 +155,16 @@ Screen by screen:
   the session; there is no swipe. Planned sets stay, because completion feeds
   §11's fatigue signal. The partial marker names its count ("partieel +2").
 - **17R** adds `Terug`, so a mis-tap on `Sessie afronden` never forces a save.
+- **33** is drawn for a planned day. A day that passed unlogged opens the same
+  screen, with the eyebrow dropping "gepland" and the footnote saying nothing
+  was saved — the alternative was a second, nearly identical artboard.
+- **34e** (an empty week, `Plan blok 3`) has no counterpart here. The programme
+  repeats week on week, so no week is ever empty; a week with nothing logged
+  says "geen sessies gelogd" instead.
+- **35** keeps a row per logged set, which the artboard does not draw: the
+  screen exists so a set can be checked and corrected, and 35 only summarises.
+  Its `Wijzig` and per-set sheet are that correction; its "Notitie toevoegen" is
+  not here, because sessions carry no note field on the wire.
 - **19** has no advisory line, on request.
 - **20**: Progressie's `Lichaam` and `Historiek` segments have no artboard; they
   are built from 20's own parts. So are the other screens no artboard draws:
@@ -189,6 +226,10 @@ Across screens:
   field for it and `LegacyAdapter` reads every stored set back with no flags —
   so a saved session cannot show or correct it. Marking a set failed after the
   fact needs a new set field agreed with the web app.
+- **Week planning cannot be reached from the Agenda's own detail.** `Wijzig
+  planning` opens `WeekPlanView` on the current week, whichever week the Agenda
+  is showing. Moving a session two weeks out still means walking there in the
+  planner.
 - **A stored set has no id.** Sets are identified by their place in their
   exercise result, on the wire and in every merge; `LoggedSet.id` is minted
   while parsing and does not survive a reload. Corrections therefore address a
