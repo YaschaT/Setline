@@ -51,6 +51,9 @@ public enum StateMerge {
         case .upsertSession(let session):
             upsertSession(session, createdAt: change.createdAt, into: &raw)
 
+        case .correctSessionSets(let sessionID, let corrections):
+            correctSessionSets(sessionID: sessionID, corrections: corrections, into: &raw)
+
         case .setActiveSession(let snapshot):
             raw[LegacyAdapter.activeSessionKey] = snapshot
 
@@ -163,6 +166,53 @@ public enum StateMerge {
         } else {
             sessions.insert(.object(incoming), at: 0)
         }
+        raw["sessions"] = .array(sessions)
+    }
+
+    /// Corrections to sets already logged, applied where they were logged.
+    ///
+    /// Unlike an upsert, this never rewrites a session's results: it reaches
+    /// the named sets and changes only the values a set carries. A session
+    /// that is not stored — never written here, or deleted meanwhile — is left
+    /// alone rather than recreated, and a set that has moved or is no longer
+    /// there is skipped rather than guessed at. Missing is never a deletion.
+    static func correctSessionSets(
+        sessionID: String,
+        corrections: [SetCorrection],
+        into raw: inout [String: JSONValue]
+    ) {
+        var sessions = raw["sessions"]?.arrayValue ?? []
+        guard let sessionIndex = sessions.firstIndex(where: { $0["id"]?.stringValue == sessionID }),
+              case .object(var session) = sessions[sessionIndex]
+        else { return }
+
+        var results = session["results"]?.arrayValue ?? []
+        var corrected = false
+
+        for correction in corrections {
+            guard correction.isLogged else { continue }
+
+            let matches = results.indices.filter {
+                results[$0]["exerciseId"]?.stringValue == correction.exerciseID
+            }
+            guard matches.indices.contains(correction.occurrence) else { continue }
+            let resultIndex = matches[correction.occurrence]
+
+            guard case .object(var result) = results[resultIndex],
+                  case .array(var sets)? = result["sets"],
+                  sets.indices.contains(correction.setIndex),
+                  case .object(let stored) = sets[correction.setIndex]
+            else { continue }
+
+            sets[correction.setIndex] = .object(correction.applied(to: stored))
+            result["sets"] = .array(sets)
+            results[resultIndex] = .object(result)
+            corrected = true
+        }
+
+        guard corrected else { return }
+        session["results"] = .array(results)
+        sessions[sessionIndex] = .object(session)
         raw["sessions"] = .array(sessions)
     }
 

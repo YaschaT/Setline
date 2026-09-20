@@ -31,7 +31,7 @@ struct StrengthSegmentView: View {
             .padding(.horizontal, SL.Space.s5)
             .padding(.top, SL.Space.s5)
         }
-        .task(id: app.sessions.count) { reload() }
+        .task(id: app.revision) { reload() }
         .onChange(of: selected) { _, _ in reloadProgress() }
     }
 

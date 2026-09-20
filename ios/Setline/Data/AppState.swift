@@ -44,6 +44,12 @@ final class AppState {
     // MARK: Derived
     private(set) var plan: [WorkoutDay] = PlanCatalog.personal
     private(set) var sessions: [TrainingSession] = []
+    /// Moves every time the state is read again.
+    ///
+    /// A correction leaves the number of sessions exactly as it was, so views
+    /// that reload on `sessions.count` would show yesterday's numbers. They
+    /// watch this instead.
+    private(set) var revision = 0
     private(set) var scheduleOverrides: [String: String] = [:]
     /// A workout that was started and paused. Not history: nothing in it
     /// counts until the session is finished.
@@ -347,6 +353,7 @@ final class AppState {
 
     private func apply(_ next: LegacyState?) {
         state = next
+        revision &+= 1
         guard let next else { return }
         plan = LegacyAdapter.plan(from: next)
         sessions = LegacyAdapter.sessions(from: next).sorted { $0.date > $1.date }
@@ -456,6 +463,17 @@ final class AppState {
     /// and leaving it behind would offer to resume something already saved.
     func save(session finished: TrainingSession) async {
         await commit([.upsert(finished), .activeSession(nil)])
+    }
+
+    /// Corrects sets in a session already saved.
+    ///
+    /// Only the named sets change. The session keeps its id, its exercises,
+    /// their order and each set's origin; everything else in the account is
+    /// untouched, offline included — the correction waits in the queue like
+    /// any other change (`StateChange.correctSessionSets`).
+    func correct(sessionID: String, _ corrections: [SetCorrection]) async {
+        guard !corrections.isEmpty else { return }
+        await commit([.correct(sessionID: sessionID, corrections)])
     }
 
     /// Records changes the user made outside a workout — a rearranged week,

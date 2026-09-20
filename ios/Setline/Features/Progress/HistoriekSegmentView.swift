@@ -4,11 +4,16 @@ import SetlineCore
 /// Artboard 20 · segment Historiek, rows shaped by the ≥1024 layout (27):
 /// `Push A · 7 sep` / `18/18 · 53 min` / `6.480 kg`.
 ///
-/// A list, and only a list. There is no approved session detail to open, so a
-/// row does not pretend to lead anywhere.
+/// The row is the way into the workout it describes: the design draws the
+/// list, and `SessionDetailView` is the smallest screen that lets a logged
+/// set be read back and corrected.
 struct HistoriekSegmentView: View {
     @Environment(AppState.self) private var app
     @State private var rows: [SessionHistoryRow] = []
+    @State private var opened: Opened?
+
+    /// The workout the reader asked to see.
+    private struct Opened: Identifiable { let id: String }
 
     var body: some View {
         ScrollView {
@@ -17,29 +22,51 @@ struct HistoriekSegmentView: View {
                     emptyState
                 } else {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(row.dayLabel) · \(app.display.shortDate(row.date))")
-                                    .slBody(SL.Weight.medium)
-                                if let detail = detail(row) {
-                                    Text(detail).slMeta().foregroundStyle(SL.Ink.tertiary)
+                        Button { opened = Opened(id: row.id) } label: {
+                            HStack(alignment: .firstTextBaseline) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(row.dayLabel) · \(app.display.shortDate(row.date))")
+                                        .slBody(SL.Weight.medium)
+                                        .foregroundStyle(SL.Ink.primary)
+                                    if let detail = detail(row) {
+                                        Text(detail).slMeta().foregroundStyle(SL.Ink.tertiary)
+                                    }
                                 }
+                                Spacer(minLength: SL.Space.s4)
+                                Text(app.display.volumeKg(row.volumeKg))
+                                    .slBody(SL.Weight.semibold)
+                                    .foregroundStyle(SL.Ink.primary)
                             }
-                            Spacer(minLength: SL.Space.s4)
-                            Text(app.display.volumeKg(row.volumeKg)).slBody(SL.Weight.semibold)
+                            // The whole row is the target, and it clears 44
+                            // whatever the text size.
+                            .padding(.vertical, 14)
+                            .frame(minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.vertical, 14)
+                        .buttonStyle(.plain)
                         .overlay(alignment: .bottom) {
                             if index < rows.count - 1 { SLHairline() }
                         }
                         .accessibilityElement(children: .combine)
+                        .accessibilityLabel(accessibilityLabel(row))
+                        .accessibilityHint("Dubbeltik om de sessie te openen")
                     }
                 }
             }
             .padding(.horizontal, SL.Space.s5)
             .padding(.top, SL.Space.s5)
         }
-        .task(id: app.sessions.count) { rows = SessionHistory.rows(from: app.sessions) }
+        .task(id: app.revision) { rows = SessionHistory.rows(from: app.sessions) }
+        .fullScreenCover(item: $opened) { workout in
+            SessionDetailView(sessionID: workout.id, onClose: { opened = nil })
+        }
+    }
+
+    private func accessibilityLabel(_ row: SessionHistoryRow) -> String {
+        var parts = ["\(row.dayLabel), \(app.display.shortDate(row.date))"]
+        if let detail = detail(row) { parts.append(detail) }
+        parts.append(app.display.volumeKg(row.volumeKg))
+        return parts.joined(separator: ", ")
     }
 
     /// Sets when the session counted them, the stored percentage when it did

@@ -55,7 +55,7 @@ found it, including entries written by a web version this app has never seen.
 | `scheduleOverrides` | both, per date | `setScheduleDay(key:dayID:)` and `removeScheduleOverride(key:)`. Keys are scoped per program (`personal:2026-09-17`), so a date under another plan is another plan's business |
 | `nutritionEntries` | both, per entry | upsert or remove by `id`. An upsert keeps the fields iOS does not model |
 | `targets` | both, per field | `setTarget(field:value:)`. The other three fields keep their value |
-| `sessions` | both, per session | iOS writes the session it logged; within a session, `results` merge per exercise, so neither app drops the other's |
+| `sessions` | both, per session | iOS writes the session it logged; within a session, `results` merge per exercise, so neither app drops the other's. A correction made from Historiek is narrower still: `correctSessionSets(sessionID:corrections:)` rewrites only the values of the sets it names, found by session id → exercise result → the set's place in it |
 | `metrics`, `completed`, `performance`, `chatMessages`, `recoveryDraft` | web | iOS reads `metrics`; it writes none of these |
 | `iosActiveSession`, `iosPainFlags`, `iosProgramReplacements`, `iosCustomExercises`, `iosHiddenWarmups` | iOS | the web app does not read them, and carries them through untouched |
 | `syncTombstones`, `syncReset` | both | deletions and resets, written by whichever app performed one |
@@ -131,8 +131,10 @@ Screen by screen:
 - **19** has no advisory line, on request.
 - **20**: Progressie's `Lichaam` and `Historiek` segments have no artboard; they
   are built from 20's own parts. So are the other screens no artboard draws:
-  Voeding's add-food sheet, Account's programme and day-target sheets, Foto's
-  empty state and an expired sign-in (23's sync block with 24's retry).
+  the session detail behind a Historiek row and its `Wijzig` mode (17R's blocks
+  in review context), Voeding's add-food sheet, Account's programme and
+  day-target sheets, Foto's empty state and an expired sign-in (23's sync block
+  with 24's retry).
 - **22** says "Foto's blijven op dit toestel" instead of "…tenzij je sync
   aanzet": there is no photo sync to turn on.
 - **23**: the Rusttimer row has no `Wijzig`, because rest follows each
@@ -180,6 +182,19 @@ Across screens:
   sets it) centred on the ground colour; there are no dark or tinted variants.
 
 ### Known technical debt
+
+- **A failed set is not kept.** `Mislukt` sets `SetFlags.failed` while the
+  session runs, and the flag is what keeps that set out of progression and
+  records. It is never written to the shared state — the wire format has no
+  field for it and `LegacyAdapter` reads every stored set back with no flags —
+  so a saved session cannot show or correct it. Marking a set failed after the
+  fact needs a new set field agreed with the web app.
+- **A stored set has no id.** Sets are identified by their place in their
+  exercise result, on the wire and in every merge; `LoggedSet.id` is minted
+  while parsing and does not survive a reload. Corrections therefore address a
+  set positionally and never reorder, insert or remove one. If both clients
+  ever need to edit the same session's sets concurrently, sets need ids in the
+  shared format first.
 
 - **Device clocks decide deletions and resets.** A deletion record
   (`syncTombstones`) or an account reset (`syncReset`) is compared with the time

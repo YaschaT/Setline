@@ -46,6 +46,13 @@ public enum SyncQueue {
                     rows.append(row)
                 }
 
+            case .correctSessionSets(_, let corrections):
+                // A correction waits as its own row: the session it belongs to
+                // is already in the account, and what is queued is the change
+                // to it.
+                let sets = corrections.count == 1 ? "1 set" : "\(corrections.count) sets"
+                rows.append(Row(title: "Correctie", detail: "\(sets) in een eerdere sessie"))
+
             case .setScheduleDay, .removeScheduleOverride:
                 weekDates += 1
                 let row = Row(

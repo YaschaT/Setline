@@ -1,0 +1,462 @@
+{
+  "name": "An iOS correction to a logged set changes that set and nothing else",
+  "why": "Correcting a mistyped weight days later must reach exactly one set: the rest of the session, the sets around it, keys neither client models, other sessions and every other collection stay as stored — and a web tab that never saw the correction must not undo it.",
+  "steps": [
+    {
+      "client": "ios",
+      "now": "2026-09-20T09:05:00.000Z",
+      "remote": {
+        "planMode": "personal",
+        "sessions": [
+          {
+            "id": "s-12",
+            "date": "2026-09-12T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "webOnlySessionKey": "keep",
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "webOnlyResultKey": "keep",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 2
+                  },
+                  {
+                    "weight": "1050",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 1,
+                    "webOnlySetKey": 7
+                  }
+                ]
+              },
+              {
+                "exerciseId": "incline-bench",
+                "name": "Incline bench press",
+                "sets": [
+                  {
+                    "weight": "70",
+                    "reps": "8",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ],
+            "durationSeconds": 3000,
+            "iosPlannedSetCount": 3,
+            "iosCompletedSetCount": 3
+          },
+          {
+            "id": "s-05",
+            "date": "2026-09-05T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nutritionEntries": [],
+        "iosHiddenWarmups": [
+          "pec-fly"
+        ]
+      },
+      "ops": [
+        {
+          "kind": "correctSessionSets",
+          "createdAt": "2026-09-20T09:00:00Z",
+          "sessionID": "s-12",
+          "corrections": [
+            {
+              "exerciseID": "flat-bench",
+              "occurrence": 0,
+              "setIndex": 1,
+              "weightKg": 105,
+              "reps": 6,
+              "rirReported": 1,
+              "pausedReps": null,
+              "partialReps": null,
+              "pauseEnabled": false,
+              "pauseSeconds": null
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "planMode": "personal",
+        "sessions": [
+          {
+            "id": "s-12",
+            "date": "2026-09-12T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "webOnlySessionKey": "keep",
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "webOnlyResultKey": "keep",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 2
+                  },
+                  {
+                    "weight": "105",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 1,
+                    "webOnlySetKey": 7
+                  }
+                ]
+              },
+              {
+                "exerciseId": "incline-bench",
+                "name": "Incline bench press",
+                "sets": [
+                  {
+                    "weight": "70",
+                    "reps": "8",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ],
+            "durationSeconds": 3000,
+            "iosPlannedSetCount": 3,
+            "iosCompletedSetCount": 3
+          },
+          {
+            "id": "s-05",
+            "date": "2026-09-05T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nutritionEntries": [],
+        "iosHiddenWarmups": [
+          "pec-fly"
+        ]
+      }
+    },
+    {
+      "client": "web",
+      "now": "2026-09-20T19:00:00.000Z",
+      "ancestry": {
+        "planMode": "personal",
+        "sessions": [
+          {
+            "id": "s-12",
+            "date": "2026-09-12T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "webOnlySessionKey": "keep",
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "webOnlyResultKey": "keep",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 2
+                  },
+                  {
+                    "weight": "1050",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 1,
+                    "webOnlySetKey": 7
+                  }
+                ]
+              },
+              {
+                "exerciseId": "incline-bench",
+                "name": "Incline bench press",
+                "sets": [
+                  {
+                    "weight": "70",
+                    "reps": "8",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ],
+            "durationSeconds": 3000,
+            "iosPlannedSetCount": 3,
+            "iosCompletedSetCount": 3
+          },
+          {
+            "id": "s-05",
+            "date": "2026-09-05T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nutritionEntries": [],
+        "iosHiddenWarmups": [
+          "pec-fly"
+        ]
+      },
+      "snapshot": {
+        "planMode": "personal",
+        "sessions": [
+          {
+            "id": "s-12",
+            "date": "2026-09-12T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "webOnlySessionKey": "keep",
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "webOnlyResultKey": "keep",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 2
+                  },
+                  {
+                    "weight": "1050",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 1,
+                    "webOnlySetKey": 7
+                  }
+                ]
+              },
+              {
+                "exerciseId": "incline-bench",
+                "name": "Incline bench press",
+                "sets": [
+                  {
+                    "weight": "70",
+                    "reps": "8",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ],
+            "durationSeconds": 3000,
+            "iosPlannedSetCount": 3,
+            "iosCompletedSetCount": 3
+          },
+          {
+            "id": "s-05",
+            "date": "2026-09-05T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nutritionEntries": [
+          {
+            "id": "n-7",
+            "date": "2026-09-20",
+            "meal": "Avondeten",
+            "name": "Kip, rijst, broccoli",
+            "calories": 740,
+            "protein": 52,
+            "carbs": 80,
+            "fat": 14
+          }
+        ],
+        "iosHiddenWarmups": [
+          "pec-fly"
+        ]
+      },
+      "expected": {
+        "planMode": "personal",
+        "sessions": [
+          {
+            "id": "s-12",
+            "date": "2026-09-12T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "webOnlySessionKey": "keep",
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "webOnlyResultKey": "keep",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 2
+                  },
+                  {
+                    "weight": "105",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false,
+                    "rir": 1,
+                    "webOnlySetKey": 7
+                  }
+                ]
+              },
+              {
+                "exerciseId": "incline-bench",
+                "name": "Incline bench press",
+                "sets": [
+                  {
+                    "weight": "70",
+                    "reps": "8",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ],
+            "durationSeconds": 3000,
+            "iosPlannedSetCount": 3,
+            "iosCompletedSetCount": 3
+          },
+          {
+            "id": "s-05",
+            "date": "2026-09-05T17:00:00.000Z",
+            "dayId": "push",
+            "dayLabel": "Push",
+            "completion": 100,
+            "results": [
+              {
+                "exerciseId": "flat-bench",
+                "name": "Flat bench press",
+                "sets": [
+                  {
+                    "weight": "100",
+                    "reps": "6",
+                    "pausedReps": "",
+                    "pauseSeconds": "",
+                    "pauseEnabled": false
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nutritionEntries": [
+          {
+            "id": "n-7",
+            "date": "2026-09-20",
+            "meal": "Avondeten",
+            "name": "Kip, rijst, broccoli",
+            "calories": 740,
+            "protein": 52,
+            "carbs": 80,
+            "fat": 14
+          }
+        ],
+        "iosHiddenWarmups": [
+          "pec-fly"
+        ]
+      }
+    }
+  ]
+}
