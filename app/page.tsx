@@ -6,6 +6,7 @@ import { AuthGate } from "./auth-gate";
 import { signOutEverywhere } from "./auth/supabase-auth";
 import { clearCloudState, loadCloudState, saveCloudState } from "@/lib/cloud-state";
 import { refinishSession } from "@/lib/refinish-session";
+import { boundPausedReps, completedReps, setSummary } from "@/lib/set-reps";
 import { clearOnboarded } from "./auth-gate";
 import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
 import {
@@ -660,10 +661,6 @@ function resultSets(result: Session["results"][number]): SetResult[] {
   return [{ weight: result.weight ?? "", reps: result.reps ?? "" }];
 }
 
-function completedReps(set: SetResult) {
-  return (Number(set.reps) || 0) + (Number(set.pausedReps) || 0);
-}
-
 function progressionTargets(prescription: string) {
   const targets: number[] = [];
   const pattern = /(\d+)×(?:\d+–)?(\d+)/g;
@@ -673,14 +670,6 @@ function progressionTargets(prescription: string) {
     for (let index = 0; index < count; index += 1) targets.push(target);
   }
   return targets;
-}
-
-function setSummary(set: SetResult) {
-  const regular = Number(set.reps) || 0;
-  const paused = Number(set.pausedReps) || 0;
-  if (!paused) return `${regular} reps`;
-  const seconds = set.pauseSeconds ? ` · ${set.pauseSeconds}s` : "";
-  return `${regular} normaal + ${paused} paused${seconds}`;
 }
 
 function bestStrengthSet(sets: SetResult[]) {
@@ -1893,7 +1882,7 @@ function TrainingApp() {
       };
       const sets = [...existing.sets];
       while (sets.length <= setIndex) sets.push(emptySetForExercise(exerciseId));
-      sets[setIndex] = { ...sets[setIndex], [field]: value };
+      sets[setIndex] = boundPausedReps({ ...sets[setIndex], [field]: value });
       return { ...current, [key]: { ...existing, sets } };
     });
   }
@@ -2294,7 +2283,7 @@ function TrainingApp() {
           if (index !== resultIndex) return row;
           const sets = resultSets(row).map((set) => ({ ...set }));
           while (sets.length <= setIndex) sets.push({ weight: "", reps: "" });
-          sets[setIndex] = { ...sets[setIndex], [field]: value };
+          sets[setIndex] = boundPausedReps({ ...sets[setIndex], [field]: value });
           return { ...row, sets, weight: undefined, reps: undefined };
         }),
       };
@@ -3491,7 +3480,7 @@ function TrainingApp() {
                               <div className="set-line">
                                 <span className="set-index" aria-label={`Set ${setIndex + 1}`}>{String(setIndex + 1).padStart(2, "0")}</span>
                                 <label className="log-field"><input inputMode="decimal" enterKeyHint="next" value={set.weight} onChange={(event) => setResult(exercise.id, setIndex, "weight", event.target.value)} placeholder={weightHint} aria-label={`${exercise.name} set ${setIndex + 1} gewicht${previousWeight > 0 ? `, vorige keer ${weightHint} kg` : ""}`} /><span>kg</span></label>
-                                <label className="log-field"><input inputMode="numeric" enterKeyHint="next" value={set.reps} onChange={(event) => setResult(exercise.id, setIndex, "reps", event.target.value)} placeholder={repsHint} aria-label={`${exercise.name} set ${setIndex + 1} normale herhalingen${previousRepCount > 0 ? `, vorige keer ${repsHint}` : ""}`} /><span>reps</span></label>
+                                <label className="log-field"><input inputMode="numeric" enterKeyHint="next" value={set.reps} onChange={(event) => setResult(exercise.id, setIndex, "reps", event.target.value)} placeholder={repsHint} aria-label={`${exercise.name} set ${setIndex + 1} herhalingen${previousRepCount > 0 ? `, vorige keer ${repsHint}` : ""}`} /><span>reps</span></label>
                                 <span className="set-actions">
                                   {supportsPausedReps && !set.pauseEnabled && <button type="button" className="pause-add" onClick={() => togglePausedReps(exercise.id, setIndex)} aria-label={`Paused reps toevoegen aan set ${setIndex + 1}`}><Pause /><span>Pauze</span></button>}
                                   {(set.weight || set.reps || set.pausedReps || setIndex >= prescribedSets) && <button type="button" className="set-clear" onClick={() => clearOrRemoveSet(exercise.id, setIndex)} aria-label={`${exercise.name} set ${setIndex + 1} ${setIndex >= prescribedSets ? "verwijderen" : "wissen"}`}><Trash2 /><span>{setIndex >= prescribedSets ? "Verwijder" : "Wis"}</span></button>}
@@ -3500,7 +3489,7 @@ function TrainingApp() {
                               {supportsPausedReps && set.pauseEnabled && (
                                 <div className="pause-line">
                                   <span className="pause-mark"><Pause aria-hidden="true" /><span>Pauze</span></span>
-                                  <label className="log-field pause-field"><input inputMode="numeric" enterKeyHint="next" value={set.pausedReps ?? ""} onChange={(event) => setResult(exercise.id, setIndex, "pausedReps", event.target.value)} placeholder="0" aria-label={`${exercise.name} set ${setIndex + 1} paused herhalingen`} /><span>paused</span></label>
+                                  <label className="log-field pause-field"><input inputMode="numeric" enterKeyHint="next" value={set.pausedReps ?? ""} onChange={(event) => setResult(exercise.id, setIndex, "pausedReps", event.target.value)} placeholder="0" aria-label={`${exercise.name} set ${setIndex + 1} gepauzeerde herhalingen, van de reps in deze set`} /><span>van de reps</span></label>
                                   <label className="log-field pause-field"><input inputMode="decimal" value={set.pauseSeconds ?? ""} onChange={(event) => setResult(exercise.id, setIndex, "pauseSeconds", event.target.value)} placeholder="3" aria-label={`${exercise.name} set ${setIndex + 1} pauzeduur`} /><span>sec</span></label>
                                   <button type="button" className="pause-remove" onClick={() => togglePausedReps(exercise.id, setIndex)} aria-label={`Paused reps uit set ${setIndex + 1} verwijderen`}><Trash2 /><span>Verwijder</span></button>
                                 </div>
@@ -4244,7 +4233,7 @@ function TrainingApp() {
                             {(supportsPausedReps || set.pauseEnabled) && (
                               set.pauseEnabled ? <div className="session-edit-pause">
                                 <Pause />
-                                <label><input inputMode="numeric" value={set.pausedReps ?? ""} onChange={(event) => updateEditingSessionSet(resultIndex, setIndex, "pausedReps", event.target.value)} aria-label={`${row.name} set ${setIndex + 1} paused reps`} /><small>paused</small></label>
+                                <label><input inputMode="numeric" value={set.pausedReps ?? ""} onChange={(event) => updateEditingSessionSet(resultIndex, setIndex, "pausedReps", event.target.value)} aria-label={`${row.name} set ${setIndex + 1} gepauzeerde reps, van de reps in deze set`} /><small>paused</small></label>
                                 <label><input inputMode="decimal" value={set.pauseSeconds ?? ""} onChange={(event) => updateEditingSessionSet(resultIndex, setIndex, "pauseSeconds", event.target.value)} aria-label={`${row.name} set ${setIndex + 1} pauzeduur`} /><small>sec</small></label>
                                 <button type="button" onClick={() => toggleEditingSessionPause(resultIndex, setIndex)}>Verwijder pauze</button>
                               </div> : <button type="button" className="session-edit-add-pause" onClick={() => toggleEditingSessionPause(resultIndex, setIndex)}><Pause /> Paused reps toevoegen</button>

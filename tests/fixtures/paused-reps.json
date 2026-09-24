@@ -1,0 +1,18 @@
+{
+  "name": "A paused count is part of the reps performed, on both clients",
+  "why": "The web app used to read `reps + pausedReps` as the reps of a set, so the same stored row meant six reps on iOS and eight on the web — one of them a rep nobody did. These four sets are the shapes the account actually holds, including the two rows in the real history that carry both numbers (120 kg × 6 with 2 paused, 60 kg × 9 with 1). Both clients must read them the same way: the reps are the reps, and the paused count says how many of them carried the pause.",
+  "readBy": ["tests/set-reps.test.mjs", "ios/SetlineCore/Tests/SetlineCoreTests/PausedRepsTests.swift"],
+  "sets": [
+    { "weight": "120", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+    { "weight": "120", "reps": "6", "pausedReps": "2", "pauseSeconds": "2", "pauseEnabled": true },
+    { "weight": "120", "reps": "6", "pausedReps": "6", "pauseSeconds": "2", "pauseEnabled": true },
+    { "weight": "60", "reps": "9", "pausedReps": "1", "pauseSeconds": "2", "pauseEnabled": true }
+  ],
+  "expected": {
+    "completedReps": [6, 6, 6, 9],
+    "pausedReps": [0, 2, 6, 1],
+    "totalReps": 27,
+    "volumeKg": 2700,
+    "loggedSets": 4
+  }
+}

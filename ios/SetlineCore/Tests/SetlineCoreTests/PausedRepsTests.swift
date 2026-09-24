@@ -138,6 +138,42 @@ final class PausedRepsTests: XCTestCase {
         XCTAssertEqual(applied["isWarmup"]?.boolValue, false, "Keys the correction does not own stay")
     }
 
+    // MARK: - The same reading on both clients
+
+    /// `tests/fixtures/paused-reps.json` holds the set shapes the account
+    /// actually stores, including the two rows in the real history that carry
+    /// both numbers. The web app checks the same file in
+    /// `tests/set-reps.test.mjs`, so a rule that changes on one side only
+    /// fails on the other.
+    func testTheSharedFixtureReadsIdenticallyHereAndOnTheWeb() throws {
+        guard let root = Fixtures.repoRoot else { throw XCTSkip("Repository root not found") }
+        let url = root.appendingPathComponent("tests/fixtures/paused-reps.json")
+        let fixture = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: url))
+        let rows = try XCTUnwrap(fixture["sets"]?.arrayValue)
+        let expected = try XCTUnwrap(fixture["expected"])
+
+        let sets = rows.enumerated().compactMap { index, row in
+            LegacyAdapter.loggedSet(from: row, index: index)
+        }
+        XCTAssertEqual(sets.count, rows.count)
+
+        XCTAssertEqual(
+            sets.map(\.reps),
+            expected["completedReps"]?.arrayValue?.compactMap(\.intValue)
+        )
+        XCTAssertEqual(
+            sets.map { $0.pausedReps ?? 0 },
+            expected["pausedReps"]?.arrayValue?.compactMap(\.intValue)
+        )
+        XCTAssertEqual(sets.reduce(0) { $0 + $1.reps }, expected["totalReps"]?.intValue)
+        XCTAssertEqual(
+            RecordsEngine.volumeLoad(sets),
+            expected["volumeKg"]?.decimalValue,
+            "volume counts each set's reps once"
+        )
+        XCTAssertEqual(sets.filter(\.isLogged).count, expected["loggedSets"]?.intValue)
+    }
+
     // MARK: - How it reads afterwards
 
     func testTheSetRowNamesTheRepsThatWerePaused() {

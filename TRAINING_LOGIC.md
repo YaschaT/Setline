@@ -387,15 +387,20 @@ Implementation rules:
 
 1. `SetModifiers.pause = { enabled, seconds }` lives on the **planned** exercise and is
    copied onto each logged set.
-2. **Bug to fix. [changes current]** `completedReps()` currently returns
-   `reps + pausedReps`, so a paused rep and a normal rep are summed into one number that
-   then drives progression status, PR detection and the strength trend. Paused and
-   unpaused reps are different reps. In the native app:
-   - `reps` is the total reps performed in the set.
+2. **Fixed, on both clients.** `completedReps()` used to return `reps + pausedReps`, so a
+   paused rep and a normal rep were summed into one number — a number nobody performed —
+   that then drove progression status, PR detection and the strength trend. Paused and
+   unpaused reps are different reps, and a rep is counted once:
+   - `reps` is the total reps performed in the set, paused ones included.
+   - `pausedReps` is how many of *those* reps carried the pause: metadata inside the reps,
+     never reps beside them. `completedReps() = reps`.
    - `pause` is a property of the set (or of individual reps, if per-rep pausing is kept).
    - Progression and PR compare **like with like**: a set with `pause.enabled == true` is
      only ever compared to other paused sets of the same exercise with the same
-     `pause.seconds` (±0.5 s tolerance).
+     `pause.seconds` (±0.5 s tolerance). A set whose reps were only *partly* paused is
+     comparable to neither series and stays out of both.
+   - Stored rows did not change shape. `lib/set-reps.ts` holds the reading on the web,
+     `LoggedSet` on iOS, and `tests/fixtures/paused-reps.json` is checked by both.
 3. Changing pause length mid-programme starts a new comparison series and the UI says so
    once: "2s → 3s pauze: dit is een nieuwe reeks, records tellen apart."
 4. Pause duration is never auto-increased as a progression lever.
