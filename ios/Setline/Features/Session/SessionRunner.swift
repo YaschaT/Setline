@@ -299,8 +299,12 @@ final class SessionRunner {
         var reps: Int
         var rir: Int?
         var failed: Bool
-        var paused: Bool
+        /// How many of `reps` were performed paused. `nil` is none; a count
+        /// equal to `reps` is a set performed paused throughout.
+        var pausedReps: Int?
         var partialReps: Int?
+
+        var isPaused: Bool { (pausedReps ?? 0) > 0 }
     }
 
     /// Tap 2 of 2. Writes the set and starts the rest, in that order.
@@ -325,16 +329,18 @@ final class SessionRunner {
         // planned paused makes the set incomparable to that exercise's series,
         // which is exactly what keeps it out of its progression.
         set.modifiers = SetModifiers(
-            pauseEnabled: entry.paused,
-            pauseSeconds: entry.paused ? (planned.modifiers.pauseSeconds ?? 2) : nil,
+            pauseEnabled: entry.isPaused,
+            pauseSeconds: entry.isPaused ? (planned.modifiers.pauseSeconds ?? 2) : nil,
             restrictedROM: planned.modifiers.restrictedROM
         )
 
         let partial = (entry.partialReps ?? 0) > 0 ? entry.partialReps : nil
         set.partialReps = partial
-        // The old mixed shape is unreachable from here: nothing writes
-        // `pausedReps`, so a set can never again be "6 + 2 paused".
-        set.pausedReps = nil
+        // Paused reps live inside the set that holds them: "120 kg × 6, de
+        // laatste 2 gepauzeerd" is six reps with two of them paused, so the
+        // count never adds reps, volume or a second set. Where every rep was
+        // paused the set is simply a paused set, and the count goes.
+        set.pausedReps = LoggedSet.pausedRepsWithin(entry.pausedReps, reps: set.reps)
 
         var flags: SetFlags = []
         if entry.failed { flags.insert(.failed) }
@@ -874,8 +880,8 @@ final class SessionRunner {
     /// delta and PR row states are inspectable without driving taps.
     func prefillForInspection() {
         guard let weight = slots.first?.sets.first?.weightKg else { return }
-        log(slotIndex: 0, setIndex: 0, entry: SetEntry(weightKg: weight, reps: 6, rir: 1, failed: false, paused: false, partialReps: nil))
-        log(slotIndex: 0, setIndex: 1, entry: SetEntry(weightKg: weight, reps: 6, rir: nil, failed: false, paused: false, partialReps: nil))
+        log(slotIndex: 0, setIndex: 0, entry: SetEntry(weightKg: weight, reps: 6, rir: 1, failed: false, pausedReps: nil, partialReps: nil))
+        log(slotIndex: 0, setIndex: 1, entry: SetEntry(weightKg: weight, reps: 6, rir: nil, failed: false, pausedReps: nil, partialReps: nil))
     }
 
     /// Fills every planned set, for inspecting the completed-session state.
@@ -887,7 +893,7 @@ final class SessionRunner {
                 let planned = slots[slotIndex].planned.sets
                 let target = (planned.indices.contains(setIndex) ? planned[setIndex] : planned.last)?
                     .repRange.upperBound ?? 8
-                log(slotIndex: slotIndex, setIndex: setIndex, entry: SetEntry(weightKg: weight, reps: target, rir: 1, failed: false, paused: false, partialReps: nil))
+                log(slotIndex: slotIndex, setIndex: setIndex, entry: SetEntry(weightKg: weight, reps: target, rir: 1, failed: false, pausedReps: nil, partialReps: nil))
             }
         }
         currentIndex = 0

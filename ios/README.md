@@ -56,7 +56,8 @@ found it, including entries written by a web version this app has never seen.
 | `nutritionEntries` | both, per entry | upsert or remove by `id`. An upsert keeps the fields iOS does not model |
 | `targets` | both, per field | `setTarget(field:value:)`. The other three fields keep their value |
 | `sessions` | both, per session | iOS writes the session it logged; within a session, `results` merge per exercise, so neither app drops the other's. A correction made from Historiek is narrower still: `correctSessionSets(sessionID:corrections:)` rewrites only the values of the sets it names, found by session id → exercise result → the set's place in it |
-| `metrics`, `completed`, `performance`, `chatMessages`, `recoveryDraft` | web | iOS reads `metrics`; it writes none of these |
+| `metrics` | both, per weigh-in | `upsertMetric` — one day's row, by its own id. A day holds one weigh-in, so weighing again on a day corrects that row instead of adding a second; `waist` is the web app's field and is carried through untouched |
+| `completed`, `performance`, `chatMessages`, `recoveryDraft` | web | iOS reads none of these and writes none of them |
 | `iosActiveSession`, `iosPainFlags`, `iosProgramReplacements`, `iosCustomExercises`, `iosHiddenWarmups` | iOS | the web app does not read them, and carries them through untouched |
 | `syncTombstones`, `syncReset` | both | deletions and resets, written by whichever app performed one |
 
@@ -165,9 +166,19 @@ Screen by screen:
   screen exists so a set can be checked and corrected, and 35 only summarises.
   Its `Wijzig` and per-set sheet are that correction; its "Notitie toevoegen" is
   not here, because sessions carry no note field on the wire.
+- **16R's `Pauze-reps` is a count, not a switch.** The chip opens a stepper
+  bounded by the reps performed, because "120 kg × 6, de laatste 2 gepauzeerd"
+  is one set of six reps and not two sets. The count sits *inside* `reps`:
+  volume counts six, the session counts one set, and the set stays out of
+  progression exactly as a mixed set always did. Every rep paused is simply a
+  paused set — `pauseEnabled`, no count — which is the shape planned paused
+  work has always had, so its own series is unaffected. Historiek and the set
+  grid say "2 pauze-reps" where only some were, "pauze" where all were.
 - **19** has no advisory line, on request.
 - **20**: Progressie's `Lichaam` and `Historiek` segments have no artboard; they
-  are built from 20's own parts. So are the other screens no artboard draws:
+  are built from 20's own parts — `Lichaam`'s weigh-in sheet included, which
+  asks for the one number the account stores and is reachable from every state
+  the segment has. So are the other screens no artboard draws:
   the session detail behind a Historiek row and its `Wijzig` mode (17R's blocks
   in review context), Voeding's add-food sheet, Account's programme and
   day-target sheets, Foto's empty state and an expired sign-in (23's sync block
@@ -230,6 +241,13 @@ Across screens:
   planning` opens `WeekPlanView` on the current week, whichever week the Agenda
   is showing. Moving a session two weeks out still means walking there in the
   planner.
+- **The web app still adds a paused count onto the reps beside it.** Its
+  `completedReps()` is `reps + pausedReps`, so a set this app writes as six
+  reps with two of them paused reads as eight there. This port never sums
+  (TRAINING_LOGIC §15 change 2), and the account's two historical sets that
+  carry both numbers are read here as the reps that were performed. Bringing
+  the two readings together means changing the web app's own, which this
+  release does not.
 - **A stored set has no id.** Sets are identified by their place in their
   exercise result, on the wire and in every merge; `LoggedSet.id` is minted
   while parsing and does not survive a reload. Corrections therefore address a

@@ -496,6 +496,28 @@ final class AppState {
         NutritionDay.make(entries: nutritionEntries, on: date, targets: targets)
     }
 
+    // MARK: - Weigh-ins
+
+    /// Every weigh-in the account holds, newest last.
+    var metrics: [BodyMetric] {
+        state.map { LegacyAdapter.metrics(from: $0) } ?? []
+    }
+
+    /// What the scale said today, if it has been asked.
+    func weighIn(on date: Date = Date()) -> BodyMetric? {
+        WeighIn.stored(on: date, in: metrics)
+    }
+
+    /// Writes the day's weight: a new weigh-in, or the day's own written
+    /// again. One day holds one weigh-in, so weighing twice corrects the
+    /// number instead of adding a second row, and every other weigh-in — with
+    /// the trend that follows from them — is left exactly as it was.
+    func saveWeighIn(_ weightKg: Decimal, on date: Date = Date()) async {
+        guard weightKg > 0 else { return }
+        let entry = WeighIn.entry(weightKg: weightKg, on: date, in: metrics)
+        await record([StateChange(.upsertMetric(WeighIn.json(entry)))])
+    }
+
     // MARK: - Fatigue
 
     /// What the last week of logged sets says (TRAINING_LOGIC §11). Read fresh

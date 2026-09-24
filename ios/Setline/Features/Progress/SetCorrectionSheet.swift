@@ -22,7 +22,7 @@ struct SetCorrectionSheet: View {
     @State private var weight: Decimal
     @State private var reps: Int
     @State private var rir: Int?
-    @State private var paused: Bool
+    @State private var pausedReps: Int?
     @State private var partialReps: Int?
     @State private var height: CGFloat?
 
@@ -45,7 +45,10 @@ struct SetCorrectionSheet: View {
         _weight = State(initialValue: original.weightKg ?? 0)
         _reps = State(initialValue: original.reps)
         _rir = State(initialValue: original.rirReported)
-        _paused = State(initialValue: original.modifiers.pauseEnabled)
+        // A stored set that was paused throughout carries no count, and opens
+        // on every rep — the same reading the entry sheet gives it.
+        _pausedReps = State(initialValue: original.pausedReps
+            ?? (original.modifiers.pauseEnabled ? original.reps : nil))
         _partialReps = State(initialValue: original.partialReps)
     }
 
@@ -78,6 +81,7 @@ struct SetCorrectionSheet: View {
 
                 rirRow.padding(.bottom, SL.Space.s4)
                 tools.padding(.bottom, SL.Space.s4)
+                if let paused = pausedReps { pausedRow(paused).padding(.bottom, SL.Space.s4) }
                 if partialReps != nil { partialRow.padding(.bottom, SL.Space.s4) }
 
                 Button { onApply(corrected) } label: { Text("Klaar") }
@@ -107,18 +111,20 @@ struct SetCorrectionSheet: View {
     }
 
     /// The set as corrected. Everything the sheet does not ask about — origin,
-    /// warm-up, what it stood in for, a legacy paused-rep count — is carried
-    /// over from the set as it was logged.
+    /// warm-up, what it stood in for — is carried over from the set as it was
+    /// logged.
     private var corrected: LoggedSet {
         var set = original
         set.weightKg = weight
         set.reps = reps
         set.rirReported = rir
+        let isPaused = (pausedReps ?? 0) > 0
         set.modifiers = SetModifiers(
-            pauseEnabled: paused,
-            pauseSeconds: paused ? (original.modifiers.pauseSeconds ?? 2) : nil,
+            pauseEnabled: isPaused,
+            pauseSeconds: isPaused ? (original.modifiers.pauseSeconds ?? 2) : nil,
             restrictedROM: original.modifiers.restrictedROM
         )
+        set.pausedReps = LoggedSet.pausedRepsWithin(pausedReps, reps: reps)
         set.partialReps = (partialReps ?? 0) > 0 ? partialReps : nil
         return set
     }
@@ -190,10 +196,35 @@ struct SetCorrectionSheet: View {
 
     private var tools: some View {
         HStack(spacing: 6) {
-            chip("Pauze-reps", isOn: paused) { paused.toggle() }
+            chip("Pauze-reps", isOn: pausedReps != nil) {
+                pausedReps = pausedReps == nil ? max(1, reps) : nil
+            }
             chip("Partieel", isOn: partialReps != nil) {
                 partialReps = partialReps == nil ? 1 : nil
             }
+        }
+    }
+
+    /// The same reading the entry sheet gives a set: paused reps are some of
+    /// the reps performed, so the count stops at the rep number.
+    private func pausedRow(_ count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                SLEyebrow(text: "Pauze-reps")
+                Spacer()
+                Text(count >= reps ? "elke rep gepauzeerd" : "van \(reps) reps")
+                    .slMeta()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .padding(.bottom, SL.Space.s2)
+            SLStepper(
+                label: "Gepauzeerd",
+                display: "\(min(count, max(1, reps)))",
+                onDecrement: { pausedReps = max(1, min(count, reps) - 1) },
+                onIncrement: { pausedReps = min(max(1, reps), count + 1) }
+            )
         }
     }
 

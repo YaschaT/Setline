@@ -23,7 +23,9 @@ struct SetEntrySheet: View {
     @State private var reps: Int
     @State private var rir: Int?
     @State private var failed = false
-    @State private var paused: Bool
+    /// How many of this set's reps were paused. `nil` is none; the chip
+    /// opens it on every rep, which is what the pause chip always meant.
+    @State private var pausedReps: Int?
     @State private var partialReps: Int?
     @State private var showsKeypad = false
     @State private var keypadText = ""
@@ -62,18 +64,19 @@ struct SetEntrySheet: View {
             ? slot.planned.sets[setIndex].repRange.upperBound
             : (slot.planned.sets.last?.repRange.upperBound ?? 8)
         _weight = State(initialValue: draft.weightKg ?? reference?.weightKg ?? 0)
-        _reps = State(initialValue: isCalibration
+        let openingReps = isCalibration
             ? Calibration.targetReps
             : (draft.reps > 0
                 ? draft.reps
-                : (proposedReps ?? reference?.reps ?? plannedTop)))
+                : (proposedReps ?? reference?.reps ?? plannedTop))
+        _reps = State(initialValue: openingReps)
         // Stepping to a first weight from zero is 30-odd taps. A calibration
         // set opens on the keypad instead.
         _showsKeypad = State(initialValue: isCalibration)
         _keypadText = State(initialValue: "")
-        // A planned paused exercise opens with pause already on, because that
+        // A planned paused exercise opens with every rep paused, because that
         // is what the plan prescribes; anywhere else it is off until asked for.
-        _paused = State(initialValue: slot.planned.modifiers.pauseEnabled)
+        _pausedReps = State(initialValue: slot.planned.modifiers.pauseEnabled ? openingReps : nil)
         // The pain flow's "Beperk de beweging" opens the set with partial on,
         // because that is what it promised.
         _partialReps = State(initialValue: startsPartial ? 1 : nil)
@@ -150,6 +153,8 @@ struct SetEntrySheet: View {
             if asksForRIR { rirRow.padding(.bottom, SL.Space.s4) }
 
             chips.padding(.bottom, SL.Space.s4)
+
+            if let paused = pausedReps { pausedRow(paused).padding(.bottom, SL.Space.s4) }
 
             if partialReps != nil { partialRow.padding(.bottom, SL.Space.s4) }
 
@@ -237,7 +242,7 @@ struct SetEntrySheet: View {
                     reps: reps,
                     rir: rir,
                     failed: failed,
-                    paused: paused,
+                    pausedReps: pausedReps,
                     partialReps: partialReps
                 ))
             } label: {
@@ -378,7 +383,11 @@ struct SetEntrySheet: View {
             keypadFocused = showsKeypad
         }
         let mislukt = chip("Mislukt", isOn: failed) { failed.toggle() }
-        let pauze = chip("Pauze-reps", isOn: paused) { paused.toggle() }
+        // On, it opens at every rep — the whole-set pause the chip used to
+        // be — and the row below narrows it to the reps that were paused.
+        let pauze = chip("Pauze-reps", isOn: pausedReps != nil) {
+            pausedReps = pausedReps == nil ? max(1, reps) : nil
+        }
         let partieel = chip("Partieel", isOn: partialReps != nil) {
             partialReps = partialReps == nil ? 1 : nil
         }
@@ -391,6 +400,30 @@ struct SetEntrySheet: View {
             } else {
                 HStack(spacing: 6) { toetsenblok; mislukt; pauze; partieel }
             }
+        }
+    }
+
+    /// Paused reps are a count *inside* the reps: six reps with the last two
+    /// paused is one set of six. The stepper therefore never passes the reps
+    /// performed, and every rep paused simply makes it a paused set.
+    private func pausedRow(_ count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                SLEyebrow(text: "Pauze-reps")
+                Spacer()
+                Text(count >= reps ? "elke rep gepauzeerd" : "van \(reps) reps")
+                    .slMeta()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .padding(.bottom, SL.Space.s2)
+            SLStepper(
+                label: "Gepauzeerd",
+                display: "\(min(count, max(1, reps)))",
+                onDecrement: { pausedReps = max(1, min(count, reps) - 1) },
+                onIncrement: { pausedReps = min(max(1, reps), count + 1) }
+            )
         }
     }
 

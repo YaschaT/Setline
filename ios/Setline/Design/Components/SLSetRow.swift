@@ -224,14 +224,16 @@ struct SLSetRow: View {
             marker("PR")
         case .failed:
             marker("mislukt")
-        case .paused:
-            marker("met pauze")
+        case .paused(let reps):
+            // "2 pauze-reps" where only some of them were: the count is part
+            // of the set, so the column says which reps it describes.
+            marker(reps.map { "\($0) pauze-reps" } ?? "met pauze")
         case .partial(let count):
             marker("partieel +\(count)")
-        case .pausedAndPartial(let count):
+        case .pausedAndPartial(let pausedReps, let count):
             // Two true things about one set. The column wraps rather than
             // dropping either, and stays at the 12pt floor.
-            marker("met pauze · partieel +\(count)", lines: 2)
+            marker("\(pausedReps.map { "\($0) pauze-reps" } ?? "met pauze") · partieel +\(count)", lines: 2)
         case .calibration:
             Text("kalibratie")
                 .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
@@ -279,9 +281,10 @@ struct SLSetRow: View {
         case .difference(let text): parts.append("\(text) vergeleken met vorige sessie")
         case .personalRecord: parts.append("persoonlijk record")
         case .failed: parts.append("mislukte set")
-        case .paused: parts.append("set met pauze")
+        case .paused(let reps): parts.append(reps.map { "\($0) reps met pauze" } ?? "set met pauze")
         case .partial(let count): parts.append("\(count) partiële reps")
-        case .pausedAndPartial(let count): parts.append("set met pauze, \(count) partiële reps")
+        case .pausedAndPartial(let pausedReps, let count):
+            parts.append("\(pausedReps.map { "\($0) reps met pauze" } ?? "set met pauze"), \(count) partiële reps")
         case .calibration: parts.append("kalibratieset")
         case .baseline: parts.append("basis voor deze oefening")
         case .reserve(let rir): parts.append("RIR \(rir)")

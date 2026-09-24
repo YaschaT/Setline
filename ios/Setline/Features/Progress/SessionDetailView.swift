@@ -351,11 +351,15 @@ struct SessionDetailView: View {
             if let rir = set.rirReported {
                 Text("RIR \(rir)").slMeta().slNumerals().foregroundStyle(SL.Ink.tertiary)
             }
-            if set.modifiers.pauseEnabled {
-                Text("pauze").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Signal.attention)
-            }
+            // One mark, never two: the whole set paused, or the reps of it
+            // that were. A count is inside the reps, so it never reads "+".
             if let paused = set.pausedReps, paused > 0 {
-                Text("+\(paused) pauze-reps").slMeta().slNumerals().foregroundStyle(SL.Signal.attention)
+                Text("\(paused) pauze-reps")
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                    .slNumerals()
+                    .foregroundStyle(SL.Signal.attention)
+            } else if set.modifiers.pauseEnabled {
+                Text("pauze").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Signal.attention)
             }
             if let partial = set.partialReps, partial > 0 {
                 Text("partieel +\(partial)")
@@ -376,8 +380,11 @@ struct SessionDetailView: View {
         var parts = ["Set \(number)", app.display.kg(set.weightKg ?? 0), "\(set.reps) reps"]
         if isRecord { parts.append("persoonlijk record") }
         if let rir = set.rirReported { parts.append("RIR \(rir)") }
-        if set.modifiers.pauseEnabled { parts.append("met pauze") }
-        if let paused = set.pausedReps, paused > 0 { parts.append("\(paused) pauze-reps") }
+        if let paused = set.pausedReps, paused > 0 {
+            parts.append("waarvan \(paused) met pauze")
+        } else if set.modifiers.pauseEnabled {
+            parts.append("met pauze")
+        }
         if let partial = set.partialReps, partial > 0 { parts.append("\(partial) partiële reps") }
         if set.origin == .sessionAdded { parts.append("extra set") }
         if set.isWarmup { parts.append("opwarming") }

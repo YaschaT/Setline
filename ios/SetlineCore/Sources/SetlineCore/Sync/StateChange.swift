@@ -31,6 +31,9 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         /// One meal, by its own id.
         case upsertNutritionEntry(JSONValue)
         case removeNutritionEntry(id: String)
+        /// One weigh-in, by its own id: a new one, or the day's own entry
+        /// written again. Every other weigh-in is left as stored.
+        case upsertMetric(JSONValue)
         /// One nutrition target, by field.
         case setTarget(field: String, value: Decimal)
         case setProgram(mode: String, sciencePlanID: String?)
@@ -79,14 +82,15 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
-        case scheduleKey, dayID, entry, field, value, mode, sciencePlanID, experience, plates, barKg, deload
+        case scheduleKey, dayID, entry, metric, field, value, mode, sciencePlanID, experience, plates, barKg, deload
         case sessionID, corrections
     }
 
     private enum KindName: String, Codable {
         case upsertSession, correctSessionSets, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
-        case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry, setTarget
+        case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry
+        case upsertMetric, setTarget
         case setProgram, setExperience, setEquipment, setDeload
     }
 
@@ -127,6 +131,8 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             kind = .upsertNutritionEntry(try container.decode(JSONValue.self, forKey: .entry))
         case .removeNutritionEntry:
             kind = .removeNutritionEntry(id: try container.decode(String.self, forKey: .targetID))
+        case .upsertMetric:
+            kind = .upsertMetric(try container.decode(JSONValue.self, forKey: .metric))
         case .setTarget:
             kind = .setTarget(
                 field: try container.decode(String.self, forKey: .field),
@@ -195,6 +201,9 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case .removeNutritionEntry(let entryID):
             try container.encode(KindName.removeNutritionEntry, forKey: .kind)
             try container.encode(entryID, forKey: .targetID)
+        case .upsertMetric(let metric):
+            try container.encode(KindName.upsertMetric, forKey: .kind)
+            try container.encode(metric, forKey: .metric)
         case .setTarget(let field, let value):
             try container.encode(KindName.setTarget, forKey: .kind)
             try container.encode(field, forKey: .field)

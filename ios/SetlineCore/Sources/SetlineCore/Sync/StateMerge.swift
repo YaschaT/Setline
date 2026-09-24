@@ -110,6 +110,13 @@ public enum StateMerge {
         case .removeNutritionEntry(let entryID):
             removeItem(entryID, in: &raw, collection: "nutritionEntries", at: change.createdAt)
 
+        case .upsertMetric(let metric):
+            // A weigh-in is one row among the account's own: the day's entry is
+            // written again by its id, and every other weigh-in stays as
+            // stored — including a waist the web app measured, which is not a
+            // field this client owns.
+            upsertItem(metric, in: &raw, collection: "metrics", fields: metricFields, createdAt: change.createdAt)
+
         case .setProgram(let mode, let sciencePlanID):
             // Which programme the account is on, and nothing more. The plan it
             // edited itself is left exactly as the web app wrote it, because a
@@ -276,6 +283,11 @@ public enum StateMerge {
     }
 
     // MARK: - Shared collections, by id
+
+    /// What a weigh-in is made of here. `waist` is deliberately absent: the
+    /// web app measures it, this app does not, and a field a client does not
+    /// own is carried through untouched.
+    static let metricFields: Set<String> = ["id", "date", "weight"]
 
     /// The fields a meal carries, and therefore the ones iOS may rewrite.
     static let nutritionFields: Set<String> = ["id", "date", "meal", "name", "calories", "protein", "carbs", "fat"]

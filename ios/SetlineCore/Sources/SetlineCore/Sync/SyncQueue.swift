@@ -69,6 +69,10 @@ public enum SyncQueue {
             case .removeNutritionEntry:
                 rows.append(Row(title: "Maaltijd verwijderd", detail: "Voeding"))
 
+            case .upsertMetric(let json):
+                let weight = json["weight"]?.decimalValue.map { display.kg($0) } ?? ""
+                rows.append(Row(title: "Weging", detail: weight.isEmpty ? "Lichaam" : "Lichaam · \(weight)"))
+
             case .setTarget:
                 if !rows.contains(where: { $0.title == "Dagdoelen" }) {
                     rows.append(Row(title: "Dagdoelen", detail: "Gewijzigd"))

@@ -2,32 +2,69 @@ import Charts
 import SwiftUI
 import SetlineCore
 
-/// Artboard 20 · segment Lichaam, read-only.
+/// Artboard 20 · segment Lichaam.
 ///
 /// Wording and colour come from the ≥1024 tile (27): `LICHAAMSGEWICHT`,
 /// `82,4 kg`, `+0,3 / 4 weken` in the recovery mint. A weigh-in is a status,
-/// not a training win, so lime stays out of this segment entirely.
+/// not a training win, so lime stays out of the reading entirely — the one
+/// exception is the action that writes today's, which is this screen's single
+/// commit and takes the pill every other screen gives its own.
 ///
-/// Weighing in has no approved screen yet, so this one only reads.
+/// The action is reachable in every state the screen has, because the account
+/// takes a weigh-in in every one of them: with a series behind it, with only
+/// today's, and with none at all.
 struct LichaamSegmentView: View {
     @Environment(AppState.self) private var app
     @State private var progress = BodyProgress.empty
+    @State private var weighing = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if let latest = progress.latest {
                     header(latest)
+                    weighInButton
+                        .padding(.bottom, progress.points.count > 1 ? SL.Space.s6 : SL.Space.s5)
                     if progress.points.count > 1 { chart }
                     entries
                 } else {
                     emptyState
+                    weighInButton.padding(.top, SL.Space.s5)
                 }
             }
             .padding(.horizontal, SL.Space.s5)
             .padding(.top, SL.Space.s5)
         }
-        .task(id: app.state?.raw.count) { reload() }
+        .task(id: app.revision) { reload() }
+        .sheet(isPresented: $weighing) {
+            WeighInSheet(
+                date: Date(),
+                existing: today,
+                latest: progress.latest?.weightKg,
+                onSave: { weight in
+                    weighing = false
+                    Task { await app.saveWeighIn(weight) }
+                },
+                onClose: { weighing = false }
+            )
+        }
+    }
+
+    /// Today's weigh-in, which decides whether this writes a new one or
+    /// corrects the one already standing.
+    private var today: BodyMetric? { app.weighIn() }
+
+    /// The one action on this screen. It never reads as a training win: the
+    /// label says which of the two things it does, so a day already weighed
+    /// offers a correction rather than a second row.
+    private var weighInButton: some View {
+        Button { weighing = true } label: {
+            Text(today == nil ? "Weeg jezelf" : "Weging van vandaag wijzigen")
+        }
+        .buttonStyle(SLOutlineButtonStyle())
+        .accessibilityHint(today == nil
+            ? "Opent het veld om je gewicht van vandaag te bewaren"
+            : "Opent je weging van vandaag om het gewicht bij te werken")
     }
 
     private func header(_ latest: BodyProgress.Entry) -> some View {
@@ -146,14 +183,12 @@ struct LichaamSegmentView: View {
         return [first, points[points.count / 2], last].map { app.display.shortDate($0.date) }
     }
 
-    /// Weighing in lives in the web app until a screen for it is designed, so
-    /// the empty state says where the numbers come from rather than offering
-    /// an action this app does not have.
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             Text("Nog geen wegingen").slLead()
-            Text("Wegingen die je opslaat verschijnen hier, met hun verloop.")
+            Text("Weeg jezelf 's ochtends, nuchter. Vanaf de tweede weging staat je verloop hier.")
                 .slBody()
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .foregroundStyle(SL.Ink.secondary)
         }
         .padding(.top, SL.Space.s2)

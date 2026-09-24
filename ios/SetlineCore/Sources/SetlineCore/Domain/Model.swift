@@ -158,10 +158,20 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
     /// Count of partial reps at the end of the set. Shown in history,
     /// excluded from progression and PR maths (§5).
     public var partialReps: Int?
-    /// Paused reps performed inside this set, carried over from the web app.
+    /// How many of this set's reps were performed paused.
     ///
-    /// The web app allowed one set to hold both normal and paused reps and
-    /// then summed them. They are kept apart here and never added to `reps`.
+    /// A count *inside* `reps`, never beside it: "120 kg × 6, de laatste 2
+    /// gepauzeerd" is one set of six reps, two of which carry the pause. It
+    /// therefore never adds reps, never adds volume and never adds a set.
+    ///
+    /// Only a part of the set is ever recorded here. Where every rep was
+    /// paused the set simply *is* a paused set, which `modifiers.pauseEnabled`
+    /// already says, and `pausedRepsWithin(_:reps:)` drops the count — the
+    /// shape the model has always had, so planned paused work keeps its own
+    /// series.
+    ///
+    /// The web app stores the same key but adds it onto `reps`
+    /// (`completedReps()`); this port never sums (TRAINING_LOGIC §15 change 2).
     public var pausedReps: Int?
     /// Prescribed by the program, or added during this session. An added set
     /// counts toward volume, history and records like any working set, but
@@ -231,6 +241,16 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
     /// progressie."
     public var countsTowardVolume: Bool {
         isLogged && !isWarmup
+    }
+
+    /// A paused-rep count that means something inside the set holding it: at
+    /// least one rep, never more than were performed, and never all of them —
+    /// a set where every rep was paused is a paused set, not a partly paused
+    /// one, and says so through `modifiers.pauseEnabled`.
+    public static func pausedRepsWithin(_ count: Int?, reps: Int) -> Int? {
+        guard let count, count > 0, reps > 0 else { return nil }
+        let bounded = min(count, reps)
+        return bounded == reps ? nil : bounded
     }
 
     /// Whether this set may drive progression, a proposal or a record.

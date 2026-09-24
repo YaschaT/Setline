@@ -14,13 +14,14 @@ public enum SetDelta: Hashable, Sendable {
     case personalRecord
     case failed
     /// A set performed with a pause. The word carries the meaning; amber
-    /// alone never does.
-    case paused
+    /// alone never does. `reps` is how many of the set's reps were paused,
+    /// and is absent where every one of them was.
+    case paused(reps: Int? = nil)
     /// Partial reps at the end of a set, with their count, so "partieel" and
     /// "met pauze" are never told apart by colour alone.
     case partial(count: Int)
     /// Both at once. Neither state is allowed to hide the other.
-    case pausedAndPartial(count: Int)
+    case pausedAndPartial(pausedReps: Int? = nil, count: Int)
     /// The calibration set itself, before it is written.
     case calibration
     /// The calibration set once written: everything else compares to it.
@@ -183,9 +184,9 @@ public enum SetRowPresenter {
                     delta = .failed
                 } else if set.modifiers.pauseEnabled, let partial = partialCount {
                     // Both descriptions are true, so both are shown.
-                    delta = .pausedAndPartial(count: partial)
+                    delta = .pausedAndPartial(pausedReps: set.pausedReps, count: partial)
                 } else if set.modifiers.pauseEnabled {
-                    delta = .paused
+                    delta = .paused(reps: set.pausedReps)
                 } else if let partial = partialCount {
                     delta = .partial(count: partial)
                 } else if RecordsEngine.isLoadPR(

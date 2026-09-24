@@ -94,4 +94,12 @@ public enum NumberInput {
     public static func value(_ text: String) -> Double {
         Double(numericOnly(text).replacingOccurrences(of: ",", with: ".")) ?? 0
     }
+
+    /// The same, exactly: a weight typed by hand is a tenth of a kilo, not a
+    /// binary approximation of one. Empty text is no number at all.
+    public static func decimal(_ text: String) -> Decimal? {
+        let normalised = numericOnly(text).replacingOccurrences(of: ",", with: ".")
+        guard !normalised.isEmpty, normalised != "." else { return nil }
+        return Decimal(string: normalised, locale: Locale(identifier: "en_US_POSIX"))
+    }
 }

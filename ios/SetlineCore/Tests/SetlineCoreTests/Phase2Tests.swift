@@ -221,16 +221,29 @@ final class PausedAndPartialTests: XCTestCase {
     }
 
     /// The rule that outranks everything: a paused rep is never added onto
-    /// the rep count, and the two can never live in one set again.
+    /// the rep count. A set performed paused throughout carries no count —
+    /// the modifier already says so — and stays a normal set inside its own
+    /// paused series. Reps of it that were paused are counted inside `reps`,
+    /// never beside them (see `PausedRepsTests`).
     func testPausedSetsCarryNoSeparateRepCount() {
         let paused = LoggedSet(
             index: 0, weightKg: 100, reps: 6,
             modifiers: SetModifiers(pauseEnabled: true, pauseSeconds: 2)
         )
         XCTAssertEqual(paused.reps, 6)
-        XCTAssertNil(paused.pausedReps, "Nothing the app writes may set a paused-rep count")
+        XCTAssertNil(paused.pausedReps, "Every rep paused is the modifier's job, not a count's")
         XCTAssertTrue(paused.countsTowardProgression, "Within its own series it is a normal set")
         XCTAssertTrue(paused.countsTowardVolume)
+
+        let partly = LoggedSet(
+            index: 1, weightKg: 100, reps: 6,
+            modifiers: SetModifiers(pauseEnabled: true, pauseSeconds: 2),
+            pausedReps: LoggedSet.pausedRepsWithin(2, reps: 6)
+        )
+        XCTAssertEqual(partly.reps, 6, "Still six reps: the count is inside them")
+        XCTAssertEqual(partly.pausedReps, 2)
+        XCTAssertFalse(partly.countsTowardProgression, "Comparable to neither series")
+        XCTAssertTrue(partly.countsTowardVolume)
     }
 
     /// Partial reps are a count beside the reps, excluded from progression,
@@ -255,7 +268,7 @@ final class PausedAndPartialTests: XCTestCase {
             ],
             reference: nil, history: history, activeIndex: nil
         )
-        XCTAssertEqual(rows[0].delta, .paused)
+        XCTAssertEqual(rows[0].delta, .paused(reps: nil))
         XCTAssertEqual(rows[1].delta, .partial(count: 3), "The count travels with the state, so colour is never the only signal")
     }
 }
@@ -395,7 +408,7 @@ final class PausedAndPartialTogetherTests: XCTestCase {
             )],
             reference: nil, history: history(), activeIndex: nil
         )
-        XCTAssertEqual(rows[0].delta, .pausedAndPartial(count: 3))
+        XCTAssertEqual(rows[0].delta, .pausedAndPartial(pausedReps: nil, count: 3))
     }
 
     /// Partials rule: a partial set stays out of progression and records even
@@ -429,7 +442,7 @@ final class PausedAndPartialTogetherTests: XCTestCase {
             sets: [LoggedSet(index: 0, weightKg: 100, reps: 6, modifiers: SetModifiers(pauseEnabled: true, pauseSeconds: 2))],
             reference: nil, history: history, activeIndex: nil
         )
-        XCTAssertEqual(paused[0].delta, .paused)
+        XCTAssertEqual(paused[0].delta, .paused(reps: nil))
 
         let partial = SetRowPresenter.rows(
             sets: [LoggedSet(index: 0, weightKg: 100, reps: 6, flags: [.partialReps], partialReps: 2)],
@@ -494,7 +507,7 @@ final class SetStateNeverHiddenTests: XCTestCase {
             reference: nil, history: empty, activeIndex: 1,
             mode: .calibrated(baseline: calibration)
         )
-        XCTAssertEqual(rows[0].delta, .pausedAndPartial(count: 1))
+        XCTAssertEqual(rows[0].delta, .pausedAndPartial(pausedReps: nil, count: 1))
     }
 
     func testACleanCalibrationSetStillReadsAsTheBaseline() {
