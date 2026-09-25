@@ -55,8 +55,8 @@ extension View {
     /// where 1.04 and 1.1 are tighter than the font's own line. Before iOS 26
     /// SwiftUI can only add space, so it adds what CSS would and cannot
     /// tighten below the font's natural line.
-    func slLineHeight(_ factor: CGFloat, size: CGFloat) -> some View {
-        modifier(SLLineHeight(factor: factor, size: size))
+    func slLineHeight(_ factor: CGFloat, size: CGFloat, maxScale: CGFloat? = nil) -> some View {
+        modifier(SLLineHeight(factor: factor, size: size, maxScale: maxScale))
     }
 
     /// Makes a view re-render when the reader changes their text size.
@@ -80,9 +80,12 @@ private struct SLTextSizeObserver: ViewModifier {
 private struct SLLineHeight: ViewModifier {
     let factor: CGFloat
     let size: CGFloat
+    /// Matches `Font.slCapped`, so a capped font keeps a line box its own size.
+    let maxScale: CGFloat?
 
     func body(content: Content) -> some View {
-        let scaled = UIFontMetrics(forTextStyle: .body).scaledValue(for: size)
+        let full = UIFontMetrics(forTextStyle: .body).scaledValue(for: size)
+        let scaled = maxScale.map { min(full, size * $0) } ?? full
         if #available(iOS 26.0, *) {
             content
                 .lineHeight(.exact(points: scaled * factor))

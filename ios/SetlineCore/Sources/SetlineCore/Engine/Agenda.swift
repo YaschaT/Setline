@@ -39,6 +39,9 @@ public struct AgendaDay: Identifiable, Equatable, Sendable {
     public let content: Content
     /// The weekday this session usually falls on, when it is not there.
     public let movedFrom: String?
+    /// Set by hand for this date rather than by the programme (41: "de
+    /// gestippelde ring als marker voor een gewijzigde dag").
+    public let isOverridden: Bool
 
     public var id: String { key }
 
@@ -59,6 +62,31 @@ public struct AgendaDay: Identifiable, Equatable, Sendable {
     public var isRest: Bool { content == .rest }
     public var isLogged: Bool { session != nil }
     public var isMoved: Bool { movedFrom != nil }
+
+    /// The mark a date carries in the week rail (39a) — one shape per state,
+    /// so a state never rests on colour alone.
+    public enum Mark: Equatable, Sendable {
+        /// A filled dot: a session was saved.
+        case logged
+        /// An open ring: planned, still to come.
+        case planned
+        /// A dashed ring: a date you set yourself — a session moved here from
+        /// its own weekday, or one put here beside it (41).
+        case moved
+        /// An open ring on a day that passed with nothing saved.
+        case missed
+        /// A small dot: nothing planned.
+        case rest
+    }
+
+    public var mark: Mark {
+        switch content {
+        case .session: return .logged
+        case .planned: return isMoved || isOverridden ? .moved : .planned
+        case .missed: return .missed
+        case .rest: return .rest
+        }
+    }
 
     /// The name a row shows: the session's own label for a logged day, the
     /// programme's for a planned one.
@@ -94,7 +122,11 @@ public enum Agenda {
         let logged = byDate(sessions, calendar: calendar)
         return WeekPlan.week(containing: date, overrides: overrides, plan: plan, calendar: calendar)
             .map { day in
-                resolve(day, logged: logged, deload: deload, now: now, calendar: calendar)
+                resolve(
+                    day, logged: logged, deload: deload,
+                    isOverridden: overrides[day.key] != nil,
+                    now: now, calendar: calendar
+                )
             }
     }
 
@@ -130,6 +162,7 @@ public enum Agenda {
         _ day: WeekPlan.Day,
         logged: [String: TrainingSession],
         deload: Deload?,
+        isOverridden: Bool,
         now: Date,
         calendar: Calendar
     ) -> AgendaDay {
@@ -157,8 +190,134 @@ public enum Agenda {
             isToday: isToday,
             isPast: isPast,
             content: content,
-            movedFrom: day.movedFrom
+            movedFrom: day.movedFrom,
+            isOverridden: isOverridden
         )
+    }
+
+    // MARK: - Several weeks at once (41d)
+
+    /// One week in the pulled-out drawer: its dates and what it is called.
+    public struct Week: Identifiable, Equatable, Sendable {
+        public let days: [AgendaDay]
+        public let number: Int
+        public let isCurrent: Bool
+
+        public var id: String { days.first?.key ?? "\(number)" }
+
+        /// "Week 6 · deze week", or the week with the Monday it starts on.
+        public var label: String {
+            guard let first = days.first else { return "Week \(number)" }
+            return isCurrent ? "Week \(number) · deze week" : "Week \(number) · \(shortDate(first.date))"
+        }
+    }
+
+    /// The weeks the drawer shows when it is pulled open: the week `date`
+    /// falls in, the one before it and the two after — read exactly as the
+    /// rail reads its own week.
+    public static func weeks(
+        around date: Date,
+        back: Int = 1,
+        forward: Int = 2,
+        plan: [WorkoutDay],
+        overrides: [String: String],
+        sessions: [TrainingSession],
+        deload: Deload? = nil,
+        firstSession: Date? = nil,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [Week] {
+        (-back...forward).compactMap { offset in
+            guard let anchor = calendar.date(byAdding: .weekOfYear, value: offset, to: date) else { return nil }
+            let days = week(
+                containing: anchor, plan: plan, overrides: overrides, sessions: sessions,
+                deload: deload, now: now, calendar: calendar
+            )
+            guard let first = days.first else { return nil }
+            return Week(
+                days: days,
+                number: WeekPlan.number(firstSession: firstSession, on: first.date, calendar: calendar),
+                isCurrent: days.contains(where: \.isToday)
+            )
+        }
+    }
+
+    // MARK: - What comes next
+
+    /// The first session still to come after `date`: the next date holding a
+    /// planned session with nothing saved on it. Rest days, logged days and
+    /// days that passed unlogged are stepped over — from a rest day, this is
+    /// the answer to 39a's second question.
+    ///
+    /// It reads through `week(containing:)`, so it sees exactly what the rail
+    /// and the Agenda see: the schedule's overrides, the saved sessions, and
+    /// the lighter week on the dates it covers. The search runs through the
+    /// week `date` falls in and the `weeks` after it; past that, nothing is
+    /// planned. Nothing is written.
+    public static func nextTraining(
+        after date: Date,
+        plan: [WorkoutDay],
+        overrides: [String: String],
+        sessions: [TrainingSession],
+        deload: Deload? = nil,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        withinWeeks weeks: Int = 4
+    ) -> AgendaDay? {
+        let from = calendar.startOfDay(for: date)
+        for offset in 0...max(0, weeks) {
+            guard let anchor = calendar.date(byAdding: .weekOfYear, value: offset, to: date) else { break }
+            let days = week(
+                containing: anchor, plan: plan, overrides: overrides, sessions: sessions,
+                deload: deload, now: now, calendar: calendar
+            )
+            if let next = days.first(where: { day in
+                guard calendar.startOfDay(for: day.date) > from else { return false }
+                if case .planned = day.content { return true }
+                return false
+            }) {
+                return next
+            }
+        }
+        return nil
+    }
+
+    /// When a date falls, said from `now` the way 39a says it: "morgen",
+    /// "overmorgen", a weekday later this week, and the weekday with its date
+    /// once it lies beyond this week — where the rail no longer shows it.
+    public static func when(_ date: Date, from now: Date = Date(), calendar: Calendar = .current) -> String {
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: now),
+            to: calendar.startOfDay(for: date)
+        ).day ?? 0
+        switch days {
+        case 0: return "vandaag"
+        case 1: return "morgen"
+        case 2: return "overmorgen"
+        case -1: return "gisteren"
+        case -2: return "eergisteren"
+        default:
+            let thisWeek = Schedule.mondayFirstWeek(containing: now, calendar: calendar)
+            if thisWeek.contains(where: { calendar.isDate($0, inSameDayAs: date) }) {
+                return WeekPlan.fullWeekday(date)
+            }
+            return "\(WeekPlan.fullWeekday(date)) \(shortDate(date))"
+        }
+    }
+
+    /// 39a's supporting line: "Volgende training morgen", or that nothing is
+    /// planned at all.
+    public static func restLine(next: AgendaDay?, now: Date = Date(), calendar: Calendar = .current) -> String {
+        guard let next else { return "Geen training gepland" }
+        return "Volgende training \(when(next.date, from: now, calendar: calendar))"
+    }
+
+    /// 39a's next-session row, right side: "vr 11 sep · ±55 min". The minutes
+    /// come from the effective prescription, so a lighter week says less.
+    public static func sessionLine(_ day: AgendaDay) -> String? {
+        guard let workout = day.plannedDay else { return nil }
+        return "\(day.weekday) \(shortDate(day.date)) · ±\(WeekPlan.minutes(of: workout)) min"
     }
 
     // MARK: - What a week says about itself

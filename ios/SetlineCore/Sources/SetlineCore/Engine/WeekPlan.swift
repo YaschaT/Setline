@@ -125,9 +125,15 @@ public enum WeekPlan {
     }
 
     /// Week 1 is the week of the first session logged; before that, week 1.
+    ///
+    /// Counted from the start of each week, so every date inside a week gives
+    /// the same number — the drawer's header and its rows cannot disagree
+    /// about which week you are looking at.
     public static func number(firstSession: Date?, on date: Date = Date(), calendar: Calendar = .current) -> Int {
         guard let firstSession else { return 1 }
-        let weeks = calendar.dateComponents([.weekOfYear], from: firstSession, to: date).weekOfYear ?? 0
+        let from = Schedule.mondayFirstWeek(containing: firstSession, calendar: calendar).first ?? firstSession
+        let to = Schedule.mondayFirstWeek(containing: date, calendar: calendar).first ?? date
+        let weeks = calendar.dateComponents([.weekOfYear], from: from, to: to).weekOfYear ?? 0
         return max(1, weeks + 1)
     }
 

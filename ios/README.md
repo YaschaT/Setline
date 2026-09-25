@@ -97,30 +97,35 @@ All of these are release gaps for a public V1, not defects in what is here.
 
 ### Browsing dates
 
-Three screens touch the calendar, and each owns one thing:
+Training holds one selected date, and three things divide the work (41):
 
-- **Training** shows one day. The strip under the card selects it (32a–32f);
-  the card then describes today, a future day, a rest day, a day whose session
-  is saved, or a day that passed unlogged. Selecting is reading — it never
-  creates or saves a session, and the lime button stays Training's own: it
-  starts today's workout and nothing else.
-- **Agenda** (34a–34d) browses weeks. Previous and next move by a week, a row
-  expands in place, and every action it offers hands off: `Bekijk sessie` opens
-  the saved session, `Bekijk wat gepland stond` opens the preview (33), and
-  `Wijzig planning` opens week planning. It reads state and writes none.
+- **Training** is what happens on the selected date. The drawer at the top
+  carries the date, the week rail and the way into the agenda; under it the
+  date's own slots — its name at 56, one line about it, what it is made of,
+  and one action. Selecting a date is reading: it never creates a session,
+  moves the schedule or touches history, and the lime stays Training's own —
+  it starts today's workout and nothing else.
+- **The agenda** is the same drawer, pulled open (41d): four weeks under each
+  other in the rail's own language, with the month either side of it. It
+  browses dates; it writes nothing.
+- **`Wijzig deze dag`** (41e–41g) changes which session belongs to one date,
+  and is the only thing on this screen that writes. It is reached from the
+  foot of the day or by holding a day in the rail. It offers the sessions of
+  the active programme, rest, and the programme's own standard; a change
+  replaces the one before it, going back to standard removes it, and a date
+  whose session is logged cannot be assigned at all — it belongs to what was
+  done on it, and the sheet points at the session instead.
 - **Historiek** lists sessions, and its detail screen (35) is the *only* screen
-  that shows a saved session. The Agenda and Training both open that same
-  screen; there is no second one.
-- **`WeekPlanView` remains the only place the schedule changes.** Both the
-  Agenda and the preview reach it by name (`Wijzig planning`), and neither
-  writes `scheduleOverrides` itself.
+  that shows a saved session. Training and Historiek open that same screen.
 
-All four read one set of sources: `WeekPlan`/`Schedule` for what a date holds,
-`scheduleOverrides` for what was moved, `sessions` for what was saved, and
-`SessionPrescription` for what a lighter week does to it. `Agenda.week(...)`
-resolves a date to exactly one of *saved session*, *planned day*, *planned but
-past* or *rest*, in that order, so a date that has a session is described by the
-session and never by today's programme.
+All of them read one set of sources: `WeekPlan`/`Schedule` for what a date
+holds, `scheduleOverrides` for what was set by hand, `sessions` for what was
+saved, and `SessionPrescription` for what a lighter week does to it.
+`Agenda.week(...)` resolves a date to exactly one of *saved session*, *planned
+day*, *planned but past* or *rest*, in that order, so a date that has a session
+is described by the session and never by today's programme. `DayPlan` builds
+the one change the sheet writes — `setScheduleDay` or `removeScheduleOverride`,
+for that date's own key and nothing else.
 
 ### Where the app differs from the design, on purpose
 
@@ -174,7 +179,21 @@ Screen by screen:
   paused set — `pauseEnabled`, no count — which is the shape planned paused
   work has always had, so its own series is unaffected. Historiek and the set
   grid say "2 pauze-reps" where only some were, "pauze" where all were.
-- **19** has no advisory line, on request.
+- **19** has no advisory line, on request. The drag planner itself survives
+  only behind Account and the pre-flight's own link: every date change on
+  Training goes through 41's assignment sheet, which writes the same per-date
+  override the planner wrote.
+- **41c's foot** keeps `Wijzig deze dag` clear of the tab bar. The artboard
+  lets its last 8pt sit behind the bar, as 08 and 09 do with their pill; here
+  every state ends 6 above it instead, so nothing is drawn under a control.
+- **41 draws no training day.** Today's own session fills the same slots a
+  selected day does (41b's name, count line and exercise list), keeps 09's one
+  lime insight under them, and takes the lime `Start` as its action. A paused
+  session replaces that action with `Hervat sessie`, and the text button below
+  it with `Beëindig sessie`, because ending one must stay reachable.
+- **The week label** in the open drawer names the week and the Monday it
+  starts on ("Week 4 · 28 sep"). 41d's "laatste van blok 2" needs a block
+  model, which the repeating programme does not have.
 - **20**: Progressie's `Lichaam` and `Historiek` segments have no artboard; they
   are built from 20's own parts — `Lichaam`'s weigh-in sheet included, which
   asks for the one number the account stores and is reachable from every state

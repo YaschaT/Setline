@@ -54,7 +54,10 @@ enum SL {
     // MARK: Action & signal
     enum Signal {
         /// Two jobs only: one semantic win + one commit action per screen.
-        /// Never a goal, never a neutral state, never a selection.
+        /// Never a goal, never a neutral state — and a selection only where
+        /// 39a extends the rule: on a rest day the week rail's selected day is
+        /// the one control, so it takes the lime, and gives it back to Start
+        /// on a training day. Never twice on one screen.
         static let action        = Color(hex: 0xC8FF66)
         static let actionPressed = Color(hex: 0xB9F45B)
         static let onAction      = Color(hex: 0x0A0D0B)
