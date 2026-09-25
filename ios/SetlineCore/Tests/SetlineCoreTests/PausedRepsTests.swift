@@ -138,6 +138,111 @@ final class PausedRepsTests: XCTestCase {
         XCTAssertEqual(applied["isWarmup"]?.boolValue, false, "Keys the correction does not own stay")
     }
 
+    // MARK: - Every rep paused is a paused set, not a mixed one
+
+    func testASetWhoseEveryRepWasPausedDrivesProgressionLikeAnyPausedSet() {
+        // The shape the web app writes: the count typed in full. Reading it as
+        // "mixed" dropped every paused session out of progression, records and
+        // the strength trend.
+        let stored: JSONValue = .object([
+            "weight": .string("120"), "reps": .string("6"),
+            "pausedReps": .string("6"), "pauseSeconds": .string("2"), "pauseEnabled": .bool(true),
+        ])
+        let set = LegacyAdapter.loggedSet(from: stored, index: 0)
+        XCTAssertEqual(set?.pausedReps, 6, "the count is kept as both clients read it")
+        XCTAssertTrue(set?.modifiers.pauseEnabled == true)
+        XCTAssertTrue(set?.countsTowardProgression == true, "a paused set belongs to the paused series")
+    }
+
+    func testAPausedSetSaysSoEvenWhereTheRowForgotTheFlag() {
+        let stored: JSONValue = .object([
+            "weight": .string("120"), "reps": .string("5"),
+            "pausedReps": .string("5"), "pauseEnabled": .bool(false),
+        ])
+        let set = LegacyAdapter.loggedSet(from: stored, index: 0)
+        XCTAssertTrue(set?.modifiers.pauseEnabled == true, "every rep paused is a paused set")
+        XCTAssertTrue(set?.countsTowardProgression == true)
+    }
+
+    func testSomeOfTheRepsPausedIsStillMixedAndStillCountsForNothing() {
+        let stored: JSONValue = .object([
+            "weight": .string("120"), "reps": .string("6"),
+            "pausedReps": .string("2"), "pauseSeconds": .string("2"), "pauseEnabled": .bool(true),
+        ])
+        let set = LegacyAdapter.loggedSet(from: stored, index: 0)
+        XCTAssertEqual(set?.pausedReps, 2)
+        XCTAssertFalse(set?.countsTowardProgression == true, "comparable to neither series")
+        XCTAssertTrue(set?.countsTowardVolume == true, "but the work was done")
+    }
+
+    func testAPausedSessionReachesTheStrengthHistory() {
+        // What the Kracht segment reads. Three paused sessions of the same
+        // exercise are three points, not nothing.
+        let paused = SetModifiers(pauseEnabled: true, pauseSeconds: 2)
+        func session(_ day: Int, weightKg: Decimal) -> TrainingSession {
+            TrainingSession(
+                id: "s-\(day)",
+                date: Date(timeIntervalSince1970: TimeInterval(day) * 86_400),
+                dayID: "upper", dayLabel: "Upper", completion: 100,
+                results: [ExerciseResult(
+                    exerciseID: "upper-paused-bench", name: "Paused bench",
+                    sets: [LoggedSet(index: 0, weightKg: weightKg, reps: 5, modifiers: paused, pausedReps: 5)]
+                )]
+            )
+        }
+        let sessions = [session(10, weightKg: 100), session(20, weightKg: 105), session(30, weightKg: 110)]
+        let history = ExerciseHistory.build(exerciseID: "upper-paused-bench", modifiers: paused, from: sessions)
+        XCTAssertEqual(history.appearances.count, 3)
+        XCTAssertTrue(history.hasReference)
+
+        let progress = StrengthProgress.make(
+            exerciseID: "upper-paused-bench", name: "Paused bench",
+            modifiers: paused, sessions: sessions
+        )
+        XCTAssertEqual(progress.points.count, 3, "every paused session is a point on the chart")
+        XCTAssertEqual(progress.rows.count, 3)
+        XCTAssertNotNil(progress.estimate)
+    }
+
+    func testAnExerciseTrainedTwoWaysHasTwoSeriesAndTheOneWithMostSessionsLeads() {
+        let paused = SetModifiers(pauseEnabled: true, pauseSeconds: 2)
+        func session(_ day: Int, modifiers: SetModifiers, weightKg: Decimal, pausedReps: Int?) -> TrainingSession {
+            TrainingSession(
+                id: "s-\(day)",
+                date: Date(timeIntervalSince1970: TimeInterval(day) * 86_400),
+                dayID: "push", dayLabel: "Push", completion: 100,
+                results: [ExerciseResult(
+                    exerciseID: "flat-bench", name: "Bankdrukken",
+                    sets: [LoggedSet(index: 0, weightKg: weightKg, reps: 5, modifiers: modifiers, pausedReps: pausedReps)]
+                )]
+            )
+        }
+        let sessions = [
+            session(10, modifiers: paused, weightKg: 110, pausedReps: 5),
+            session(20, modifiers: .none, weightKg: 130, pausedReps: nil),
+            session(30, modifiers: .none, weightKg: 130, pausedReps: nil),
+        ]
+
+        let found = ExerciseHistory.series(exerciseID: "flat-bench", from: sessions)
+        XCTAssertEqual(found.count, 2, "touch-and-go and paused are two series of one lift")
+        XCTAssertEqual(found.first?.sessions, 2)
+        XCTAssertFalse(found.first?.modifiers.pauseEnabled == true, "the one the account has most of leads")
+        XCTAssertEqual(found.first?.label, "zonder pauze")
+        XCTAssertEqual(found.last?.label, "gepauzeerd · 2 s")
+
+        // And the leading series is the one a screen reading it would show.
+        let progress = StrengthProgress.make(
+            exerciseID: "flat-bench", name: "Bankdrukken",
+            modifiers: try! XCTUnwrap(found.first).modifiers, sessions: sessions
+        )
+        XCTAssertEqual(progress.points.count, 2)
+        XCTAssertEqual(progress.source?.weightKg, 130, "the estimate comes from the sets you actually press")
+    }
+
+    func testAnExerciseNeverLoggedHasNoSeriesAtAll() {
+        XCTAssertTrue(ExerciseHistory.series(exerciseID: "flat-bench", from: []).isEmpty)
+    }
+
     // MARK: - The same reading on both clients
 
     /// `tests/fixtures/paused-reps.json` holds the set shapes the account

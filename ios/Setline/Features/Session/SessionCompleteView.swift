@@ -36,7 +36,12 @@ struct SessionCompleteView: View {
                     SLEyebrow(text: "Afgerond · \(runner.completedSetCount)/\(runner.plannedSetCount) sets")
                         .padding(.top, SL.Space.s5)
 
-                    Text("\(runner.day.short) · \(app.display.minutes(runner.elapsedSeconds)) · \(app.display.shortDate(Date()))")
+                    // The date is the session's own, and a workout written
+                    // down afterwards claims no duration: the minutes it took
+                    // to type are not the minutes it took to train.
+                    Text(runner.isLoggedAfterwards
+                         ? "\(runner.day.short) · \(app.display.shortDate(runner.startedAt))"
+                         : "\(runner.day.short) · \(app.display.minutes(runner.elapsedSeconds)) · \(app.display.shortDate(runner.startedAt))")
                         .slTitle()
                         .foregroundStyle(SL.Ink.primary)
                         .padding(.top, SL.Space.s2)

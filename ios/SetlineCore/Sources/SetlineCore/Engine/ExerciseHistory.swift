@@ -63,6 +63,74 @@ public struct ExerciseHistory: Sendable {
 
     public var mostRecent: ExerciseAppearance? { appearances.first }
 
+    /// One comparable series of an exercise: the sets that may be compared to
+    /// each other, and how much of it the account has.
+    ///
+    /// An exercise can hold more than one. Bench pressed touch-and-go and
+    /// bench pressed with a two-second pause are two series of the same
+    /// exercise (§9.2), and a screen that shows one of them has to know which.
+    public struct Series: Equatable, Sendable {
+        public let modifiers: SetModifiers
+        public let sessions: Int
+        public let lastTrained: Date
+
+        public init(modifiers: SetModifiers, sessions: Int, lastTrained: Date) {
+            self.modifiers = modifiers
+            self.sessions = sessions
+            self.lastTrained = lastTrained
+        }
+
+        /// How a reader tells two series of one exercise apart.
+        public var label: String {
+            var parts: [String] = []
+            if modifiers.pauseEnabled {
+                let seconds = modifiers.pauseSeconds ?? 2
+                let whole = seconds == seconds.rounded() ? String(Int(seconds)) : String(format: "%.1f", seconds)
+                parts.append("gepauzeerd · \(whole) s")
+            } else {
+                parts.append("zonder pauze")
+            }
+            if modifiers.restrictedROM { parts.append("beperkte ROM") }
+            return parts.joined(separator: " · ")
+        }
+    }
+
+    /// Every series this account has for one exercise, the one it has most of
+    /// first (ties to the one trained most recently).
+    ///
+    /// Sets that belong to no series — a mix of paused and unpaused reps, a
+    /// technical breakdown, a warm-up — are in none of them, exactly as they
+    /// are in no progression.
+    public static func series(
+        exerciseID: String,
+        from sessions: [TrainingSession]
+    ) -> [Series] {
+        var found: [SetModifiers: (sessions: Int, last: Date)] = [:]
+
+        for session in sessions where session.kind == .workout {
+            guard let result = session.results.first(where: { $0.exerciseID == exerciseID }) else { continue }
+            var seenHere: Set<SetModifiers> = []
+            for set in result.sets where set.countsTowardProgression {
+                // Pause length is compared with a tolerance, so a series is
+                // keyed by the first shape that matched it rather than by an
+                // exact 2.0 vs 2.0000001.
+                let key = found.keys.first { $0.isComparable(to: set.modifiers) } ?? set.modifiers
+                guard !seenHere.contains(key) else { continue }
+                seenHere.insert(key)
+                let held = found[key]
+                found[key] = ((held?.sessions ?? 0) + 1, max(held?.last ?? session.date, session.date))
+            }
+        }
+
+        return found
+            .map { Series(modifiers: $0.key, sessions: $0.value.sessions, lastTrained: $0.value.last) }
+            .sorted { left, right in
+                if left.sessions != right.sessions { return left.sessions > right.sessions }
+                if left.lastTrained != right.lastTrained { return left.lastTrained > right.lastTrained }
+                return !left.modifiers.pauseEnabled && right.modifiers.pauseEnabled
+            }
+    }
+
     /// Sets the reference gate. No proposal and no record until three
     /// comparable sessions exist (§10.2 guard 4; design 28b/29b "Referentie
     /// opbouwen · sessie N van 3").

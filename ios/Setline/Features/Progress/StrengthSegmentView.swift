@@ -20,6 +20,10 @@ struct StrengthSegmentView: View {
     @State private var selected: String?
     @State private var progress: StrengthProgress?
     @State private var rows: [ExercisePicker.Row] = []
+    /// The comparable series this exercise has. More than one means the same
+    /// lift was trained two ways — paused and not — and the screen has to say
+    /// which one its number is about.
+    @State private var series: [ExerciseHistory.Series] = []
     @State private var picking = false
     @State private var explaining = false
 
@@ -121,9 +125,16 @@ struct StrengthSegmentView: View {
     /// "Borst · favoriet" — where this exercise sits, and whether it is one of
     /// yours. The star says the same thing; the words are what VoiceOver and a
     /// glance get.
+    ///
+    /// When the same lift was trained two ways, the series on screen is named
+    /// here too: a number computed from paused sets must not read as one about
+    /// the sets you pressed touch-and-go.
     private var standing: String? {
         guard let current else { return nil }
-        return current.isFavorite ? "\(current.group.title) · favoriet" : current.group.title
+        var parts = [current.group.title]
+        if current.isFavorite { parts.append("favoriet") }
+        if series.count > 1, let shown = series.first { parts.append(shown.label) }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - The estimate, in three layers
@@ -372,12 +383,17 @@ struct StrengthSegmentView: View {
     private func reloadProgress() {
         guard let row = rows.first(where: { $0.exerciseID == selected }) else {
             progress = nil
+            series = []
             return
         }
-        let modifiers = app.plan
-            .flatMap(\.exercises)
-            .first { $0.exerciseID == row.exerciseID }?
-            .modifiers ?? .none
+        series = ExerciseHistory.series(exerciseID: row.exerciseID, from: app.sessions)
+        // The series this account actually has, not the one its programme
+        // happens to prescribe: bench pressed touch-and-go is most of this
+        // history even in a week whose plan says to pause it, and reading the
+        // plan's modifiers instead hid every one of those sessions.
+        let modifiers = series.first?.modifiers
+            ?? app.plan.flatMap(\.exercises).first { $0.exerciseID == row.exerciseID }?.modifiers
+            ?? .none
         progress = StrengthProgress.make(
             exerciseID: row.exerciseID,
             name: row.name,

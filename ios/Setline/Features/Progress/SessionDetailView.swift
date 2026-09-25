@@ -25,6 +25,13 @@ struct SessionDetailView: View {
     @State private var correcting: Target?
     @State private var confirmsDiscard = false
     @State private var isSaving = false
+    /// Sets taken out while editing, by where they sit in the stored session.
+    /// Held beside the draft rather than cut from it, so every other set keeps
+    /// the index the correction it may also carry is named by.
+    @State private var removed: Set<String> = []
+    /// Asked before the last set of the session goes, because that takes the
+    /// session with it.
+    @State private var confirmsLastSet: Target?
 
     /// Which set the correction sheet is open on.
     private struct Target: Identifiable {
@@ -35,7 +42,22 @@ struct SessionDetailView: View {
 
     private var session: TrainingSession? { app.sessions.first { $0.id == sessionID } }
     private var results: [ExerciseResult] { editing ? draft : (session?.results ?? []) }
-    private var hasChanges: Bool { editing && draft != session?.results }
+    private var hasChanges: Bool { editing && (draft != session?.results || !removed.isEmpty) }
+
+    /// The sets of one result that are still in the session, each with the
+    /// index the stored session knows it by.
+    private func visibleSets(of result: ExerciseResult, at resultIndex: Int) -> [(index: Int, set: LoggedSet)] {
+        result.sets.enumerated()
+            .filter { !removed.contains(Target(resultIndex: resultIndex, setIndex: $0.offset).id) }
+            .map { (index: $0.offset, set: $0.element) }
+    }
+
+    /// How many sets the whole session would still hold.
+    private var remainingSetCount: Int {
+        results.enumerated().reduce(0) { total, entry in
+            total + visibleSets(of: entry.element, at: entry.offset).count
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -74,6 +96,20 @@ struct SessionDetailView: View {
             }
         }
         .sheet(item: $correcting) { target in correctionSheet(target) }
+        // An alert rather than a dialog, because both answers have to be
+        // visible: one of them removes a workout from the account.
+        .alert(
+            "Dit is de laatste set van deze sessie.",
+            isPresented: Binding(get: { confirmsLastSet != nil }, set: { if !$0 { confirmsLastSet = nil } })
+        ) {
+            Button("Behoud", role: .cancel) { confirmsLastSet = nil }
+            Button("Verwijder de sessie", role: .destructive) {
+                if let target = confirmsLastSet { remove(target) }
+                confirmsLastSet = nil
+            }
+        } message: {
+            Text("Zonder sets blijft er geen sessie over. Hij verdwijnt uit je historiek zodra je bewaart.")
+        }
         .confirmationDialog(
             "Correcties niet bewaren?",
             isPresented: $confirmsDiscard,
@@ -232,8 +268,10 @@ struct SessionDetailView: View {
     private func exercises(_ session: TrainingSession) -> some View {
         VStack(alignment: .leading, spacing: SL.Space.s4) {
             ForEach(Array(results.enumerated()), id: \.offset) { index, result in
-                block(result, at: index, in: session)
-                if index < results.count - 1 { SLHairline() }
+                if !visibleSets(of: result, at: index).isEmpty {
+                    block(result, at: index, in: session)
+                    if index < results.count - 1 { SLHairline() }
+                }
             }
         }
         .padding(.top, SL.Space.s5)
@@ -257,16 +295,16 @@ struct SessionDetailView: View {
                     .padding(.top, 2)
             }
 
-            ForEach(Array(result.sets.enumerated()), id: \.offset) { setIndex, set in
+            ForEach(Array(visibleSets(of: result, at: resultIndex).enumerated()), id: \.element.index) { position, entry in
                 row(
-                    set,
-                    number: setIndex + 1,
+                    entry.set,
+                    number: position + 1,
                     isRecord: RecordsEngine.isLoadPR(
-                        set: set,
+                        set: entry.set,
                         history: history,
-                        earlierInSession: Array(result.sets.prefix(setIndex))
+                        earlierInSession: Array(result.sets.prefix(entry.index))
                     ),
-                    target: Target(resultIndex: resultIndex, setIndex: setIndex),
+                    target: Target(resultIndex: resultIndex, setIndex: entry.index),
                     exercise: result
                 )
             }
@@ -408,6 +446,14 @@ struct SessionDetailView: View {
                     draft[target.resultIndex].sets[target.setIndex] = corrected
                     correcting = nil
                 },
+                onDelete: {
+                    correcting = nil
+                    if remainingSetCount <= 1 {
+                        confirmsLastSet = target
+                    } else {
+                        remove(target)
+                    }
+                },
                 onClose: { correcting = nil }
             )
         }
@@ -415,12 +461,18 @@ struct SessionDetailView: View {
 
     private func startEditing() {
         draft = session?.results ?? []
+        removed = []
         withAnimation(.easeOut(duration: SL.Motion.base)) { editing = true }
     }
 
     private func stopEditing() {
         withAnimation(.easeOut(duration: SL.Motion.base)) { editing = false }
         draft = []
+        removed = []
+    }
+
+    private func remove(_ target: Target) {
+        withAnimation(.easeOut(duration: SL.Motion.fast)) { _ = removed.insert(target.id) }
     }
 
     /// Only the sets that actually changed travel, each named by where it sits
@@ -432,12 +484,21 @@ struct SessionDetailView: View {
         var corrections: [SetCorrection] = []
         var seen: [String: Int] = [:]
 
+        var removals: [SetRemoval] = []
+
         for (resultIndex, result) in draft.enumerated() {
             let occurrence = seen[result.exerciseID, default: 0]
             seen[result.exerciseID] = occurrence + 1
             guard session.results.indices.contains(resultIndex) else { continue }
             let stored = session.results[resultIndex]
             for (setIndex, set) in result.sets.enumerated() where stored.sets.indices.contains(setIndex) {
+                if removed.contains(Target(resultIndex: resultIndex, setIndex: setIndex).id) {
+                    // A set on its way out is not corrected on the way.
+                    removals.append(
+                        SetRemoval(exerciseID: result.exerciseID, occurrence: occurrence, setIndex: setIndex)
+                    )
+                    continue
+                }
                 guard set != stored.sets[setIndex] else { continue }
                 corrections.append(
                     SetCorrection(
@@ -450,12 +511,19 @@ struct SessionDetailView: View {
             }
         }
 
-        guard !corrections.isEmpty else { return stopEditing() }
+        guard !corrections.isEmpty || !removals.isEmpty else { return stopEditing() }
         isSaving = true
+        let id = session.id
         Task {
-            await app.correct(sessionID: session.id, corrections)
+            // Corrections first, by the indices the reader saw; the removals
+            // then take their sets out from the back forward.
+            if !corrections.isEmpty { await app.correct(sessionID: id, corrections) }
+            if !removals.isEmpty { await app.removeSets(sessionID: id, removals) }
             isSaving = false
             stopEditing()
+            // A session whose last set has gone is gone: there is nothing left
+            // for this screen to show.
+            if app.sessions.contains(where: { $0.id == id }) == false { onClose() }
         }
     }
 }

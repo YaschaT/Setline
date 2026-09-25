@@ -53,6 +53,10 @@ public enum SyncQueue {
                 let sets = corrections.count == 1 ? "1 set" : "\(corrections.count) sets"
                 rows.append(Row(title: "Correctie", detail: "\(sets) in een eerdere sessie"))
 
+            case .removeSessionSets(_, let removals):
+                let sets = removals.count == 1 ? "1 set" : "\(removals.count) sets"
+                rows.append(Row(title: "Correctie", detail: "\(sets) verwijderd uit een eerdere sessie"))
+
             case .setScheduleDay, .removeScheduleOverride:
                 weekDates += 1
                 let row = Row(

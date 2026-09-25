@@ -487,6 +487,14 @@ final class AppState {
         await commit([.correct(sessionID: sessionID, corrections)])
     }
 
+    /// Takes sets out of one stored session. Only the named sets go; a session
+    /// left with nothing in it goes too, because an empty workout would still
+    /// read as a trained day.
+    func removeSets(sessionID: String, _ removals: [SetRemoval]) async {
+        guard !removals.isEmpty else { return }
+        await commit([StateChange(.removeSessionSets(sessionID: sessionID, removals: removals))])
+    }
+
     /// Records changes the user made outside a workout — a rearranged week,
     /// a meal, a target. Entry-wise, never a key at a time.
     func record(_ changes: [StateChange]) async {

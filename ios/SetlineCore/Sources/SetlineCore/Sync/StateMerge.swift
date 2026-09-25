@@ -54,6 +54,9 @@ public enum StateMerge {
         case .correctSessionSets(let sessionID, let corrections):
             correctSessionSets(sessionID: sessionID, corrections: corrections, into: &raw)
 
+        case .removeSessionSets(let sessionID, let removals):
+            removeSessionSets(sessionID: sessionID, removals: removals, into: &raw)
+
         case .setActiveSession(let snapshot):
             raw[LegacyAdapter.activeSessionKey] = snapshot
 
@@ -226,6 +229,69 @@ public enum StateMerge {
 
         guard corrected else { return }
         session["results"] = .array(results)
+        sessions[sessionIndex] = .object(session)
+        raw["sessions"] = .array(sessions)
+    }
+
+    /// Takes named sets out of one stored session.
+    ///
+    /// Indices are the ones the reader saw, so the removals are applied from
+    /// the back of each result forward: taking set 1 out first would move set
+    /// 2 under the finger that asked for it. A result left with no sets is
+    /// dropped, and a session left with no results is dropped too — a workout
+    /// with nothing in it would still count as a trained day everywhere that
+    /// reads the list.
+    ///
+    /// The set counts iOS derives from the results go, exactly as they do
+    /// when any other client rewrites them: a count that no longer matches
+    /// the sets is worse than no count, and the history falls back to the
+    /// percentage the session stored.
+    static func removeSessionSets(
+        sessionID: String,
+        removals: [SetRemoval],
+        into raw: inout [String: JSONValue]
+    ) {
+        var sessions = raw["sessions"]?.arrayValue ?? []
+        guard let sessionIndex = sessions.firstIndex(where: { $0["id"]?.stringValue == sessionID }),
+              case .object(var session) = sessions[sessionIndex]
+        else { return }
+
+        var results = session["results"]?.arrayValue ?? []
+        var removed = false
+
+        // Highest index first, inside each result.
+        for removal in removals.sorted(by: { $0.setIndex > $1.setIndex }) {
+            let matches = results.indices.filter {
+                results[$0]["exerciseId"]?.stringValue == removal.exerciseID
+            }
+            guard matches.indices.contains(removal.occurrence) else { continue }
+            let resultIndex = matches[removal.occurrence]
+
+            guard case .object(var result) = results[resultIndex],
+                  case .array(var sets)? = result["sets"],
+                  sets.indices.contains(removal.setIndex)
+            else { continue }
+
+            sets.remove(at: removal.setIndex)
+            result["sets"] = .array(sets)
+            results[resultIndex] = .object(result)
+            removed = true
+        }
+
+        guard removed else { return }
+
+        results.removeAll { result in
+            (result["sets"]?.arrayValue ?? []).isEmpty
+        }
+
+        guard !results.isEmpty else {
+            sessions.remove(at: sessionIndex)
+            raw["sessions"] = .array(sessions)
+            return
+        }
+
+        session["results"] = .array(results)
+        for field in derivedSessionFields { session[field] = nil }
         sessions[sessionIndex] = .object(session)
         raw["sessions"] = .array(sessions)
     }

@@ -12,6 +12,24 @@ import Foundation
 /// Nothing else about the set is touched: whether it was a warm-up, what it
 /// stood in for, whether the program prescribed it or the session added it,
 /// and any field a newer client wrote all stay exactly as stored.
+/// One set to take out of a stored session.
+///
+/// Named exactly the way a correction names one — the exercise it was logged
+/// under, which result that is when a session holds the same exercise twice,
+/// and its place in that result — so removing a set and correcting one speak
+/// the same language about where a set sits.
+public struct SetRemoval: Codable, Hashable, Sendable {
+    public let exerciseID: String
+    public let occurrence: Int
+    public let setIndex: Int
+
+    public init(exerciseID: String, occurrence: Int = 0, setIndex: Int) {
+        self.exerciseID = exerciseID
+        self.occurrence = occurrence
+        self.setIndex = setIndex
+    }
+}
+
 public struct SetCorrection: Codable, Hashable, Sendable {
 
     /// The exercise the set was logged under, as the session stored it.

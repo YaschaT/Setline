@@ -17,6 +17,9 @@ struct SetCorrectionSheet: View {
     let display: NumberDisplay
     let original: LoggedSet
     let onApply: (LoggedSet) -> Void
+    /// Taking the set out of the session altogether. `nil` where that is not
+    /// offered; the words beneath say which of the two this sheet can do.
+    let onDelete: (() -> Void)?
     let onClose: () -> Void
 
     @State private var weight: Decimal
@@ -33,6 +36,7 @@ struct SetCorrectionSheet: View {
         display: NumberDisplay,
         original: LoggedSet,
         onApply: @escaping (LoggedSet) -> Void,
+        onDelete: (() -> Void)? = nil,
         onClose: @escaping () -> Void
     ) {
         self.exerciseName = exerciseName
@@ -41,6 +45,7 @@ struct SetCorrectionSheet: View {
         self.display = display
         self.original = original
         self.onApply = onApply
+        self.onDelete = onDelete
         self.onClose = onClose
         _weight = State(initialValue: original.weightKg ?? 0)
         _reps = State(initialValue: original.reps)
@@ -88,10 +93,31 @@ struct SetCorrectionSheet: View {
                     .buttonStyle(SLPrimaryButtonStyle())
                     .disabled(!isLogged)
 
-                Text("Alleen deze set verandert.")
+                if let onDelete {
+                    // A set that was never performed is not a set to correct.
+                    // It leaves the session, and the words under the button
+                    // say that this one action reaches further than the other.
+                    Button(action: onDelete) {
+                        Text("Verwijder deze set")
+                            .slBody(SL.Weight.medium)
+                            .foregroundStyle(SL.Signal.loss)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, SL.Space.s2)
+                }
+
+                Text(onDelete == nil
+                     ? "Alleen deze set verandert."
+                     : "Alleen deze set verandert. Verwijderen haalt hem uit de sessie.")
                     .slMeta()
+                    .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+                    .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.tertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.center)
                     .padding(.top, SL.Space.s3)
             }
             .padding(.horizontal, SL.Space.gutterSession)

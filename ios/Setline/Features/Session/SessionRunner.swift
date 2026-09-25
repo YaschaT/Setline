@@ -44,6 +44,13 @@ final class SessionRunner {
     private(set) var slots: [ExerciseSlot]
     /// The calendar moment the workout began — its date, not its duration.
     private(set) var startedAt = Date()
+    /// Whether this session is being written down afterwards for a date that
+    /// has passed. A workout logged the next morning has a date but no honest
+    /// duration, and no rest to count down.
+    ///
+    /// Read from the date rather than held as a flag, so a retro entry that
+    /// was parked and picked up again still knows what it is.
+    var isLoggedAfterwards: Bool { !Calendar.current.isDateInToday(startedAt) }
     /// Duration is active workout time, banked across pauses.
     private var clock = WorkoutClock(segmentStartedAt: Date())
     private(set) var restTimer: RestTimerState?
@@ -77,8 +84,18 @@ final class SessionRunner {
     /// its name. The exercise the swap was given is the truth for that id.
     private var knownExercises: [String: Exercise] = [:]
 
-    init(day: WorkoutDay, app: AppState, restoring snapshot: ActiveSessionSnapshot? = nil) {
+    init(
+        day: WorkoutDay,
+        app: AppState,
+        restoring snapshot: ActiveSessionSnapshot? = nil,
+        loggingFor date: Date? = nil
+    ) {
         self.day = day
+        if let date {
+            // Midday on that date: far enough from either midnight that a time
+            // zone cannot move the workout to the day before or after.
+            startedAt = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: date) ?? date
+        }
         let exerciseNamed: @MainActor (String) -> Exercise = { app.exercise($0) }
         let historyFor: @MainActor (PlannedExercise) -> ExerciseHistory = { app.history(for: $0) }
         self.exerciseNamed = exerciseNamed
@@ -100,6 +117,7 @@ final class SessionRunner {
         }
 
         if let snapshot { restore(from: snapshot) }
+        if date != nil { restTimer = nil }
         // A fresh stretch starts now either way; a resumed session carries its
         // banked time in, rather than recomputing from `startedAt`.
         clock = WorkoutClock(accumulatedSeconds: snapshot?.activeSeconds ?? 0, segmentStartedAt: Date())
@@ -715,6 +733,8 @@ final class SessionRunner {
 
     /// Rest inherits from the exercise's role (13R), never a flat 2:00.
     private func startRest(for planned: PlannedExercise) {
+        // Nothing to rest for in a workout that is already over.
+        guard !isLoggedAfterwards else { return }
         let prescription = RestPrescription.forRole(planned.role)
         let timer = RestTimerState(targetSeconds: prescription.defaultSeconds, startedAt: Date())
         restTimer = timer
@@ -836,7 +856,10 @@ final class SessionRunner {
             completion: SessionSlot.completion(of: models),
             kind: .workout,
             results: allResults,
-            durationSeconds: clock.activeSeconds(at: Date()),
+            // A session written down afterwards records no duration rather
+            // than the minutes it took to type — `SessionHistory` already says
+            // nothing about time for a session that never recorded one.
+            durationSeconds: isLoggedAfterwards ? nil : clock.activeSeconds(at: Date()),
             // What history shows as "completed of planned". Added rows are in
             // neither number.
             plannedSetCount: SessionSlot.plannedSetCount(of: models),

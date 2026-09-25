@@ -17,6 +17,9 @@ struct TrainingHomeView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let onStart: (WorkoutDay) -> Void
     let onResume: (WorkoutDay, ActiveSessionSnapshot) -> Void
+    /// A workout that was done on a date that has passed and never written
+    /// down. Same session screen, that date on the result.
+    let onLogPast: (WorkoutDay, Date) -> Void
 
     @State private var confirmsEnd = false
     /// The date the screen is on. `nil` is today, which is where every visit
@@ -415,6 +418,13 @@ struct TrainingHomeView: View {
             } else if let session = day.session {
                 Button { openedSession = OpenedSession(id: session.id) } label: { Text("Bekijk sessie") }
                     .buttonStyle(SLOutlineButtonStyle())
+            } else if isPast(day.date), let workout = day.plannedDay {
+                // A day that has gone by with nothing logged. The work may
+                // well have been done; this is where it gets written down, on
+                // the date it happened rather than on today.
+                Button { onLogPast(workout, day.date) } label: { Text("Log \(workout.short)") }
+                    .buttonStyle(SLPrimaryButtonStyle())
+                    .accessibilityHint("Schrijft \(workout.short) achteraf op, op \(Agenda.when(day.date))")
             } else if let workout = day.plannedDay {
                 Button { preview = day } label: { Text("Bekijk \(workout.short)") }
                     .buttonStyle(SLOutlineButtonStyle())
@@ -426,6 +436,11 @@ struct TrainingHomeView: View {
             }
         }
         .padding(.top, 16)
+    }
+
+    /// A date that has gone by. Today is never past, whatever the hour.
+    private func isPast(_ date: Date) -> Bool {
+        Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
     }
 
     /// 41b's left half: what today holds, from the date you are not on.

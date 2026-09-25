@@ -87,7 +87,11 @@ public enum LegacyAdapter {
         let reps = object["reps"]?.intValue ?? 0
         let pausedReps = object["pausedReps"]?.intValue ?? 0
         let pauseSeconds = object["pauseSeconds"]?.doubleValue
-        let pauseEnabled = object["pauseEnabled"]?.boolValue ?? (pausedReps > 0 || (pauseSeconds ?? 0) > 0)
+        // A count that covers every rep says the set was a paused set, whatever
+        // else the row carries: that is what the count means, and the web app
+        // types it in full rather than leaving it empty the way this app does.
+        let fullyPaused = reps > 0 && pausedReps >= reps
+        let pauseEnabled = fullyPaused || (object["pauseEnabled"]?.boolValue ?? (pausedReps > 0 || (pauseSeconds ?? 0) > 0))
         // Only iOS writes an origin, and only on added sets. Everything else —
         // the web app's own unmarked "Extra set" rows included — reads as
         // prescribed (see `ProgressionEngine.prescribedSlots`).
@@ -127,6 +131,10 @@ public enum LegacyAdapter {
             flags: [],
             substitutedFrom: object["substitutedFrom"]?.stringValue,
             partialReps: object["partialReps"]?.intValue,
+            // The count is kept exactly as stored, because both clients read
+            // the same number from it (`tests/fixtures/paused-reps.json`).
+            // Whether a set is *mixed* is a reading of that number, not a
+            // rewriting of it: see `countsTowardProgression`.
             pausedReps: pausedReps > 0 ? pausedReps : nil,
             origin: origin
         )

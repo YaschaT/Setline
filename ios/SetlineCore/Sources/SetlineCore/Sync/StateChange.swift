@@ -16,6 +16,11 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         /// named sets change; everything else in that session, and every other
         /// session, is left exactly as stored.
         case correctSessionSets(sessionID: String, corrections: [SetCorrection])
+        /// Sets taken out of one stored session. Only the named sets go; the
+        /// session keeps its id, its date and everything else it holds — and
+        /// a session whose last set is removed goes with it, because an
+        /// empty workout is not a workout.
+        case removeSessionSets(sessionID: String, removals: [SetRemoval])
         /// The paused workout, or `.null` to clear it explicitly.
         case setActiveSession(JSONValue)
         case addPainFlag(PainFlag)
@@ -85,11 +90,11 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
         case scheduleKey, dayID, entry, metric, field, value, mode, sciencePlanID, experience, plates, barKg, deload
-        case sessionID, corrections, isFavorite
+        case sessionID, corrections, isFavorite, removals
     }
 
     private enum KindName: String, Codable {
-        case upsertSession, correctSessionSets, setActiveSession, addPainFlag, removePainFlag
+        case upsertSession, correctSessionSets, removeSessionSets, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
         case setFavoriteExercise
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry
@@ -108,6 +113,11 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             kind = .correctSessionSets(
                 sessionID: try container.decode(String.self, forKey: .sessionID),
                 corrections: try container.decode([SetCorrection].self, forKey: .corrections)
+            )
+        case .removeSessionSets:
+            kind = .removeSessionSets(
+                sessionID: try container.decode(String.self, forKey: .sessionID),
+                removals: try container.decode([SetRemoval].self, forKey: .removals)
             )
         case .setActiveSession:
             kind = .setActiveSession(try container.decodeIfPresent(JSONValue.self, forKey: .snapshot) ?? .null)
@@ -175,6 +185,10 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             try container.encode(KindName.correctSessionSets, forKey: .kind)
             try container.encode(sessionID, forKey: .sessionID)
             try container.encode(corrections, forKey: .corrections)
+        case .removeSessionSets(let sessionID, let removals):
+            try container.encode(KindName.removeSessionSets, forKey: .kind)
+            try container.encode(sessionID, forKey: .sessionID)
+            try container.encode(removals, forKey: .removals)
         case .setActiveSession(let snapshot):
             try container.encode(KindName.setActiveSession, forKey: .kind)
             try container.encode(snapshot, forKey: .snapshot)

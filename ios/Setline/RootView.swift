@@ -34,10 +34,18 @@ struct RootView: View {
     }
 
     /// A session in progress, optionally resumed from a paused snapshot.
+    ///
+    /// `loggingFor` is set when the workout is being written down afterwards
+    /// for a date that has passed — the same screen, the same logging, with
+    /// that date on the session instead of today.
     struct RunningSession: Identifiable {
         let day: WorkoutDay
         let snapshot: ActiveSessionSnapshot?
-        var id: String { day.id }
+        var loggingFor: Date?
+        var id: String {
+            guard let loggingFor else { return day.id }
+            return "\(day.id):\(Schedule.dateKey(loggingFor))"
+        }
     }
 
     var body: some View {
@@ -93,6 +101,12 @@ struct RootView: View {
                         onStart: { day in preflightDay = day },
                         onResume: { day, snapshot in
                             running = RunningSession(day: day, snapshot: snapshot)
+                        },
+                        // A workout that was done but never written down opens
+                        // straight into the session: the pre-flight readies you
+                        // for work that is already finished.
+                        onLogPast: { day, date in
+                            running = RunningSession(day: day, snapshot: nil, loggingFor: date)
                         }
                     )
                 case .voeding:
@@ -137,6 +151,7 @@ struct RootView: View {
                 day: session.day,
                 app: app,
                 resuming: session.snapshot,
+                loggingFor: session.loggingFor,
                 onFinish: { finished in
                     running = nil
                     Task { await save(finished) }

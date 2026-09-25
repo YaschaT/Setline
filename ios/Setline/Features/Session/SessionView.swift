@@ -37,10 +37,11 @@ struct SessionView: View {
         day: WorkoutDay,
         app: AppState,
         resuming snapshot: ActiveSessionSnapshot?,
+        loggingFor date: Date? = nil,
         onFinish: @escaping (TrainingSession) -> Void,
         onPause: @escaping (ActiveSessionSnapshot) -> Void
     ) {
-        _runner = State(initialValue: SessionRunner(day: day, app: app, restoring: snapshot))
+        _runner = State(initialValue: SessionRunner(day: day, app: app, restoring: snapshot, loggingFor: date))
         self.onFinish = onFinish
         self.onPause = onPause
     }
@@ -318,10 +319,16 @@ struct SessionView: View {
 
             Spacer(minLength: 0)
 
-            Text("\(RestTimerState.clockLabel(runner.elapsedSeconds)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)")
+            // A workout being written down afterwards has no clock to show —
+            // it names the day it is being written for instead, so the sets
+            // can never land on the wrong date without anyone noticing.
+            Text(runner.isLoggedAfterwards
+                 ? "\(Schedule.weekdayLabel(runner.startedAt).lowercased()) \(app.display.shortDate(runner.startedAt)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)"
+                 : "\(RestTimerState.clockLabel(runner.elapsedSeconds)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)")
                 .slMeta(SL.Weight.medium).slNumerals()
                 .foregroundStyle(SL.Ink.tertiary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             if runner.hasProgress && !runner.isComplete {
                 Button { confirmsEarlyFinish = true } label: {

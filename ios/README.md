@@ -127,6 +127,42 @@ is described by the session and never by today's programme. `DayPlan` builds
 the one change the sheet writes — `setScheduleDay` or `removeScheduleOverride`,
 for that date's own key and nothing else.
 
+### Writing down a workout you already did
+
+A date that has gone by with nothing logged offers `Log <sessie>` where a
+future date offers `Bekijk`. It opens the same session screen — the same
+logging, the same progression — with three differences that keep the record
+honest:
+
+- The session carries **that date**, not today's. The header says which day it
+  is writing down instead of counting a clock, and the summary names the date
+  without a duration.
+- **No duration is invented.** The minutes it takes to type are not the minutes
+  it took to train, and `SessionHistory` already says nothing about time for a
+  session that recorded none.
+- **No rest timer runs.** There is nothing left to rest for.
+
+A day whose plan says rest, or says another session than the one you did, is
+set with `Wijzig deze dag` first; the foot then offers to log it. One workout
+per date still holds: logging a date that already has a session reuses that
+session's id rather than adding a second.
+
+### Correcting a saved workout
+
+`Historiek` → a session → `Wijzig` edits the sets of that session. A set is
+corrected in the sheet that logged it, and now also removed there
+(`Verwijder deze set`):
+
+- A removal names the set the way a correction does — exercise, which result
+  when a session holds the same exercise twice, and its place in that result —
+  and is applied from the back of each result forward, so removing one set
+  never moves another out from under the request.
+- An exercise left with no sets leaves the session; a session left with no sets
+  leaves the account, and the alert says so before it happens.
+- The set counts iOS derives from the results go with the change, exactly as
+  they do when any other client rewrites them, because a count that no longer
+  matches the sets is worse than no count.
+
 ### Finding an exercise, and reading its 1RM
 
 Progressie's `Kracht` segment shows one exercise at a time, and the exercise's
@@ -145,6 +181,12 @@ change it.
   iOS-only `iosFavoriteExercises` key, beside `iosHiddenWarmups` and the other
   keys the web app carries through untouched. A star set on another device is
   never overwritten by this one's list.
+- **The series** is the one the account actually has, not the one the plan
+  prescribes. Bench pressed touch-and-go and bench pressed with a two-second
+  pause are two series of one lift (§9.2), and reading the plan's modifiers
+  hid every session trained the other way. `ExerciseHistory.series` finds them,
+  the one with the most sessions leads, and when there is more than one its
+  name joins the line under the title ("Borst · zonder pauze").
 - **The estimate** is stated in three layers (40a): the number, what it moved
   *since a date* — a date can be placed, "in 8 weken" cannot — and the set it
   was computed from. The ⓘ opens 40e, which puts the same three numbers in a

@@ -256,13 +256,20 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
     /// Whether this set may drive progression, a proposal or a record.
     ///
     /// Excluded: warm-ups, technical breakdowns, sets carrying partial reps
-    /// (§5), and sets that mix paused and unpaused reps — a mixed set is not
+    /// (§5), and sets that *mix* paused and unpaused reps — a mixed set is not
     /// comparable to either series, so counting it would be exactly the
     /// wrong-number bug the comparability rule exists to prevent.
+    ///
+    /// Mixed means some of the reps, not all of them. A set whose every rep
+    /// was paused is a paused set and belongs to the paused series
+    /// (`modifiers.pauseEnabled`, §9.2); reading it as mixed would silently
+    /// drop every paused session out of progression, records and the strength
+    /// trend — which is what it did for sets the web app wrote, where the
+    /// count is typed in full.
     public var countsTowardProgression: Bool {
         guard isLogged, !isWarmup, !flags.contains(.technicalBreakdown) else { return false }
         if (partialReps ?? 0) > 0 { return false }
-        if (pausedReps ?? 0) > 0 && reps > 0 { return false }
+        if let paused = pausedReps, paused > 0, paused < reps { return false }
         return true
     }
 }
