@@ -13,6 +13,14 @@ public struct NutritionEntry: Identifiable, Equatable, Sendable {
     public let protein: Double
     public let carbs: Double
     public let fat: Double
+    /// How much of it, in `unit`. Written by this app so the amount can be
+    /// changed afterwards and the macros follow it (42d); absent on entries
+    /// the web app wrote, where the amount was never kept.
+    public let amount: Double?
+    public let unit: String?
+    /// When it was logged, as it happened. Never derived from the meal it sits
+    /// under: a late lunch is still a lunch, and the clock says what it says.
+    public let loggedAt: Date?
 
     public init(
         id: String,
@@ -22,7 +30,10 @@ public struct NutritionEntry: Identifiable, Equatable, Sendable {
         calories: Double,
         protein: Double,
         carbs: Double,
-        fat: Double
+        fat: Double,
+        amount: Double? = nil,
+        unit: String? = nil,
+        loggedAt: Date? = nil
     ) {
         self.id = id
         self.date = date
@@ -32,10 +43,69 @@ public struct NutritionEntry: Identifiable, Equatable, Sendable {
         self.protein = protein
         self.carbs = carbs
         self.fat = fat
+        self.amount = amount
+        self.unit = unit
+        self.loggedAt = loggedAt
+    }
+
+    /// The same item at another amount: the macros scale with it, because
+    /// they were what that amount weighed.
+    public func scaled(to newAmount: Double) -> NutritionEntry {
+        guard let amount, amount > 0, newAmount > 0 else { return self }
+        let factor = newAmount / amount
+        return NutritionEntry(
+            id: id, date: date, meal: meal, name: name,
+            calories: (calories * factor).rounded(),
+            protein: (protein * factor * 10).rounded() / 10,
+            carbs: (carbs * factor * 10).rounded() / 10,
+            fat: (fat * factor * 10).rounded() / 10,
+            amount: newAmount, unit: unit, loggedAt: loggedAt
+        )
+    }
+
+    /// "100 g", "2 sneden" — what the row says beside the name.
+    public var portion: String? {
+        guard let amount, amount > 0, let unit, !unit.isEmpty else { return nil }
+        let whole = amount.rounded() == amount
+        let number = whole ? String(Int(amount)) : String(format: "%.1f", amount).replacingOccurrences(of: ".", with: ",")
+        return "\(number) \(unit)"
+    }
+
+    /// Whether the amount is weighed or counted. Grams and millilitres take a
+    /// useful step; slices and pieces come one at a time, because half a slice
+    /// is not something this form can weigh.
+    public var isWeighed: Bool {
+        guard let unit = unit?.lowercased() else { return false }
+        return unit == "g" || unit == "ml"
+    }
+
+    /// What one tap of the stepper changes — 42d names it in the label above
+    /// the control ("HOEVEELHEID · PER 25 G"), so it is never a surprise.
+    public var step: Double {
+        guard let amount, amount > 0, isWeighed else { return 1 }
+        switch amount {
+        case 200...: return 25
+        case 50...: return 10
+        case 20...: return 5
+        default: return 1
+        }
+    }
+
+    /// The same entry under another heading (42d's meal segment).
+    ///
+    /// Its own time is kept. A lunch eaten at 15:30 and filed under Lunch was
+    /// still eaten at 15:30; the heading says which meal it was, and the clock
+    /// is not rewritten to agree with it.
+    public func filed(under meal: Meal) -> NutritionEntry {
+        NutritionEntry(
+            id: id, date: date, meal: meal.rawValue, name: name,
+            calories: calories, protein: protein, carbs: carbs, fat: fat,
+            amount: amount, unit: unit, loggedAt: loggedAt
+        )
     }
 
     public var json: JSONValue {
-        .object([
+        var object: [String: JSONValue] = [
             "id": .string(id),
             "date": .string(date),
             "meal": .string(meal),
@@ -44,7 +114,14 @@ public struct NutritionEntry: Identifiable, Equatable, Sendable {
             "protein": .number(Decimal(protein)),
             "carbs": .number(Decimal(carbs)),
             "fat": .number(Decimal(fat)),
-        ])
+        ]
+        // Three keys the web app does not model. It carries unknown keys on an
+        // entry through untouched, so an amount written here survives its
+        // edits, and an entry without them still reads everywhere.
+        if let amount, amount > 0 { object["amount"] = .number(Decimal(amount)) }
+        if let unit, !unit.isEmpty { object["unit"] = .string(unit) }
+        if let loggedAt { object["loggedAt"] = .string(LegacyAdapter.isoString(loggedAt)) }
+        return .object(object)
     }
 
     /// What the food is worth when the label only gives macros. The web app
@@ -55,12 +132,17 @@ public struct NutritionEntry: Identifiable, Equatable, Sendable {
     }
 }
 
-public enum Meal: String, CaseIterable, Sendable {
+public enum Meal: String, CaseIterable, Identifiable, Sendable {
     case ontbijt = "Ontbijt"
     case lunch = "Lunch"
     case preWorkout = "Pre-workout"
     case avondeten = "Avondeten"
     case snack = "Snack"
+
+    public var id: String { rawValue }
+
+    /// How a sentence names it: "Toevoegen aan avondeten".
+    public var spoken: String { rawValue.lowercased() }
 
     /// What is most likely being logged at this hour — the meal picker opens
     /// there, and is one tap from anything else. The hours are the web app's
@@ -71,6 +153,40 @@ public enum Meal: String, CaseIterable, Sendable {
         case ..<16: return .lunch
         default: return .avondeten
         }
+    }
+}
+
+/// One of the four headings a day is read in (42a), with what sits under it.
+///
+/// The headings are fixed and stay even when empty, so a day has a shape
+/// before anything is logged. `Snacks` also carries what the web app files as
+/// pre-workout, and anything it files under a name this app does not know:
+/// a heading that hid an entry would be worse than one that gathers a few.
+public struct MealSection: Identifiable, Equatable, Sendable {
+    public let meal: Meal
+    public let title: String
+    public let entries: [NutritionEntry]
+    public let calories: Double
+
+    public var id: String { title }
+    public var isEmpty: Bool { entries.isEmpty }
+
+    /// Ontbijt, lunch, avondeten, snacks — four, always, in this order.
+    public static let headings: [(Meal, String)] = [
+        (.ontbijt, "Ontbijt"), (.lunch, "Lunch"), (.avondeten, "Avondeten"), (.snack, "Snacks"),
+    ]
+
+    /// What a heading is called: "Snacks" gathers more than one meal, so it is
+    /// named in the plural everywhere it appears.
+    public static func title(of meal: Meal) -> String {
+        headings.first { $0.0 == meal }?.1 ?? meal.rawValue
+    }
+
+    public init(meal: Meal, title: String, entries: [NutritionEntry]) {
+        self.meal = meal
+        self.title = title
+        self.entries = entries
+        self.calories = entries.reduce(0) { $0 + $1.calories }
     }
 }
 
@@ -103,6 +219,22 @@ public struct NutritionDay: Equatable, Sendable {
     ) -> NutritionDay {
         let key = Schedule.dateKey(date, calendar: calendar)
         return NutritionDay(dateKey: key, entries: entries.filter { $0.date == key }, targets: targets)
+    }
+
+    /// The day under its four headings, in the order they are eaten. Entries
+    /// keep the order they were logged in; nothing is re-sorted by hour.
+    public var sections: [MealSection] {
+        MealSection.headings.map { meal, title in
+            MealSection(meal: meal, title: title, entries: entries.filter { belongs($0, to: meal) })
+        }
+    }
+
+    private func belongs(_ entry: NutritionEntry, to meal: Meal) -> Bool {
+        let stored = Meal(rawValue: entry.meal)
+        switch meal {
+        case .snack: return stored == nil || stored == .snack || stored == .preWorkout
+        default: return stored == meal
+        }
     }
 
     /// A target of zero is not a target — the web app writes zeroes where the

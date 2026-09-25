@@ -105,26 +105,59 @@ enum DemoData {
             ])
         }
 
-        // A day's eating, with the handoff's own numbers: 1.840 of 2.250 kcal
-        // eaten, so 410 left, and macros that add up to 142 · 188 · 61.
-        let todayKey = Schedule.dateKey(Date())
-        let food: [(String, String, Double, Double, Double, Double)] = [
-            ("Havermout, magere kwark", "Ontbijt", 520, 38, 60, 14),
-            ("Kip, rijst, broccoli", "Lunch", 740, 58, 82, 22),
-            ("Whey, banaan", "Pre-workout", 310, 32, 30, 5),
-            ("Volkoren boterham, kaas", "Snack", 270, 14, 16, 20),
+        // A day's eating, with 42a's own rows: 1.100 of 2.250 kcal eaten, so
+        // 1.150 left, macros adding up to 88 · 131 · 32, and avondeten still
+        // empty. Each item carries its amount and the hour it was logged at, so
+        // the row, the amount stepper and "gelogd 7:40" all have something real
+        // to show. The three dinners before today are what "vaak bij
+        // avondeten" is read from.
+        struct DemoFood {
+            let day: Int
+            let meal: String
+            let name: String
+            let calories: Double
+            let protein: Double
+            let carbs: Double
+            let fat: Double
+            let amount: Double
+            let unit: String
+            let hour: Int
+            let minute: Int
+        }
+        let food: [DemoFood] = [
+            .init(day: 0, meal: "Ontbijt", name: "Havermout", calories: 375, protein: 15, carbs: 60, fat: 12, amount: 100, unit: "g", hour: 7, minute: 40),
+            .init(day: 0, meal: "Ontbijt", name: "Magere kwark", calories: 145, protein: 26, carbs: 10, fat: 1, amount: 250, unit: "g", hour: 7, minute: 40),
+            .init(day: 0, meal: "Lunch", name: "Volkoren boterham", calories: 170, protein: 9, carbs: 30, fat: 4, amount: 2, unit: "sneden", hour: 12, minute: 55),
+            .init(day: 0, meal: "Lunch", name: "Kaas", calories: 100, protein: 9, carbs: 1, fat: 12, amount: 30, unit: "g", hour: 12, minute: 55),
+            .init(day: 0, meal: "Snack", name: "Whey", calories: 120, protein: 26, carbs: 3, fat: 2, amount: 30, unit: "g", hour: 16, minute: 20),
+            .init(day: 0, meal: "Snack", name: "Banaan", calories: 190, protein: 3, carbs: 27, fat: 1, amount: 1, unit: "stuk", hour: 16, minute: 20),
+
+            .init(day: 3, meal: "Avondeten", name: "Kipfilet", calories: 290, protein: 62, carbs: 0, fat: 6, amount: 180, unit: "g", hour: 19, minute: 10),
+            .init(day: 3, meal: "Avondeten", name: "Rijst, gekookt", calories: 390, protein: 8, carbs: 86, fat: 1, amount: 250, unit: "g", hour: 19, minute: 10),
+            .init(day: 2, meal: "Avondeten", name: "Kipfilet", calories: 290, protein: 62, carbs: 0, fat: 6, amount: 180, unit: "g", hour: 19, minute: 25),
+            .init(day: 2, meal: "Avondeten", name: "Broccoli", calories: 60, protein: 5, carbs: 7, fat: 1, amount: 200, unit: "g", hour: 19, minute: 25),
+            .init(day: 2, meal: "Ontbijt", name: "Magere kwark", calories: 145, protein: 26, carbs: 10, fat: 1, amount: 250, unit: "g", hour: 7, minute: 55),
+            .init(day: 1, meal: "Avondeten", name: "Rijst, gekookt", calories: 390, protein: 8, carbs: 86, fat: 1, amount: 250, unit: "g", hour: 19, minute: 0),
+            .init(day: 1, meal: "Snack", name: "Whey", calories: 120, protein: 26, carbs: 3, fat: 2, amount: 30, unit: "g", hour: 16, minute: 45),
         ]
-        let nutritionEntries = food.enumerated().map { index, item -> JSONValue in
-            let (name, meal, calories, protein, carbs, fat) = item
+        // `-SetlineEmptyDay` keeps the history and leaves today blank, which is
+        // the one state the fabricated day cannot otherwise show (42b).
+        let blankToday = ProcessInfo.processInfo.arguments.contains("-SetlineEmptyDay")
+        let nutritionEntries = food.filter { !blankToday || $0.day > 0 }.enumerated().map { index, item -> JSONValue in
+            let midnight = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -item.day, to: Date())!)
+            let when = calendar.date(byAdding: .minute, value: item.hour * 60 + item.minute, to: midnight)!
             return .object([
                 "id": .string("demo-food-\(index)"),
-                "date": .string(todayKey),
-                "meal": .string(meal),
-                "name": .string(name),
-                "calories": .number(Decimal(calories)),
-                "protein": .number(Decimal(protein)),
-                "carbs": .number(Decimal(carbs)),
-                "fat": .number(Decimal(fat)),
+                "date": .string(Schedule.dateKey(when)),
+                "meal": .string(item.meal),
+                "name": .string(item.name),
+                "calories": .number(Decimal(item.calories)),
+                "protein": .number(Decimal(item.protein)),
+                "carbs": .number(Decimal(item.carbs)),
+                "fat": .number(Decimal(item.fat)),
+                "amount": .number(Decimal(item.amount)),
+                "unit": .string(item.unit),
+                "loggedAt": .string(LegacyAdapter.isoString(when)),
             ])
         }
 

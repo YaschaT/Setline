@@ -127,6 +127,39 @@ is described by the session and never by today's programme. `DayPlan` builds
 the one change the sheet writes — `setScheduleDay` or `removeScheduleOverride`,
 for that date's own key and nothing else.
 
+### Logging a day's food
+
+Voeding reads the day under four headings — Ontbijt, Lunch, Avondeten, Snacks
+(42a) — and three things divide the work:
+
+- **The day** is the totals and those four headings. What is left to eat is the
+  only loud number; kcal per meal sits in the heading and macros are the day's,
+  once. An empty meal keeps its heading (42b), so a day nothing is logged on
+  already has a shape. A row says what was eaten and how much of it; tapping it
+  opens the item, swiping it offers to remove it with five seconds to undo.
+- **`Toevoegen`** (42c) opens on the meal the hour suggests, or on the meal
+  whose ⊕ was tapped. Under the meal: a search, then what this account eats at
+  this meal most often, then what it logged last. Both lists are its own
+  entries — `FoodMemory` reads them, nothing is invented, and a row is offered
+  back at the amount it was logged at. The search is the web app's own
+  endpoint (`/api/food-search`), shown in the order the server ranked it.
+- **The item** (42d) changes one entry: how much of it, which meal it belongs
+  to, or nothing at all. The amount is a stepper whose label says what one tap
+  is worth, and the macros under it are what that amount is worth, recomputed
+  as it changes, so nothing is saved that was not read first. Its id, its date
+  and the hour it was logged at are kept — moving a late lunch under `Lunch`
+  does not rewrite the clock.
+
+Every write is one entry: `upsertNutritionEntry` or `removeNutritionEntry` for
+that id, merged field by field at the far end. The day itself, the other meals
+and the targets are never rewritten to change one row.
+
+An entry this app writes carries three keys the web app does not model —
+`amount`, `unit` and `loggedAt`. The shared merge only changes the fields a
+client knows (`WEB_ITEM_FIELDS` in `lib/state-merge.ts`, `StateMerge` in
+SetlineCore), so they survive a web edit untouched; the web app does not show
+them.
+
 ### Where the app differs from the design, on purpose
 
 Screen by screen:
@@ -194,14 +227,29 @@ Screen by screen:
 - **The week label** in the open drawer names the week and the Monday it
   starts on ("Week 4 · 28 sep"). 41d's "laatste van blok 2" needs a block
   model, which the repeating programme does not have.
+- **42a keeps the four headings in one order** — Ontbijt, Lunch, Avondeten,
+  Snacks — where the artboard happens to draw its one empty meal last. The
+  annotation names that order and 42b draws it; a day whose headings moved as
+  you logged would not be the fixed shape the design asks for.
+- **42c's barcode button is not built.** There is no barcode lookup behind it
+  on either client, and a control that cannot answer is worse than no control.
+  The search field beside it is the one the artboard draws.
+- **42c keeps `Zelf invullen`,** which it does not draw: the search already
+  says "vul de waarden zelf in" when it finds nothing, and food no database
+  knows has to stay loggable. It sits under the lists, out of the way.
+- **A search result is logged at 100 g,** the amount its values are given for,
+  and changed afterwards on the row itself (42d). 42c's own rows are previous
+  entries, which already carry an amount.
+- **A sheet is drawn ~4% smaller than its points.** iOS 26 presents these
+  sheets as inset cards and scales their contents to fit; the numbers in the
+  code are the artboard's, and the system applies that card uniformly.
 - **20**: Progressie's `Lichaam` and `Historiek` segments have no artboard; they
   are built from 20's own parts — `Lichaam`'s weigh-in sheet included, which
   asks for the one number the account stores and is reachable from every state
   the segment has. So are the other screens no artboard draws:
   the session detail behind a Historiek row and its `Wijzig` mode (17R's blocks
-  in review context), Voeding's add-food sheet, Account's programme and
-  day-target sheets, Foto's empty state and an expired sign-in (23's sync block
-  with 24's retry).
+  in review context), Account's programme and day-target sheets, Foto's empty
+  state and an expired sign-in (23's sync block with 24's retry).
 - **22** says "Foto's blijven op dit toestel" instead of "…tenzij je sync
   aanzet": there is no photo sync to turn on.
 - **23**: the Rusttimer row has no `Wijzig`, because rest follows each
@@ -289,12 +337,14 @@ Across screens:
 
 ## Run without an account
 
-Two DEBUG-only launch arguments, for development and screenshots. They use
+DEBUG-only launch arguments, for development and screenshots. They use
 fabricated data; `PRIVATE-DATA/` is never bundled.
 
 | Argument | Effect |
 | --- | --- |
-| `-SetlineDemoData` | Signs in as a demo user with three prior push sessions |
+| `-SetlineDemoData` | Signs in as a demo user with three prior push sessions and a week of meals |
+| `-SetlineResetDemo` | Starts from the fabricated data again instead of what the device holds |
+| `-SetlineEmptyDay` | Keeps the food history and leaves today blank (42b) |
 | `-SetlineOpenSession` | Opens straight into today's session |
 | `-SetlineLoggedSets` | Writes the first two sets, so delta and PR states show |
 | `-SetlineComplete` | Jumps to the session summary |

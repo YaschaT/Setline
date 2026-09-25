@@ -169,7 +169,10 @@ public enum LegacyAdapter {
                 calories: object["calories"]?.doubleValue ?? 0,
                 protein: object["protein"]?.doubleValue ?? 0,
                 carbs: object["carbs"]?.doubleValue ?? 0,
-                fat: object["fat"]?.doubleValue ?? 0
+                fat: object["fat"]?.doubleValue ?? 0,
+                amount: object["amount"]?.doubleValue,
+                unit: object["unit"]?.stringValue,
+                loggedAt: object["loggedAt"]?.stringValue.flatMap(isoDate)
             )
         }
     }

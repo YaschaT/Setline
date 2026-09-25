@@ -80,11 +80,16 @@ public enum FoodSearch {
         let factor = max(0, grams) / 100
         func macro(_ value: Double) -> Double { (value * factor * 10).rounded() / 10 }
         return NutritionDraft(
-            name: grams > 0 ? "\(NumberDisplay.dutch.number(Decimal(grams))) g \(product.name)" : product.name,
+            // The name is the food; how much of it is its own field. 42a draws
+            // them apart ("Havermout · 100 g") and 42d changes the amount
+            // afterwards, which needs the number kept as a number.
+            name: product.name,
             calories: grams > 0 ? (product.calories * factor).rounded() : 0,
             protein: macro(product.protein),
             carbs: macro(product.carbs),
-            fat: macro(product.fat)
+            fat: macro(product.fat),
+            amount: grams > 0 ? grams : nil,
+            unit: grams > 0 ? "g" : nil
         )
     }
 }
@@ -96,12 +101,26 @@ public struct NutritionDraft: Equatable, Sendable {
     public let protein: Double
     public let carbs: Double
     public let fat: Double
+    /// How much of it these numbers are worth, kept so the amount can be
+    /// changed later and the macros follow it.
+    public let amount: Double?
+    public let unit: String?
 
-    public init(name: String, calories: Double, protein: Double, carbs: Double, fat: Double) {
+    public init(
+        name: String,
+        calories: Double,
+        protein: Double,
+        carbs: Double,
+        fat: Double,
+        amount: Double? = nil,
+        unit: String? = nil
+    ) {
         self.name = name
         self.calories = calories
         self.protein = protein
         self.carbs = carbs
         self.fat = fat
+        self.amount = amount
+        self.unit = unit
     }
 }

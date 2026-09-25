@@ -75,7 +75,11 @@ final class FoodSearchContractTests: XCTestCase {
         let skyr = try XCTUnwrap(FoodSearch.results(from: expected).first)
         let draft = FoodSearch.portion(of: skyr, grams: 250)
 
-        XCTAssertEqual(draft.name, "250 g Magere skyr")
+        // The name is the food and the amount is its own field: 42a writes
+        // them apart, and 42d needs the number back to change it.
+        XCTAssertEqual(draft.name, "Magere skyr")
+        XCTAssertEqual(draft.amount, 250)
+        XCTAssertEqual(draft.unit, "g")
         XCTAssertEqual(draft.calories, 158)
         XCTAssertEqual(draft.protein, 27.5)
         XCTAssertEqual(draft.carbs, 9.5)
@@ -89,5 +93,7 @@ final class FoodSearchContractTests: XCTestCase {
 
         XCTAssertEqual(draft.name, "Magere skyr")
         XCTAssertEqual(draft.calories, 0)
+        XCTAssertNil(draft.amount)
+        XCTAssertNil(draft.unit)
     }
 }

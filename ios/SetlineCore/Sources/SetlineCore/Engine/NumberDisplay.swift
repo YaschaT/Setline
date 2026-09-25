@@ -66,6 +66,14 @@ public struct NumberDisplay: Sendable {
         return formatter.string(from: date).replacingOccurrences(of: ".", with: "")
     }
 
+    /// "7:40" — the hour something was logged at (42d), as the clock had it.
+    public func clock(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = "H:mm"
+        return formatter.string(from: date)
+    }
+
     /// "53 min"
     public func minutes(_ seconds: Int) -> String { "\(seconds / 60) min" }
 }
