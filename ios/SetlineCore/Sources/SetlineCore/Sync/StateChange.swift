@@ -24,6 +24,8 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case removeProgramReplacement(id: String)
         case addCustomExercise(CustomExercise)
         case hideWarmup(exerciseID: String)
+        /// One exercise starred, or unstarred, in Progressie's picker (40b).
+        case setFavoriteExercise(exerciseID: String, isFavorite: Bool)
         /// One date of the schedule, scoped per program (`personal:2026-09-17`).
         case setScheduleDay(key: String, dayID: String)
         /// Explicitly back to the program's default week for that date.
@@ -83,12 +85,13 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
         case scheduleKey, dayID, entry, metric, field, value, mode, sciencePlanID, experience, plates, barKg, deload
-        case sessionID, corrections
+        case sessionID, corrections, isFavorite
     }
 
     private enum KindName: String, Codable {
         case upsertSession, correctSessionSets, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
+        case setFavoriteExercise
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry
         case upsertMetric, setTarget
         case setProgram, setExperience, setEquipment, setDeload
@@ -120,6 +123,11 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             kind = .addCustomExercise(try container.decode(CustomExercise.self, forKey: .exercise))
         case .hideWarmup:
             kind = .hideWarmup(exerciseID: try container.decode(String.self, forKey: .exerciseID))
+        case .setFavoriteExercise:
+            kind = .setFavoriteExercise(
+                exerciseID: try container.decode(String.self, forKey: .exerciseID),
+                isFavorite: try container.decode(Bool.self, forKey: .isFavorite)
+            )
         case .setScheduleDay:
             kind = .setScheduleDay(
                 key: try container.decode(String.self, forKey: .scheduleKey),
@@ -188,6 +196,10 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case .hideWarmup(let exerciseID):
             try container.encode(KindName.hideWarmup, forKey: .kind)
             try container.encode(exerciseID, forKey: .exerciseID)
+        case .setFavoriteExercise(let exerciseID, let isFavorite):
+            try container.encode(KindName.setFavoriteExercise, forKey: .kind)
+            try container.encode(exerciseID, forKey: .exerciseID)
+            try container.encode(isFavorite, forKey: .isFavorite)
         case .setScheduleDay(let key, let dayID):
             try container.encode(KindName.setScheduleDay, forKey: .kind)
             try container.encode(key, forKey: .scheduleKey)

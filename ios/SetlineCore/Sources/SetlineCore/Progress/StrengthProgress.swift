@@ -18,15 +18,37 @@ public struct StrengthProgress: Equatable, Sendable {
         }
     }
 
-    /// Movement over the window the screen can actually show. The weeks are
-    /// counted, never assumed: a history of five weeks says "in 5 weken".
+    /// Movement over the window the screen can actually show. 40a names the
+    /// date it is measured from — "+6,2 kg sinds 13 jul" — because a reader
+    /// can place a date and cannot place "in 8 weken"; the weeks are still
+    /// counted, never assumed, for anything that wants a span.
     public struct Change: Equatable, Sendable {
         public let value: Decimal
         public let weeks: Int
+        /// The session the comparison starts at, and what was estimated there.
+        public let since: Date
+        public let baseline: Decimal
 
-        public init(value: Decimal, weeks: Int) {
+        public init(value: Decimal, weeks: Int, since: Date, baseline: Decimal) {
             self.value = value
             self.weeks = weeks
+            self.since = since
+            self.baseline = baseline
+        }
+    }
+
+    /// The set the current estimate was computed from (40a's source line, and
+    /// the first row of 40e). It is a set that was really performed: the
+    /// estimate is derived from it and was never itself lifted.
+    public struct SourceSet: Equatable, Sendable {
+        public let date: Date
+        public let weightKg: Decimal
+        public let reps: Int
+
+        public init(date: Date, weightKg: Decimal, reps: Int) {
+            self.date = date
+            self.weightKg = weightKg
+            self.reps = reps
         }
     }
 
@@ -68,10 +90,25 @@ public struct StrengthProgress: Equatable, Sendable {
     /// estimate is not honest enough to show (§10.2 guard 2).
     public let estimate: Decimal?
     public let change: Change?
+    /// `nil` when there is no estimate to explain.
+    public let source: SourceSet?
     public let points: [Point]
     /// Newest first, as the artboard lists them.
     public let rows: [SessionRow]
     public let sessionCount: Int
+
+    /// The change as a screen may state it: the difference between the two
+    /// numbers it actually shows, each rounded to the step a gym has.
+    ///
+    /// Rounding both ends and subtracting keeps 126,5 − 120,5 = 6 — the
+    /// arithmetic a reader can do on the explanation sheet (40e) — where
+    /// rounding the exact difference would print 6,5 beside two numbers that
+    /// differ by 6. `change.value` stays exact for anything that computes.
+    public func shownChange(toIncrement increment: Decimal = Decimal(string: "0.5") ?? 0.5) -> Decimal? {
+        guard let change, let estimate else { return nil }
+        return Estimates.round(estimate, toIncrement: increment)
+            - Estimates.round(change.baseline, toIncrement: increment)
+    }
 
     public var hasReference: Bool { sessionCount >= ExerciseHistory.sessionsBeforeReference }
     /// "Referentie opbouwen · sessie 2 van 3" while the series is too short.
@@ -100,10 +137,15 @@ public struct StrengthProgress: Equatable, Sendable {
         var heaviestSoFar: Decimal = 0
         var previousTopLoad: Decimal?
 
+        var source: SourceSet?
+
         for (index, appearance) in appearances.enumerated() {
             guard let top = appearance.topSet, let load = top.weightKg else { continue }
-            if let estimate = bestEstimate(in: appearance.sets) {
+            if let best = bestSet(in: appearance.sets), let estimate = best.estimate {
                 points.append(Point(date: appearance.date, estimate: estimate))
+                // The newest session with an estimate wins, because that is
+                // the estimate the screen states.
+                source = SourceSet(date: appearance.date, weightKg: best.weightKg, reps: best.reps)
             }
 
             let marker: Marker
@@ -138,6 +180,7 @@ public struct StrengthProgress: Equatable, Sendable {
             name: name,
             estimate: points.last?.estimate,
             change: change(in: points, calendar: calendar),
+            source: source,
             points: points,
             rows: rows.reversed(),
             sessionCount: appearances.count
@@ -146,7 +189,15 @@ public struct StrengthProgress: Equatable, Sendable {
 
     /// The best estimate one session offers, over its comparable sets.
     static func bestEstimate(in sets: [LoggedSet]) -> Decimal? {
-        sets.compactMap { Estimates.e1RM(weightKg: $0.weightKg ?? 0, reps: $0.reps) }.max()
+        bestSet(in: sets)?.estimate
+    }
+
+    /// The set that estimate came from, so the screen can say which one it was.
+    static func bestSet(in sets: [LoggedSet]) -> (weightKg: Decimal, reps: Int, estimate: Decimal?)? {
+        sets
+            .map { (weightKg: $0.weightKg ?? 0, reps: $0.reps, estimate: Estimates.e1RM(weightKg: $0.weightKg ?? 0, reps: $0.reps)) }
+            .filter { $0.estimate != nil }
+            .max { ($0.estimate ?? 0) < ($1.estimate ?? 0) }
     }
 
     /// Against the session nearest to eight weeks back — before or after it,
@@ -162,7 +213,12 @@ public struct StrengthProgress: Equatable, Sendable {
         guard baseline.date < latest.date else { return nil }
 
         let days = calendar.dateComponents([.day], from: baseline.date, to: latest.date).day ?? 0
-        return Change(value: latest.estimate - baseline.estimate, weeks: max(1, Int((Double(days) / 7).rounded())))
+        return Change(
+            value: latest.estimate - baseline.estimate,
+            weeks: max(1, Int((Double(days) / 7).rounded())),
+            since: baseline.date,
+            baseline: baseline.estimate
+        )
     }
 }
 

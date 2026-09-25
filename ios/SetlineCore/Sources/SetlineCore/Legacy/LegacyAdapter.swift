@@ -345,8 +345,19 @@ public enum LegacyAdapter {
     // anything it does not recognise through a round trip untouched.
 
     public static let painFlagsKey = "iosPainFlags"
+    public static let favoriteExercisesKey = "iosFavoriteExercises"
     public static let replacementsKey = "iosProgramReplacements"
     public static let customExercisesKey = "iosCustomExercises"
+
+    /// The exercises this account starred in Progressie's picker (40b).
+    public static func favoriteExercises(from state: LegacyState) -> Set<String> {
+        guard let values = state[favoriteExercisesKey]?.arrayValue else { return [] }
+        return Set(values.compactMap(\.stringValue))
+    }
+
+    public static func apply(favoriteExercises: Set<String>, to state: inout LegacyState) {
+        state.set(favoriteExercisesKey, to: .array(favoriteExercises.sorted().map { .string($0) }))
+    }
 
     public static func painFlags(from state: LegacyState) -> [PainFlag] {
         decodeList(state[painFlagsKey]) ?? []

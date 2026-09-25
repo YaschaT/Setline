@@ -25,7 +25,7 @@ struct ProgressHomeView: View {
                 .padding(.top, SL.Space.s4)
 
             segmentControl
-                .padding(.horizontal, SL.Space.s5)
+                .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.top, SL.Space.s4)
 
             switch segment {
@@ -60,10 +60,15 @@ struct ProgressHomeView: View {
                         .foregroundStyle(segment == item ? SL.Ink.primary : SL.Ink.secondary)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: 42)
+                        .slBorderBox()
                         .background(
-                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
                                 .fill(segment == item ? SL.Surface.raised2 : .clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .strokeBorder(segment == item ? SL.Surface.selection : .clear, lineWidth: SL.Metric.border)
                         )
                         .contentShape(Rectangle())
                 }
@@ -71,14 +76,16 @@ struct ProgressHomeView: View {
                 .accessibilityAddTraits(segment == item ? [.isSelected, .isButton] : .isButton)
             }
         }
-        .padding(4)
+        // 40a draws this segment like the ones on 42c/42d: 3 of padding inside
+        // a 14 radius, the chosen one raised with the .28 edge.
+        .padding(3)
         .slBorderBox()
         .background(
-            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+            RoundedRectangle(cornerRadius: SL.Radius.lg - 2, style: .continuous)
                 .fill(SL.Surface.raised)
                 .overlay(
-                    RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
-                        .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: SL.Radius.lg - 2, style: .continuous)
+                        .strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border)
                 )
         )
     }

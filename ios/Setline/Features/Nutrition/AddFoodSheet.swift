@@ -591,7 +591,9 @@ struct MealSegment: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
-                        .frame(minHeight: SL.Space.hitMin)
+                        // 42 of content inside its own hairline is the 44 the
+                        // artboard draws, and the 44 a finger needs.
+                        .frame(minHeight: SL.Space.hitMin - 2)
                         .slBorderBox()
                         .background(
                             RoundedRectangle(cornerRadius: 11, style: .continuous)

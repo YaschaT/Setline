@@ -91,6 +91,13 @@ public enum StateMerge {
             hidden.insert(exerciseID)
             raw[LegacyAdapter.hiddenWarmupsKey] = .array(hidden.sorted().map { .string($0) })
 
+        case .setFavoriteExercise(let exerciseID, let isFavorite):
+            // One exercise, added or taken out of the list — never the list
+            // rewritten, so a star set on another device survives this one.
+            var favorites = Set((raw[LegacyAdapter.favoriteExercisesKey]?.arrayValue ?? []).compactMap(\.stringValue))
+            if isFavorite { favorites.insert(exerciseID) } else { favorites.remove(exerciseID) }
+            raw[LegacyAdapter.favoriteExercisesKey] = .array(favorites.sorted().map { .string($0) })
+
         case .setScheduleDay(let key, let dayID):
             // One date, never the map: a day the web moved stays moved.
             var overrides = raw["scheduleOverrides"]?.objectValue ?? [:]

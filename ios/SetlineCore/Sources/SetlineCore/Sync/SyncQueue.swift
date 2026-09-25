@@ -99,7 +99,10 @@ public enum SyncQueue {
                     rows.append(Row(title: "Oefeningen", detail: "Vervangen of toegevoegd"))
                 }
 
-            case .setActiveSession, .hideWarmup:
+            // A paused workout, a hidden ramp and a starred exercise are
+            // preferences, not work waiting to be saved: they sync like
+            // everything else, but the list is about what you did.
+            case .setActiveSession, .hideWarmup, .setFavoriteExercise:
                 continue
             }
         }

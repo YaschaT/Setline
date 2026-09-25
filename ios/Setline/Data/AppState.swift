@@ -56,6 +56,8 @@ final class AppState {
     private(set) var activeSession: ActiveSessionSnapshot?
     /// Exercises whose warm-up ramp is hidden for good.
     private(set) var hiddenWarmups: Set<String> = []
+    /// The exercises starred in Progressie's picker (40b).
+    private(set) var favoriteExercises: Set<String> = []
     /// Notes that something was felt. They expire after 14 days (§14).
     private(set) var painFlags: [PainFlag] = []
     /// Replacements written into the program, as opposed to swapped for a day.
@@ -229,6 +231,7 @@ final class AppState {
         deload = nil
         activeSession = nil
         hiddenWarmups = []
+        favoriteExercises = []
         painFlags = []
         programReplacements = []
         customExercises = []
@@ -360,6 +363,7 @@ final class AppState {
         scheduleOverrides = LegacyAdapter.scheduleOverrides(from: next)
         activeSession = LegacyAdapter.activeSession(from: next)
         hiddenWarmups = LegacyAdapter.hiddenWarmups(from: next)
+        favoriteExercises = LegacyAdapter.favoriteExercises(from: next)
         painFlags = LegacyAdapter.painFlags(from: next).active()
         programReplacements = LegacyAdapter.programReplacements(from: next)
         customExercises = LegacyAdapter.customExercises(from: next)
@@ -405,6 +409,13 @@ final class AppState {
     func hideWarmup(exerciseID: String) async {
         guard !hiddenWarmups.contains(exerciseID) else { return }
         await commit([StateChange(.hideWarmup(exerciseID: exerciseID))])
+    }
+
+    /// The star in Progressie's picker. One exercise at a time, so a star set
+    /// on another device is never overwritten by this one's list.
+    func setFavorite(exerciseID: String, isFavorite: Bool) async {
+        guard favoriteExercises.contains(exerciseID) != isFavorite else { return }
+        await commit([StateChange(.setFavoriteExercise(exerciseID: exerciseID, isFavorite: isFavorite))])
     }
 
     func clearActiveSession() async {

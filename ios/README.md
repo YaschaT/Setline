@@ -127,6 +127,32 @@ is described by the session and never by today's programme. `DayPlan` builds
 the one change the sheet writes — `setScheduleDay` or `removeScheduleOverride`,
 for that date's own key and nothing else.
 
+### Finding an exercise, and reading its 1RM
+
+Progressie's `Kracht` segment shows one exercise at a time, and the exercise's
+own name is the control (40a): it says what you are looking at and is where you
+change it.
+
+- **The picker** (40b–40d) offers the catalogue, not the history. It opens on
+  what you starred, or — with nothing starred (40c) — on what you trained last,
+  with the six muscle groups under it and a search across all of them. Every
+  row says when it was last trained, or that it never was; an exercise with
+  nothing logged is still pickable, because a list of only what you have done
+  cannot tell you what is there. `MuscleGroup` folds the engine's nineteen
+  muscles into the six a person picks from, for choosing and naming only —
+  nothing ranks, balances or substitutes by it.
+- **The star** writes one exercise at a time (`setFavoriteExercise`), into the
+  iOS-only `iosFavoriteExercises` key, beside `iosHiddenWarmups` and the other
+  keys the web app carries through untouched. A star set on another device is
+  never overwritten by this one's list.
+- **The estimate** is stated in three layers (40a): the number, what it moved
+  *since a date* — a date can be placed, "in 8 weken" cannot — and the set it
+  was computed from. The ⓘ opens 40e, which puts the same three numbers in a
+  row so the arithmetic is visible: the delta is the difference between two
+  estimates, not between two lifts. That is also why the change on screen is
+  computed from the two rounded numbers on screen (`shownChange`), so 126,5 −
+  120,5 reads as 6 rather than 6,5.
+
 ### Logging a day's food
 
 Voeding reads the day under four headings — Ontbijt, Lunch, Avondeten, Snacks
@@ -227,6 +253,14 @@ Screen by screen:
 - **The week label** in the open drawer names the week and the Monday it
   starts on ("Week 4 · 28 sep"). 41d's "laatste van blok 2" needs a block
   model, which the repeating programme does not have.
+- **40a's session row states the date and the set,** and no longer carries the
+  PR badge or the per-session delta the chip-era row had. The artboard draws
+  two spans; a record is still a record in the session summary and in the
+  history, where the workout it belongs to is.
+- **The exercise picker offers the whole catalogue,** so its counts are the
+  catalogue's own (65 across six groups) rather than the artboard's mocked 38.
+  An exercise without authored attributes has no group to file it under and is
+  left out rather than dropped into a wrong one.
 - **42a keeps the four headings in one order** — Ontbijt, Lunch, Avondeten,
   Snacks — where the artboard happens to draw its one empty meal last. The
   annotation names that order and 42b draws it; a day whose headings moved as
@@ -243,6 +277,8 @@ Screen by screen:
 - **A sheet is drawn ~4% smaller than its points.** iOS 26 presents these
   sheets as inset cards and scales their contents to fit; the numbers in the
   code are the artboard's, and the system applies that card uniformly.
+- **20's exercise chips are gone**, replaced by 40a's title-as-picker. The rest
+  of 20 stands.
 - **20**: Progressie's `Lichaam` and `Historiek` segments have no artboard; they
   are built from 20's own parts — `Lichaam`'s weigh-in sheet included, which
   asks for the one number the account stores and is reachable from every state
