@@ -6,6 +6,7 @@ import { AuthGate } from "./auth-gate";
 import { signOutEverywhere } from "./auth/supabase-auth";
 import { clearCloudState, loadCloudState, saveCloudState } from "@/lib/cloud-state";
 import { refinishSession } from "@/lib/refinish-session";
+import { estimate1RM } from "@/lib/one-rep-max";
 import { boundPausedReps, completedReps, setSummary } from "@/lib/set-reps";
 import { clearOnboarded } from "./auth-gate";
 import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
@@ -681,7 +682,8 @@ function bestStrengthSet(sets: SetResult[]) {
     const weight = numberValue(set.weight);
     const reps = completedReps(set);
     if (!weight || !reps) return best;
-    const value = weight * (1 + reps / 30);
+    const value = estimate1RM(weight, reps);
+    if (value === null) return best;
     return !best || value > best.value ? { value, weight, reps } : best;
   }, null);
 }
@@ -2563,14 +2565,21 @@ function TrainingApp() {
 
     if (currentWeight > previousWeight) {
       const gain = currentWeight - previousWeight;
-      const estimatedNow = currentWeight * (1 + currentReps / 30);
-      const estimatedBefore = previousWeight * (1 + previousReps / 30);
+      // Above ten reps there is no estimate to compare (§10.2 guard 2), so the
+      // set states the weight it added and claims nothing about strength.
+      const estimatedNow = estimate1RM(currentWeight, currentReps);
+      const estimatedBefore = estimate1RM(previousWeight, previousReps);
+      const stronger = estimatedNow !== null && estimatedBefore !== null
+        ? estimatedNow >= estimatedBefore
+        : null;
       return {
         metric: `+${gain.toLocaleString("nl-BE")} kg`,
-        label: estimatedNow >= estimatedBefore
-          ? "Sterkere set dan vorige keer"
-          : "Meer gewicht · bouw je reps verder op",
-        tone: estimatedNow >= estimatedBefore ? "good" : "neutral",
+        label: stronger === null
+          ? `Meer gewicht · ${currentWeight.toLocaleString("nl-BE")} kg`
+          : stronger
+            ? "Sterkere set dan vorige keer"
+            : "Meer gewicht · bouw je reps verder op",
+        tone: stronger ? "good" : "neutral",
       };
     }
     if (currentWeight === previousWeight && currentReps > previousReps) {
@@ -2582,8 +2591,9 @@ function TrainingApp() {
       };
     }
 
-    const estimatedNow = currentWeight * (1 + currentReps / 30);
-    const estimatedBefore = previousWeight * (1 + previousReps / 30);
+    const estimatedNow = estimate1RM(currentWeight, currentReps);
+    const estimatedBefore = estimate1RM(previousWeight, previousReps);
+    if (estimatedNow === null || estimatedBefore === null) return null;
     const estimatedGain = ((estimatedNow / estimatedBefore) - 1) * 100;
     if (estimatedGain >= 0.5) {
       return {

@@ -409,10 +409,19 @@ Implementation rules:
 
 ## 10. PR detection
 
-**[current]** `bestStrengthSet()` uses Epley (`weight × (1 + reps/30)`), `strengthRecord()`
-compares against the previous session and against an all-time best with a 0.05 tolerance,
-and distinguishes "Nieuw persoonlijk record" from "Sterker dan vorige sessie". The shape
-is right. It needs typing, guards, and honesty about the estimate.
+**[current]** `bestStrengthSet()` computes e1RM, `strengthRecord()` compares against the
+previous session and against an all-time best with a 0.05 tolerance, and distinguishes
+"Nieuw persoonlijk record" from "Sterker dan vorige sessie". The shape is right. It needs
+typing, guards, and honesty about the estimate.
+
+**The formula is Brzycki: `weight × 36 / (37 − reps)`** (changed from Epley,
+`weight × (1 + reps/30)`, on 2026-09-26). Epley drifts high exactly where this app's
+readers train: at one rep it claims a single is worth 3,3% more than the weight just
+lifted, and at four to six reps it reads several kilos above a real touch-and-go bench.
+Brzycki is exact at one rep, agrees with Epley to the decimal at ten reps, and sits lower
+in between. Both clients compute it from one rule — `lib/one-rep-max.ts` on the web,
+`Estimates.e1RM` in SetlineCore — and both are checked against
+`tests/fixtures/one-rep-max.json`, so the two can no longer drift apart.
 
 ### 10.1 Record types
 
@@ -420,7 +429,7 @@ is right. It needs typing, guards, and honesty about the estimate.
 |---|---|---|
 | **Load PR** | Heaviest load moved for ≥1 clean rep in this exercise | "Zwaarste ooit · 125 kg × 3" |
 | **Rep PR** | Most reps at a load already used before | "+2 reps op 100 kg" |
-| **Estimated strength PR** | Highest Epley e1RM | "Geschatte kracht · 142 kg" |
+| **Estimated strength PR** | Highest e1RM (Brzycki, §10) | "Geschatte kracht · 142 kg" |
 | **Volume PR** | Highest exercise volume-load (Σ load × reps) in one session | secondary, history only |
 | **Session best** | Better than last session, not an all-time record | "Sterker dan vorige sessie" |
 
@@ -428,9 +437,10 @@ is right. It needs typing, guards, and honesty about the estimate.
 
 1. **Comparability.** Same `exerciseId`, same `modifiers` (pause, tempo, ROM), same
    unilateral flag, `isWarmup == false`, no `technicalBreakdown` flag.
-2. **e1RM validity — B.** Epley and its relatives lose accuracy as reps rise. Setline
+2. **e1RM validity — B.** Brzycki and its relatives lose accuracy as reps rise. Setline
    computes e1RM **only for sets of ≤10 reps** and labels it "geschat" every time it is
-   shown. Above 10 reps: no e1RM, use Load PR and Rep PR only.
+   shown. Above 10 reps: no e1RM, use Load PR and Rep PR only — including where the
+   estimate is used only to word a comparison.
 3. **Never across exercises — A/B.** An e1RM from an incline press says nothing about a
    flat press. e1RM is compared only within one exercise id. See §13.
 4. **Baseline period.** No PR banners during the first **3 logged sessions** of a new
@@ -707,7 +717,8 @@ Ordered by risk of getting it wrong later.
 | 1 | Typed prescriptions replace parsed strings (`prescription`, `load`, `rest`) | Regex-parsing `"1×5–6 + 2×6–8"` is the root of most edge cases; every rule in this spec needs typed fields |
 | 2 | Separate paused from unpaused reps in `completedReps()` | Currently summed, which corrupts progression, PR and trend for `upper-paused-bench` |
 | 3 | Log RIR per set | The signal that unlocks §3, §8 and §11; currently exists only inside prose |
-| 4 | e1RM restricted to ≤10 reps and always labelled "geschat" | Epley degrades with reps; the app currently implies precision it does not have |
+| 4 | e1RM restricted to ≤10 reps and always labelled "geschat" | Every formula of this kind degrades with reps; the app previously implied precision it does not have |
+| 4b | e1RM formula Epley → Brzycki (2026-09-26, both clients) | Epley reads a 100 kg single as 103,3 kg and sits several kilos high at 4–6 reps, which is where the headline number is read |
 | 5 | PR epsilon 0.05 → 0.5 kg, plus a 3-session baseline before PR banners | Prevents noise records and PR fatigue |
 | 6 | Structured exercise attributes + computed alternative ranking | Current `ALTERNATIVES` is 2 hand-written options per exercise with no model behind it |
 | 7 | Explicit Swap-for-today vs Replace-in-program | Currently alternatives are advisory text only; no action, no scope distinction |

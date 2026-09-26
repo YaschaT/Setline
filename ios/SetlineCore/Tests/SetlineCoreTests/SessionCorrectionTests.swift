@@ -302,10 +302,12 @@ final class SessionCorrectionTests: XCTestCase {
         XCTAssertEqual(now.heaviest, 102.5, "history reads the corrected weight")
         XCTAssertNotEqual(now.estimate, was.estimate, "the estimated 1RM moved with it")
         let estimate = try XCTUnwrap(now.estimate)
+        // The engine keeps the estimate exact; rounding onto half kilos is a
+        // step the screen takes, not the history.
         XCTAssertEqual(
             estimate,
-            Estimates.round(try XCTUnwrap(Estimates.e1RM(weightKg: 102.5, reps: 6)), toIncrement: 0.5),
-            "and is what Epley makes of the corrected set"
+            try XCTUnwrap(Estimates.e1RM(weightKg: 102.5, reps: 6)),
+            "and is what the estimate makes of the corrected set"
         )
         XCTAssertNotNil(now.proposal, "the next session is proposed from the corrected history")
         XCTAssertNotEqual(now.proposal, was.proposal, "which is not what the mistyped set proposed")

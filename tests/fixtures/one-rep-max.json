@@ -1,0 +1,59 @@
+{
+  "name": "One estimated 1RM, computed the same way on both clients",
+  "formula": "Brzycki: weightKg × 36 / (37 − reps), for reps 1…10",
+  "why": "Setline used Epley (weight × (1 + reps/30)) on both sides. Epley is well behaved at the rep ranges it was fitted on but drifts high where this app's readers actually train: at one rep it claims a single is worth 3,3% more than the weight that was just lifted, and at four to six reps it reads a few kilos above what a touch-and-go bench really is. Brzycki is exact at one rep, agrees with Epley exactly at ten, and sits lower in between. The two clients must never disagree about the number, so both read this file: a change that lands on one side alone fails on the other.",
+  "guards": "No estimate above 10 reps (TRAINING_LOGIC §10.2 guard 2). An estimate is always labelled 'geschat' where it is shown, and never compared across exercises.",
+  "readBy": [
+    "tests/one-rep-max.test.mjs",
+    "ios/SetlineCore/Tests/SetlineCoreTests/EstimatesTests.swift"
+  ],
+  "tolerance": 0.001,
+  "cases": [
+    {
+      "weightKg": 100,
+      "reps": 1,
+      "e1RM": 100,
+      "roundedHalfKg": 100,
+      "note": "a single is worth exactly what was lifted"
+    },
+    { "weightKg": 100, "reps": 2, "e1RM": 102.8571, "roundedHalfKg": 103 },
+    { "weightKg": 100, "reps": 3, "e1RM": 105.8824, "roundedHalfKg": 106 },
+    { "weightKg": 100, "reps": 5, "e1RM": 112.5, "roundedHalfKg": 112.5 },
+    { "weightKg": 100, "reps": 8, "e1RM": 124.1379, "roundedHalfKg": 124 },
+    {
+      "weightKg": 100,
+      "reps": 10,
+      "e1RM": 133.3333,
+      "roundedHalfKg": 133.5,
+      "note": "Brzycki and Epley meet here"
+    },
+    {
+      "weightKg": 130,
+      "reps": 4,
+      "e1RM": 141.8182,
+      "roundedHalfKg": 142,
+      "note": "Epley read 147,3 for this set"
+    },
+    {
+      "weightKg": 130,
+      "reps": 5,
+      "e1RM": 146.25,
+      "roundedHalfKg": 146.5,
+      "note": "Epley read 151,7; a half-kilo tie rounds up on both clients"
+    },
+    {
+      "weightKg": 120,
+      "reps": 5,
+      "e1RM": 135,
+      "roundedHalfKg": 135,
+      "note": "Epley read exactly 140"
+    },
+    { "weightKg": 97.5, "reps": 5, "e1RM": 109.6875, "roundedHalfKg": 109.5 },
+    { "weightKg": 60, "reps": 9, "e1RM": 77.1429, "roundedHalfKg": 77 }
+  ],
+  "refused": [
+    { "weightKg": 100, "reps": 11, "why": "above the ten-rep guard" },
+    { "weightKg": 100, "reps": 0, "why": "no reps, no set" },
+    { "weightKg": 0, "reps": 5, "why": "no weight, no estimate" }
+  ]
+}

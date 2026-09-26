@@ -49,12 +49,12 @@ final class StrengthProgressTests: XCTestCase {
             sessions: benchSessions(), calendar: calendar
         )
 
-        // Epley on the newest top set: 50 × (1 + 8/30) = 63,33…
+        // Brzycki on the newest top set: 50 × 36/29 = 62,07…
         let estimate = try XCTUnwrap(progress.estimate)
-        XCTAssertEqual((estimate as NSDecimalNumber).doubleValue, 63.33, accuracy: 0.01)
+        XCTAssertEqual((estimate as NSDecimalNumber).doubleValue, 62.07, accuracy: 0.01)
         let change = try XCTUnwrap(progress.change)
-        // Against eight weeks back: 45 × (1 + 8/30) = 57.
-        XCTAssertEqual((change.value as NSDecimalNumber).doubleValue, 6.33, accuracy: 0.01)
+        // Against eight weeks back: 45 × 36/29 = 55,86…
+        XCTAssertEqual((change.value as NSDecimalNumber).doubleValue, 6.21, accuracy: 0.01)
         XCTAssertEqual(change.weeks, 8)
         XCTAssertEqual(progress.points.count, 4, "one point per comparable session")
     }
