@@ -183,7 +183,11 @@ struct StrengthSegmentView: View {
                     (
                         Text("\(app.display.signedDelta(shown)) kg")
                             .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
-                            .foregroundColor(SL.Signal.action)
+                            // 40a draws a gain, and lime is what a gain reads
+                            // as. A drop is stated in the sentence's own ink:
+                            // it is a fact about the weeks, not a failure to
+                            // colour, and lime on it would read as a win.
+                            .foregroundColor(shown > 0 ? SL.Signal.action : SL.Ink.primary)
                         + Text(" sinds \(app.display.shortDate(change.since))")
                             .font(.sl(SL.TypeSize.body, SL.Weight.regular))
                             .foregroundColor(SL.Ink.secondary)

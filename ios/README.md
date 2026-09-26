@@ -187,6 +187,10 @@ change it.
   hid every session trained the other way. `ExerciseHistory.series` finds them,
   the one with the most sessions leads, and when there is more than one its
   name joins the line under the title ("Borst · zonder pauze").
+  Only the leading series is drawn: the design has no control for switching
+  between them, so a lift trained two ways shows the one you do most and names
+  it. Every session is still in `Historiek` and still counts for its own
+  series' progression.
 - **The estimate** is stated in three layers (40a): the number, what it moved
   *since a date* — a date can be placed, "in 8 weken" cannot — and the set it
   was computed from. The ⓘ opens 40e, which puts the same three numbers in a
@@ -295,6 +299,10 @@ Screen by screen:
 - **The week label** in the open drawer names the week and the Monday it
   starts on ("Week 4 · 28 sep"). 41d's "laatste van blok 2" needs a block
   model, which the repeating programme does not have.
+- **40a colours a gain, not a drop.** The artboard only draws a rise, and lime
+  is what a rise reads as; a fall is stated in the sentence's own ink rather
+  than in lime that would read as a win, or in red that would read as a
+  verdict.
 - **40a's session row states the date and the set,** and no longer carries the
   PR badge or the per-session delta the chip-era row had. The artboard draws
   two spans; a record is still a record in the session summary and in the

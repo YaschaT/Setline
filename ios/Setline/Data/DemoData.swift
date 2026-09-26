@@ -83,6 +83,46 @@ enum DemoData {
             ]))
         }
 
+        // Upper's bench, trained both ways — the shape that broke Progressie.
+        //
+        // The programme prescribes a two-second pause; three of these sessions
+        // were pressed touch-and-go anyway and two were paused, and the paused
+        // ones are written the way the web app writes them: the count typed
+        // out over every rep. One lift, two comparable series (§9.2), and
+        // neither of them may be read as the other.
+        let pausedBench: [(day: Int, weightKg: Int, reps: Int, paused: Bool)] = [
+            (day: 24, weightKg: 85, reps: 5, paused: true),
+            (day: 17, weightKg: 85, reps: 5, paused: true),
+            (day: 10, weightKg: 100, reps: 5, paused: false),
+            (day: 6, weightKg: 100, reps: 4, paused: false),
+            (day: 3, weightKg: 97, reps: 5, paused: false),
+        ]
+        for (index, entry) in pausedBench.enumerated() {
+            let date = calendar.date(byAdding: .day, value: -entry.day, to: Date())!
+            let sets = (0..<3).map { _ in
+                JSONValue.object([
+                    "weight": .string("\(entry.weightKg)"),
+                    "reps": .string("\(entry.reps)"),
+                    "pausedReps": .string(entry.paused ? "\(entry.reps)" : ""),
+                    "pauseSeconds": .string(entry.paused ? "2" : ""),
+                    "pauseEnabled": .bool(entry.paused),
+                    "rir": .number(2),
+                ])
+            }
+            sessions.append(.object([
+                "id": .string("demo-upper-\(index)"),
+                "date": .string(LegacyAdapter.isoString(date)),
+                "dayId": .string("upper"),
+                "dayLabel": .string("Upper"),
+                "completion": .number(100),
+                "results": .array([.object([
+                    "exerciseId": .string("upper-paused-bench"),
+                    "name": .string(ExerciseCatalog.exercise("upper-paused-bench")?.name ?? "Paused bench"),
+                    "sets": .array(sets),
+                ])]),
+            ]))
+        }
+
         // Today is a push day whatever the weekday, so the slice is always
         // reachable from a cold launch.
         // `-SetlineUpperDay` puts today on Upper, which is where the planned
