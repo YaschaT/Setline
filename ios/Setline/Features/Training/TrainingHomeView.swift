@@ -233,8 +233,11 @@ struct TrainingHomeView: View {
             }
 
             // 09's one lime line, kept where the date is today's training:
-            // the only semantic win this screen makes.
-            if showsToday, !drawerOpen, let insight {
+            // the only semantic win this screen makes. Only while it is still
+            // to do — once today's session is saved, its "Vandaag …" would be
+            // the next session's target, and a logged day reads as one that
+            // has gone by.
+            if showsToday, !drawerOpen, selectedDay?.isLogged != true, let insight {
                 Text(attributed(insight.text, liming: insight.highlight))
                     .slBody()
                     .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
