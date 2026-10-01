@@ -5,8 +5,12 @@ import SwiftUI
 /// tile widens to keep "102,5" at full size and the reps tile beside it gives
 /// up the difference; with "50" in it (12) the two are equal.
 ///
-/// When the content cannot fit at all, the tiles fall back to equal shares
-/// and their own text scaling takes over.
+/// When the contents together are wider than the row — "102,5" beside a rep
+/// count on a 390pt phone — each tile keeps what it cannot give up, its
+/// padding and buttons, and the rest of the row is shared in proportion to
+/// what each value asks for. The wider value stays in the wider tile, and its
+/// own text scaling covers the few points it lacks. Equal shares cut "102,5"
+/// to "10…" there.
 struct SLFlexPair: Layout {
     var spacing: CGFloat = SL.Space.s2
 
@@ -66,6 +70,13 @@ struct SLFlexPair: Layout {
                 held.insert(index)
             }
         }
-        return widths.reduce(0, +) > available + 0.5 ? equal : widths
+        guard widths.reduce(0, +) > available + 0.5 else { return widths }
+
+        let floors = subviews.map { $0.sizeThatFits(ProposedViewSize(width: 0, height: nil)).width }
+        let asks = zip(content, floors).map { max(0, $0 - $1) }
+        let room = available - floors.reduce(0, +)
+        let asked = asks.reduce(0, +)
+        guard room > 0, asked > 0 else { return equal }
+        return zip(floors, asks).map { $0 + $1 * min(1, room / asked) }
     }
 }

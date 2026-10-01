@@ -306,41 +306,54 @@ struct SessionView: View {
 
     /// Pause leaves; Afronden appears only once there is something to finish.
     private var header: some View {
-        HStack(spacing: SL.Space.s3) {
-            Button {
-                runner.stopRestSignals()
-                onPause(runner.snapshot())
-            } label: {
-                Text("Pauzeer").slBody(SL.Weight.medium)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .slHitTarget()
-            }
-            .buttonStyle(.plain)
-
-            Spacer(minLength: 0)
-
-            // A workout being written down afterwards has no clock to show —
-            // it names the day it is being written for instead, so the sets
-            // can never land on the wrong date without anyone noticing.
-            Text(runner.isLoggedAfterwards
-                 ? "\(Schedule.weekdayLabel(runner.startedAt).lowercased()) \(app.display.shortDate(runner.startedAt)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)"
-                 : "\(RestTimerState.clockLabel(runner.elapsedSeconds)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)")
-                .slMeta(SL.Weight.medium).slNumerals()
-                .foregroundStyle(SL.Ink.tertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            if runner.hasProgress && !runner.isComplete {
-                Button { confirmsEarlyFinish = true } label: {
-                    Text("Afronden").slBody(SL.Weight.medium)
+        // At accessibility sizes the clock takes a line of its own: between
+        // the two controls it was cut short and broke "Afronden" in two.
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: SL.Space.s3) {
+                Button {
+                    runner.stopRestSignals()
+                    onPause(runner.snapshot())
+                } label: {
+                    Text("Pauzeer").slBody(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
                         .slHitTarget()
                 }
                 .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+
+                if !typeSize.isAccessibilitySize { headerClock }
+
+                if runner.hasProgress && !runner.isComplete {
+                    Button { confirmsEarlyFinish = true } label: {
+                        Text("Afronden").slBody(SL.Weight.medium)
+                            .foregroundStyle(SL.Ink.secondary)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .slHitTarget()
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            if typeSize.isAccessibilitySize { headerClock }
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s3)
+    }
+
+    /// A workout being written down afterwards has no clock to show — it names
+    /// the day it is being written for instead, so the sets can never land on
+    /// the wrong date without anyone noticing.
+    private var headerClock: some View {
+        Text(runner.isLoggedAfterwards
+             ? "\(Schedule.weekdayLabel(runner.startedAt).lowercased()) \(app.display.shortDate(runner.startedAt)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)"
+             : "\(RestTimerState.clockLabel(runner.elapsedSeconds)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)")
+            .slMeta(SL.Weight.medium).slNumerals()
+            .foregroundStyle(SL.Ink.tertiary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
     }
 
     /// Where you are and how to move, directly under the header and always

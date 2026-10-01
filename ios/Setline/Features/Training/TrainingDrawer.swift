@@ -12,6 +12,7 @@ import SetlineCore
 /// is `DayPlanSheet`, reached from "Wijzig deze dag" or by holding a day.
 struct TrainingDrawer: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     let week: [AgendaDay]
     let weeks: [Agenda.Week]
@@ -76,14 +77,19 @@ struct TrainingDrawer: View {
     /// 41c: the date is the title — the tab bar already says which screen this
     /// is — and beside it where that date stands.
     private var dateHeader: some View {
-        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+        // At accessibility sizes the date takes a line of its own: beside
+        // "vandaag · week 6" it was cut to "Donderdag 1…".
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
+        return layout {
             Text(title)
                 .slTitle()
                 .slNumerals()
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .foregroundStyle(SL.Ink.primary)
-            Spacer(minLength: SL.Space.s2)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
             Text(standing)
                 .slMeta()
                 .slNumerals()
@@ -91,6 +97,7 @@ struct TrainingDrawer: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, 14)
         .accessibilityElement(children: .combine)

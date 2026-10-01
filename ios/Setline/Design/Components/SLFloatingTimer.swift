@@ -132,10 +132,12 @@ struct SLFloatingTimer: View {
     private func label(_ text: String) -> some View {
         HStack(spacing: 6) {
             SLGlyph(name: .timer, size: 16)
+            // At accessibility sizes it wraps rather than ending in "PRIMAI…".
             Text(text.uppercased())
                 .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
-                .lineLimit(1)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
         }
         .foregroundStyle(SL.Ink.tertiary)
     }
