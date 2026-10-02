@@ -6,7 +6,6 @@ struct RootView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var modelContext
     @State private var tab: SLTab = .training
-    @State private var preflightDay: WorkoutDay?
     @State private var running: RunningSession?
     /// Which way the reader came in from the cold open, and therefore which
     /// side of the one identity screen opens.
@@ -75,6 +74,14 @@ struct RootView: View {
             app.attach(context: modelContext)
             await app.restore()
             #if DEBUG
+            // `-SetlineTab voeding` opens on a tab, so each screen can be
+            // checked without driving taps.
+            let arguments = ProcessInfo.processInfo.arguments
+            if let flag = arguments.firstIndex(of: "-SetlineTab"), arguments.indices.contains(flag + 1),
+               let requested = SLTab(rawValue: arguments[flag + 1]) {
+                tab = requested
+            }
+            if arguments.contains("-SetlineAccount") { tab = .account }
             if ProcessInfo.processInfo.arguments.contains("-SetlineOpenSession") {
                 if let paused = app.resumableSession, let day = app.day(for: paused) {
                     running = RunningSession(day: day, snapshot: paused)
@@ -98,15 +105,17 @@ struct RootView: View {
                 switch tab {
                 case .training:
                     TrainingHomeView(
-                        onStart: { day in preflightDay = day },
+                        // "Start training → logscherm": the session opens at
+                        // once. Looking first is `Oefeningen bekijken`, which
+                        // starts nothing.
+                        onStart: { day in running = RunningSession(day: programmed(day), snapshot: nil) },
                         onResume: { day, snapshot in
                             running = RunningSession(day: day, snapshot: snapshot)
                         },
                         // A workout that was done but never written down opens
-                        // straight into the session: the pre-flight readies you
-                        // for work that is already finished.
+                        // the same session screen, with that date on it.
                         onLogPast: { day, date in
-                            running = RunningSession(day: day, snapshot: nil, loggingFor: date)
+                            running = RunningSession(day: programmed(day), snapshot: nil, loggingFor: date)
                         }
                     )
                 case .voeding:
@@ -119,7 +128,8 @@ struct RootView: View {
                     AccountView()
                 }
             }
-            .padding(.bottom, SL.Metric.tabBarHeight + lift)
+            // The bar, then the 4 the design leaves under it.
+            .padding(.bottom, SL.Metric.tabBarHeight + 4 + lift)
             // Scrolled content stops at the status bar: the clock always sits
             // on the ground, as every artboard draws it.
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -133,19 +143,6 @@ struct RootView: View {
         }
         // The session is a full-screen presentation over the tab shell, so
         // the tab bar is gone the moment it starts: mid-set there is one task.
-        .fullScreenCover(item: $preflightDay) { day in
-            PreflightView(
-                day: day,
-                onBegin: {
-                    preflightDay = nil
-                    // Let the sheet finish dismissing before the next opens.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        running = RunningSession(day: day, snapshot: nil)
-                    }
-                },
-                onClose: { preflightDay = nil }
-            )
-        }
         .fullScreenCover(item: $running) { session in
             SessionView(
                 day: session.day,
@@ -159,9 +156,18 @@ struct RootView: View {
                 onPause: { snapshot in
                     running = nil
                     Task { await app.pauseSession(snapshot) }
-                }
+                },
+                // Opened and left with nothing done: there is nothing to park.
+                onClose: { running = nil }
             )
         }
+    }
+
+    /// The day as the programme has it. A date read through the agenda
+    /// already carries the lighter week; the session applies that itself, and
+    /// handing it the lightened day would cut the sets twice.
+    private func programmed(_ day: WorkoutDay) -> WorkoutDay {
+        app.plan.first { $0.id == day.id } ?? day
     }
 
     /// One workout per date: re-opening a day already logged reuses that

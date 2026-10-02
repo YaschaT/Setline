@@ -77,6 +77,49 @@ final class CheckInTests: XCTestCase {
         XCTAssertEqual(weeks("2026-09-06"), 8)
     }
 
+    // MARK: Two of them, chosen
+
+    private var three: CheckInGallery {
+        CheckInGallery.make(
+            [checkIn("a", "2026-06-01"), checkIn("b", "2026-07-13"), checkIn("c", "2026-09-06")],
+            metrics: [metric("2026-06-01", 86.8), metric("2026-07-13", 85.5), metric("2026-09-06", 84.2)],
+            calendar: calendar
+        )
+    }
+
+    func testTheComparisonIsFirstAgainstLatestUntilAnotherPairIsChosen() {
+        let comparison = three.comparison(calendar: calendar)
+        XCTAssertEqual(comparison?.before.checkIn.id, "a")
+        XCTAssertEqual(comparison?.after.checkIn.id, "c")
+        XCTAssertEqual(comparison?.weeks, 14)
+        XCTAssertEqual(comparison?.change, Decimal(84.2) - Decimal(86.8))
+    }
+
+    func testAChosenPairIsOrderedByDateNotByTheOrderItWasPickedIn() {
+        let comparison = three.comparison("c", "b", calendar: calendar)
+        XCTAssertEqual(comparison?.before.checkIn.id, "b")
+        XCTAssertEqual(comparison?.after.checkIn.id, "c")
+        XCTAssertEqual(comparison?.weeks, 8)
+        XCTAssertEqual(comparison?.change, Decimal(84.2) - Decimal(85.5))
+    }
+
+    func testAChoiceThatNoLongerExistsFallsBackToFirstAgainstLatest() {
+        let comparison = three.comparison("b", "removed", calendar: calendar)
+        XCTAssertEqual(comparison?.before.checkIn.id, "a")
+        XCTAssertEqual(comparison?.after.checkIn.id, "c")
+    }
+
+    func testTheSamePhotoTwiceIsNotAComparison() {
+        let comparison = three.comparison("b", "b", calendar: calendar)
+        XCTAssertEqual(comparison?.before.checkIn.id, "a")
+        XCTAssertEqual(comparison?.after.checkIn.id, "c")
+    }
+
+    func testOneCheckInHasNothingToCompareWith() {
+        let gallery = CheckInGallery.make([checkIn("a", "2026-06-01")], metrics: [], calendar: calendar)
+        XCTAssertNil(gallery.comparison(calendar: calendar))
+    }
+
     func testACheckInSurvivesBeingStored() throws {
         let stored = [checkIn("a", "2026-07-13"), checkIn("b", "2026-09-06")]
         let data = try JSONEncoder().encode(stored)

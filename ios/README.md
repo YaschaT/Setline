@@ -97,20 +97,26 @@ All of these are release gaps for a public V1, not defects in what is here.
 
 ### Browsing dates
 
-Training holds one selected date, and three things divide the work (41):
+Training holds one selected date, and three things divide the work (redesign
+1a):
 
-- **Training** is what happens on the selected date. The drawer at the top
-  carries the date, the week rail and the way into the agenda; under it the
-  date's own slots — its name at 56, one line about it, what it is made of,
-  and one action. Selecting a date is reading: it never creates a session,
-  moves the schedule or touches history, and the lime stays Training's own —
-  it starts today's workout and nothing else.
-- **The agenda** is the same drawer, pulled open (41d): four weeks under each
-  other in the rail's own language, with the month either side of it. It
-  browses dates; it writes nothing.
+- **Training** is what happens on the selected date. Under the date, the week
+  strip carries the seven days and the way into the `Agenda`; under it one
+  compact card for the selected date — its name, one line about it, what it is
+  made of, at most one progression line, and one action. Tapping a day or swiping the
+  card selects another date. Selecting a date is reading: it never creates a
+  session, moves the schedule or touches history, and the lime stays
+  Training's own — `Start training` starts today's workout and nothing else,
+  and `Oefeningen bekijken` opens the preview, which starts nothing.
+- **The agenda** is a sheet over Training: one week at a time — how much of it
+  is done, its seven days, the best set of each session the week before —
+  stepped back and forth, with `Hele maand` to jump to a date. A row opens
+  what its day holds: a saved session's results, a planned day's preview, or
+  `Wijzig deze dag` for a rest day. It browses dates; it writes nothing.
 - **`Wijzig deze dag`** (41e–41g) changes which session belongs to one date,
-  and is the only thing on this screen that writes. It is reached from the
-  foot of the day or by holding a day in the rail. It offers the sessions of
+  and is the only thing on this screen that writes. It is reached from a day's
+  preview, from a rest day in the agenda, or by holding a day in the strip or
+  the agenda. It offers the sessions of
   the active programme, rest, and the programme's own standard; a change
   replaces the one before it, going back to standard removes it, and a date
   whose session is logged cannot be assigned at all — it belongs to what was
@@ -129,8 +135,8 @@ for that date's own key and nothing else.
 
 ### Writing down a workout you already did
 
-A date that has gone by with nothing logged offers `Log <sessie>` where a
-future date offers `Bekijk`. It opens the same session screen — the same
+A date that has gone by with nothing logged offers `Achteraf loggen` — on its
+card and in its preview. It opens the same session screen — the same
 logging, the same progression — with three differences that keep the record
 honest:
 
@@ -201,16 +207,17 @@ change it.
 
 ### Logging a day's food
 
-Voeding reads the day under four headings — Ontbijt, Lunch, Avondeten, Snacks
-(42a) — and three things divide the work:
+Voeding reads the day as one list (redesign 1c), in meal order — Ontbijt,
+Lunch, Avondeten, Snacks — and three things divide the work:
 
-- **The day** is the totals and those four headings. What is left to eat is the
-  only loud number; kcal per meal sits in the heading and macros are the day's,
-  once. An empty meal keeps its heading (42b), so a day nothing is logged on
-  already has a shape. A row says what was eaten and how much of it; tapping it
-  opens the item, swiping it offers to remove it with five seconds to undo.
-- **`Toevoegen`** (42c) opens on the meal the hour suggests, or on the meal
-  whose ⊕ was tapped. Under the meal: a search, then what this account eats at
+- **The day** is what is left to eat — the only loud number — with the day's
+  macros under it, once, and then `Vandaag gegeten`: one row per item, saying
+  when it was logged, which meal it belongs to, how much of it and what it
+  cost. Tapping a row opens the item; swiping it offers to remove it with five
+  seconds to undo. Amber appears once, and only when the log earns it: two or
+  more whole days in a row under the protein target (`ProteinShortfall`).
+- **`Maaltijd loggen`** (42c) opens on the meal the hour suggests, one tap from
+  any other. Under the meal: a search, then what this account eats at
   this meal most often, then what it logged last. Both lists are its own
   entries — `FoodMemory` reads them, nothing is invented, and a row is offered
   back at the amount it was logged at. The search is the web app's own
@@ -232,23 +239,80 @@ client knows (`WEB_ITEM_FIELDS` in `lib/state-merge.ts`, `StateMerge` in
 SetlineCore), so they survive a web edit untouched; the web app does not show
 them.
 
+### The SETLINE redesign (1a–1e)
+
+`SETLINE Redesign.dc.html` (Claude Design) restyles Training, the session,
+Voeding, Progressie and Foto's, and is the visual source of truth for them where
+it and the artboards below disagree, except where the overrides below say
+otherwise. Account and the tab bar's five places stay SETLINE Main's. Archivo is bundled (`Fonts/`, its SIL Open
+Font License beside it). The design names "Archivo Expanded" for numbers; no
+such family is published, and the design file itself renders them in Archivo
+at normal width, as the app does.
+
+What the redesign changed in how the app is used:
+
+- **Progressie** opens on an overview — weight, best sets, volume — whose
+  links (`Alle wegingen`, `Kracht per oefening`, `Alle sessies`) open the
+  Lichaam, Kracht and Historiek segments as before. `+ Weeg jezelf` sits by
+  the title.
+- **Foto's** compares the first and the latest check-in; `Andere datums
+  kiezen` compares any two.
+
+Where the app differs from the redesign, on purpose (the user's overrides
+first):
+
+- **The tab bar keeps Main's five places** — Training, Voeding, Progressie,
+  Foto's, Account — in the redesign's own style. There is no `Loggen` tab:
+  logging starts from Training, and Account stays the screen it was, a tab of
+  its own, with the redesign's type and colour only.
+- **Training has no greeting, no avatar and no `Rest van de week`.** Its head is
+  the date the card is on. The card draws no oversized word behind the name,
+  and it carries one progression line at most ("Flat bench press staat +5 kg
+  sinds 10 sep."), none when there is no real gain, and none once today is
+  logged. It grows with its text rather than to a fixed height.
+- **Herstel is built from logged sets**, not from sleep, readiness and HRV
+  (HealthKit is out of scope). The card keeps the design's shape — the
+  proposal, the evidence under a hairline, `Overnemen` and `Negeren` — and is
+  shown only while there is a proposal, the lighter days it led to, or its
+  dismissal.
+- **Voeding has no `Maaltijd fotograferen`.** Nothing recognises food in a
+  photo; `Maaltijd loggen` is the one way in.
+- **The session** keeps what the design has no room for: `‹ Training` (or
+  `‹ Pauzeer` once anything changed) and `Afronden` beside the clock,
+  `Meer` for the entry sheet's tools, the RIR chips when a set asks for one,
+  `Set toevoegen`, and the day's exercises under the sets. The reps stepper
+  is 140 wide rather than 132, so a two-digit count keeps its size between
+  the two 44-point buttons.
+- **The agenda** steps through weeks and opens a whole month; the design
+  draws this week only.
+- **The preview** adds `Achteraf loggen` for a day that went by unlogged, and
+  `Wijzig deze dag` for any day not yet logged.
+- **At accessibility text sizes** rows stack — the date and the mark on one
+  line, the text under them — and titles and section heads give their meta a
+  line of its own, so no word is broken to fit. The design draws the default
+  size only.
+
 ### Where the app differs from the design, on purpose
 
-Screen by screen:
+Screen by screen, against the earlier artboards:
 
 - **05** has no "Eigen plan" option: there is no plan editor behind it.
 - **09** has no "Herstel · slaap, HRV" line (HealthKit is out of scope).
-- **10**: pre-flight's `Wijzig` opens the week agenda, the one place today's
-  session can be changed.
-- **11–13 / 11R–13R**: the session keeps a strip of the day's exercises under
-  its header. No artboard draws one, but it is the only way back to an earlier
+- **10**'s pre-flight is gone. The redesign splits it in two: `Start training`
+  starts, and `Oefeningen bekijken` opens the preview (1a), which starts
+  nothing. A session opened by mistake closes from `‹ Training` and leaves
+  nothing behind, as long as nothing in it was changed; a paused one stays
+  paused, as it was.
+- **11–13 / 11R–13R**: the session keeps a list of the day's exercises under
+  the sets. No artboard draws one, but it is the only way back to an earlier
   exercise to correct a set.
 - **11R / 12R** draw the entry sheet without a tools row. The app keeps 12's
   `Toetsenblok · Mislukt · Pauze-reps` and adds `Partieel`, because 16R's
   failed, paused and partial sets are entered there.
-- **13R / 11–13**: the rest timer opens as 13R's card (`Overslaan`) and folds
-  to 11–13's compact row (`Klaar`) after three seconds; a tap switches between
-  them. At accessibility sizes it stays open.
+- **The rest timer** is 1b's one row above the input card — `RUST`, the time,
+  `+30s`, skip — and a tap opens the larger version with `−30s`, `+30s`, the
+  prescribed rest and skip. It stays the size it was left at; it no longer
+  folds by itself.
 - **14**: the plate calculator adds correctly where the artboard's own example
   does not.
 - **15**: a `Wissel` pill sits beside the exercise name. Base 15 enters the swap
@@ -285,20 +349,14 @@ Screen by screen:
   work has always had, so its own series is unaffected. Historiek and the set
   grid say "2 pauze-reps" where only some were, "pauze" where all were.
 - **19** has no advisory line, on request. The drag planner itself survives
-  only behind Account and the pre-flight's own link: every date change on
-  Training goes through 41's assignment sheet, which writes the same per-date
-  override the planner wrote.
-- **41c's foot** keeps `Wijzig deze dag` clear of the tab bar. The artboard
-  lets its last 8pt sit behind the bar, as 08 and 09 do with their pill; here
-  every state ends 6 above it instead, so nothing is drawn under a control.
-- **41 draws no training day.** Today's own session fills the same slots a
-  selected day does (41b's name, count line and exercise list), keeps 09's one
-  lime insight under them, and takes the lime `Start` as its action. A paused
-  session replaces that action with `Hervat sessie`, and the text button below
-  it with `Beëindig sessie`, because ending one must stay reachable.
-- **The week label** in the open drawer names the week and the Monday it
-  starts on ("Week 4 · 28 sep"). 41d's "laatste van blok 2" needs a block
-  model, which the repeating programme does not have.
+  only behind Account: every date change on Training goes through 41's
+  assignment sheet, which writes the same per-date override the planner wrote.
+- **A paused session** replaces today's lime `Start training` with `Hervat
+  training`, and puts `Beëindig sessie` under it, because ending one must stay
+  reachable.
+- **The week label** over the strip says how far the week lies from this one
+  ("Deze week", "Vorige week", "Over 2 weken"). 41d's "laatste van blok 2"
+  needs a block model, which the repeating programme does not have.
 - **40a colours a gain, not a drop.** The artboard only draws a rise, and lime
   is what a rise reads as; a fall is stated in the sentence's own ink rather
   than in lime that would read as a win, or in red that would read as a
@@ -311,10 +369,6 @@ Screen by screen:
   catalogue's own (65 across six groups) rather than the artboard's mocked 38.
   An exercise without authored attributes has no group to file it under and is
   left out rather than dropped into a wrong one.
-- **42a keeps the four headings in one order** — Ontbijt, Lunch, Avondeten,
-  Snacks — where the artboard happens to draw its one empty meal last. The
-  annotation names that order and 42b draws it; a day whose headings moved as
-  you logged would not be the fixed shape the design asks for.
 - **42c's barcode button is not built.** There is no barcode lookup behind it
   on either client, and a control that cannot answer is worse than no control.
   The search field beside it is the one the artboard draws.
@@ -369,15 +423,14 @@ Across screens:
   2pt larger than their neighbours. Here they keep their size, so nothing moves
   when it is tapped. Surfaces bordered in every state do take the extra 2pt
   (`slBorderBox()`), as the mock renders them.
-- **Text below 20pt** is set with SF Pro's Text optical size and iOS's line
-  breaking, which avoids a lone word on a last line. The mock's browser draws
-  small text 3–5% narrower and keeps such orphans, so a line can break one word
-  earlier (03's title, 19's subtitle, 18R's footnote).
-- **Tab screens** keep 12pt between the commit pill and the tab bar. 08 and 09
-  draw the pill partly behind the bar, 21 and 22 flush against it.
-- **Tab bar**: the glyphs are the mock's own Material Symbols (exercise,
-  nutrition, trending_up, photo_camera, account_circle) as vector assets. The
-  bar keeps its size at large text sizes instead of overflowing.
+- **Text** is set with iOS's line breaking, which avoids a lone word on a last
+  line. The mock's browser keeps such orphans, so a line can break one word
+  earlier than it does there.
+- **Tab screens** end 4pt above the tab bar, as the redesign leaves it, so
+  nothing scrolls under a control.
+- **Tab bar**: the glyphs are the redesign's own (calendar, barbell, fork,
+  chart, camera) as vector assets. The bar keeps its size at large text sizes
+  instead of overflowing.
 - **App icon**: the design has no icon artboard. The Home Screen icon is the
   approved SETLINE wordmark (600 weight, .16em tracking, as the Review header
   sets it) centred on the ground colour; there are no dark or tinted variants.
@@ -390,10 +443,10 @@ Across screens:
   field for it and `LegacyAdapter` reads every stored set back with no flags —
   so a saved session cannot show or correct it. Marking a set failed after the
   fact needs a new set field agreed with the web app.
-- **Week planning cannot be reached from the Agenda's own detail.** `Wijzig
-  planning` opens `WeekPlanView` on the current week, whichever week the Agenda
-  is showing. Moving a session two weeks out still means walking there in the
-  planner.
+- **The week planner is reached from Account only** (`Trainingsdagen`), and
+  opens on the current week. One date is changed from wherever it is shown
+  (`Wijzig deze dag`); moving a whole week two weeks out still means walking
+  there in the planner.
 - **The web app still adds a paused count onto the reps beside it.** Its
   `completedReps()` is `reps + pausedReps`, so a set this app writes as six
   reps with two of them paused reads as eight there. This port never sums
@@ -434,6 +487,12 @@ fabricated data; `PRIVATE-DATA/` is never bundled.
 | `-SetlineOpenSession` | Opens straight into today's session |
 | `-SetlineLoggedSets` | Writes the first two sets, so delta and PR states show |
 | `-SetlineComplete` | Jumps to the session summary |
+| `-SetlineRestDay` | Makes today a rest day in the demo data |
+| `-SetlineTab <tab>` | Opens on `training`, `voeding`, `progressie`, `fotos` or `account` |
+| `-SetlineAgenda` | Opens the agenda over Training |
+| `-SetlinePreview` | Opens the preview of today's session, on a training day |
+| `-SetlineAccount` | Opens on the Account tab |
+| `-SetlineRestOpen` | Shows the rest timer at its larger size once a rest runs |
 
 Set them under Product → Scheme → Edit Scheme → Run → Arguments.
 

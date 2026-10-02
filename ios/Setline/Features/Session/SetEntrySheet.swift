@@ -1,9 +1,12 @@
 import SwiftUI
 import SetlineCore
 
-/// Tap 1 of 2 opens this, pre-filled from the previous session. Tap 2 is
-/// `Log set`. Changing weight or reps is optional and costs extra taps; it is
-/// never on the default path.
+/// Everything one set can carry, for the times the input card is not enough.
+///
+/// The default path never comes here: a set is saved from the card under the
+/// exercise in one tap. This sheet opens from `Meer`, from the weight itself,
+/// or from a row — to correct a set already written, to type a weight off the
+/// step, or to say what the set was: reps in reserve, failed, paused, partial.
 struct SetEntrySheet: View {
     let slot: SessionRunner.ExerciseSlot
     let setIndex: Int
@@ -45,6 +48,8 @@ struct SetEntrySheet: View {
         isCalibration: Bool = false,
         proposedReps: Int? = nil,
         startsPartial: Bool = false,
+        startsOnKeypad: Bool = false,
+        proposedRIR: Int? = nil,
         onLog: @escaping (SessionRunner.SetEntry) -> Void,
         onClose: @escaping () -> Void,
         onRemove: (() -> Void)? = nil
@@ -72,14 +77,27 @@ struct SetEntrySheet: View {
         _reps = State(initialValue: openingReps)
         // Stepping to a first weight from zero is 30-odd taps. A calibration
         // set opens on the keypad instead.
-        _showsKeypad = State(initialValue: isCalibration)
+        _showsKeypad = State(initialValue: isCalibration || startsOnKeypad)
         _keypadText = State(initialValue: "")
-        // A planned paused exercise opens with every rep paused, because that
-        // is what the plan prescribes; anywhere else it is off until asked for.
-        _pausedReps = State(initialValue: slot.planned.modifiers.pauseEnabled ? openingReps : nil)
-        // The pain flow's "Beperk de beweging" opens the set with partial on,
-        // because that is what it promised.
-        _partialReps = State(initialValue: startsPartial ? 1 : nil)
+        // A set being corrected opens on what it holds; one still open, on the
+        // reserve already picked in the card.
+        _rir = State(initialValue: draft.isLogged ? draft.rirReported : proposedRIR)
+        _failed = State(initialValue: draft.isLogged && draft.flags.contains(.failed))
+        if draft.isLogged {
+            // A correction changes what it is asked to change. Opening a
+            // written set on the plan's defaults would quietly strip the pause
+            // or the partial reps it was logged with.
+            _pausedReps = State(initialValue: draft.modifiers.pauseEnabled ? (draft.pausedReps ?? draft.reps) : nil)
+            _partialReps = State(initialValue: (draft.partialReps ?? 0) > 0 ? draft.partialReps : nil)
+        } else {
+            // A planned paused exercise opens with every rep paused, because
+            // that is what the plan prescribes; anywhere else it is off until
+            // asked for.
+            _pausedReps = State(initialValue: slot.planned.modifiers.pauseEnabled ? openingReps : nil)
+            // The pain flow's "Beperk de beweging" opens the set with partial
+            // on, because that is what it promised.
+            _partialReps = State(initialValue: startsPartial ? 1 : nil)
+        }
     }
 
     /// RIR is the third, optional tap. By default an exercise asks it on its
@@ -103,6 +121,11 @@ struct SetEntrySheet: View {
         asksForRIR && rir != nil && !RIRPreference.everySet
     }
 
+    /// The row already holds a written set: this is a correction.
+    private var isCorrection: Bool {
+        slot.sets.indices.contains(setIndex) && slot.sets[setIndex].isLogged
+    }
+
     /// A set added during this session rather than prescribed.
     private var isAddedSet: Bool {
         slot.sets.indices.contains(setIndex) && slot.sets[setIndex].origin == .sessionAdded
@@ -120,7 +143,7 @@ struct SetEntrySheet: View {
     private var sheetHeight: CGFloat {
         var height: CGFloat = 391        // grabber, head, steppers, chips, pill, footnote
         if asksForRIR { height += 86 }
-        if isCalibration { height += 56 } // the keypad it opens on
+        if showsKeypad { height += 56 }   // the keypad it opens on
         if canRemove { height += 52 }     // the quiet way back out
         return height
     }
@@ -187,7 +210,7 @@ struct SetEntrySheet: View {
         .task {
             // The keyboard comes up once the sheet has settled on its measured
             // height, never while that height is still being decided.
-            guard isCalibration else { return }
+            guard showsKeypad else { return }
             try? await Task.sleep(for: .milliseconds(400))
             keypadFocused = true
         }
@@ -246,7 +269,7 @@ struct SetEntrySheet: View {
                     partialReps: partialReps
                 ))
             } label: {
-                Text("Log set")
+                Text(isCorrection ? "Set \(setIndex + 1) bijwerken" : "Set opslaan")
             }
             .buttonStyle(SLPrimaryButtonStyle())
             .disabled(weight <= 0 || reps <= 0)
@@ -338,17 +361,17 @@ struct SetEntrySheet: View {
                         Text(value == 4 ? "4+" : "\(value)")
                             .slLead()
                             .slNumerals()
-                            .foregroundStyle(rir == value ? SL.Ink.primary : SL.Ink.secondary)
+                            .foregroundStyle(rir == value ? SL.Signal.action : SL.Ink.primary)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: SL.Metric.chipHeight)
                             .background(
                                 RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                                    .fill(SL.Surface.raised2)
+                                    .fill(rir == value ? SL.Signal.actionTint : SL.Surface.raised2)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
                                     .strokeBorder(
-                                        rir == value ? SL.Surface.selection : Color.clear,
+                                        rir == value ? SL.Signal.action : Color.clear,
                                         lineWidth: 1
                                     )
                             )
@@ -446,16 +469,16 @@ struct SetEntrySheet: View {
                         Text(value == 4 ? "4+" : "\(value)")
                             .slLead()
                             .slNumerals()
-                            .foregroundStyle(partialReps == value ? SL.Ink.primary : SL.Ink.secondary)
+                            .foregroundStyle(partialReps == value ? SL.Signal.action : SL.Ink.primary)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: SL.Metric.chipHeight)
                             .background(
                                 RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                                    .fill(SL.Surface.raised2)
+                                    .fill(partialReps == value ? SL.Signal.actionTint : SL.Surface.raised2)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                                    .strokeBorder(partialReps == value ? SL.Surface.selection : .clear, lineWidth: 1)
+                                    .strokeBorder(partialReps == value ? SL.Signal.action : .clear, lineWidth: 1)
                             )
                             .contentShape(Rectangle())
                     }
@@ -467,25 +490,25 @@ struct SetEntrySheet: View {
         }
     }
 
-    /// raised2 at 13/500 in `text2`; on, the .28 edge and white — the same
-    /// selected state the RIR chips beside it use (12R).
+    /// Surface-2 at 13 in ink-2; on, the lime tint inside a lime edge — the
+    /// same selected state the reserve chips beside it use.
     private func chip(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .slMeta(SL.Weight.medium)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .foregroundStyle(isOn ? SL.Ink.primary : SL.Ink.secondary)
+                .foregroundStyle(isOn ? SL.Signal.action : SL.Ink.secondary)
                 .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: SL.Metric.chipHeight)
                 .background(
                     RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .fill(SL.Surface.raised2)
+                        .fill(isOn ? SL.Signal.actionTint : SL.Surface.raised2)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .strokeBorder(isOn ? SL.Surface.selection : .clear, lineWidth: 1)
+                        .strokeBorder(isOn ? SL.Signal.action : .clear, lineWidth: 1)
                 )
                 .contentShape(Rectangle())
         }

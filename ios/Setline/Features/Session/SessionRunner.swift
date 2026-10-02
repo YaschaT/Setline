@@ -61,13 +61,11 @@ final class SessionRunner {
     private(set) var restCompletions = 0
     private var restCompletionSignalled = false
     private(set) var now = Date()
-    /// The timer opens expanded and steps back after a few seconds; the user
-    /// can flip it either way at any time.
-    var isTimerExpanded = true
-    /// The step-back happens once per rest. Without this, every tick after
-    /// the third second collapsed the timer again and manual expansion was
-    /// undone the instant it happened.
-    private var hasAutoCollapsed = false
+    /// The rest pill is one row until it is tapped open; opening it is the
+    /// reader's choice and stays theirs until the rest ends.
+    var isTimerExpanded = false
+    /// The session exactly as it opened — fresh, or as it was resumed.
+    private var openingSlots: [SessionSlot] = []
 
     var currentIndex: Int = 0
     var editing: (slot: Int, set: Int)?
@@ -121,7 +119,14 @@ final class SessionRunner {
         // A fresh stretch starts now either way; a resumed session carries its
         // banked time in, rather than recomputing from `startedAt`.
         clock = WorkoutClock(accumulatedSeconds: snapshot?.activeSeconds ?? 0, segmentStartedAt: Date())
+        openingSlots = slots.map(\.model)
     }
+
+    /// Nothing has been written, swapped, added or adjusted since the session
+    /// opened. Leaving it then is just leaving: there is no state to park, and
+    /// parking it anyway would leave a "paused session" behind that nobody
+    /// started — `Loggen` is one tap from every tab.
+    var isUntouched: Bool { slots.map(\.model) == openingSlots }
 
     private static func resolve(
         _ model: SessionSlot,
@@ -640,6 +645,31 @@ final class SessionRunner {
             ?? slots[slotIndex].planned.sets.last?.repRange.upperBound
     }
 
+    /// The reps a row opens on — in the input card and in the sheet alike, so
+    /// the two can never disagree about what one tap would write.
+    ///
+    /// The calibration set aims at its own target; a row that already holds
+    /// reps keeps them; otherwise SETLINE's proposal for that row, then what
+    /// the same set was last time, then the top of the row's range.
+    func openingReps(slotIndex: Int, setIndex: Int) -> Int {
+        guard slots.indices.contains(slotIndex), slots[slotIndex].sets.indices.contains(setIndex) else { return 0 }
+        let slot = slots[slotIndex]
+        let row = slot.sets[setIndex]
+        if setIndex == 0, !row.isLogged, needsCalibration(slotIndex: slotIndex) { return Calibration.targetReps }
+        if row.reps > 0 { return row.reps }
+        let reference = slot.history.mostRecent?.sets.first { $0.index == setIndex }
+        let plannedTop = slot.planned.sets.indices.contains(setIndex)
+            ? slot.planned.sets[setIndex].repRange.upperBound
+            : (slot.planned.sets.last?.repRange.upperBound ?? 8)
+        return suggestedReps(slotIndex: slotIndex, setIndex: setIndex) ?? reference?.reps ?? plannedTop
+    }
+
+    /// The first exercise that still has a set open, for when the one on
+    /// screen is done and it was the last in the list.
+    var firstOpenSlotIndex: Int? {
+        slots.firstIndex { !$0.isComplete }
+    }
+
     // MARK: - Reorder
 
     /// The "do something else now and come back" offer, when one exists.
@@ -740,13 +770,19 @@ final class SessionRunner {
         restTimer = timer
         restTitle = "Rust · \(Self.roleLabel(planned.role)) \(prescription.displayLabel)"
         restCompletionSignalled = false
-        isTimerExpanded = true
-        hasAutoCollapsed = false
+        isTimerExpanded = false
         RestNotifier.schedule(at: timer.fireDate)
     }
 
-    /// Seconds after which the expanded timer steps back to the compact bar.
-    static let expandedTimerSeconds: TimeInterval = 3
+    /// "3:00 vast": the rest the role prescribes, counted from now. The one
+    /// control that restarts the count, and it says so.
+    func resetRest() {
+        guard let current = restTimer else { return }
+        let timer = RestTimerState(targetSeconds: current.targetSeconds, startedAt: Date())
+        restTimer = timer
+        restCompletionSignalled = false
+        RestNotifier.schedule(at: timer.fireDate)
+    }
 
     func adjustRest(by seconds: Int) {
         restTimer?.adjust(by: seconds, floorRemainingAt: now)
@@ -757,8 +793,7 @@ final class SessionRunner {
 
     func endRest() {
         restTimer = nil
-        isTimerExpanded = true
-        hasAutoCollapsed = false
+        isTimerExpanded = false
         RestNotifier.cancel()
     }
 
@@ -770,8 +805,6 @@ final class SessionRunner {
 
     func toggleTimerExpanded() {
         isTimerExpanded.toggle()
-        // A deliberate choice outranks the automatic step-back.
-        hasAutoCollapsed = true
     }
 
     func tick() {
@@ -780,11 +813,6 @@ final class SessionRunner {
         if !restCompletionSignalled, timer.remaining(at: now) == 0 {
             restCompletionSignalled = true
             restCompletions += 1
-        }
-        guard !hasAutoCollapsed else { return }
-        if isTimerExpanded, now.timeIntervalSince(timer.startedAt) >= Self.expandedTimerSeconds {
-            isTimerExpanded = false
-            hasAutoCollapsed = true
         }
     }
 
@@ -831,6 +859,34 @@ final class SessionRunner {
         guard let weight = sets.first?.weightKg else { return nil }
         let reps = sets.map { "\($0.reps)" }.joined(separator: " · ")
         return ("Vorige · \(display.shortDate(last.date))", "\(display.kg(weight)) × \(reps)")
+    }
+
+    /// The card's head: "Vorige sessie · 2 sep" and what was lifted then —
+    /// "82,5 kg" with "× 8/8/8/7" where every set shared a weight, otherwise
+    /// each set on its own: "120 × 6 · 110 × 8".
+    func previousSummary(for slot: ExerciseSlot) -> (date: Date, weight: String?, detail: String)? {
+        guard let last = slot.history.mostRecent else { return nil }
+        let sets = last.sets.filter(\.countsTowardVolume)
+        guard let first = sets.first?.weightKg else { return nil }
+        if sets.allSatisfy({ $0.weightKg == first }) {
+            return (last.date, display.kg(first), "× " + sets.map { "\($0.reps)" }.joined(separator: "/"))
+        }
+        let each = sets.compactMap { set in
+            set.weightKg.map { display.setReference(weightKg: $0, reps: set.reps) }
+        }
+        return (last.date, nil, each.joined(separator: " · "))
+    }
+
+    /// What the same set was last time: "82,5 × 8".
+    func previousSet(slotIndex: Int, setIndex: Int) -> String? {
+        guard slots.indices.contains(slotIndex) else { return nil }
+        let slot = slots[slotIndex]
+        guard let reference = slot.history.mostRecent else { return nil }
+        let row = slot.sets.indices.contains(setIndex) ? slot.sets[setIndex] : nil
+        let prior = reference.sets.first { $0.index == row?.index }
+            ?? (reference.sets.indices.contains(setIndex) ? reference.sets[setIndex] : nil)
+        guard let prior, let weight = prior.weightKg else { return nil }
+        return display.setReference(weightKg: weight, reps: prior.reps)
     }
 
     var columnHeaderDate: String {

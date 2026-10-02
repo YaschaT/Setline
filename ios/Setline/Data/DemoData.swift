@@ -127,7 +127,10 @@ enum DemoData {
         // reachable from a cold launch.
         // `-SetlineUpperDay` puts today on Upper, which is where the planned
         // paused bench lives.
-        let today = ProcessInfo.processInfo.arguments.contains("-SetlineUpperDay") ? "upper" : "push"
+        // `-SetlineRestDay` rests today, for the screens that only show then.
+        let arguments = ProcessInfo.processInfo.arguments
+        let today = arguments.contains("-SetlineRestDay") ? "rest"
+            : arguments.contains("-SetlineUpperDay") ? "upper" : "push"
         let overrides = JSONValue.object([
             "personal:\(Schedule.dateKey(Date()))": .string(today)
         ])

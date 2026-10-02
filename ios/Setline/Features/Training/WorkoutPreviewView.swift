@@ -1,132 +1,195 @@
 import SwiftUI
 import SetlineCore
 
-/// Artboard 33 · workout preview.
+/// Redesign 1a · "Voorbeeld · start nog niet".
 ///
-/// What a date holds, read from the programme and the schedule. It is 10's
-/// card without 10's promise: there is no start button here, because a
-/// session begins on the day itself, from Training. Opening this screen
-/// writes nothing.
+/// What a date holds, read from the programme and the schedule: four numbers
+/// about the session, then its exercises in order. Opening it writes nothing
+/// and starts nothing — starting is the lime button, and only today has one.
+///
+/// A day that has gone by offers writing it down afterwards instead; a day
+/// still to come offers nothing but a look. Every unlogged day can be given
+/// another session from here ("Wijzig deze dag").
 struct WorkoutPreviewView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     let day: AgendaDay
     let workout: WorkoutDay
+    /// Today only: start the session.
+    let onStart: (() -> Void)?
+    /// A day that passed unlogged: write it down on its own date.
+    let onLogPast: (() -> Void)?
+    let onChangeDay: () -> Void
     let onClose: () -> Void
-    let onPlanWeek: () -> Void
-    /// Present only where the reader came from Training; the Agenda hides it
-    /// rather than offering a way back to itself.
-    let onOpenAgenda: (() -> Void)?
 
     var body: some View {
-        ZStack {
-            SL.Surface.ground.ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 0) {
-                header
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        SLEyebrow(text: eyebrow)
-
-                        Text(workout.short)
-                            .slDisplay()
-                            .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
-                            .foregroundStyle(SL.Ink.primary)
-                            .padding(.top, 6)
-
-                        Text(meta)
-                            .slBody().slNumerals()
-                            .foregroundStyle(SL.Ink.secondary)
-                            .padding(.top, 6)
-
-                        if let movedFrom = day.movedFrom {
-                            Text("Verplaatst van \(movedFrom).")
-                                .slBody()
-                                .foregroundStyle(SL.Ink.secondary)
-                                .padding(.top, 6)
-                        }
-
-                        exerciseCard.padding(.top, SL.Space.s6)
-
-                        Text(footnote)
-                            .slMeta()
-                            .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(SL.Ink.tertiary)
-                            .padding(.top, SL.Space.s5)
-                    }
-                    .padding(.horizontal, SL.Space.gutterSession)
-                    .padding(.top, 28)
-                    .padding(.bottom, SL.Space.s8)
-                }
+        SLSheet(title: title.slUnbroken, subtitle: subtitle, onClose: onClose) {
+            VStack(alignment: .leading, spacing: SL.Space.s4) {
+                stats
+                exercises
+                Text(footnote.slUnbroken)
+                    .slMeta()
+                    .slNumerals()
+                    .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.secondary)
+                actions
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            if let onOpenAgenda {
-                Button(action: onOpenAgenda) {
-                    Text("Naar agenda")
-                        .slBody(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: SL.Metric.primaryPillHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.bottom, SL.Space.sessionBlockBottom)
-                .background(SL.Surface.ground)
-            }
-        }
-        .slRespondsToTextSize()
     }
 
-    private var header: some View {
-        HStack {
-            Button(action: onClose) {
-                Text("Sluiten").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary).slHitTarget()
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            Button(action: onPlanWeek) {
-                Text("Wijzig planning").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.tertiary).slHitTarget()
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.top, SL.Space.s3)
+    // MARK: - Head
+
+    /// "Push A · bank & schouders"
+    private var title: String {
+        guard let first = workout.focus.first else { return workout.short }
+        return "\(workout.short) · \(first.lowercased())\(workout.focus.dropFirst())"
     }
 
-    private var eyebrow: String {
+    private var subtitle: String {
+        if day.isToday { return "Voorbeeld · start nog niet" }
         let date = "\(WeekPlan.fullWeekday(day.date)) \(app.display.shortDate(day.date))"
-        if case .missed = day.content { return date }
-        return "\(date) · gepland"
+        if case .missed = day.content { return "Niet gelogd · \(date)" }
+        return "Voorbeeld · \(date)"
     }
 
-    /// The same three numbers 10 states, from the same rules.
-    private var meta: String {
-        var parts = ["\(WeekPlan.sets(of: workout)) sets", "±\(WeekPlan.minutes(of: workout)) min"]
-        parts.append("rust \(restLabel)")
-        return parts.joined(separator: " · ")
-    }
+    // MARK: - Four numbers
 
-    private var restLabel: String {
-        let seconds = workout.exercises.map { RestPrescription.forRole($0.role).defaultSeconds }
-        func clock(_ value: Int) -> String { "\(value / 60):" + String(format: "%02d", value % 60) }
-        guard let low = seconds.min(), let high = seconds.max() else { return clock(120) }
-        return low == high ? clock(low) : "\(clock(low))–\(clock(high))"
-    }
-
-    /// 33 says why there is no start button, and 32f says what a passed day
-    /// does not become.
-    private var footnote: String {
-        if case .missed = day.content {
-            return "Geen sets opgeslagen. SETLINE haalt niets in en verschuift niets — je plan voor volgende week blijft staan."
+    private var stats: some View {
+        let volume = plannedVolume
+        var items: [(value: String, label: String)] = [
+            ("~\(WeekPlan.minutes(of: workout))", "min"),
+            ("\(workout.exercises.count)", workout.exercises.count == 1 ? "oefening" : "oefeningen"),
+            ("\(WeekPlan.sets(of: workout))", "sets"),
+        ]
+        // Tonnage needs weights to reckon with; a first session has none, and
+        // the column is left out rather than filled with a guess.
+        if volume > 0 {
+            items.append((app.display.number(tonnes(volume)), "ton gepland"))
         }
-        guard let reference = lastSession else {
-            return "Verwachte gewichten. Er staat hier geen startknop: een sessie begin je op de dag zelf vanaf Training."
+        // Four across, until the text is too large for four: then two rows
+        // of two, and every label whole.
+        let columns = Array(
+            repeating: GridItem(.flexible(), spacing: SL.Space.s2, alignment: .topLeading),
+            count: typeSize.isAccessibilitySize ? 2 : items.count
+        )
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: SL.Space.s3) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.value)
+                        .slTitle()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text(item.label)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+            }
         }
-        return "Verwachte gewichten, gerekend uit je sessie van \(app.display.shortDate(reference.date)). Er staat hier geen startknop: een sessie begin je op de dag zelf vanaf Training."
+        .padding(.vertical, SL.Space.s3)
+        .overlay(alignment: .top) { SLHairline() }
+        .overlay(alignment: .bottom) { SLHairline() }
+    }
+
+    /// The volume the day would come to at the weights it would open with.
+    private var plannedVolume: Decimal {
+        workout.exercises.reduce(Decimal(0)) { total, planned in
+            guard let weight = target(for: planned).weight else { return total }
+            let reps = planned.sets.reduce(0) { $0 + $1.repRange.upperBound }
+            return total + weight * Decimal(reps)
+        }
+    }
+
+    /// Kilos as tonnes, to one decimal: "7,4".
+    private func tonnes(_ kilos: Decimal) -> Decimal {
+        var value = kilos / 1000
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 1, .plain)
+        return rounded
+    }
+
+    // MARK: - The exercises
+
+    private var exercises: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(workout.exercises.enumerated()), id: \.offset) { index, planned in
+                row(index: index, planned)
+                    .overlay(alignment: .bottom) {
+                        if index < workout.exercises.count - 1 { SLHairline() }
+                    }
+            }
+        }
+    }
+
+    private func row(index: Int, _ planned: PlannedExercise) -> some View {
+        SLAdaptiveRow(spacing: SL.Space.s3) {
+            Text("\(index + 1)")
+                .slMeta()
+                .slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minWidth: 24, alignment: .leading)
+        } main: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(app.exercise(planned.exerciseID).name)
+                    .slLead(SL.Weight.regular)
+                    .foregroundStyle(SL.Ink.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if typeSize.isAccessibilitySize {
+                    prescriptionText(planned)
+                }
+            }
+        } trailing: {
+            if !typeSize.isAccessibilitySize {
+                prescriptionText(planned)
+            }
+        }
+        .padding(.vertical, SL.Space.s2)
+        .frame(minHeight: 56)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func prescriptionText(_ planned: PlannedExercise) -> some View {
+        Text(prescription(planned).slUnbroken)
+            .slMeta()
+            .slNumerals()
+            .multilineTextAlignment(typeSize.isAccessibilitySize ? .leading : .trailing)
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(SL.Ink.secondary)
+    }
+
+    /// What the exercise would open with, read as the date would open it:
+    /// history up to that date only, so a look at a past day never borrows
+    /// numbers from after it.
+    private func target(for planned: PlannedExercise) -> (weight: Decimal?, previous: Decimal?) {
+        let history = app.history(for: planned, before: day.date)
+        let previous = history.mostRecent?.sets.first?.weightKg
+        let proposal = ProgressionEngine.proposal(
+            planned: planned, exercise: app.exercise(planned.exerciseID), history: history
+        )
+        return (proposal.weightKg ?? previous, previous)
+    }
+
+    /// "4 × 8 · vorige 82,5 kg", or the weight the session would propose where
+    /// that is no longer the previous one.
+    private func prescription(_ planned: PlannedExercise) -> String {
+        let reps = planned.sets.first?.repRange.upperBound ?? 0
+        let line = "\(planned.targetSets) × \(reps)"
+        let (weight, previous) = target(for: planned)
+        if let weight, let previous, weight != previous {
+            return "\(line) · doel \(app.display.kg(weight))"
+        }
+        if let previous {
+            return "\(line) · vorige \(app.display.kg(previous))"
+        }
+        if let note = planned.authoredNote?.load, !note.isEmpty {
+            return "\(line) · \(note)"
+        }
+        return line
     }
 
     private var lastSession: TrainingSession? {
@@ -135,61 +198,48 @@ struct WorkoutPreviewView: View {
             .max { $0.date < $1.date }
     }
 
-    /// 10's card, without its trailing lime: nothing here is a target yet.
-    private var exerciseCard: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(workout.exercises.enumerated()), id: \.offset) { index, planned in
-                row(planned)
-                if index < workout.exercises.count - 1 {
-                    SLHairline().padding(.horizontal, 14)
+    private var footnote: String {
+        var lines: [String] = []
+        if let movedFrom = day.movedFrom {
+            lines.append("Verplaatst van \(movedFrom).")
+        }
+        if case .missed = day.content {
+            lines.append("Geen sets opgeslagen. SETLINE haalt niets in en verschuift niets — je plan voor volgende week blijft staan.")
+        } else if day.isToday {
+            lines.append("Gewichten komen uit je vorige sessie. Alles is tijdens de sessie aanpasbaar.")
+        } else if let reference = lastSession {
+            lines.append("Verwachte gewichten, gerekend uit je sessie van \(app.display.shortDate(reference.date)). Starten kan op de dag zelf.")
+        } else {
+            lines.append("Starten kan op de dag zelf.")
+        }
+        return lines.joined(separator: " ")
+    }
+
+    // MARK: - What can be done from here
+
+    private var actions: some View {
+        VStack(spacing: SL.Space.s1) {
+            if let onStart {
+                Button(action: onStart) {
+                    HStack(spacing: 10) {
+                        SLGlyph(name: .play, size: 16)
+                        Text("Start training")
+                    }
                 }
+                .buttonStyle(SLPrimaryButtonStyle())
             }
-        }
-        .padding(8)
-        .slBorderBox()
-        .background(
-            RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                .strokeBorder(SL.Surface.hairline, lineWidth: 1)
-        )
-    }
-
-    private func row(_ planned: PlannedExercise) -> some View {
-        let exercise = app.exercise(planned.exerciseID)
-        // Read as the date would open it: history up to that date only, so a
-        // preview of a past day never borrows numbers from after it.
-        let history = app.history(for: planned, before: day.date)
-        let previous = history.mostRecent?.sets.first?.weightKg
-        let proposal = ProgressionEngine.proposal(planned: planned, exercise: exercise, history: history)
-        let target = proposal.weightKg ?? previous
-
-        return HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(exercise.name).slLead().foregroundStyle(SL.Ink.primary)
-                Text(prescription(planned, previous: previous))
-                    .slMeta().slNumerals()
-                    .foregroundStyle(SL.Ink.tertiary)
+            if let onLogPast {
+                Button(action: onLogPast) { Text("Achteraf loggen") }
+                    .buttonStyle(SLOutlineButtonStyle())
+                    .accessibilityHint("Schrijft \(workout.short) op, op \(Agenda.when(day.date))")
+                    .padding(.bottom, SL.Space.s1)
             }
-            Spacer(minLength: SL.Space.s3)
-            Text(target.map(app.display.kg) ?? "—")
-                .slLead()
-                .slNumerals()
-                .foregroundStyle(SL.Ink.primary)
+            Button(action: onChangeDay) { Text("Wijzig deze dag") }
+                .buttonStyle(SLOutlineButtonStyle())
+                .padding(.top, onStart == nil ? 0 : SL.Space.s1)
+                .accessibilityHint("Zet een andere sessie of rust op deze datum")
+            Button(action: onClose) { Text("Terug naar overzicht") }
+                .buttonStyle(SLQuietButtonStyle())
         }
-        .padding(14)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func prescription(_ planned: PlannedExercise, previous: Decimal?) -> String {
-        let reps = planned.sets.first?.repRange.upperBound ?? 0
-        var line = "\(planned.targetSets) × \(reps)"
-        if let previous {
-            line += " · vorige \(app.display.kg(previous))"
-        } else if let note = planned.authoredNote?.load, !note.isEmpty {
-            line += " · \(note)"
-        }
-        return line
     }
 }

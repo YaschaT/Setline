@@ -17,6 +17,8 @@ import SetlineCore
 struct StrengthSegmentView: View {
     @Environment(AppState.self) private var app
 
+    /// The exercise on screen. Opens on the one a best-set row pointed at,
+    /// where the overview led here from one.
     @State private var selected: String?
     @State private var progress: StrengthProgress?
     @State private var rows: [ExercisePicker.Row] = []
@@ -26,6 +28,10 @@ struct StrengthSegmentView: View {
     @State private var series: [ExerciseHistory.Series] = []
     @State private var picking = false
     @State private var explaining = false
+
+    init(opening exerciseID: String? = nil) {
+        _selected = State(initialValue: exerciseID)
+    }
 
     var body: some View {
         ScrollView {

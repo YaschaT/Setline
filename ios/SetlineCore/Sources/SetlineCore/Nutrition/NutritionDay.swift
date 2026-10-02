@@ -296,3 +296,48 @@ public enum Macro: String, CaseIterable, Sendable {
     /// is steering. The other two are reported, not urged.
     public var isLed: Bool { self == .protein }
 }
+
+/// Days in a row on which protein stayed under its target — the one thing the
+/// nutrition screen raises by itself (redesign 1c, "Aandacht").
+///
+/// It is read from what was logged and nothing else. Only whole days count:
+/// today joins once it is over, because a day half eaten is always short. A
+/// day with nothing logged ends the run rather than extending it — not logging
+/// is not the same as not eating. And a single short day is not a pattern, so
+/// nothing is said until there are two.
+public struct ProteinShortfall: Equatable, Sendable {
+    public let days: Int
+    /// The mean number of grams those days fell short by, to the gram.
+    public let averageGrams: Int
+
+    public init(days: Int, averageGrams: Int) {
+        self.days = days
+        self.averageGrams = averageGrams
+    }
+
+    /// The longest run this looks back over.
+    public static let window = 60
+
+    public static func make(
+        entries: [NutritionEntry],
+        targets: NutritionTargets?,
+        today: Date = Date(),
+        calendar: Calendar = .current
+    ) -> ProteinShortfall? {
+        guard let target = targets.map({ Double($0.protein) }), target > 0 else { return nil }
+        var byDate: [String: Double] = [:]
+        for entry in entries { byDate[entry.date, default: 0] += entry.protein }
+
+        var days = 0
+        var shortfall = 0.0
+        var cursor = calendar.date(byAdding: .day, value: -1, to: today)
+        while let day = cursor, days < window {
+            guard let eaten = byDate[Schedule.dateKey(day, calendar: calendar)], eaten < target else { break }
+            shortfall += target - eaten
+            days += 1
+            cursor = calendar.date(byAdding: .day, value: -1, to: day)
+        }
+        guard days >= 2 else { return nil }
+        return ProteinShortfall(days: days, averageGrams: Int((shortfall / Double(days)).rounded()))
+    }
+}

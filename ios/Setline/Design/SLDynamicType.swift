@@ -18,7 +18,13 @@ extension Font {
         _ weight: Font.Weight,
         relativeTo style: UIFont.TextStyle = .body
     ) -> Font {
-        .system(size: UIFontMetrics(forTextStyle: style).scaledValue(for: size), weight: weight)
+        SLTypeface.font(size: UIFontMetrics(forTextStyle: style).scaledValue(for: size), weight: weight)
+    }
+
+    /// Archivo at a fixed size, for chrome that deliberately ignores Dynamic
+    /// Type — the tab bar's 11pt labels.
+    static func slFixed(_ size: CGFloat, _ weight: Font.Weight) -> Font {
+        SLTypeface.font(size: size, weight: weight)
     }
 
     /// The same scaling, with a ceiling.
@@ -33,7 +39,7 @@ extension Font {
         relativeTo style: UIFont.TextStyle = .body
     ) -> Font {
         let scaled = UIFontMetrics(forTextStyle: style).scaledValue(for: size)
-        return .system(size: min(scaled, size * maxScale), weight: weight)
+        return SLTypeface.font(size: min(scaled, size * maxScale), weight: weight)
     }
 }
 
@@ -94,7 +100,7 @@ private struct SLLineHeight: ViewModifier {
                 // be cut off; CSS lets them hang over, and so does this.
                 .textRenderer(SLOverhangRenderer(overhang: scaled * 0.3))
         } else {
-            content.lineSpacing(max(0, scaled * factor - UIFont.systemFont(ofSize: scaled).lineHeight))
+            content.lineSpacing(max(0, scaled * factor - SLTypeface.uiFont(size: scaled, weight: .regular).lineHeight))
         }
     }
 }

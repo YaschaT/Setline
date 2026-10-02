@@ -1,12 +1,14 @@
 // SetlineTokens.swift
-// SETLINE design tokens — transcribed 1:1 from the approved design
-// (see design/SETLINE Main.dc.html, "Tokens" section).
+// SETLINE design tokens — transcribed from "SETLINE Redesign.dc.html",
+// section D (the redesign of 2026-09). It supersedes the token sheet in
+// SETLINE Main.dc.html: same ground and the same two signals, solid hairlines
+// instead of translucent white, Archivo instead of the system face, and
+// rounded-rectangle actions instead of pills.
 //
 // Two deliberate edits to the transcription, both in SLPrimaryButtonStyle:
-// the label uses the Dynamic Type-scaled font helper, and the pill takes a
+// the label uses the Dynamic Type-scaled font helper, and the button takes a
 // minimum height rather than a fixed one, so it grows with the reader's text
-// size instead of clipping. The handoff asks for both ("Support Dynamic Type
-// via @ScaledMetric … the 44 hit-target minimum must hold at every size").
+// size instead of clipping. The 44 hit-target minimum holds at every size.
 //
 // Dark appearance only. Set .preferredColorScheme(.dark) at the app root
 // and use these literals rather than semantic system colours.
@@ -31,44 +33,57 @@ enum SL {
 
     // MARK: Ground & surfaces
     enum Surface {
-        static let ground   = Color(hex: 0x060908)   // app background
-        static let raised   = Color(hex: 0x0D1310)   // cards, tab bar, sheets
-        static let raised2  = Color(hex: 0x151C17)   // selected / louder surfaces
+        static let ground   = Color(hex: 0x060908)   // --sl-bg
+        static let raised   = Color(hex: 0x0D1210)   // --sl-surface-1 · cards, tab bar, sheets
+        static let raised2  = Color(hex: 0x141A18)   // --sl-surface-2 · pressed, sheet rows
 
-        static let hairline       = Color.white.opacity(0.08)  // structure
-        static let hairlineStrong = Color.white.opacity(0.16)  // today's card, sheet edge
-        static let selection      = Color.white.opacity(0.28)  // selected rows, secondary buttons
+        static let hairline       = Color(hex: 0x1C2422)       // --sl-line · card edge
+        static let hairlineStrong = Color(hex: 0x232B29)       // --sl-line-strong · button edge
+        static let selection      = Color.white.opacity(0.28)  // selected rows in the older sheets
+
+        /// The grey the design draws empty rings, week dots and bar stubs in.
+        static let mute = Color(hex: 0x3A4643)
 
         /// Only translucent surface in the app: the floating rest timer.
-        static let floatFill = Color(hex: 0x151C17).opacity(0.82)
-        static let floatBlur: CGFloat = 24
+        static let floatFill = Color(hex: 0x0D1210).opacity(0.82)
+        static let floatBlur: CGFloat = 18
+
+        /// The day card and the two hero cards: 155°, #1d2723 → #111815 at
+        /// 55% → #0d1210. See `slHeroCard()`.
+        static let heroStops: [Gradient.Stop] = [
+            .init(color: Color(hex: 0x1D2723), location: 0),
+            .init(color: Color(hex: 0x111815), location: 0.55),
+            .init(color: Color(hex: 0x0D1210), location: 1),
+        ]
     }
 
     // MARK: Ink
     enum Ink {
-        static let primary   = Color(hex: 0xF3F7F4)
-        static let secondary = Color(hex: 0xA9B5AD)
-        static let tertiary  = Color(hex: 0x8B968E)
+        static let primary   = Color(hex: 0xF2F5F3)                // --sl-ink
+        static let secondary = Color(hex: 0x9AA6A1)                // --sl-ink-2 · 7,6:1 on ground
+        static let tertiary  = Color(hex: 0xF2F5F3).opacity(0.55)  // --sl-ink-3
+        /// The slightly lighter grey the design sets a card's meta line in.
+        static let meta      = Color(hex: 0xB3BDB8)
     }
 
     // MARK: Action & signal
     enum Signal {
-        /// Two jobs only: one semantic win + one commit action per screen.
-        /// Never a goal, never a neutral state — and a selection only where
-        /// 39a extends the rule: on a rest day the week rail's selected day is
-        /// the one control, so it takes the lime, and gives it back to Start
-        /// on a training day. Never twice on one screen.
-        static let action        = Color(hex: 0xC8FF66)
-        static let actionPressed = Color(hex: 0xB9F45B)
-        static let onAction      = Color(hex: 0x0A0D0B)
+        /// Lime is the action colour: the commit on a screen, the selected
+        /// day, the set that is open, and a gain. Mint is rest and recovery,
+        /// amber asks for attention, red is a loss.
+        static let action        = Color(hex: 0xC8FF66)   // --sl-action
+        static let actionPressed = Color(hex: 0xDCFFA0)   // --sl-action-press
+        static let actionTint    = Color(hex: 0xC8FF66).opacity(0.12)
+        static let onAction      = Color(hex: 0x060908)   // --sl-on-action
 
-        static let recovery  = Color(hex: 0x72EFD0)
-        static let attention = Color(hex: 0xF4C65B)
-        static let loss      = Color(hex: 0xFF8A8A)
+        static let recovery     = Color(hex: 0x72EFD0)    // --sl-rest
+        static let recoveryTint = Color(hex: 0x72EFD0).opacity(0.12)
+        static let attention    = Color(hex: 0xFFB84D)    // --sl-attention
+        static let loss         = Color(hex: 0xFF5C5C)    // --sl-loss
     }
 
     // MARK: Type
-    // System font. Numerals ALWAYS .monospacedDigit().
+    // Archivo (bundled; see `SLTypeface`). Numerals ALWAYS .monospacedDigit().
     // UI minimum is 12pt; 11pt is reserved for tab labels only.
     enum TypeSize {
         static let displayXL: CGFloat = 44   // 01 headline, 09 session name
@@ -91,7 +106,9 @@ enum SL {
     enum Weight {
         static let regular  = Font.Weight.regular   // 400
         static let medium   = Font.Weight.medium    // 500
-        static let semibold = Font.Weight.semibold  // 600 — nothing heavier
+        static let semibold = Font.Weight.semibold  // 600
+        /// 700: the label on a lime action and the oversized workout word.
+        static let bold     = Font.Weight.bold
     }
 
     // MARK: Space
@@ -172,14 +189,20 @@ enum SL {
 
     // MARK: Fixed component metrics
     enum Metric {
-        static let primaryPillHeight: CGFloat = 54
+        /// "Start training": 56 high, radius 16. Kept under its old name so
+        /// every primary action in the app takes the new size.
+        static let primaryPillHeight: CGFloat = 56
+        /// "Set opslaan", the one 64pt action (--sl-cta).
+        static let ctaHeight:         CGFloat = 64
+        /// The outlined secondary: 48 high, radius 12.
+        static let outlineHeight:     CGFloat = 48
         static let tertiaryHeight:    CGFloat = 44
-        static let setRowHeight:      CGFloat = 56
-        /// The tab bar as the design renders it: 56-high items inside 6 of
-        /// padding and a 1pt border. The HTML sizes boxes content-box, so its
-        /// `height:56px` bar draws 70 tall — the height seen in every artboard.
+        static let setRowHeight:      CGFloat = 52
+        /// The tab bar: 56 high inside its hairline, radius 22, inset 21
+        /// (--sl-tabbar-h). The design sizes boxes content-box, so the border
+        /// adds to it: 58 across.
         static let tabItemHeight:     CGFloat = 56
-        static let tabBarHeight:      CGFloat = 70
+        static let tabBarHeight:      CGFloat = 58
         static let segmentHeight:     CGFloat = 44
         static let chipHeight:        CGFloat = 44
         static let dayTileHeight:     CGFloat = 64   // 72 on the first-run home
@@ -192,68 +215,84 @@ enum SL {
         static let focusRingWidth:    CGFloat = 2
         static let focusRingOffset:   CGFloat = 2
         static let undoWindow:        Double = 5     // seconds
-        static let restAdjustStep:    Double = 15    // seconds, never resets
+        static let restAdjustStep:    Double = 30    // seconds, never resets
         static let restDefault:       Double = 120   // 2:00
     }
 }
 
 // MARK: - Primitives
 
-/// The one commit action per screen. Pressed: scale .97 + #B9F45B, 120ms ease-out.
-/// Focus: 2pt lime ring, 2pt offset, no glow. Disabled: raised2 fill, tertiary ink.
+/// The commit action: lime, radius 16, 56 high, its label at 17/700.
+/// `prominent` is the logging screen's 64-high "Set opslaan" at 21/700.
+/// Pressed: #DCFFA0, 120ms ease-out. Focus: 2pt lime ring, 2pt offset, no
+/// glow. Disabled: raised2 fill, tertiary ink.
 struct SLPrimaryButtonStyle: ButtonStyle {
+    var prominent = false
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+        let shape = RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+        return configuration.label
+            .font(.sl(prominent ? SL.TypeSize.title : SL.TypeSize.lead, SL.Weight.bold))
             .foregroundStyle(isEnabled ? SL.Signal.onAction : SL.Ink.tertiary)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: SL.Metric.primaryPillHeight)
+            .frame(minHeight: prominent ? SL.Metric.ctaHeight : SL.Metric.primaryPillHeight)
             .background(
-                Capsule().fill(
+                shape.fill(
                     !isEnabled ? SL.Surface.raised2
                     : configuration.isPressed ? SL.Signal.actionPressed
                     : SL.Signal.action
                 )
             )
-            .scaleEffect(configuration.isPressed && isEnabled ? SL.Metric.pressedScale : 1)
+            .contentShape(shape)
             .animation(
                 .easeOut(duration: SL.Motion.duration(SL.Motion.fast, reduceMotion: reduceMotion)),
                 value: configuration.isPressed
             )
-            .slFocusRing(Capsule())
+            .slFocusRing(shape)
     }
 }
 
-/// Secondary (border .28) and tertiary-in-stack (border .16) pill.
+/// The outlined secondary: 48 high, radius 12, the strong hairline, its label
+/// at 15/400 — "Details in agenda", "Andere datums kiezen". Pressed it takes
+/// the raised2 fill. `tertiary` steps the ink back for the second of a pair.
 struct SLOutlineButtonStyle: ButtonStyle {
     enum Emphasis { case secondary, tertiary }
     var emphasis: Emphasis = .secondary
-    /// An artboard's own edge where it differs from the emphasis — 24 draws
-    /// its secondary retry with the .16 edge.
+    /// An edge of its own where a screen needs one — mint on a recovery
+    /// action, red on a removal.
     var edge: Color? = nil
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.sl(
-                SL.TypeSize.lead,
-                emphasis == .secondary ? SL.Weight.semibold : SL.Weight.medium
-            ))
+        let shape = RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+        return configuration.label
+            .font(.sl(SL.TypeSize.body, SL.Weight.regular))
             .foregroundStyle(emphasis == .secondary ? SL.Ink.primary : SL.Ink.secondary)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: SL.Metric.primaryPillHeight)
+            .frame(minHeight: SL.Metric.outlineHeight)
+            // 48 inside the border, 50 across — the design's box is content-box.
             .slBorderBox()
-            .background(Capsule().fill(SL.Surface.raised2))
-            .overlay(
-                Capsule().strokeBorder(
-                    edge ?? (emphasis == .secondary ? SL.Surface.selection : SL.Surface.hairlineStrong),
-                    lineWidth: 1
-                )
-            )
-            .opacity(configuration.isPressed ? 0.86 : 1)
-            .slFocusRing(Capsule())
+            .background(shape.fill(configuration.isPressed ? SL.Surface.raised2 : Color.clear))
+            .overlay(shape.strokeBorder(edge ?? SL.Surface.hairlineStrong, lineWidth: 1))
+            .contentShape(shape)
+            .slFocusRing(shape)
+    }
+}
+
+/// A text action with no edge: 44 high, 15/400 — "Oefeningen bekijken",
+/// "Terug naar overzicht".
+struct SLQuietButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+        return configuration.label
+            .font(.sl(SL.TypeSize.body, SL.Weight.regular))
+            .foregroundStyle(SL.Ink.primary)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: SL.Space.hitMin)
+            .background(shape.fill(configuration.isPressed ? SL.Surface.raised2 : Color.clear))
+            .contentShape(shape)
+            .slFocusRing(shape)
     }
 }
 
@@ -292,6 +331,53 @@ extension View {
                         lineWidth: 1
                     )
             )
+    }
+
+    /// The day card and the two hero cards: the 155° gradient inside the
+    /// strong hairline, radius 22. The angle is CSS's — the gradient line runs
+    /// through the centre and ends where the perpendicular meets the corners,
+    /// so it is measured against the card's own size.
+    func slHeroCard(radius: CGFloat = SL.Radius.xl) -> some View {
+        background(
+            GeometryReader { proxy in
+                let angle = 155.0 * Double.pi / 180
+                let (dx, dy) = (sin(angle), -cos(angle))
+                let size = proxy.size
+                let length = abs(size.width * dx) + abs(size.height * dy)
+                let half = length / 2
+                RoundedRectangle(cornerRadius: radius, style: .continuous).fill(
+                    LinearGradient(
+                        stops: SL.Surface.heroStops,
+                        startPoint: UnitPoint(
+                            x: 0.5 - dx * half / max(size.width, 1),
+                            y: 0.5 - dy * half / max(size.height, 1)
+                        ),
+                        endPoint: UnitPoint(
+                            x: 0.5 + dx * half / max(size.width, 1),
+                            y: 0.5 + dy * half / max(size.height, 1)
+                        )
+                    )
+                )
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)
+        )
+    }
+
+    /// A list card: surface-1 inside the hairline, radius 16, rows clipped to
+    /// the corner.
+    func slListCard(radius: CGFloat = SL.Radius.lg, raised: Bool = false) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(raised ? SL.Surface.raised2 : SL.Surface.raised)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+        )
     }
 
     /// Every numeric value in this design uses tabular figures.

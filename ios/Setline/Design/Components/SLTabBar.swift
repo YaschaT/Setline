@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// The five places the bar leads to — SETLINE Main's own five. The redesign
+/// put `Loggen` here and reached Account from an avatar; on iOS Account stays
+/// a tab and logging starts from Training.
 enum SLTab: String, CaseIterable, Identifiable {
     case training, voeding, progressie, fotos, account
 
@@ -15,11 +18,9 @@ enum SLTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The design's own artwork: the Material Symbols Rounded glyphs the
-    /// artboards draw (`exercise`, `nutrition`, `trending_up`,
-    /// `photo_camera`, `account_circle`; weight 400, unfilled), bundled as
-    /// template vectors in the asset catalog. The font the HTML loads carries
-    /// no fill axis, so the active tab is drawn outlined too — in lime.
+    /// The redesign's own strokes — a calendar, a fork and knife, a rising
+    /// line and a camera, each on a 22pt grid at 1.7 — and Main's outlined
+    /// account circle, which the redesign has no glyph for.
     var artwork: String {
         switch self {
         case .training: return "TabTraining"
@@ -31,52 +32,47 @@ enum SLTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Floating bar, inset 21 from the sides and resting on the home band; radius
-/// 22; 70 high as the artboards draw it, with 56-high items.
+/// The tab bar: inset 21 from the sides, 56 high, radius 22, on surface-1
+/// inside the hairline. The active tab is lime — icon and a 600 label — and
+/// carries no fill of its own.
 ///
-/// A custom bar rather than the stock one: the inset floating shape and the
-/// lime active fill are not achievable with `TabView`'s own bar.
+/// A custom bar rather than the stock one: the inset floating shape is not
+/// achievable with `TabView`'s own bar.
 struct SLTabBar: View {
     @Binding var selection: SLTab
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             ForEach(SLTab.allCases) { tab in
-                Button { selection = tab } label: {
-                    VStack(spacing: 5) {
+                let isActive = selection == tab
+                Button {
+                    selection = tab
+                } label: {
+                    VStack(spacing: 3) {
                         // Deliberately unscaled, like the 11pt label beneath
                         // it: letting the bar follow Dynamic Type burst it open
                         // and struck the labels through at accessibility sizes.
                         Image(tab.artwork)
                             .renderingMode(.template)
                             .resizable()
-                            .frame(width: 20, height: 20)
-                            .foregroundStyle(selection == tab ? SL.Signal.action : SL.Ink.tertiary)
+                            .frame(width: 22, height: 22)
                             .accessibilityHidden(true)
                         Text(tab.label)
-                            .font(.system(
-                                size: SL.TypeSize.tab,
-                                weight: selection == tab ? SL.Weight.semibold : SL.Weight.regular
-                            ))
-                            .foregroundStyle(selection == tab ? SL.Ink.primary : SL.Ink.tertiary)
+                            .font(.slFixed(SL.TypeSize.tab, isActive ? SL.Weight.semibold : SL.Weight.regular))
+                            .lineLimit(1)
                     }
+                    .foregroundStyle(isActive ? SL.Signal.action : SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: SL.Metric.tabItemHeight)
-                    .background(
-                        RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
-                            .fill(selection == tab ? SL.Surface.raised2 : .clear)
-                    )
+                    .frame(height: SL.Metric.tabItemHeight)
                     .contentShape(Rectangle())
-                    .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
                 .accessibilityLabel(tab.label)
-                .accessibilityAddTraits(selection == tab ? [.isSelected, .isButton] : .isButton)
+                .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
             }
         }
-        // 6 of padding inside the 1pt border, as the HTML draws it.
-        .padding(7)
-        .frame(minHeight: SL.Metric.tabBarHeight)
+        .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
                 .fill(SL.Surface.raised)

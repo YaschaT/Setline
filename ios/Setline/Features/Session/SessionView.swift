@@ -1,11 +1,20 @@
 import SwiftUI
 import SetlineCore
 
-/// Artboards 11R / 12R / 13R / 29 / 30.
+/// Redesign 1b · Loggen — the live session.
 ///
-/// The tab bar is gone by the time this appears: mid-set there is exactly
-/// one task, so the session is a full-screen presentation over the tab
-/// shell, not a tab-embedded push.
+/// The tab bar is gone by the time this appears: mid-set there is exactly one
+/// task, so the session is a full-screen presentation over the tab shell.
+///
+/// Everything a set needs sits in the dock at the foot of the screen, inside
+/// the thumb's reach: the rest pill, then the input card — weight and reps
+/// already filled in from what was proposed, one step per tap, and
+/// `Set opslaan` saying what it will write. Arriving costs no taps, a
+/// correction costs one, and the next set takes the corrected weight over.
+///
+/// Above it the exercise reads top to bottom: its name, the previous session,
+/// and one row per set. A row opens the full sheet for that set — to correct
+/// it, or to say what it was.
 struct SessionView: View {
     @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -14,12 +23,24 @@ struct SessionView: View {
     @State private var showsComplete = false
     @State private var confirmsEarlyFinish = false
     @State private var showsSwap = false
-    /// 11–13's `Schijven`: the plate calculator for the set up next.
+    /// `Schijven`: the plate calculator for the set up next.
     @State private var showsPlates = false
     @State private var toast: SessionToast?
-    /// Proposal cards opened with `Toon` at accessibility text sizes.
+    /// Proposal notes opened with `Toon` at accessibility text sizes.
     @State private var expandedProposals: Set<Int> = []
     @State private var asksAboutNotifications = false
+    /// Reps chosen in the input card for a set that is not saved yet. Kept by
+    /// set, so the next set opens on its own target again.
+    @State private var repsDraft: [UUID: Int] = [:]
+    /// Reps in reserve picked in the card, where the set asks for them.
+    @State private var rirDraft: [UUID: Int] = [:]
+    /// Open sets whose weight or reps were moved by hand: "aangepast".
+    @State private var adjusted: Set<UUID> = []
+    /// The weight each open set had before it was touched, so "aangepast" can
+    /// tell a correction from a value stepped back to where it started.
+    @State private var openingWeight: [UUID: Decimal] = [:]
+    /// The set sheet opens on its number field — reached from the weight.
+    @State private var entryOpensOnKeypad = false
 
     /// What just happened, and how to take it back.
     struct SessionToast: Identifiable {
@@ -30,8 +51,11 @@ struct SessionView: View {
 
     let onFinish: (TrainingSession) -> Void
     let onPause: (ActiveSessionSnapshot) -> Void
+    /// Leaves a session nothing was done in, without parking it.
+    let onClose: () -> Void
 
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private static let topAnchor = "session-top"
 
     init(
         day: WorkoutDay,
@@ -39,11 +63,13 @@ struct SessionView: View {
         resuming snapshot: ActiveSessionSnapshot?,
         loggingFor date: Date? = nil,
         onFinish: @escaping (TrainingSession) -> Void,
-        onPause: @escaping (ActiveSessionSnapshot) -> Void
+        onPause: @escaping (ActiveSessionSnapshot) -> Void,
+        onClose: @escaping () -> Void
     ) {
         _runner = State(initialValue: SessionRunner(day: day, app: app, restoring: snapshot, loggingFor: date))
         self.onFinish = onFinish
         self.onPause = onPause
+        self.onClose = onClose
     }
 
     var body: some View {
@@ -51,12 +77,11 @@ struct SessionView: View {
             SL.Surface.ground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                header
-                exerciseNav
+                topBar
                 sessionContent
             }
         }
-        .safeAreaInset(edge: .bottom) { bottomBar }
+        .safeAreaInset(edge: .bottom) { dock }
         .animation(
             .easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion)),
             value: runner.completedSetCount
@@ -78,6 +103,7 @@ struct SessionView: View {
             // Rest is over. The notification covers the background; this is
             // the foreground's equivalent, felt without looking.
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            AccessibilityNotification.Announcement("Rust afgelopen").post()
         }
         .task(id: toast?.id) {
             guard let id = toast?.id, !UIAccessibility.isVoiceOverRunning else { return }
@@ -99,6 +125,9 @@ struct SessionView: View {
                 runner.prefillForInspection()
                 showsComplete = true
             }
+            if ProcessInfo.processInfo.arguments.contains("-SetlineRestOpen") {
+                runner.toggleTimerExpanded()
+            }
             #endif
         }
         .sheet(isPresented: Binding(
@@ -110,12 +139,16 @@ struct SessionView: View {
             if let editing = runner.editing,
                runner.slots.indices.contains(editing.slot),
                runner.slots[editing.slot].sets.indices.contains(editing.set) {
+                let row = runner.slots[editing.slot].sets[editing.set]
                 SetEntrySheet(
                     slot: runner.slots[editing.slot],
                     setIndex: editing.set,
                     isCalibration: editing.set == 0 && runner.needsCalibration(slotIndex: editing.slot),
-                    proposedReps: runner.suggestedReps(slotIndex: editing.slot, setIndex: editing.set),
+                    // What the card shows is what the sheet opens on.
+                    proposedReps: repsDraft[row.id] ?? runner.suggestedReps(slotIndex: editing.slot, setIndex: editing.set),
                     startsPartial: runner.editingStartsPartial,
+                    startsOnKeypad: entryOpensOnKeypad,
+                    proposedRIR: rirDraft[row.id],
                     onLog: { entry in
                         runner.log(slotIndex: editing.slot, setIndex: editing.set, entry: entry)
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -157,6 +190,7 @@ struct SessionView: View {
             )
             .environment(app)
         }
+        .sheet(isPresented: $showsPlates) { platesForNextSet }
         .alert(
             "Sessie afronden met \(runner.completedSetCount) van \(runner.plannedSetCount) sets?",
             isPresented: $confirmsEarlyFinish
@@ -209,6 +243,7 @@ struct SessionView: View {
     private func closeEntry() {
         runner.editing = nil
         runner.editingStartsPartial = false
+        entryOpensOnKeypad = false
     }
 
     /// Everything the swap sheet can decide, applied in one place. Every
@@ -302,263 +337,222 @@ struct SessionView: View {
         show("Set \(set + 1) verwijderd.") { runner.restore(removed, slotIndex: slot) }
     }
 
-    // MARK: Chrome
 
-    /// Pause leaves; Afronden appears only once there is something to finish.
-    private var header: some View {
-        // At accessibility sizes the clock takes a line of its own: between
-        // the two controls it was cut short and broke "Afronden" in two.
-        VStack(alignment: .leading, spacing: 2) {
+    // MARK: - Top bar
+
+    /// The way out on the left — nothing is lost by taking it — and on the
+    /// right the clock, the count, and `Afronden` once there is something to
+    /// finish.
+    private var topBar: some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: SL.Space.s3) {
-                Button {
-                    runner.stopRestSignals()
-                    onPause(runner.snapshot())
-                } label: {
-                    Text("Pauzeer").slBody(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .slHitTarget()
+                Button(action: leave) {
+                    HStack(spacing: 2) {
+                        SLGlyph(name: .chevronLeft, size: 18)
+                        Text(runner.isUntouched ? "Training" : "Pauzeer").slBody()
+                    }
+                    .foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(runner.isUntouched ? "Terug naar Training" : "Pauzeer de sessie")
+                .accessibilityHint(runner.isUntouched ? "" : "Bewaart waar je bent. Je hervat vanaf Training.")
 
                 Spacer(minLength: 0)
 
-                if !typeSize.isAccessibilitySize { headerClock }
+                // At the largest sizes the clock takes a line of its own
+                // rather than squeezing both controls into broken words.
+                if !typeSize.isAccessibilitySize { clockLine }
 
                 if runner.hasProgress && !runner.isComplete {
                     Button { confirmsEarlyFinish = true } label: {
-                        Text("Afronden").slBody(SL.Weight.medium)
+                        Text("Afronden")
+                            .slBody()
                             .foregroundStyle(SL.Ink.secondary)
                             .lineLimit(1)
                             .fixedSize()
-                            .slHitTarget()
+                            .frame(minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            if typeSize.isAccessibilitySize { headerClock }
+            if typeSize.isAccessibilitySize {
+                clockLine.padding(.leading, SL.Space.s1)
+            }
         }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.top, SL.Space.s3)
+        .padding(.leading, SL.Space.s4)
+        .padding(.trailing, SL.Space.gutterSession)
     }
 
-    /// A workout being written down afterwards has no clock to show — it names
-    /// the day it is being written for instead, so the sets can never land on
-    /// the wrong date without anyone noticing.
-    private var headerClock: some View {
-        Text(runner.isLoggedAfterwards
-             ? "\(Schedule.weekdayLabel(runner.startedAt).lowercased()) \(app.display.shortDate(runner.startedAt)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)"
-             : "\(RestTimerState.clockLabel(runner.elapsedSeconds)) · SET \(runner.completedSetCount)/\(runner.plannedSetCount)")
-            .slMeta(SL.Weight.medium).slNumerals()
-            .foregroundStyle(SL.Ink.tertiary)
-            .lineLimit(1)
+    /// A workout being written down afterwards has no clock to show — it
+    /// names the day it is being written for instead, so the sets can never
+    /// land on the wrong date without anyone noticing.
+    private var clockLine: some View {
+        Text(sessionLine)
+            .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+            .slNumerals()
+            .foregroundStyle(SL.Ink.primary.opacity(0.62))
+            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
             .minimumScaleFactor(0.8)
     }
 
-    /// Where you are and how to move, directly under the header and always
-    /// on screen — including while the rest timer runs.
-    ///
-    /// Subordinate to the exercise below it: 13pt, no fill on the inactive
-    /// chips, and a hairline to seat it against the content.
-    private var exerciseNav: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: SL.Space.s2) {
-                        ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
-                            navChip(index: index, slot: slot).id(index)
-                        }
-                    }
-                    .padding(.horizontal, SL.Space.gutterSession)
-                    // The chips' hit areas now carry the vertical room this
-                    // padding used to, so the strip keeps its height.
-                    .padding(.vertical, SL.Space.s1)
-                }
-                .onChange(of: runner.currentIndex) { _, index in
-                    withAnimation(.easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
-                        proxy.scrollTo(index, anchor: .center)
-                    }
-                }
-            }
-            SLHairline()
+    private var sessionLine: String {
+        let count = "\(runner.completedSetCount) van \(runner.plannedSetCount) sets"
+        if runner.isLoggedAfterwards {
+            return "\(Schedule.weekdayLabel(runner.startedAt).lowercased()) \(app.display.shortDate(runner.startedAt)) · \(count)"
+        }
+        return "sessie \(SLRestPill.clockLabel(runner.elapsedSeconds)) · \(count)"
+    }
+
+    /// Pausing keeps the session exactly as it stands. A session in which
+    /// nothing was done has nothing to keep, and simply closes.
+    private func leave() {
+        runner.stopRestSignals()
+        if runner.isUntouched {
+            onClose()
+        } else {
+            onPause(runner.snapshot())
         }
     }
 
-    private func navChip(index: Int, slot: SessionRunner.ExerciseSlot) -> some View {
-        let isCurrent = index == runner.currentIndex
-        return Button { runner.currentIndex = index } label: {
-            Text(slot.exercise.name)
-                .slMeta(isCurrent ? SL.Weight.semibold : SL.Weight.regular)
-                .foregroundStyle(
-                    isCurrent ? SL.Ink.primary : (slot.isComplete ? SL.Ink.tertiary : SL.Ink.secondary)
-                )
-                .lineLimit(1)
-                .padding(.horizontal, SL.Space.s3)
-                .frame(minHeight: 36)
-                .background(
-                    Capsule().fill(isCurrent ? SL.Surface.raised2 : .clear)
-                )
-                .overlay(
-                    Capsule().strokeBorder(isCurrent ? SL.Surface.selection : .clear, lineWidth: 1)
-                )
-                // The capsule stays 36 high; the tappable area is 44.
-                .frame(minHeight: SL.Space.hitMin)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(slot.exercise.name)\(slot.isComplete ? ", afgerond" : "")")
-        .accessibilityAddTraits(isCurrent ? [.isSelected, .isButton] : .isButton)
-    }
+    // MARK: - The exercise
 
     private var sessionContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                exerciseHeader
-                if let prompt = runner.calibrationPrompt(slotIndex: runner.currentIndex) {
-                    calibrationCard(prompt).padding(.top, SL.Space.s5)
-                } else if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
-                    // 28b: set 1 is named in the header and the reference it
-                    // starts is named under the grid — nothing to propose yet.
-                } else if runner.showsProposal {
-                    if typeSize.isAccessibilitySize && !expandedProposals.contains(runner.currentIndex) {
-                        compactProposal.padding(.top, SL.Space.s5)
-                    } else {
-                        proposalCard.padding(.top, SL.Space.s5)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: SL.Space.s4) {
+                    exerciseHead.id(Self.topAnchor)
+                    changeLines
+                    aboveTheSets
+                    if showsLadder { warmupSection }
+                    setsCard
+                    if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
+                        referenceNote
                     }
+                    afterSets
+                    sessionSection
                 }
-                if showsLadder {
-                    // 30: the ladder 24 below the topset line, WERKSETS 24
-                    // below the ladder and 10 above the grid.
-                    warmupSection.padding(.top, SL.Space.s6)
-                }
-                setRows.padding(.top, showsLadder ? 10 : SL.Space.s5)
-                if showsLadder {
-                    Text(WarmupPlanner.footnote(
-                        topSetKg: runner.warmupLadder(slotIndex: runner.currentIndex).last?.weightKg ?? 0,
-                        formatter: app.display
-                    ))
-                    .slMeta()
-                    .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, SL.Space.s5)
-                }
-
-                if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
-                    referenceFooter.padding(.top, SL.Space.s8)
-                }
-                afterGrid.padding(.top, SL.Space.s5)
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.top, SL.Space.s2)
+                .padding(.bottom, SL.Space.s3)
             }
-            .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s4)
-            .padding(.bottom, SL.Space.s6)
+            .onChange(of: runner.currentIndex) { _, _ in
+                withAnimation(.easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
+                    proxy.scrollTo(Self.topAnchor, anchor: .top)
+                }
+            }
         }
     }
 
-    private var exerciseHeader: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // The title and the swap affordance share a row. `Wissel` is
-            // visibly secondary to logging — 13pt, tertiary ink, no fill —
-            // but it is on screen: long-press is a shortcut for people who
-            // know it, never the only way in.
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+    /// The exercise is its own title; `Wissel` sits beside it, visibly
+    /// secondary to logging but always on screen. Long-press is a shortcut for
+    /// people who know it, never the only way in.
+    private var exerciseHead: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s3))
+        return layout {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(runner.current.exercise.name)
-                    .slDisplay()
-                    .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
+                    .slTitle()
+                    .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
                     .foregroundStyle(SL.Ink.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: SL.Space.s2)
-                Button { showsSwap = true } label: {
-                    Text("Wissel")
-                        .slMeta(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .padding(.horizontal, SL.Space.s3)
-                        .frame(minHeight: 34)
-                        .background(Capsule().fill(SL.Surface.raised))
-                        .overlay(Capsule().strokeBorder(SL.Surface.hairline, lineWidth: 1))
-                        // Visually 34 high; the tappable area is 44.
-                        .frame(minHeight: SL.Space.hitMin)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Wissel \(runner.current.exercise.name)")
-                .accessibilityHint("Alternatieven, volgorde wijzigen of iets voelen")
+                    .accessibilityAddTraits(.isHeader)
+                Text("Oefening \(runner.currentIndex + 1) van \(runner.slots.count) · \(Self.equipmentLabel(runner.current.exercise.equipment))")
+                    .slBody()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onLongPressGesture { showsSwap = true }
 
-            // 28: before the calibration set, "geen historiek" is said once,
-            // on the line that already says where the exercise came from.
-            let calibrating = runner.calibrationPrompt(slotIndex: runner.currentIndex) != nil
-            let noHistory = calibrating ? " · geen historiek" : ""
-            if let origin = runner.substitutedOrigin(slotIndex: runner.currentIndex) {
-                undoLine("Gewisseld van \(origin.name)\(noHistory)", accessibility: "Wissel naar \(origin.name) ongedaan maken")
-            } else if let replacement = runner.latestUndo(slotIndex: runner.currentIndex)?.replacement {
-                // A program change stays reversible here until the workout
-                // ends. The toast is the quick way back; this one is still
-                // there after the toast has gone. After the workout, undo
-                // belongs to program settings.
-                let origin = app.exercise(replacement.originExerciseID)
-                undoLine(
-                    "Vervangt \(origin.name) in je schema\(noHistory)",
-                    accessibility: "Vervanging van \(origin.name) in je schema ongedaan maken"
-                )
-            }
-
-            if !runner.current.preserved.isEmpty {
-                // Work done here before a swap is kept, and the screen says so.
-                Text(preservedLine(runner.current.preserved))
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-            }
-
-            Group {
-                if showsLadder, let topSet = runner.topSetLabel(slotIndex: runner.currentIndex) {
-                    // 30: while the ladder shows, the top set takes the line
-                    // the previous session otherwise holds.
-                    HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                        SLEyebrow(text: "Topset vandaag")
-                        Text(topSet).slLead().slNumerals().foregroundStyle(SL.Ink.primary)
-                    }
-                } else if let previous = runner.previousLine(for: runner.current) {
-                    HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                        SLEyebrow(text: previous.label)
-                        Text(previous.detail)
-                            .slLead()
-                            .slNumerals()
-                            .foregroundStyle(SL.Ink.primary)
-                    }
-                } else if let summary = runner.calibrationSummary(slotIndex: runner.currentIndex) {
-                    calibratedLine(summary)
-                } else if runner.substitutedOrigin(slotIndex: runner.currentIndex) == nil,
-                          runner.latestUndo(slotIndex: runner.currentIndex)?.replacement == nil {
-                    SLEyebrow(text: "Geen historiek")
+            Button { showsSwap = true } label: {
+                HStack(spacing: 6) {
+                    Text("Wissel")
+                    SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
                 }
             }
-            .padding(.top, 10)
+            .buttonStyle(SLPillButtonStyle())
+            .accessibilityLabel("Wissel \(runner.current.exercise.name)")
+            .accessibilityHint("Alternatieven, volgorde wijzigen of iets voelen")
         }
     }
 
-    /// The quiet, session-long way back from a swap or a program change: an
-    /// eyebrow and a text action, never a button that competes with logging.
+    private static func equipmentLabel(_ equipment: Equipment) -> String {
+        switch equipment {
+        case .barbell: return "barbell"
+        case .dumbbell: return "dumbbells"
+        case .machinePlate: return "machine met schijven"
+        case .machineSelectorised: return "machine"
+        case .cable: return "kabel"
+        case .smith: return "smith machine"
+        case .bodyweight: return "lichaamsgewicht"
+        case .band: return "band"
+        }
+    }
+
+    /// Where the exercise on screen came from, when it is not what the
+    /// programme had here — with the way back, which stays for the whole
+    /// session — and the work that was done before a swap.
+    @ViewBuilder
+    private var changeLines: some View {
+        // Before the calibration set, "geen historiek" is said once, on the
+        // line that already says where the exercise came from.
+        let calibrating = runner.calibrationPrompt(slotIndex: runner.currentIndex) != nil
+        let noHistory = calibrating ? " · geen historiek" : ""
+        if let origin = runner.substitutedOrigin(slotIndex: runner.currentIndex) {
+            undoLine("Gewisseld van \(origin.name)\(noHistory)", accessibility: "Wissel naar \(origin.name) ongedaan maken")
+        } else if let replacement = runner.latestUndo(slotIndex: runner.currentIndex)?.replacement {
+            // A program change stays reversible here until the workout ends.
+            // The toast is the quick way back; this one is still there after
+            // the toast has gone. After the workout, undo belongs to program
+            // settings.
+            let origin = app.exercise(replacement.originExerciseID)
+            undoLine(
+                "Vervangt \(origin.name) in je schema\(noHistory)",
+                accessibility: "Vervanging van \(origin.name) in je schema ongedaan maken"
+            )
+        }
+
+        if !runner.current.preserved.isEmpty {
+            // Work done here before a swap is kept, and the screen says so.
+            Text(preservedLine(runner.current.preserved))
+                .slMeta()
+                .slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, SL.Space.s1)
+        }
+    }
+
+    /// The quiet, session-long way back from a swap or a program change: a
+    /// line and a text action, never a button that competes with logging.
     private func undoLine(_ text: String, accessibility: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-            SLEyebrow(text: text)
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            Text(text)
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: SL.Space.s2)
             Button { undoLatestChange() } label: {
-                Text("Ongedaan maken").slMeta(SL.Weight.medium)
-                    .foregroundStyle(SL.Ink.secondary)
+                Text("Ongedaan maken")
+                    .slMeta(SL.Weight.semibold)
+                    .foregroundStyle(SL.Signal.action)
                     .fixedSize()
-                    .slHitTarget()
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(accessibility)
         }
-        .padding(.top, 8)
+        .padding(.horizontal, SL.Space.s1)
+        .padding(.vertical, -SL.Space.s2)
     }
 
     /// Reverses the latest change in the current slot — and, when that was a
@@ -579,126 +573,127 @@ struct SessionView: View {
         return "Bewaard: " + parts.joined(separator: ", ")
     }
 
+    // MARK: - What SETLINE says before set 1
+
+    /// One note above the sets, and only before the first of them is written:
+    /// the calibration ask for an exercise with no history, or the proposal.
+    /// Neither applies anything — the proposal is already in the input card,
+    /// and is changed there.
+    @ViewBuilder
+    private var aboveTheSets: some View {
+        if let prompt = runner.calibrationPrompt(slotIndex: runner.currentIndex) {
+            SLNoteCard(tone: .action) {
+                SLOverline(text: "Set 1 · kalibratie", color: SL.Signal.action)
+                Text(prompt.headline)
+                    .slLead()
+                    .slLineHeight(1.3, size: SL.TypeSize.lead)
+                    .foregroundStyle(SL.Ink.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(prompt.body)
+                    .slBody()
+                    .slLineHeight(1.45, size: SL.TypeSize.body)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
+            // Set 1 is named in the card's head and the reference it starts is
+            // named under the sets — nothing to propose yet.
+        } else if runner.showsProposal {
+            proposalNote
+        }
+    }
+
     /// One component, four tones. None of them applies anything.
-    private var proposalCard: some View {
+    private var proposalNote: some View {
         let proposal = runner.current.proposal
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center) {
-                SLEyebrow(
-                    text: proposal.label ?? toneLabel(proposal.tone),
-                    color: toneColor(proposal.tone)
-                )
-                Spacer()
-                Button {
-                    runner.dismissProposal(slotIndex: runner.currentIndex)
-                } label: {
-                    Text("Sluiten").slBody().foregroundStyle(SL.Ink.tertiary).slHitTarget()
+        let index = runner.currentIndex
+        let collapsed = typeSize.isAccessibilitySize && !expandedProposals.contains(index)
+        return SLNoteCard(tone: tone(proposal.tone)) {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                SLOverline(text: proposal.label ?? toneLabel(proposal.tone), color: tone(proposal.tone).color)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: SL.Space.s2)
+                Button { runner.dismissProposal(slotIndex: index) } label: {
+                    SLGlyph(name: .close, size: 14)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Voorstel sluiten")
+                // 44 to touch; the overline keeps its own line height.
+                .padding(.vertical, -14)
+                .padding(.trailing, -SL.Space.s3)
             }
 
-            Text(proposal.headline)
-                .slTitle()
-                .slLineHeight(1.3, size: SL.TypeSize.title)
-                .foregroundStyle(SL.Ink.primary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
-
-            if proposal.tone != .noReference {
-                Group {
-                    if typeSize.isAccessibilitySize {
-                        VStack(spacing: SL.Space.s2) { proposalSteppers }
-                    } else {
-                        SLFlexPair { proposalSteppers }
-                    }
-                }
-                .padding(.top, SL.Space.s4)
-            }
-
-            Text(proposal.body)
-                .slMeta()
-                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
-                .foregroundStyle(SL.Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 14)
-        }
-        .padding(SL.Space.s5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(ToneSurface(tone: proposal.tone))
-    }
-
-    /// 29b: only the label's colour and the edge change between tones. READY
-    /// is lime on raised2; CLOSE is amber on raised with the .16 edge; the
-    /// quiet two stay tertiary on raised with the .08 edge.
-    private func toneColor(_ tone: ProposalTone) -> Color {
-        switch tone {
-        case .ready: return SL.Signal.action
-        case .close: return SL.Signal.attention
-        case .neutral, .noReference: return SL.Ink.tertiary
-        }
-    }
-
-    private struct ToneSurface: ViewModifier {
-        let tone: ProposalTone
-        func body(content: Content) -> some View {
-            switch tone {
-            case .ready: content.slCardStrong(fill: SL.Surface.raised2)
-            case .close: content.slCardStrong()
-            case .neutral, .noReference: content.slCard()
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var proposalSteppers: some View {
-        SLStepper(
-            label: "Gewicht",
-            display: app.display.number(runner.proposedWeight(slotIndex: runner.currentIndex) ?? 0),
-            level: .onRaised2,
-            onDecrement: { runner.adjustProposedWeight(slotIndex: runner.currentIndex, by: -increment) },
-            onIncrement: { runner.adjustProposedWeight(slotIndex: runner.currentIndex, by: increment) }
-        )
-        SLStepper(
-            label: "Mik op",
-            display: "\(runner.proposedRepTarget(slotIndex: runner.currentIndex))",
-            level: .onRaised2,
-            onDecrement: { runner.adjustProposedReps(slotIndex: runner.currentIndex, by: -1) },
-            onIncrement: { runner.adjustProposedReps(slotIndex: runner.currentIndex, by: 1) }
-        )
-    }
-
-    /// At accessibility sizes the full card pushes the first set row off the
-    /// screen. The same proposal on one line; `Toon` opens the full card.
-    private var compactProposal: some View {
-        let proposal = runner.current.proposal
-        return VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(
-                text: proposal.label ?? toneLabel(proposal.tone),
-                color: toneColor(proposal.tone)
-            )
-            Text(compactProposalSummary)
+            Text((collapsed ? compactProposalSummary : proposal.headline).slUnbroken)
                 .slLead()
                 .slNumerals()
+                .slLineHeight(1.3, size: SL.TypeSize.lead)
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
-            HStack {
-                Button { expandedProposals.insert(runner.currentIndex) } label: {
-                    Text("Toon").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.secondary).slHitTarget()
+
+            if collapsed {
+                // At accessibility sizes the full note pushes the first set off
+                // the screen. The same proposal on one line; `Toon` opens it.
+                Button { expandedProposals.insert(index) } label: {
+                    Text("Toon")
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Toon het volledige voorstel")
-                Spacer()
-                Button { runner.dismissProposal(slotIndex: runner.currentIndex) } label: {
-                    Text("Sluiten").slBody().foregroundStyle(SL.Ink.tertiary).slHitTarget()
+            } else {
+                Text(proposal.body.slUnbroken)
+                    .slBody()
+                    .slNumerals()
+                    .slLineHeight(1.45, size: SL.TypeSize.body)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if proposal.tone != .noReference, runner.proposedTargets(slotIndex: index) != nil {
+                    aimRow
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.top, SL.Space.s2)
         }
-        .padding(SL.Space.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(ToneSurface(tone: proposal.tone))
+    }
+
+    /// `Mik op`: the reps every open set aims at, moved together so a mixed
+    /// prescription keeps its shape — `5 · 6 · 6` becomes `6 · 7 · 7`. It
+    /// changes what the sets are pre-filled with and never writes one.
+    private var aimRow: some View {
+        let index = runner.currentIndex
+        let targets = runner.proposedTargets(slotIndex: index) ?? []
+        return HStack(alignment: .center, spacing: SL.Space.s2) {
+            Text("Mik op \(ProgressionEngine.repsLabel(targets))")
+                .slBody(SL.Weight.semibold)
+                .slNumerals()
+                .foregroundStyle(SL.Ink.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            aimButton("−", label: "Eén rep minder per set") { runner.adjustProposedReps(slotIndex: index, by: -1) }
+            aimButton("+", label: "Eén rep meer per set") { runner.adjustProposedReps(slotIndex: index, by: 1) }
+        }
+        .padding(.top, SL.Space.s1)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func aimButton(_ glyph: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(glyph)
+                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.primary)
+                .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                .background(
+                    RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                        .fill(SL.Surface.hairline)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private var compactProposalSummary: String {
@@ -710,68 +705,15 @@ struct SessionView: View {
         return "\(weight) · mik op \(ProgressionEngine.repsLabel(targets))"
     }
 
-    private var increment: Decimal { runner.current.exercise.incrementKg }
-
-    /// Artboard 28. Same slot, same size and radius as the proposal card it
-    /// replaces — the app asks for a weight instead of proposing one.
-    private func calibrationCard(_ prompt: CalibrationPrompt) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: "Set 1 · kalibratie")
-            Text(prompt.headline)
-                .slTitle()
-                .slLineHeight(1.3, size: SL.TypeSize.title)
-                .foregroundStyle(SL.Ink.primary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
-            Text(prompt.body)
-                .slBody()
-                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
-                .foregroundStyle(SL.Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, SL.Space.s3)
+    /// Only the dot, the overline and the edge change between tones: lime
+    /// where the top of the range is confirmed, amber where it is close, grey
+    /// for the quiet two.
+    private func tone(_ tone: ProposalTone) -> SLNoteTone {
+        switch tone {
+        case .ready: return .action
+        case .close: return .attention
+        case .neutral, .noReference: return .quiet
         }
-        .padding(SL.Space.s5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .slCardStrong(fill: SL.Surface.raised2)
-    }
-
-    /// Artboard 28b's header line — "GEKALIBREERD OP  80 kg × 8 · RIR 2" — plus
-    /// the one honest extra: say so when the set was easy enough that the
-    /// next one starts a step higher.
-    private func calibratedLine(_ summary: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                SLEyebrow(text: "Gekalibreerd op")
-                Text(summary)
-                    .slLead().slNumerals()
-                    .foregroundStyle(SL.Ink.primary)
-            }
-            if runner.didStepUpAfterCalibration(slotIndex: runner.currentIndex) {
-                Text("RIR 3 of meer: set 2 staat één stap hoger. Pas aan als dat niet klopt.")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    /// 28b, under a hairline below the grid: what the calibration set starts.
-    private var referenceFooter: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Referentie opbouwen · sessie 1 van \(ExerciseHistory.sessionsBeforeReference)")
-                .slLead()
-                .foregroundStyle(SL.Ink.primary)
-            Text("Na drie sessies rekent SETLINE progressie voor \(runner.current.exercise.name.lowercased()). Tot dan geen voorstel en geen record.")
-                .slBody()
-                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
-                .foregroundStyle(SL.Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, SL.Space.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .top) { SLHairline() }
-        .accessibilityElement(children: .combine)
     }
 
     private func toneLabel(_ tone: ProposalTone) -> String {
@@ -783,110 +725,699 @@ struct SessionView: View {
         }
     }
 
-    /// Artboard 30's ladder: shown when there is one to show and nothing is
-    /// sitting above the grid — 29 shows no warm-up while a proposal is up,
-    /// and 11R–13R none once set 1 is written.
+    private var increment: Decimal { runner.current.exercise.incrementKg }
+
+    // MARK: - Warm-up
+
+    /// The ramp is shown when there is one to show and nothing else is sitting
+    /// above the sets: not while a proposal is up, and not once set 1 is
+    /// written.
     private var showsLadder: Bool {
         !runner.warmupLadder(slotIndex: runner.currentIndex).isEmpty
             && !runner.isWarmupCollapsed(slotIndex: runner.currentIndex)
     }
 
-    /// Artboard 30. Generated from today's top set, outside the working-set
-    /// card, dashed, with no status dot and no rest timer — and no taps: it is
-    /// a reference strip, not a log.
+    /// Generated from today's top set, outside the working sets, with no ring
+    /// and no rest timer — and no taps: it is a reference strip, not a log.
     private var warmupSection: some View {
         let ladder = runner.warmupLadder(slotIndex: runner.currentIndex)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                SLEyebrow(text: "Opwarmen · telt niet mee")
-                Spacer()
+        let rows = SetRowPresenter.warmupRows(ladder)
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Opwarmen").slLead().foregroundStyle(SL.Ink.primary)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(warmupLine)
+                        .slMeta().slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: SL.Space.s2)
                 Button {
                     Task { await app.hideWarmup(exerciseID: runner.current.planned.exerciseID) }
                 } label: {
-                    Text("Altijd verbergen").slMeta().foregroundStyle(SL.Ink.secondary).slHitTarget()
+                    Text("Altijd verbergen")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize()
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.bottom, 10)
+            .padding(.horizontal, SL.Space.s1)
 
-            VStack(spacing: SLSetColumn.rowGap) {
-                ForEach(SetRowPresenter.warmupRows(ladder), id: \.index) { row in
-                    SLSetRow(row: row) {}
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                    SLWarmupRow(label: row.indexLabel, value: "\(row.weightLabel) × \(row.repsLabel)")
+                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
                 }
             }
+            .slBorderBox()
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                    .strokeBorder(SL.Surface.hairlineStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            )
 
-            SLEyebrow(text: "Werksets").padding(.top, SL.Space.s6)
+            Text(WarmupPlanner.footnote(
+                topSetKg: ladder.last?.weightKg ?? 0,
+                formatter: app.display
+            ))
+            .slMeta()
+            .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+            .foregroundStyle(SL.Ink.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, SL.Space.s1)
         }
     }
 
-    private var setRows: some View {
-        SLSetGrid(referenceLabel: runner.columnHeader(slotIndex: runner.currentIndex)) {
-            VStack(spacing: SLSetColumn.rowGap) {
-                ForEach(runner.rows(for: runner.currentIndex), id: \.index) { row in
-                    SLSetRow(row: row) {
-                        runner.editing = (runner.currentIndex, row.index)
-                    }
-                }
-            }
-            gridFooter.padding(.top, 2)
-        }
-        .sheet(isPresented: $showsPlates) { platesForNextSet }
+    /// "telt niet mee · topset vandaag 102,5 kg × 5"
+    private var warmupLine: String {
+        guard let topSet = runner.topSetLabel(slotIndex: runner.currentIndex) else { return "telt niet mee" }
+        return "telt niet mee · topset vandaag \(topSet)"
     }
 
-    /// 11–13's grid footer: `Set toevoegen` as a dashed 44pt button, and
-    /// `Schijven` beside it for the set up next. Adding a set is for this
-    /// session only; the calculator appears only where plates load the bar.
-    private var gridFooter: some View {
-        footerLayout {
+    // MARK: - The sets
+
+    /// The previous session in the card's head, then one row per set.
+    private var setsCard: some View {
+        let slotIndex = runner.currentIndex
+        let rows = runner.rows(for: slotIndex)
+        return VStack(spacing: 0) {
+            cardHead
+            ForEach(rows, id: \.index) { row in
+                setRow(row, slotIndex: slotIndex)
+                    .overlay(alignment: .top) { SLHairline() }
+            }
             Button { addSet() } label: {
-                Text("Set toevoegen")
-                    .slBody(SL.Weight.medium)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: SL.Space.hitMin)
-                    .slBorderBox()
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                            .strokeBorder(SL.Surface.hairlineStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    )
-                    .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+                HStack(spacing: 6) {
+                    SLGlyph(name: .plus, size: 14)
+                    Text("Set toevoegen").slBody()
+                }
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+            .buttonStyle(SLRowButtonStyle())
+            .overlay(alignment: .top) { SLHairline() }
             .accessibilityLabel("Set toevoegen aan \(runner.current.exercise.name)")
             .accessibilityHint("Alleen voor deze sessie. Je schema verandert niet.")
+        }
+        .slBorderBox()
+        .slListCard()
+    }
 
-            if showsPlatesButton {
-                Button { showsPlates = true } label: {
-                    HStack(spacing: 6) {
-                        SLGlyph(name: .calculate, size: 18)
-                        Text("Schijven").slBody(SL.Weight.medium)
-                    }
+    /// "Vorige sessie · 2 sep" and what was lifted then — or, where there is
+    /// no then, what the sets are compared against instead.
+    private var cardHead: some View {
+        let slot = runner.current
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s1))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
+        return layout {
+            if let previous = runner.previousSummary(for: slot) {
+                Text("Vorige sessie · \(app.display.shortDate(previous.date))")
+                    .slMeta().slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
-                    .padding(.horizontal, SL.Space.s3)
-                    .frame(minWidth: 110)
-                    .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : nil)
-                    .frame(minHeight: SL.Space.hitMin)
-                    .background(
-                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                            .fill(SL.Surface.raised2)
-                    )
-                    .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+                    .fixedSize()
+                Spacer(minLength: 0)
+                ((previous.weight.map {
+                    Text($0 + " ").font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
+                } ?? Text(""))
+                    + Text(previous.detail)
+                        .font(.sl(SL.TypeSize.lead, previous.weight == nil ? SL.Weight.semibold : SL.Weight.regular))
+                        .foregroundStyle(previous.weight == nil ? SL.Ink.primary : SL.Ink.meta))
+                    .slNumerals()
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let summary = runner.calibrationSummary(slotIndex: runner.currentIndex) {
+                Text("Gekalibreerd op")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize()
+                Spacer(minLength: 0)
+                Text(summary)
+                    .slLead().slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+                    .multilineTextAlignment(.trailing)
+            } else {
+                Text("Vorige sessie")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize()
+                Spacer(minLength: 0)
+                Text("geen historiek")
+                    .slBody()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+        }
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func setRow(_ row: SetRowPresentation, slotIndex: Int) -> some View {
+        let set = runner.slots[slotIndex].sets[row.index]
+        let phase: SLSetRow.Phase = row.status == .written ? .done : row.status == .nextUp ? .open : .pending
+        var label = "Set \(row.indexLabel)"
+        if phase == .open { label += " · open" } else if row.isAdded { label += " · extra" }
+
+        let value: String
+        switch phase {
+        case .done:
+            value = set.weightKg.map { app.display.setReference(weightKg: $0, reps: set.reps) } ?? "—"
+        case .open:
+            let reps = openReps(slotIndex: slotIndex, setIndex: row.index)
+            value = "\(set.weightKg.map(app.display.number) ?? "—") × \(reps)"
+        case .pending:
+            value = row.weightKind == .awaitingCalibration ? row.weightLabel : "—"
+        }
+
+        return SLSetRow(
+            label: label,
+            phase: phase,
+            note: note(for: row),
+            previous: runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "vorige \($0)" },
+            value: value,
+            valueIsSentence: phase == .pending && row.weightKind == .awaitingCalibration,
+            spoken: spoken(row, value: value, phase: phase),
+            onTap: { runner.editing = (slotIndex, row.index) }
+        )
+    }
+
+    /// What the set was, where that is more than its numbers.
+    private func note(for row: SetRowPresentation) -> SLSetRow.Note? {
+        switch row.delta {
+        case .personalRecord:
+            return .init(text: "PR", tone: SL.Signal.action)
+        case .failed:
+            return .init(text: "mislukt", tone: SL.Signal.loss)
+        case .paused(let reps):
+            // "2 pauze-reps" where only some of them were: the count is part
+            // of the set, so the row says which reps it describes.
+            return .init(text: reps.map { "\($0) pauze-reps" } ?? "met pauze", tone: SL.Signal.attention)
+        case .partial(let count):
+            return .init(text: "partieel +\(count)", tone: SL.Signal.attention)
+        case .pausedAndPartial(let pausedReps, let count):
+            // Two true things about one set; neither hides the other.
+            return .init(
+                text: "\(pausedReps.map { "\($0) pauze-reps" } ?? "met pauze") · partieel +\(count)",
+                tone: SL.Signal.attention
+            )
+        case .calibration:
+            return .init(text: "kalibratie", tone: SL.Ink.secondary)
+        case .baseline:
+            return .init(text: "basis", tone: SL.Ink.secondary)
+        case .reserve(let rir):
+            return .init(text: "RIR \(rir)", tone: SL.Ink.secondary)
+        case .difference(let text):
+            guard text != "=" else { return nil }
+            return .init(text: "\(text) kg", tone: text.hasPrefix("−") ? SL.Ink.secondary : SL.Signal.action)
+        case .reference, .added, .none:
+            return nil
+        }
+    }
+
+    /// "Set 2, 85 × 8, vorige keer 82,5 × 8, persoonlijk record"
+    private func spoken(_ row: SetRowPresentation, value: String, phase: SLSetRow.Phase) -> String {
+        let name = row.isAdded ? "Extra set" : "Set"
+        var parts = ["\(name) \(row.indexLabel)"]
+        switch phase {
+        case .done: parts.append(value)
+        case .open: parts.append("open, \(value)")
+        case .pending: parts.append(row.weightKind == .awaitingCalibration ? "volgt uit set 1" : "nog te doen")
+        }
+        if let previous = runner.previousSet(slotIndex: runner.currentIndex, setIndex: row.index) {
+            parts.append("vorige keer \(previous)")
+        }
+        switch row.delta {
+        case .personalRecord: parts.append("persoonlijk record")
+        case .failed: parts.append("mislukte set")
+        case .paused(let reps): parts.append(reps.map { "\($0) reps met pauze" } ?? "set met pauze")
+        case .partial(let count): parts.append("\(count) partiële reps")
+        case .pausedAndPartial(let pausedReps, let count):
+            parts.append("\(pausedReps.map { "\($0) reps met pauze" } ?? "set met pauze"), \(count) partiële reps")
+        case .calibration: parts.append("kalibratieset")
+        case .baseline: parts.append("basis voor deze oefening")
+        case .reserve(let rir): parts.append("RIR \(rir)")
+        case .difference(let text): parts.append("\(text) kilo vergeleken met vorige sessie")
+        case .added: parts.append("alleen voor deze sessie")
+        case .reference, .none: break
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Under the sets, once the calibration set is in: what it started.
+    private var referenceNote: some View {
+        SLNoteCard {
+            Text("Referentie opbouwen · sessie 1 van \(ExerciseHistory.sessionsBeforeReference)")
+                .slLead()
+                .slNumerals()
+                .foregroundStyle(SL.Ink.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Na drie sessies rekent SETLINE progressie voor \(runner.current.exercise.name.lowercased()). Tot dan geen voorstel en geen record.")
+                .slBody()
+                .slLineHeight(1.45, size: SL.TypeSize.body)
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if runner.didStepUpAfterCalibration(slotIndex: runner.currentIndex) {
+                Text("RIR 3 of meer: set 2 staat één stap hoger. Pas aan als dat niet klopt.")
+                    .slBody()
+                    .slLineHeight(1.45, size: SL.TypeSize.body)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The advice line once the exercise's last set is written, then what
+    /// comes after it — or that this was the session's last exercise.
+    private var afterSets: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            if let advice = runner.adviceLine(for: runner.currentIndex) {
+                SLNoteCard(tone: advice.hasPrefix("Niet") ? .quiet : .action) {
+                    Text(advice.slUnbroken)
+                        .slBody()
+                        .slNumerals()
+                        .slLineHeight(1.45, size: SL.TypeSize.body)
+                        .foregroundStyle(SL.Ink.primary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(.plain)
-                .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
-                .accessibilityHint("Schijven per kant voor de volgende set")
+                .transition(.opacity)
+            }
+            Text(upNextLine.slUnbroken)
+                .slMeta().slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, SL.Space.s1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var upNextLine: String {
+        guard let next = runner.nextSlotIndex else { return "Laatste oefening van de sessie" }
+        let slot = runner.slots[next]
+        let reps = slot.planned.sets.first?.repRange.upperBound ?? 0
+        return "Volgende · \(slot.exercise.name) · \(slot.planned.targetSets) × \(reps)"
+    }
+
+    // MARK: - The session
+
+    /// Every exercise of the session, where you are in it, and the way to
+    /// another one. Always one scroll away — including while the rest runs.
+    private var sessionSection: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLSectionHead(
+                title: "\(runner.day.short) · \(Agenda.when(runner.startedAt))",
+                meta: "\(runner.completedSetCount) van \(runner.plannedSetCount) sets"
+            )
+            VStack(spacing: 0) {
+                ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
+                    exerciseRow(index: index, slot: slot)
+                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                }
+            }
+            .slBorderBox()
+            .slListCard()
+
+            if runner.hasProgress {
+                Button {
+                    if runner.isComplete { showsComplete = true } else { confirmsEarlyFinish = true }
+                } label: { Text("Training afronden") }
+                    .buttonStyle(SLOutlineButtonStyle())
+                    .padding(.top, SL.Space.s1)
+            }
+        }
+        .padding(.top, SL.Space.s2)
+    }
+
+    private func exerciseRow(index: Int, slot: SessionRunner.ExerciseSlot) -> some View {
+        let isCurrent = index == runner.currentIndex
+        let logged = slot.model.loggedSetCount
+        let total = slot.model.setCount
+        return Button { runner.currentIndex = index } label: {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                Text("\(index + 1)")
+                    .slMeta().slNumerals()
+                    .foregroundStyle(isCurrent ? SL.Signal.action : SL.Ink.secondary)
+                    .frame(width: 24, alignment: .leading)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(slot.exercise.name)
+                        .slLead()
+                        .slLineHeight(1.3, size: SL.TypeSize.lead)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("\(logged) van \(total) sets\(slot.isComplete ? " · klaar" : "")")
+                        .slBody().slNumerals()
+                        .slLineHeight(1.35, size: SL.TypeSize.body)
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if slot.isComplete {
+                    SLDoneMark()
+                } else if isCurrent {
+                    Text("NU")
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                        .tracking(SL.TypeSize.micro * 0.06)
+                        .foregroundStyle(SL.Signal.action)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .frame(minHeight: 72)
+            .background(isCurrent ? SL.Signal.action.opacity(0.06) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(slot.exercise.name), \(logged) van \(total) sets\(slot.isComplete ? ", afgerond" : "")")
+        .accessibilityAddTraits(isCurrent ? [.isSelected, .isButton] : .isButton)
+    }
+
+    // MARK: - The dock
+    //
+    // The undo surface, the rest pill and the input card share one bottom
+    // inset, so the scroll view always reserves room for all of them. Nothing
+    // in the session can end up underneath, and everything touched between
+    // sets stays inside the thumb's reach.
+
+    private var dock: some View {
+        VStack(spacing: SL.Space.s2) {
+            if let toast {
+                SLUndoToast(message: toast.message, onUndo: toast.undo, onDismiss: { self.toast = nil })
+                    .transition(.opacity)
+            }
+            // A finished session has no rest left to take.
+            if let timer = runner.restTimer, !runner.isComplete {
+                SLRestPill(
+                    title: runner.restTitle,
+                    remaining: timer.remaining(at: runner.now),
+                    total: max(timer.targetSeconds + timer.adjustmentSeconds, timer.remaining(at: runner.now)),
+                    planned: timer.targetSeconds,
+                    isExpanded: runner.isTimerExpanded,
+                    onAdjust: { runner.adjustRest(by: $0) },
+                    onReset: { runner.resetRest() },
+                    onToggleExpanded: { runner.toggleTimerExpanded() },
+                    onSkip: { runner.endRest() }
+                )
+            }
+            inputCard
+        }
+        .padding(.horizontal, SL.Space.gutterSession)
+        .padding(.top, SL.Space.s2)
+        .padding(.bottom, SL.Space.s1)
+        .background(SL.Surface.ground)
+    }
+
+    /// One primary action, and it is whichever one is true right now.
+    @ViewBuilder
+    private var inputCard: some View {
+        let slotIndex = runner.currentIndex
+        if runner.isComplete {
+            Button { showsComplete = true } label: { Text("Sessie afronden") }
+                .buttonStyle(SLPrimaryButtonStyle(prominent: true))
+        } else if let next = runner.nextIndex(in: runner.current) {
+            let set = runner.current.sets[next]
+            let needsSheet = (next == 0 && runner.needsCalibration(slotIndex: slotIndex))
+                || (set.weightKg ?? 0) <= 0
+                || typeSize.isAccessibilitySize
+            VStack(spacing: SL.Space.s2) {
+                inputHead(setIndex: next, set: set, compact: needsSheet)
+                if needsSheet {
+                    // No weight to step from — a calibration set, or a swap
+                    // that starts empty — or text too large for the card: the
+                    // sheet has the number field and room for everything.
+                    Button {
+                        entryOpensOnKeypad = (set.weightKg ?? 0) <= 0
+                        runner.editing = (slotIndex, next)
+                    } label: {
+                        Text(next == 0 && runner.needsCalibration(slotIndex: slotIndex)
+                             ? "Kalibratieset invoeren"
+                             : "Set \(next + 1) invoeren")
+                    }
+                    .buttonStyle(SLPrimaryButtonStyle(prominent: true))
+                } else {
+                    steppers(slotIndex: slotIndex, setIndex: next, set: set)
+                    if asksForRIR(slotIndex: slotIndex, setIndex: next) {
+                        reserveRow(set)
+                    }
+                    saveButton(slotIndex: slotIndex, setIndex: next, set: set)
+                }
+            }
+            .padding(SL.Space.s3)
+            .slBorderBox()
+            .background(
+                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                    .fill(SL.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                    .strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)
+            )
+        } else if let next = runner.nextSlotIndex {
+            Button { runner.advance() } label: {
+                Text("Volgende · \(runner.slots[next].exercise.name)")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, SL.Space.s3)
+            }
+            .buttonStyle(SLPrimaryButtonStyle(prominent: true))
+        } else if let open = runner.firstOpenSlotIndex {
+            // The last exercise is done and an earlier one is not.
+            Button { runner.currentIndex = open } label: {
+                Text("Verder · \(runner.slots[open].exercise.name)")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, SL.Space.s3)
+            }
+            .buttonStyle(SLPrimaryButtonStyle(prominent: true))
+        }
+    }
+
+    /// "Set 2 van 4" and where its numbers came from, then the two tools.
+    private func inputHead(setIndex: Int, set: LoggedSet, compact: Bool) -> some View {
+        HStack(alignment: .center, spacing: SL.Space.s2) {
+            HStack(alignment: .center, spacing: SL.Space.s2) {
+                Circle().fill(SL.Signal.action).frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Set \(setIndex + 1) van \(runner.current.sets.count)")
+                        .slLead()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text(status(setIndex: setIndex, set: set))
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+
+            if !compact && !typeSize.isAccessibilitySize {
+                Button {
+                    entryOpensOnKeypad = false
+                    runner.editing = (runner.currentIndex, setIndex)
+                } label: { Text("Meer") }
+                    .buttonStyle(SLPillButtonStyle(quiet: true))
+                    .accessibilityLabel("Meer opties voor deze set")
+                    .accessibilityHint("Reps in reserve, mislukt, pauze-reps, partieel of een gewicht typen")
+            }
+            if showsPlatesButton && !typeSize.isAccessibilitySize {
+                Button { showsPlates = true } label: {
+                    HStack(spacing: SL.Space.s2) {
+                        SLGlyph(name: .plates, size: 16)
+                        Text("Schijven")
+                    }
+                }
+                .buttonStyle(SLPillButtonStyle(quiet: true))
+                .accessibilityHint("Schijven per kant voor deze set")
             }
         }
     }
 
-    /// 11–13 sets the pair from the top: the dashed button's border adds to
-    /// it (46), `Schijven` has none (44).
-    private var footerLayout: AnyLayout {
-        typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 6))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 6))
+    /// Where the numbers in the card came from, in the design's own words.
+    private func status(setIndex: Int, set: LoggedSet) -> String {
+        let slotIndex = runner.currentIndex
+        if adjusted.contains(set.id) { return "aangepast" }
+        if setIndex == 0, runner.needsCalibration(slotIndex: slotIndex) { return "kalibratieset" }
+        guard let weight = set.weightKg, weight > 0 else { return "nog geen gewicht" }
+
+        let slot = runner.current
+        let reference = slot.history.mostRecent
+        let prior = reference?.sets.first { $0.index == set.index }
+        if let reference, prior?.weightKg == weight {
+            return "doel uit \(app.display.shortDate(reference.date))"
+        }
+        if slot.sets.prefix(setIndex).last(where: \.isLogged)?.weightKg == weight {
+            return "overgenomen: \(app.display.kg(weight))"
+        }
+        if slot.proposal.weightKg == weight {
+            return "voorstel: \(app.display.kg(weight))"
+        }
+        return "nog niet opgeslagen"
     }
+
+    private func openReps(slotIndex: Int, setIndex: Int) -> Int {
+        let set = runner.slots[slotIndex].sets[setIndex]
+        return repsDraft[set.id] ?? runner.openingReps(slotIndex: slotIndex, setIndex: setIndex)
+    }
+
+    private func steppers(slotIndex: Int, setIndex: Int, set: LoggedSet) -> some View {
+        let reps = openReps(slotIndex: slotIndex, setIndex: setIndex)
+        let step = runner.slots[slotIndex].exercise.incrementKg
+        let changed = adjusted.contains(set.id)
+        return HStack(alignment: .top, spacing: SL.Space.s2) {
+            SLStepper(
+                label: "Gewicht",
+                display: set.weightKg.map(app.display.number) ?? "—",
+                isChanged: changed && runner.slots[slotIndex].sets[setIndex].weightKg != openingWeight[set.id],
+                onTapValue: {
+                    // A load off the step: the sheet has the number field.
+                    entryOpensOnKeypad = true
+                    runner.editing = (slotIndex, setIndex)
+                },
+                valueHint: "Gewicht typen",
+                onDecrement: { moveWeight(slotIndex: slotIndex, set: set, by: -step) },
+                onIncrement: { moveWeight(slotIndex: slotIndex, set: set, by: step) }
+            )
+            SLStepper(
+                label: "Reps",
+                display: "\(reps)",
+                isChanged: repsDraft[set.id] != nil
+                    && repsDraft[set.id] != runner.openingReps(slotIndex: slotIndex, setIndex: setIndex),
+                onDecrement: { moveReps(set, to: max(1, reps - 1)) },
+                onIncrement: { moveReps(set, to: reps + 1) }
+            )
+            .frame(width: 140)
+        }
+    }
+
+    /// One step on the weight moves every set still open, which is what makes
+    /// the next set one tap again: it takes the correction over.
+    private func moveWeight(slotIndex: Int, set: LoggedSet, by delta: Decimal) {
+        if openingWeight[set.id] == nil { openingWeight[set.id] = set.weightKg ?? 0 }
+        runner.adjustProposedWeight(slotIndex: slotIndex, by: delta)
+        markAdjusted(set, slotIndex: slotIndex)
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    private func moveReps(_ set: LoggedSet, to reps: Int) {
+        repsDraft[set.id] = reps
+        markAdjusted(set, slotIndex: runner.currentIndex)
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    /// "aangepast" holds for as long as the card differs from what it opened
+    /// on; stepping back to the opening values takes the word away again.
+    private func markAdjusted(_ set: LoggedSet, slotIndex: Int) {
+        guard let position = runner.slots[slotIndex].sets.firstIndex(where: { $0.id == set.id }) else { return }
+        let weightMoved = openingWeight[set.id].map { $0 != (runner.slots[slotIndex].sets[position].weightKg ?? 0) } ?? false
+        let repsMoved = repsDraft[set.id].map { $0 != runner.openingReps(slotIndex: slotIndex, setIndex: position) } ?? false
+        if weightMoved || repsMoved { adjusted.insert(set.id) } else { adjusted.remove(set.id) }
+    }
+
+    /// RIR is the optional third tap. By default an exercise asks it on its
+    /// last prescribed set and on any set added after it; asking on every set
+    /// is an Account setting.
+    private func asksForRIR(slotIndex: Int, setIndex: Int) -> Bool {
+        RIRPreference.everySet || runner.slots[slotIndex].model.asksForRIR(at: setIndex)
+    }
+
+    private func reserveRow(_ set: LoggedSet) -> some View {
+        let picked = rirDraft[set.id]
+        return HStack(alignment: .center, spacing: 6) {
+            Text("RIR")
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minWidth: 30, alignment: .leading)
+                .accessibilityHidden(true)
+            ForEach(0..<5, id: \.self) { value in
+                Button {
+                    rirDraft[set.id] = picked == value ? nil : value
+                } label: {
+                    Text(value == 4 ? "4+" : "\(value)")
+                        .slBody(picked == value ? SL.Weight.semibold : SL.Weight.regular)
+                        .slNumerals()
+                        .foregroundStyle(picked == value ? SL.Signal.action : SL.Ink.primary)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .background(
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                                .fill(picked == value ? SL.Signal.actionTint : SL.Surface.raised2)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                                .strokeBorder(picked == value ? SL.Signal.action : Color.clear, lineWidth: 1)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reps in reserve: \(value == 4 ? "4 of meer" : "\(value)")")
+                .accessibilityHint("Optioneel")
+                .accessibilityAddTraits(picked == value ? [.isSelected, .isButton] : .isButton)
+            }
+        }
+    }
+
+    /// The commit: 64 high, and it says what it is about to write.
+    private func saveButton(slotIndex: Int, setIndex: Int, set: LoggedSet) -> some View {
+        let reps = openReps(slotIndex: slotIndex, setIndex: setIndex)
+        let weight = set.weightKg ?? 0
+        return Button {
+            save(slotIndex: slotIndex, setIndex: setIndex)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Set opslaan")
+                Text(app.display.setReference(weightKg: weight, reps: reps))
+                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+                    .slNumerals()
+                    .foregroundStyle(SL.Signal.onAction.opacity(0.72))
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+        .buttonStyle(SLPrimaryButtonStyle(prominent: true))
+        .disabled(weight <= 0 || reps <= 0)
+        .accessibilityLabel("Set opslaan, \(app.display.kg(weight)) × \(reps)")
+    }
+
+    /// One tap: writes the set as the card shows it and starts the rest.
+    private func save(slotIndex: Int, setIndex: Int) {
+        let slot = runner.slots[slotIndex]
+        let set = slot.sets[setIndex]
+        guard let weight = set.weightKg, weight > 0 else { return }
+        let reps = openReps(slotIndex: slotIndex, setIndex: setIndex)
+        guard reps > 0 else { return }
+        runner.log(
+            slotIndex: slotIndex,
+            setIndex: setIndex,
+            entry: SessionRunner.SetEntry(
+                weightKg: weight,
+                reps: reps,
+                rir: asksForRIR(slotIndex: slotIndex, setIndex: setIndex) ? rirDraft[set.id] : nil,
+                failed: false,
+                // A planned paused exercise is performed paused throughout,
+                // which is what the plan prescribes.
+                pausedReps: slot.planned.modifiers.pauseEnabled ? reps : nil,
+                partialReps: nil
+            )
+        )
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        AccessibilityNotification.Announcement(
+            "Set \(setIndex + 1) opgeslagen, \(app.display.kg(weight)) × \(reps)"
+        ).post()
+        Task { await askAboutNotificationsIfWorthIt() }
+    }
+
+    // MARK: - Schijven
 
     /// Plates load the bar on a barbell, a smith and a plate-loaded machine,
     /// and only a set with a weight has anything to load.
@@ -899,8 +1430,8 @@ struct SessionView: View {
         return weight > 0
     }
 
-    /// Artboard 14, for the set up next. A load chosen here moves every open
-    /// row, as the proposal's weight stepper does.
+    /// For the set up next. A load chosen here moves every open set, as the
+    /// card's own weight stepper does.
     @ViewBuilder
     private var platesForNextSet: some View {
         let index = runner.currentIndex
@@ -909,105 +1440,16 @@ struct SessionView: View {
         PlateSheet(
             exercise: runner.current.exercise.name,
             setNumber: next + 1,
-            reps: runner.targetReps(slotIndex: index, setIndex: next)
-                ?? runner.current.planned.sets.first?.repRange.upperBound ?? 0,
+            reps: runner.current.sets.indices.contains(next) ? openReps(slotIndex: index, setIndex: next) : 0,
             target: weight,
             onChoose: { load in
-                runner.adjustProposedWeight(slotIndex: index, by: load - weight)
+                if runner.current.sets.indices.contains(next) {
+                    moveWeight(slotIndex: index, set: runner.current.sets[next], by: load - weight)
+                }
                 showsPlates = false
             },
             onClose: { showsPlates = false }
         )
         .environment(app)
-    }
-
-    /// 11–13 under the grid, above a hairline: the advice line at 17/600 once
-    /// the exercise's last set is written, then "Volgende · Militair drukken ·
-    /// 4 × 8" at 13 — or that this was the session's last exercise.
-    private var afterGrid: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let advice = runner.adviceLine(for: runner.currentIndex) {
-                Text(advice)
-                    .slLead()
-                    .slLineHeight(1.4, size: SL.TypeSize.lead)
-                    .foregroundStyle(SL.Ink.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 6)
-                    .transition(.opacity)
-            }
-            Text(upNextLine)
-                .slMeta().slNumerals()
-                .foregroundStyle(SL.Ink.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, SL.Space.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .top) { SLHairline() }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var upNextLine: String {
-        guard let next = runner.nextSlotIndex else { return "Laatste oefening van de sessie" }
-        let slot = runner.slots[next]
-        let reps = slot.planned.sets.first?.repRange.upperBound ?? 0
-        return "Volgende · \(slot.exercise.name) · \(slot.planned.targetSets) × \(reps)"
-    }
-
-    // MARK: Bottom bar
-    //
-    // The undo surface, the timer and the commit action share one bottom
-    // inset, so the scroll view always reserves room for all of them. Nothing
-    // in the session can end up underneath, and nothing covers the primary
-    // action.
-
-    private var bottomBar: some View {
-        VStack(spacing: SL.Space.s3) {
-            if let toast {
-                SLUndoToast(message: toast.message, onUndo: toast.undo, onDismiss: { self.toast = nil })
-                    .transition(.opacity)
-            }
-            // 13R and 11–13 put the rest timer where the pill stands: while
-            // the rest runs, its button is the one action. A finished session
-            // keeps `Sessie afronden` there instead — the rest is moot.
-            if let timer = runner.restTimer, !runner.isComplete {
-                SLFloatingTimer(
-                    title: runner.restTitle,
-                    remaining: timer.remaining(at: runner.now),
-                    total: timer.targetSeconds + timer.adjustmentSeconds,
-                    isExpanded: runner.isTimerExpanded,
-                    onAdjust: { runner.adjustRest(by: $0) },
-                    onToggleExpanded: { runner.toggleTimerExpanded() },
-                    onSkip: { runner.endRest() }
-                )
-            } else {
-                primaryAction
-            }
-        }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.top, SL.Space.s3)
-        // The session artboards end the pill 42 above the frame's edge.
-        .padding(.bottom, SL.Space.sessionBlockBottom)
-        .background(SL.Surface.ground)
-    }
-
-    /// One primary action, and it is whichever one is true right now.
-    @ViewBuilder
-    private var primaryAction: some View {
-        if runner.isComplete {
-            Button { showsComplete = true } label: { Text("Sessie afronden") }
-                .buttonStyle(SLPrimaryButtonStyle())
-        } else if let next = runner.nextIndex(in: runner.current) {
-            Button { runner.editing = (runner.currentIndex, next) } label: {
-                Text(next == 0 && runner.needsCalibration(slotIndex: runner.currentIndex)
-                     ? "Kalibratieset invoeren"
-                     : "Begin set \(next + 1)")
-            }
-            .buttonStyle(SLPrimaryButtonStyle())
-        } else if let next = runner.nextSlotIndex {
-            Button { runner.advance() } label: {
-                Text("Volgende · \(runner.slots[next].exercise.name)")
-            }
-            .buttonStyle(SLPrimaryButtonStyle())
-        }
     }
 }

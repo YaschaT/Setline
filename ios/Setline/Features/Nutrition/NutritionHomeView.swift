@@ -2,16 +2,15 @@ import SwiftUI
 import UIKit
 import SetlineCore
 
-/// Artboards 42a–42b · Voeding.
+/// Redesign 1c · Voeding.
 ///
-/// The day reads as four quiet headings — ontbijt, lunch, avondeten, snacks —
-/// each with its own kcal and its own ⊕. No cards: one hairline between
-/// meals, the items under them without lines of their own. An empty meal keeps
-/// its heading, so a day nothing has been logged on already has a shape.
+/// What is left to eat is the one loud number, in the card at the top with the
+/// one action beside it. Under it the day's macros against their targets, and
+/// then what was eaten: one row per item, with when, which meal and what it
+/// cost. Tapping a row opens the item; a swipe offers to take it off the day.
 ///
-/// What is left to eat stays at the top and is the only loud number. A meal
-/// shows its kcal in its heading and no macros at all: the macros are the
-/// day's, once, where the totals are.
+/// Amber appears once, and only when the account's own log earns it: two or
+/// more whole days in a row under the protein target.
 struct NutritionHomeView: View {
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -19,9 +18,9 @@ struct NutritionHomeView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     /// The clock this screen is reading. Held rather than asked for on every
-    /// line, so the date, the meal the button names and what a tap logs are one
-    /// moment; read again whenever the screen is come back to, so a phone left
-    /// open over lunch does not still say ontbijt.
+    /// line, so the date, the meal the sheet opens on and what a tap logs are
+    /// one moment; read again whenever the screen is come back to, so a phone
+    /// left open over lunch does not still say ontbijt.
     @State private var now = Date()
 
     /// One sheet at a time, and one modifier for it: two `.sheet`s on the same
@@ -33,11 +32,13 @@ struct NutritionHomeView: View {
     enum Sheet: Identifiable {
         case add(Meal)
         case edit(NutritionEntry)
+        case targets
 
         var id: String {
             switch self {
             case .add(let meal): return "add-\(meal.rawValue)"
             case .edit(let entry): return "edit-\(entry.id)"
+            case .targets: return "targets"
             }
         }
     }
@@ -52,27 +53,50 @@ struct NutritionHomeView: View {
 
     private var day: NutritionDay { app.nutrition(on: now) }
 
-    /// What the hour suggests. The big button adds there and the sheet opens
-    /// there, one tap from anything else.
+    /// What the hour suggests. The sheet opens there, one tap from any other
+    /// meal.
     private var likely: Meal { Meal.likely(at: now) }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            header
+    /// The day's items in the order they are eaten: ontbijt, lunch, avondeten,
+    /// snacks, each in the order it was logged.
+    private var eaten: [(entry: NutritionEntry, section: MealSection)] {
+        day.sections.flatMap { section in section.entries.map { ($0, section) } }
+    }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    totals
-                    meals.padding(.top, SL.Space.s3)
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: SL.Space.s4) {
+                SLScreenTitle(title: "Voeding", subtitle: SLDateText.long(now))
+                hero
+                macros
+                if let shortfall = ProteinShortfall.make(entries: app.nutritionEntries, targets: app.targets, today: now) {
+                    SLAttentionCard(title: "Aandacht") {
+                        Text("\(shortfall.days) dagen op rij onder je eiwitdoel. Gemiddeld \(shortfall.averageGrams) g tekort.".slUnbroken)
+                            .slBody()
+                            .slNumerals()
+                            .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(SL.Ink.primary)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
-                .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, 18)
-                .padding(.bottom, SL.Space.s6)
+                eatenSection
             }
-            .scrollDismissesKeyboard(.immediately)
+            .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.top, SL.Space.s5)
+            .padding(.bottom, SL.Space.s6)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .safeAreaInset(edge: .bottom) { foot }
+        .scrollDismissesKeyboard(.immediately)
+        .safeAreaInset(edge: .bottom) {
+            // The undo sits above the tab bar, where a deleted row can be put
+            // back without anything being covered.
+            if let toast {
+                SLUndoToast(message: toast.message, onUndo: toast.undo, onDismiss: { self.toast = nil })
+                    .padding(.horizontal, SL.Space.gutterSession)
+                    .padding(.bottom, SL.Space.s2)
+                    .transition(.opacity)
+            }
+        }
         .animation(
             .easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion)),
             value: toast?.id
@@ -106,6 +130,13 @@ struct NutritionHomeView: View {
                         delete(removed)
                     }
                 )
+            case .targets:
+                TargetsSheet(targets: app.targets) { changes in
+                    sheet = nil
+                    Task { await app.record(changes) }
+                } onClose: {
+                    sheet = nil
+                }
             }
         }
         .slRespondsToTextSize()
@@ -115,193 +146,210 @@ struct NutritionHomeView: View {
         }
     }
 
-    // MARK: - Chrome
-
-    /// 42a: the tab's name, and the date it is showing.
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-            Text("Voeding")
-                .slTitle()
-                .foregroundStyle(SL.Ink.primary)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: SL.Space.s2)
-            Text(dateLabel)
-                .slMeta()
-                .slNumerals()
-                .foregroundStyle(SL.Ink.tertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.top, SL.Space.s4)
-    }
-
-    private var dateLabel: String {
-        "\(WeekPlan.fullWeekday(now).capitalized) \(app.display.shortDate(now))"
-    }
-
-    /// The undo sits above the one action, in the same inset, so a deleted row
-    /// can be put back without anything covering the button.
-    private var foot: some View {
-        VStack(spacing: SL.Space.s3) {
-            if let toast {
-                SLUndoToast(message: toast.message, onUndo: toast.undo, onDismiss: { self.toast = nil })
-                    .transition(.opacity)
-            }
-            Button { sheet = .add(likely) } label: { Text("Toevoegen aan \(likely.spoken)") }
-                .buttonStyle(SLPrimaryButtonStyle())
-        }
-        .padding(.horizontal, SL.Space.gutterSession)
-        // 42a ends the pill 16 above the tab bar.
-        .padding(.bottom, SL.Space.s4)
-        .padding(.top, SL.Space.s3)
-        .frame(maxWidth: .infinity)
-        .background(SL.Surface.ground)
-    }
-
     // MARK: - What is left
 
-    private var totals: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            eyebrow("NOG TE ETEN")
-
-            Text(heroTitle)
-                .font(.slCapped(SL.TypeSize.displayXL, SL.Weight.semibold, maxScale: 1.5))
-                .slLineHeight(1.05, size: SL.TypeSize.displayXL, maxScale: 1.5)
-                .slNumerals()
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .foregroundStyle(SL.Ink.primary)
-                // SwiftUI draws the glyphs of a line tightened below the font's
-                // own height lower in the box than a browser does. Lifting the
-                // drawing, not the box, puts the number where 42a sets it.
-                .offset(y: -0.117 * Self.heroScaledSize)
-                .padding(.top, 6)
-
-            Text(subline)
-                .slBody()
-                .slNumerals()
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SL.Ink.secondary)
-                .padding(.top, 2)
-
-            macros.padding(.top, SL.Space.s3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
+    /// Over the target there is nothing left to eat: the card says by how much
+    /// it was passed, in amber. Without a target there is nothing to count
+    /// down from, so the loud number is what the day has come to.
+    private var over: Double {
+        guard day.hasTarget, let target = day.targets?.calories else { return 0 }
+        return max(0, day.calories - Double(target))
     }
 
-    private static var heroScaledSize: CGFloat {
-        min(
-            UIFontMetrics(forTextStyle: .body).scaledValue(for: SL.TypeSize.displayXL),
-            SL.TypeSize.displayXL * 1.5
-        )
-    }
-
-    /// Without a target there is nothing left over to count down, so the loud
-    /// number becomes what the day has come to.
-    private var heroTitle: String {
-        app.display.kcal(Decimal(day.hasTarget ? day.remaining : day.calories))
-    }
-
-    /// 42b says plainly that nothing is logged rather than showing a zero.
-    private var subline: String {
-        guard day.calories > 0 else { return "Nog niets gelogd vandaag" }
-        guard day.hasTarget, let target = day.targets?.calories else {
-            return "\(app.display.whole(Decimal(day.calories))) kcal gelogd"
-        }
-        return "\(app.display.whole(Decimal(day.calories))) van \(app.display.kcal(Decimal(target)))"
-    }
-
-    /// Three plain columns: the day's macros, once. 42a puts none of them on a
-    /// meal.
-    private var macros: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: SL.Space.s3))
-
-        return layout {
-            ForEach(Macro.allCases, id: \.self) { macro in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(macro.label)
-                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(macroValue(macro))
-                        .slBody(SL.Weight.semibold)
-                        .slNumerals()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .foregroundStyle(SL.Ink.primary)
+    private var hero: some View {
+        let isOver = over > 0
+        let label = !day.hasTarget ? "Gegeten vandaag" : isOver ? "Boven je doel" : "Nog te eten"
+        let value = !day.hasTarget ? day.calories : isOver ? over : day.remaining
+        return VStack(alignment: .leading, spacing: SL.Space.s4) {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                VStack(alignment: .leading, spacing: SL.Space.s1) {
+                    Text(label)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(app.display.whole(Decimal(value)))
+                            .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
+                            .slNumerals()
+                            .slLineHeight(1, size: SL.TypeSize.display)
+                            .foregroundStyle(isOver ? SL.Signal.attention : SL.Signal.action)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                        Text("kcal")
+                            .slLead(SL.Weight.regular)
+                            .foregroundStyle(SL.Ink.primary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(macro.label), \(macroValue(macro))")
-            }
-        }
-    }
+                .accessibilityLabel("\(label), \(app.display.kcal(Decimal(value)))")
 
-    /// 42a writes the day's macros in whole grams: a tenth of a gram of fat is
-    /// not something a day is steered by, and the column has three of them.
-    private func macroValue(_ macro: Macro) -> String {
-        let total = app.display.whole(Decimal(day.total(of: macro)))
-        let target = day.target(for: macro)
-        guard target > 0 else { return "\(total) g" }
-        return "\(total) / \(app.display.whole(Decimal(target))) g"
-    }
-
-    // MARK: - The four meals
-
-    private var meals: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(day.sections.enumerated()), id: \.element.id) { index, section in
-                VStack(alignment: .leading, spacing: 0) {
-                    if index > 0 { SLHairline() }
-                    heading(section)
-                    ForEach(section.entries) { entry in
-                        row(entry, in: section)
-                    }
-                    if !section.isEmpty { Color.clear.frame(height: 6) }
+                // The oversized word: decoration, so it keeps its own size and
+                // steps aside when the text is large.
+                if !typeSize.isAccessibilitySize {
+                    Text("KCAL")
+                        .font(.slFixed(48, SL.Weight.bold))
+                        .tracking(-0.48)
+                        .foregroundStyle(SL.Signal.action.opacity(0.18))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .accessibilityHidden(true)
                 }
             }
+
+            if day.hasTarget {
+                SLBar(fraction: day.consumed, height: 8, fill: isOver ? SL.Signal.attention : SL.Signal.action)
+                    .accessibilityLabel("\(Int((day.consumed * 100).rounded())) procent van je caloriedoel gegeten")
+            }
+
+            HStack(alignment: .top, spacing: SL.Space.s3) {
+                heroStat(app.display.whole(Decimal(day.calories)), label: "gegeten")
+                Button { sheet = .targets } label: {
+                    heroStat(
+                        day.hasTarget ? app.display.whole(Decimal(day.targets?.calories ?? 0)) : "—",
+                        label: day.hasTarget ? "doel" : "doel instellen"
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opent je dagdoelen")
+            }
+            .padding(.top, SL.Space.s3)
+            .overlay(alignment: .top) { SLHairline() }
+
+            Button { sheet = .add(likely) } label: {
+                HStack(spacing: 10) {
+                    SLGlyph(name: .plus, size: 16)
+                    Text("Maaltijd loggen")
+                }
+            }
+            .buttonStyle(SLPrimaryButtonStyle())
+            .accessibilityHint("Opent op \(likely.spoken)")
+        }
+        .padding(SL.Space.s4)
+        .slBorderBox()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slHeroCard()
+    }
+
+    private func heroStat(_ value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            (Text(value).font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
+                + Text(" kcal").font(.sl(SL.TypeSize.meta, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
+                .slNumerals()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label), \(value) kcal")
+    }
+
+    // MARK: - Macros
+
+    /// The three macros against their targets, once, for the day. Protein is
+    /// the one the reader steers by, so it leads and carries the full lime;
+    /// the other two step back.
+    private var macros: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLSectionHead(title: "Macro’s", meta: day.hasTarget ? "gegeten / doel" : "gegeten")
+            VStack(spacing: 0) {
+                ForEach(Array(Macro.allCases.enumerated()), id: \.element) { index, macro in
+                    macroRow(macro, level: index)
+                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                }
+            }
+            .slBorderBox()
+            .slListCard()
         }
     }
 
-    /// The meal, what it came to, and the one way to add to it.
-    private func heading(_ section: MealSection) -> some View {
-        HStack(spacing: SL.Space.s3) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(section.title)
+    private func macroRow(_ macro: Macro, level: Int) -> some View {
+        let total = day.total(of: macro)
+        let target = day.target(for: macro)
+        let left = (target - total).rounded()
+        let name = macro == .protein ? "Eiwit" : macro.label
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            layout {
+                Text(name)
                     .slLead()
                     .foregroundStyle(SL.Ink.primary)
+                if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
+                // Whole grams: a tenth of a gram of fat is not something a day
+                // is steered by.
+                (Text(app.display.whole(Decimal(total))).font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
+                    + Text(target > 0 ? " / \(app.display.whole(Decimal(target))) g" : " g")
+                        .font(.sl(SL.TypeSize.body, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
+                    .slNumerals()
                     .lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-                Text(section.isEmpty ? "—" : app.display.kcal(Decimal(section.calories)))
+            }
+            if target > 0 {
+                SLBar(
+                    fraction: day.fraction(of: macro),
+                    height: 6,
+                    fill: SL.Signal.action.opacity([1, 0.6, 0.4][min(level, 2)])
+                )
+                Text(left >= 0
+                     ? "nog \(app.display.whole(Decimal(left))) g"
+                     : "\(app.display.whole(Decimal(-left))) g boven doel")
                     .slMeta()
                     .slNumerals()
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: SL.Space.s2)
-            Button { sheet = .add(section.meal) } label: {
-                Image(systemName: "plus")
-                    .font(.sl(SL.TypeSize.title, SL.Weight.medium))
                     .foregroundStyle(SL.Ink.secondary)
-                    .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            // 42a hangs the ⊕ 12 past the gutter, so its glyph lines up with
-            // the numbers above it rather than its own hit area.
-            .padding(.trailing, -12)
-            .accessibilityLabel("Toevoegen aan \(section.meal.spoken)")
         }
-        .frame(minHeight: SL.Space.hitMin)
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
+        .frame(minHeight: target > 0 ? 72 : 52)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            target > 0
+                ? "\(name), \(app.display.whole(Decimal(total))) van \(app.display.whole(Decimal(target))) gram"
+                : "\(name), \(app.display.whole(Decimal(total))) gram"
+        )
     }
 
-    /// One logged item: what it was, how much of it, and what it cost. Tapping
-    /// it opens the item (42d); a swipe offers to take it off the day.
+    // MARK: - What was eaten
+
+    private var eatenSection: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLSectionHead(
+                title: "Vandaag gegeten",
+                meta: "\(eaten.count) \(eaten.count == 1 ? "item" : "items")"
+            )
+            VStack(spacing: 0) {
+                if eaten.isEmpty {
+                    // Said plainly rather than shown as a row of zeroes.
+                    VStack(alignment: .leading, spacing: SL.Space.s1) {
+                        Text("Nog niets gelogd")
+                            .slLead()
+                            .foregroundStyle(SL.Ink.primary)
+                        Text("Log je eerste maaltijd; je totalen en wat er nog over is rekenen meteen mee.")
+                            .slBody()
+                            .slLineHeight(1.45, size: SL.TypeSize.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
+                    .padding(SL.Space.s4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(Array(eaten.enumerated()), id: \.element.entry.id) { index, item in
+                        row(item.entry, in: item.section)
+                            .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                    }
+                }
+            }
+            .slBorderBox()
+            .slListCard()
+        }
+    }
+
+    /// One logged item: when, what it was and which meal, and what it cost.
+    /// Tapping it opens the item; a swipe offers to take it off the day.
     private func row(_ entry: NutritionEntry, in section: MealSection) -> some View {
         let isSwiped = swiped == entry.id
 
@@ -310,6 +358,7 @@ struct NutritionHomeView: View {
                 Text("Verwijder")
                     .slBody(SL.Weight.semibold)
                     .foregroundStyle(SL.Signal.loss)
+                    .padding(.horizontal, SL.Space.s4)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
             }
@@ -320,31 +369,49 @@ struct NutritionHomeView: View {
             // A plain row rather than a Button: a Button takes the whole
             // gesture, and a sideways drag across it would open the item
             // instead of offering to remove it.
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                rowTitle(entry)
-                    .foregroundStyle(SL.Ink.primary)
-                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
-                Spacer(minLength: SL.Space.s2)
-                Text(app.display.whole(Decimal(entry.calories)))
-                    .slBody()
+            SLAdaptiveRow {
+                Text(entry.loggedAt.map(Self.clock) ?? "")
+                    .slBody(SL.Weight.semibold)
                     .slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(width: typeSize.isAccessibilitySize ? nil : timeWidth, alignment: .leading)
+            } main: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.name)
+                        .slLead()
+                        .slLineHeight(1.3, size: SL.TypeSize.lead)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text(detail(entry, in: section).slUnbroken)
+                        .slBody()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                .fixedSize(horizontal: false, vertical: true)
+            } trailing: {
+                (Text(app.display.whole(Decimal(entry.calories))).font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
+                    + Text(" kcal").font(.sl(SL.TypeSize.meta, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
+                    .slNumerals()
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            .frame(minHeight: SL.Space.hitMin)
-            .background(SL.Surface.ground)
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .frame(minHeight: 72)
+            .background(SL.Surface.raised)
             .contentShape(Rectangle())
             .offset(x: isSwiped ? -Self.swipeReveal : 0)
             .onTapGesture { sheet = isSwiped ? nil : .edit(entry) }
         }
-        // 42a's rows are 44 of hit area at a pitch of 40, so two items under a
-        // heading read as one block rather than a list.
-        .padding(.top, -4)
         .animation(
             .easeOut(duration: SL.Motion.duration(SL.Motion.fast, reduceMotion: reduceMotion)),
             value: isSwiped
         )
-        .gesture(
-            // Only a sideways drag, so the day still scrolls under the finger.
+        // Beside the scroll view's own drag: only a sideways one is read, so
+        // the day still scrolls under the finger.
+        .simultaneousGesture(
             DragGesture(minimumDistance: 16)
                 .onEnded { value in
                     guard abs(value.translation.width) > abs(value.translation.height) else { return }
@@ -363,33 +430,41 @@ struct NutritionHomeView: View {
         .accessibilityAction(named: "Verwijderen") { delete(entry) }
     }
 
-    private static let swipeReveal: CGFloat = 104
+    private static let swipeReveal: CGFloat = 112
 
-    /// "Havermout · 100 g", with the amount quieter than the food.
-    private func rowTitle(_ entry: NutritionEntry) -> Text {
-        let name = Text(entry.name).font(.sl(SL.TypeSize.body, SL.Weight.regular))
-        guard let portion = entry.portion else { return name }
-        return name + Text(" · \(portion)")
-            .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
-            .foregroundColor(SL.Ink.tertiary)
+    /// 48 in the design; it has to grow with the text or "12:45" is cut.
+    @ScaledMetric(relativeTo: .body) private var timeWidth: CGFloat = 48
+
+    /// "12:45" — the hour it was logged, as the clock had it.
+    private static func clock(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+
+    /// "Lunch · 100 g · 46 g eiwit"
+    private func detail(_ entry: NutritionEntry, in section: MealSection) -> String {
+        [
+            section.title,
+            entry.portion,
+            "\(app.display.whole(Decimal(entry.protein))) g eiwit",
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
     }
 
     private func spoken(_ entry: NutritionEntry, in section: MealSection) -> String {
         [
+            entry.loggedAt.map { "gelogd om \(Self.clock($0))" },
             section.title,
             entry.name,
             entry.portion,
             app.display.kcal(Decimal(entry.calories)),
+            "\(app.display.whole(Decimal(entry.protein))) gram eiwit",
         ]
         .compactMap { $0 }
         .joined(separator: ", ")
-    }
-
-    private func eyebrow(_ text: String) -> some View {
-        Text(text)
-            .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
-            .tracking(SL.TypeSize.micro * 0.06)
-            .foregroundStyle(SL.Ink.tertiary)
     }
 
     // MARK: - Writing one entry

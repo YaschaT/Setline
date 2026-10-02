@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.4">
+<!-- SETLINE Redesign.dc.html — the design's own glyph, drawn as a template vector. -->
+<rect x="2" y="3" width="12" height="10" rx="2"/>
+<path d="M2 11l3.5-3.5 3 3 2-2L14 12"/>
+</svg>

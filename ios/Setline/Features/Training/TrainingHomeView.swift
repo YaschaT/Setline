@@ -1,20 +1,22 @@
 import SwiftUI
 import SetlineCore
 
-/// Artboards 41b–41d · Training.
+/// Redesign 1a · Training — today and the week.
 ///
-/// One screen, one selected date. The drawer at the top carries the date, the
-/// week and the way into the agenda; below it the date's own slots — its name
-/// at 56, one line about it, what it is made of, and the foot that acts on it.
-/// The slots keep their places whatever the date holds, so selecting another
-/// day changes the words and never the composition.
+/// One screen, one selected date. The week strip and the card under it say
+/// what that date holds; the card is swiped, or a day tapped, to look at
+/// another one. Looking never writes: a session starts from `Start training`
+/// on today's card and nowhere else, and `Oefeningen bekijken` opens the
+/// preview, which starts nothing.
 ///
-/// Training is what happens on the selected date. The agenda (the drawer,
-/// pulled open) browses dates. "Wijzig deze dag" changes what a date holds,
-/// and is the only thing here that writes.
+/// Planning and results live one tap away in the Agenda. "Wijzig deze dag" —
+/// the only thing here that changes the schedule — is reached from a day's
+/// preview, from a rest day's row in the Agenda, or by holding a day.
 struct TrainingHomeView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+
     let onStart: (WorkoutDay) -> Void
     let onResume: (WorkoutDay, ActiveSessionSnapshot) -> Void
     /// A workout that was done on a date that has passed and never written
@@ -23,37 +25,43 @@ struct TrainingHomeView: View {
 
     @State private var confirmsEnd = false
     /// The date the screen is on. `nil` is today, which is where every visit
-    /// starts and where `Terug naar vandaag` returns.
+    /// starts and where `Naar vandaag` returns.
     @State private var selectedDate: Date?
-    @State private var preview: AgendaDay?
+    @State private var sheet: Presented?
     @State private var openedSession: OpenedSession?
-    /// The drawer, and the month it shows while it is open (41d).
-    @State private var drawerOpen = false
-    @State private var drawerAnchor = Date()
-    /// The date whose assignment sheet is open (41e–41g).
-    @State private var planning: PlannedDate?
+    /// The card under the finger, and on its way in after a day change.
+    @State private var dragX: CGFloat = 0
+    @State private var isDragging = false
+    /// The recovery proposal was waved away on this visit; the card says so.
+    @State private var ignoredProposal = false
 
     private struct OpenedSession: Identifiable { let id: String }
-    private struct PlannedDate: Identifiable { let date: Date; var id: String { Schedule.dateKey(date) } }
 
-    private var isFirstRun: Bool { app.sessions.isEmpty }
+    /// One sheet at a time, as the design has it: a preview takes the
+    /// agenda's place rather than stacking on it.
+    private enum Presented: Identifiable {
+        case agenda
+        case preview(AgendaDay)
+        case plan(Date)
 
-    /// The week the rail shows: the one the selected date falls in, so
-    /// picking a date in the agenda brings its week back with it.
-    private var week: [AgendaDay] {
-        Agenda.week(
-            containing: selectedDate ?? Date(),
-            plan: app.plan,
-            overrides: app.scheduleOverrides,
-            sessions: app.sessions,
-            deload: app.activeDeload
-        )
+        var id: String {
+            switch self {
+            case .agenda: return "agenda"
+            case .preview(let day): return "preview-\(day.key)"
+            case .plan(let date): return "plan-\(Schedule.dateKey(date))"
+            }
+        }
     }
 
-    /// Today, wherever the screen happens to be standing.
-    private var today: AgendaDay? {
-        Agenda.day(
-            on: Date(),
+    // MARK: - What the screen reads
+
+    /// The week the strip shows: the one the selected date falls in, so
+    /// picking a date in the agenda brings its week back with it.
+    private var week: [AgendaDay] { days(containing: selectedDate ?? Date()) }
+
+    private func days(containing date: Date) -> [AgendaDay] {
+        Agenda.week(
+            containing: date,
             plan: app.plan,
             overrides: app.scheduleOverrides,
             sessions: app.sessions,
@@ -63,45 +71,82 @@ struct TrainingHomeView: View {
 
     private var selectedDay: AgendaDay? {
         let key = Schedule.dateKey(selectedDate ?? Date())
-        return week.first { $0.key == key } ?? today
+        return week.first { $0.key == key }
     }
 
-    private var showsToday: Bool { selectedDay.map(\.isToday) ?? true }
+    private var isOffline: Bool { app.sync == .offline }
+
+    private var queue: [SyncQueue.Row] {
+        SyncQueue.rows(from: app.pendingChanges, display: app.display)
+    }
 
     var body: some View {
-        Group {
-            if isOffline { offlineBody } else { onlineBody }
+        ScrollView {
+            VStack(alignment: .leading, spacing: SL.Space.s4) {
+                header
+                if isOffline { offlineCard }
+                weekSection
+                if let day = selectedDay {
+                    daySection(day)
+                }
+                if let status = recoveryStatus {
+                    recoverySection(status)
+                        .padding(.top, SL.Space.s1)
+                }
+                if isOffline, !queue.isEmpty { queueSection }
+            }
+            .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.top, SL.Space.s5)
+            .padding(.bottom, SL.Space.s6)
         }
-        .fullScreenCover(item: $preview) { day in
-            if let workout = day.plannedDay {
-                WorkoutPreviewView(
-                    day: day,
-                    workout: workout,
-                    onClose: { preview = nil },
-                    onPlanWeek: { preview = nil; planning = PlannedDate(date: day.date) },
-                    onOpenAgenda: nil
+        .sheet(item: $sheet) { presented in
+            switch presented {
+            case .agenda:
+                AgendaSheet(
+                    initialDate: selectedDate ?? Date(),
+                    selectedKey: selectedDay?.key ?? "",
+                    onSelect: { select($0) },
+                    onPreview: { day in
+                        select(day)
+                        sheet = .preview(day)
+                    },
+                    onClose: { sheet = nil }
+                )
+            case .preview(let day):
+                preview(day)
+            case .plan(let date):
+                DayPlanSheet(
+                    plan: dayPlan(for: date),
+                    onApply: { option in
+                        let plan = dayPlan(for: date)
+                        sheet = nil
+                        guard let change = plan.change(for: option, programKey: app.programKey) else { return }
+                        Task { await app.record([change]) }
+                    },
+                    onOpenSession: { session in
+                        after(closing: { openedSession = OpenedSession(id: session.id) })
+                    },
+                    onClose: { sheet = nil }
                 )
             }
         }
         .fullScreenCover(item: $openedSession) { opened in
             SessionDetailView(sessionID: opened.id, onClose: { openedSession = nil })
         }
-        .sheet(item: $planning) { target in
-            DayPlanSheet(
-                plan: dayPlan(for: target.date),
-                onApply: { option in
-                    let plan = dayPlan(for: target.date)
-                    planning = nil
-                    guard let change = plan.change(for: option, programKey: app.programKey) else { return }
-                    Task { await app.record([change]) }
-                },
-                onOpenSession: { session in
-                    planning = nil
-                    openedSession = OpenedSession(id: session.id)
-                },
-                onClose: { planning = nil }
-            )
+        #if DEBUG
+        // `-SetlineAgenda` and `-SetlinePreview` open the two sheets, so they
+        // can be looked at on any simulator without driving taps.
+        .task {
+            let arguments = ProcessInfo.processInfo.arguments
+            try? await Task.sleep(for: .milliseconds(600))
+            if arguments.contains("-SetlineAgenda") {
+                sheet = .agenda
+            } else if arguments.contains("-SetlinePreview"),
+                      let today = days(containing: Date()).first(where: \.isToday), today.plannedDay != nil {
+                sheet = .preview(today)
+            }
         }
+        #endif
         .alert("Sessie beëindigen?", isPresented: $confirmsEnd) {
             Button("Annuleer", role: .cancel) {}
             Button("Beëindigen") { Task { await app.endActiveSession() } }
@@ -111,7 +156,39 @@ struct TrainingHomeView: View {
         .slRespondsToTextSize()
     }
 
-    /// One date, read the way the rail and the agenda read it.
+    /// Closes whatever sheet is up, and acts once it has gone: the session and
+    /// the results both open over the whole screen, which a sheet on its way
+    /// out would refuse.
+    private func after(closing action: @escaping @MainActor () -> Void) {
+        sheet = nil
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            action()
+        }
+    }
+
+    @ViewBuilder
+    private func preview(_ day: AgendaDay) -> some View {
+        if let workout = day.plannedDay {
+            let isMissed = { if case .missed = day.content { return true } else { return false } }()
+            WorkoutPreviewView(
+                day: day,
+                workout: workout,
+                // A paused session is resumed from the card, never started
+                // over from here.
+                onStart: day.isToday && app.resumableSession == nil
+                    ? { after(closing: { onStart(workout) }) }
+                    : nil,
+                onLogPast: isMissed
+                    ? { after(closing: { onLogPast(workout, day.date) }) }
+                    : nil,
+                onChangeDay: { sheet = .plan(day.date) },
+                onClose: { sheet = nil }
+            )
+        }
+    }
+
+    /// One date, read the way the strip and the agenda read it.
     private func dayPlan(for date: Date) -> DayPlan {
         DayPlan.make(
             for: date,
@@ -122,205 +199,277 @@ struct TrainingHomeView: View {
         )
     }
 
-    private var onlineBody: some View {
-        VStack(spacing: 0) {
-            // 18R's proposal is answered before anything else; it draws no week.
-            if !app.proposesDeload {
-                TrainingDrawer(
-                    week: week,
-                    weeks: drawerWeeks,
-                    selected: selectedDay,
-                    isOpen: $drawerOpen,
-                    anchor: $drawerAnchor,
-                    onSelect: select,
-                    onPlan: { planning = PlannedDate(date: $0.date) }
-                )
-            }
+    // MARK: - The date
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if app.proposesDeload {
-                        DeloadCard(
-                            reading: app.fatigue,
-                            proposal: Deload(startedAt: Date()),
-                            onApply: { Task { await app.applyDeload() } },
-                            onDismiss: { withAnimation(.easeOut(duration: SL.Motion.base)) { app.dismissDeload() } }
-                        )
-                        steppedBackToday
-                            .opacity(0.6)
-                            .padding(.top, SL.Space.s6)
-                    } else if drawerOpen {
-                        openDrawerSummary
-                    } else {
-                        dayHero
+    /// The head is the date the card is on, as Main has it: no greeting and
+    /// no avatar — Account is a tab of its own.
+    private var header: some View {
+        Text(longDate)
+            .slTitle()
+            .slNumerals()
+            .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
+            .foregroundStyle(SL.Ink.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+            .padding(.top, SL.Space.s1)
+    }
+
+    /// "Woensdag 9 september" — the date the card is on.
+    private var longDate: String { SLDateText.long(selectedDay?.date ?? Date()) }
+
+    // MARK: - The week
+
+    private var weekSection: some View {
+        let headLayout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s3))
+        return VStack(spacing: SL.Space.s1) {
+            headLayout {
+                SLOverline(text: Agenda.weekLabel(containing: selectedDate ?? Date()))
+                    .padding(.leading, SL.Space.s1)
+                    .accessibilityAddTraits(.isHeader)
+                if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
+                Button { sheet = .agenda } label: {
+                    HStack(spacing: 6) {
+                        SLGlyph(name: .calendar, size: 18)
+                        Text("Agenda").slBody(SL.Weight.semibold)
+                        SLGlyph(name: .chevronRight, size: 14)
+                    }
+                    .foregroundStyle(SL.Signal.action)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.leading, typeSize.isAccessibilitySize ? SL.Space.s1 : SL.Space.s3)
+                    .padding(.trailing, SL.Space.s2)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+                .padding(.trailing, typeSize.isAccessibilitySize ? 0 : -SL.Space.s2)
+                .accessibilityHint("Opent planning en resultaten")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            WeekStrip(
+                days: week,
+                selected: selectedDay?.key ?? "",
+                onSelect: { go(to: $0) },
+                onPlan: { sheet = .plan($0.date) }
+            )
+        }
+        .padding(.top, SL.Space.s1)
+    }
+
+    // MARK: - The selected date
+
+    private func daySection(_ day: AgendaDay) -> some View {
+        VStack(spacing: SL.Space.s1) {
+            dayCard(day)
+                .offset(x: dragX)
+                .opacity(1 - min(abs(dragX) / 400, 0.4))
+                // Beside the scroll view's own drag, never instead of it: a
+                // vertical pull still scrolls the screen.
+                .simultaneousGesture(swipe)
+            dayNav
+        }
+    }
+
+    private func dayCard(_ day: AgendaDay) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s4) {
+            cardTop(day)
+            cardBody(day)
+            cardActions(day)
+        }
+        .padding(SL.Space.s4)
+        .slBorderBox()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slHeroCard()
+        .clipShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func cardTop(_ day: AgendaDay) -> some View {
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            Text(eyebrow(for: day))
+                .font(.sl(SL.TypeSize.meta, SL.Weight.bold))
+                .slNumerals()
+                .foregroundStyle(SL.Signal.action)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: SL.Space.s2)
+            if day.isToday {
+                SLTodayBadge()
+            } else {
+                Button {
+                    if let today = days(containing: Date()).first(where: \.isToday) { go(to: today) }
+                } label: {
+                    HStack(spacing: SL.Space.s1) {
+                        SLGlyph(name: .chevronLeft, size: 14)
+                        Text("Naar vandaag").slMeta(SL.Weight.semibold)
+                    }
+                    .foregroundStyle(SL.Signal.action)
+                    .padding(.horizontal, SL.Space.s2)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+                // 44 to touch, 28 in the row: the design lets it hang over.
+                .padding(.vertical, -SL.Space.s2)
+                .padding(.trailing, -SL.Space.s2)
+                .fixedSize()
+            }
+        }
+        .frame(minHeight: 28)
+    }
+
+    /// "Week 3 · Push / Pull / Benen" — the week counted from the first
+    /// session logged, and the programme the account is on.
+    private func eyebrow(for day: AgendaDay) -> String {
+        let week = "Week \(WeekPlan.number(firstSession: app.sessions.last?.date, on: day.date))"
+        guard let state = app.state else { return week }
+        return "\(week) · \(ProgramCatalog.current(in: state, plan: app.plan).name)"
+    }
+
+    private func cardBody(_ day: AgendaDay) -> some View {
+        let content = card(for: day)
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            // No oversized word behind the title: the name says it once.
+            VStack(alignment: .leading, spacing: 6) {
+                Text(content.title)
+                    .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
+                    .tracking(-0.01 * SL.TypeSize.display)
+                    .slLineHeight(1.05, size: SL.TypeSize.display)
+                    .foregroundStyle(content.isRest ? SL.Signal.recovery : SL.Ink.primary)
+                    .minimumScaleFactor(0.75)
+                    .accessibilityAddTraits(.isHeader)
+                if let focus = content.focus {
+                    Text(focus.slUnbroken)
+                        .slLead(SL.Weight.regular)
+                        .slNumerals()
+                        .slLineHeight(1.35, size: SL.TypeSize.lead)
+                        .foregroundStyle(SL.Ink.primary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !content.meta.isEmpty {
+                SLFlow(spacing: SL.Space.s3, lineSpacing: SL.Space.s1) {
+                    ForEach(Array(content.meta.enumerated()), id: \.offset) { _, item in
+                        HStack(spacing: 5) {
+                            if item.timed { SLGlyph(name: .clock, size: 15) }
+                            Text(item.text.slUnbroken).slBody().slNumerals()
+                        }
+                        .foregroundStyle(SL.Ink.meta)
                     }
                 }
-                .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, contentTop)
-                .padding(.bottom, SL.Space.s6)
+                .accessibilityElement(children: .combine)
             }
-        }
-        .safeAreaInset(edge: .bottom) { foot }
-    }
 
-    /// 41c ends the screen 6 under the last control. The action keeps its
-    /// place in every state, so selecting another day never moves it.
-    private static let actionGap: CGFloat = 6
-
-    /// 41c sets the name 48 under the drawer; 41d's compact summary 22, where
-    /// the agenda has taken the room. 18R's proposal opens where 09 did.
-    private var contentTop: CGFloat {
-        if app.proposesDeload { return isFirstRun ? SL.Space.s6 : SL.Space.s5 }
-        return drawerOpen ? 22 : 48
-    }
-
-    /// Selecting a date reads it and nothing else: no session, no schedule,
-    /// no programme, no history is touched by looking.
-    private func select(_ day: AgendaDay) {
-        withAnimation(.easeOut(duration: SL.Motion.base)) {
-            selectedDate = day.isToday ? nil : day.date
-        }
-    }
-
-    /// The four weeks the open drawer shows, around the month it is on.
-    private var drawerWeeks: [Agenda.Week] {
-        Agenda.weeks(
-            around: drawerAnchor,
-            plan: app.plan,
-            overrides: app.scheduleOverrides,
-            sessions: app.sessions,
-            deload: app.activeDeload,
-            firstSession: app.sessions.last?.date
-        )
-    }
-
-    // MARK: - The selected date (41b, 41c)
-
-    /// The date's own slots: its name at 56, the one line that describes it,
-    /// and what it is made of. Every state fills the same three.
-    private var dayHero: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(heroTitle)
-                // Capped so the word stays whole on one line at accessibility
-                // sizes: 84pt is as large as it fits across a phone.
-                .font(.slCapped(Self.heroSize, SL.Weight.semibold, maxScale: 1.5))
-                .slLineHeight(1.02, size: Self.heroSize, maxScale: 1.5)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .foregroundStyle(SL.Ink.primary)
-                // SwiftUI draws the glyphs of a line tightened below the
-                // font's own height lower in the box than a browser does —
-                // 0.117em here. Lifting the drawing, not the box, puts the
-                // word where the artboard sets it.
-                .offset(y: -0.117 * Self.heroScaledSize)
-                .accessibilityAddTraits(.isHeader)
-
-            Text(heroLine)
-                .slLead(SL.Weight.regular)
-                .slNumerals()
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SL.Ink.secondary)
-                .padding(.top, 10)
-
-            if let detail = heroDetail {
-                Text(detail)
+            ForEach(Array(content.notes.enumerated()), id: \.offset) { _, note in
+                Text(note)
                     .slBody()
-                    .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
+                    .slNumerals()
+                    .slLineHeight(1.4, size: SL.TypeSize.body)
                     .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .slMeasure(32, fontSize: SL.TypeSize.body)
-                    .padding(.top, 14)
-            }
-
-            // 09's one lime line, kept where the date is today's training:
-            // the only semantic win this screen makes. Only while it is still
-            // to do — once today's session is saved, its "Vandaag …" would be
-            // the next session's target, and a logged day reads as one that
-            // has gone by.
-            if showsToday, !drawerOpen, selectedDay?.isLogged != true, let insight {
-                Text(attributed(insight.text, liming: insight.highlight))
-                    .slBody()
-                    .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .slMeasure(32, fontSize: SL.TypeSize.body)
-                    .padding(.top, 14)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private static let heroSize: CGFloat = 56
+    // MARK: - What the card says
 
-    private static var heroScaledSize: CGFloat {
-        min(UIFontMetrics(forTextStyle: .body).scaledValue(for: heroSize), heroSize * 1.5)
+    private struct Card {
+        struct Meta { let text: String; var timed = false }
+        var title: String
+        var focus: String?
+        var isRest = false
+        var meta: [Meta] = []
+        var notes: [AttributedString] = []
     }
 
-    /// 41d: with the agenda open the same date says the same things, at the
-    /// size the room allows.
-    private var openDrawerSummary: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                Text(heroTitle).slTitle().foregroundStyle(SL.Ink.primary)
-                Spacer(minLength: SL.Space.s2)
-                if let day = selectedDay {
-                    Text("\(day.weekday) \(app.display.shortDate(day.date)) · \(Agenda.when(day.date))")
-                        .slBody().slNumerals()
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+    private func card(for day: AgendaDay) -> Card {
+        // A session that was started and paused is the one you are in the
+        // middle of, whatever today's plan says.
+        if day.isToday, let paused = app.resumableSession, let resumed = app.day(for: paused) {
+            let planned = SessionPrescription.setCount(of: resumed, deload: app.activeDeload)
+            return Card(
+                title: resumed.short,
+                focus: resumed.focus.isEmpty ? nil : resumed.focus,
+                meta: [
+                    .init(
+                        text: "\(paused.loggedSetCount) van \(max(planned, paused.plannedSetCount)) sets gelogd"
+                            + " · gepauzeerd \(app.pausedWhenLabel(for: paused).replacingOccurrences(of: "van ", with: ""))"
+                    ),
+                ]
+            )
+        }
+
+        switch day.content {
+        case .planned(let workout):
+            var card = Card(
+                title: workout.short,
+                focus: workout.focus.isEmpty ? nil : workout.focus
+            )
+            // 1a: today reads "◷ 5 oefeningen · ~62 min"; another day only
+            // what it holds, "20 sets".
+            let exercises = workout.exercises.count == 1 ? "1 oefening" : "\(workout.exercises.count) oefeningen"
+            card.meta = day.isToday
+                ? [.init(text: "\(exercises) · ~\(WeekPlan.minutes(of: workout)) min", timed: true)]
+                : [.init(text: "\(WeekPlan.sets(of: workout)) sets")]
+            if let movedFrom = day.movedFrom {
+                card.notes.append(plain("Verplaatst van \(movedFrom)."))
+            }
+            if day.isToday {
+                if let insight { card.notes.append(attributed(insight.text, liming: insight.highlight)) }
+                if app.sessions.isEmpty {
+                    card.notes.append(plain(
+                        "Nog geen sessies gelogd. Je eerste sessie zet de startgewichten; daarna rekent SETLINE de progressie zelf."
+                    ))
                 }
             }
-            Text(heroLine)
-                .slBody()
-                .slNumerals()
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SL.Ink.secondary)
-                .padding(.top, 6)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
+            return card
 
-    /// The name of what the date holds: the session that was saved on it, the
-    /// one the programme puts there, or rest.
-    private var heroTitle: String {
-        guard let day = selectedDay else { return "Rustdag" }
-        return day.title ?? "Rustdag"
-    }
-
-    /// One line about it, in the same shape for every state: what it costs,
-    /// what it came to, or when the next one is.
-    private var heroLine: String {
-        guard let day = selectedDay else { return "" }
-        switch day.content {
-        case .session(let session):
-            return loggedSummary(session)
-        case .planned(let workout):
-            return "\(WeekPlan.sets(of: workout)) sets · ±\(WeekPlan.minutes(of: workout)) min"
         case .missed(let workout):
-            return "Stond gepland · \(WeekPlan.sets(of: workout)) sets · niet gelogd"
+            return Card(
+                title: workout.short,
+                focus: workout.focus.isEmpty ? nil : workout.focus,
+                meta: [.init(text: "\(WeekPlan.sets(of: workout)) sets · niet gelogd")],
+                notes: [plain("SETLINE haalt niets in en verschuift niets. Je plan voor volgende week blijft staan.")]
+            )
+
+        case .session(let session):
+            return Card(
+                title: "Voltooid",
+                focus: session.dayLabel,
+                meta: [.init(text: loggedSummary(session))]
+            )
+
         case .rest:
-            return Agenda.restLine(next: nextTraining(after: day.date))
-        }
-    }
-
-    /// What it is made of, where that is something other than the line above.
-    private var heroDetail: String? {
-        guard let day = selectedDay else { return nil }
-        switch day.content {
-        case .planned(let workout):
-            var detail = workout.exercises.map { app.exercise($0.exerciseID).name }.joined(separator: " · ")
-            if isFirstRun {
-                detail += "\n\nNog geen sessies gelogd. Je eerste sessie zet de startgewichten; daarna rekent SETLINE de progressie zelf."
+            var card = Card(title: "Rust", focus: "Geen training gepland", isRest: true)
+            if let next = nextTraining(after: day.date), let workout = next.plannedDay {
+                card.notes.append(plain("\(Agenda.restLine(next: next)) · \(workout.short)"))
             }
-            return detail
-        case .missed:
-            return "SETLINE haalt niets in en verschuift niets. Je plan voor volgende week blijft staan."
-        case .session, .rest:
-            return nil
+            return card
         }
     }
 
-    /// The next session still to come after a date, read the way the rail
+    private func plain(_ text: String) -> AttributedString {
+        var string = AttributedString(text.slUnbroken)
+        string.foregroundColor = SL.Ink.meta
+        return string
+    }
+
+    private func attributed(_ text: String, liming fragment: String) -> AttributedString {
+        var string = AttributedString(text.slUnbroken)
+        string.foregroundColor = SL.Ink.primary
+        if let range = string.range(of: fragment.slUnbroken) {
+            string[range].foregroundColor = SL.Signal.action
+        }
+        return string
+    }
+
+    /// The next session still to come after a date, read the way the strip
     /// reads its week — across its end as well.
     private func nextTraining(after date: Date) -> AgendaDay? {
         Agenda.nextTraining(
@@ -332,340 +481,18 @@ struct TrainingHomeView: View {
         )
     }
 
-    // MARK: - The foot (41b, 41c)
-
-    /// What the date offers: the next session on its hairline where today
-    /// rests, the way back to today where it does not, then the one action
-    /// and the way to change the day.
-    private var foot: some View {
-        VStack(spacing: 0) {
-            if let day = selectedDay, !app.proposesDeload {
-                footRow(day)
-                footAction(day)
-                Button {
-                    if app.resumableSession != nil && day.isToday {
-                        confirmsEnd = true
-                    } else {
-                        planning = PlannedDate(date: day.date)
-                    }
-                } label: {
-                    Text(app.resumableSession != nil && day.isToday ? "Beëindig sessie" : "Wijzig deze dag")
-                        .slBody(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: SL.Space.hitMin)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
+    private func loggedSummary(_ session: TrainingSession) -> String {
+        let volume = RecordsEngine.volumeLoad(session.results.flatMap(\.sets))
+        if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
+            return "\(completed) van \(planned) sets · \(app.display.volumeKg(volume)) volume"
         }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.bottom, Self.actionGap)
-        .frame(maxWidth: .infinity)
-        .background(SL.Surface.ground)
+        return "\(session.completion)% afgerond · \(app.display.volumeKg(volume)) volume"
     }
 
-    /// 41c's next session, or 41b's "what today holds · back to today".
-    @ViewBuilder
-    private func footRow(_ day: AgendaDay) -> some View {
-        if day.isToday, day.isRest, let next = nextTraining(after: day.date), let workout = next.plannedDay {
-            VStack(spacing: 0) {
-                Rectangle().fill(Self.rowDivider).frame(height: 1)
-                HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                    Text(workout.short).slTitle().foregroundStyle(SL.Ink.primary)
-                    Spacer(minLength: SL.Space.s2)
-                    Text(Agenda.sessionLine(next) ?? "")
-                        .slBody().slNumerals()
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                }
-                .padding(.top, 14)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Volgende training: \(workout.short), \(Agenda.sessionLine(next) ?? "")")
-            }
-        } else if !day.isToday {
-            VStack(spacing: 0) {
-                Rectangle().fill(Self.rowDivider).frame(height: 1)
-                HStack(spacing: SL.Space.s3) {
-                    Text(todayLine)
-                        .slBody()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: SL.Space.s2)
-                    Button {
-                        withAnimation(.easeOut(duration: SL.Motion.base)) { selectedDate = nil }
-                    } label: {
-                        Text("Terug naar vandaag")
-                            .slBody(SL.Weight.semibold)
-                            .foregroundStyle(SL.Ink.primary)
-                            .slHitTarget()
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.top, 14)
-            }
-        }
-    }
-
-    /// One action per date. Today commits — starting or resuming is the only
-    /// lime on this screen; every other date opens what it holds.
-    @ViewBuilder
-    private func footAction(_ day: AgendaDay) -> some View {
-        Group {
-            if day.isToday, let paused = app.resumableSession, let resumed = app.day(for: paused) {
-                Button { onResume(resumed, paused) } label: { Text(resumeLabel(paused)) }
-                    .buttonStyle(SLPrimaryButtonStyle())
-            } else if day.isToday, let workout = day.plannedDay {
-                Button { onStart(workout) } label: { Text("Start \(workout.short)") }
-                    .buttonStyle(SLPrimaryButtonStyle())
-            } else if let session = day.session {
-                Button { openedSession = OpenedSession(id: session.id) } label: { Text("Bekijk sessie") }
-                    .buttonStyle(SLOutlineButtonStyle())
-            } else if isPast(day.date), let workout = day.plannedDay {
-                // A day that has gone by with nothing logged. The work may
-                // well have been done; this is where it gets written down, on
-                // the date it happened rather than on today.
-                Button { onLogPast(workout, day.date) } label: { Text("Log \(workout.short)") }
-                    .buttonStyle(SLPrimaryButtonStyle())
-                    .accessibilityHint("Schrijft \(workout.short) achteraf op, op \(Agenda.when(day.date))")
-            } else if let workout = day.plannedDay {
-                Button { preview = day } label: { Text("Bekijk \(workout.short)") }
-                    .buttonStyle(SLOutlineButtonStyle())
-                    .accessibilityHint("Opent wat er \(Agenda.when(day.date)) gepland staat. Er start niets.")
-            } else if day.isToday, let next = nextTraining(after: day.date), let workout = next.plannedDay {
-                Button { preview = next } label: { Text("Bekijk \(workout.short)") }
-                    .buttonStyle(SLOutlineButtonStyle())
-                    .accessibilityHint("Opent wat er \(Agenda.when(next.date)) gepland staat. Er start niets.")
-            }
-        }
-        .padding(.top, 16)
-    }
-
-    /// A date that has gone by. Today is never past, whatever the hour.
-    private func isPast(_ date: Date) -> Bool {
-        Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
-    }
-
-    /// 41b's left half: what today holds, from the date you are not on.
-    private var todayLine: String {
-        guard let today else { return "Vandaag" }
-        switch today.content {
-        case .session(let session): return "Vandaag · \(session.dayLabel) gelogd"
-        case .planned(let workout): return "Vandaag · \(workout.short)"
-        case .missed(let workout): return "Vandaag · \(workout.short), niet gelogd"
-        case .rest: return "Vandaag · rustdag"
-        }
-    }
-
-    /// 41c draws this one hairline at .14, between the system's two.
-    private static let rowDivider = Color.white.opacity(0.14)
-
-    private var isOffline: Bool { app.sync == .offline }
-
-    // MARK: - Artboard 24 · offline
-
-    /// Sync failure is a state of the data, not a red box: the header becomes
-    /// a card saying so, the loud element is the reassurance, today's session
-    /// is still one tap away, and what waits is listed as what it is.
-    private var offlineBody: some View {
-        VStack(spacing: 0) {
-            offlineBanner
-                .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, SL.Space.s3)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    SLEyebrow(text: "TRAINING")
-                    Text("Niets verloren.")
-                        .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
-                        .slLineHeight(1.04, size: SL.TypeSize.displayXL)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(SL.Ink.primary)
-                        .padding(.top, SL.Space.s2)
-                    Text(offlineReassurance)
-                        .slBody()
-                        .slLineHeight(1.5, size: SL.TypeSize.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .slMeasure(32, fontSize: SL.TypeSize.body)
-                        .padding(.top, 10)
-
-                    compactToday.padding(.top, SL.Space.s5)
-
-                    if !queue.isEmpty {
-                        SLEyebrow(text: "IN DE WACHTRIJ", weight: SL.Weight.regular).padding(.top, SL.Space.s6)
-                        VStack(spacing: 0) {
-                            ForEach(Array(queue.enumerated()), id: \.offset) { _, row in
-                                queueRow(row)
-                            }
-                        }
-                    }
-
-                    Text("SETLINE schrijft eerst lokaal en synct daarna. Exporteren werkt ook offline.")
-                        .slMeta()
-                        .slLineHeight(1.5, size: SL.TypeSize.meta)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .padding(.top, SL.Space.s5)
-                }
-                .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, SL.Space.s5)
-                .padding(.bottom, SL.Space.s6)
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            // Artboard 24 keeps lime off this screen: retrying is the action,
-            // and it is a secondary one.
-            Button { Task { await app.syncNow() } } label: {
-                Text(app.sync == .syncing ? "Bezig met syncen…" : "Nu opnieuw proberen")
-            }
-            .buttonStyle(SLOutlineButtonStyle(edge: SL.Surface.hairlineStrong))
-            .disabled(app.sync == .syncing)
-            .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.bottom, SL.Space.s3)
-            .frame(maxWidth: .infinity)
-            .background(SL.Surface.ground)
-        }
-    }
-
-    private var offlineBanner: some View {
-        HStack(spacing: SL.Space.s3) {
-            Circle().fill(SL.Signal.attention).frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Offline · alles wordt lokaal bewaard")
-                    .slBody(SL.Weight.medium)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(SL.Ink.primary)
-                if let waiting {
-                    Text(waiting).slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, SL.Space.s3)
-        .padding(.horizontal, 14)
-        .slBorderBox()
-        .background(
-            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
-                .fill(SL.Surface.raised2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
-                .strokeBorder(SL.Signal.attention.opacity(0.4), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Today, still one tap from starting: being offline never stops a
-    /// session, because logging is local.
-    @ViewBuilder
-    private var compactToday: some View {
-        let paused = app.resumableSession
-        let day = paused.flatMap { app.day(for: $0) } ?? app.todayDay
-        Button {
-            if let paused, let resumed = app.day(for: paused) {
-                onResume(resumed, paused)
-            } else if let day {
-                onStart(day)
-            }
-        } label: {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: SL.Space.s1) {
-                    SLEyebrow(text: "Vandaag · \(longDateLabel)", weight: SL.Weight.regular)
-                    Text(day?.short ?? "Rustdag").slTitle().foregroundStyle(SL.Ink.primary)
-                }
-                Spacer(minLength: SL.Space.s3)
-                if let day {
-                    Text("\(SessionPrescription.setCount(of: day, deload: app.activeDeload)) sets")
-                        .slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
-                }
-            }
-            .padding(.vertical, SL.Space.s4)
-            .padding(.horizontal, SL.Space.s5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .slCard()
-            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(day == nil)
-        .accessibilityHint(paused != nil ? "Dubbeltik om je sessie te hervatten" : "Dubbeltik om te beginnen")
-    }
-
-    private func queueRow(_ row: SyncQueue.Row) -> some View {
-        HStack(alignment: .center, spacing: SL.Space.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                Text(row.detail).slMeta().slNumerals().foregroundStyle(SL.Ink.tertiary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text("Wacht").slMeta().foregroundStyle(SL.Signal.attention)
-        }
-        .padding(.vertical, 14)
-        .overlay(alignment: .bottom) { SLHairline() }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var queue: [SyncQueue.Row] {
-        SyncQueue.rows(from: app.pendingChanges, display: app.display)
-    }
-
-    private var offlineReassurance: String {
-        queue.isEmpty
-            ? "Alles staat op dit toestel. Loggen werkt offline; syncen gebeurt zodra er verbinding is."
-            : "Wat hieronder wacht, staat op dit toestel. Loggen werkt offline; syncen gebeurt zodra er verbinding is."
-    }
-
-    /// What is still on this device only, counted rather than estimated.
-    private var waiting: String? {
-        let count = queue.count
-        guard count > 0 else { return nil }
-        return count == 1 ? "1 wijziging wacht op sync" : "\(count) wijzigingen wachten op sync"
-    }
-
-    private var weekLabel: String {
-        "Week \(WeekPlan.number(firstSession: app.sessions.last?.date))"
-    }
-
-    /// 18R's today, beneath the proposal: an eyebrow, the day at 21, and its
-    /// exercises — no card, so the proposal stays the one loud thing.
-    private var steppedBackToday: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: "Vandaag")
-            Text(app.todayDay?.short ?? "Rustdag")
-                .slTitle()
-                .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
-                .foregroundStyle(SL.Ink.primary)
-                .padding(.top, SL.Space.s2)
-                .padding(.bottom, SL.Space.s1)
-            Text(app.todayDay.map { day in
-                day.exercises.map { app.exercise($0.exerciseID).name }.joined(separator: " · ")
-            } ?? "Geen sessie gepland vandaag.")
-                .slBody()
-                .foregroundStyle(SL.Ink.secondary)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// 08's eyebrow names the day only: "VANDAAG · MAANDAG".
-    private var weekdayLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
-        formatter.dateFormat = "EEEE"
-        return formatter.string(from: Date())
-    }
-
-    private var longDateLabel: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
-        formatter.dateFormat = "EEEE d MMM"
-        return formatter.string(from: Date()).replacingOccurrences(of: ".", with: "")
-    }
-
-    /// The one lime accent on this screen: a value that beats the user's own
-    /// previous data, then today's plan for the same exercise — artboard 09's
-    /// "Bankdrukken staat +5 kg sinds 26 aug. Vandaag 50 kg × 8."
+    /// The one progression line: a value that beats the reader's own earlier
+    /// data — "Bankdrukken staat +5 kg sinds 26 aug." The gain is the lime in
+    /// it. Today's weights stay with the session that opens them; and with no
+    /// real gain there is no line at all.
     private var insight: (text: String, highlight: String)? {
         guard let day = app.todayDay else { return nil }
         for planned in day.exercises {
@@ -678,78 +505,71 @@ struct TrainingHomeView: View {
             else { continue }
             let name = app.exercise(planned.exerciseID).name
             let delta = "\(app.display.signedDelta(latest - oldest)) kg"
-            var text = "\(name) staat \(delta) sinds \(app.display.shortDate(since))."
-            if let today = SessionRunner.openingTarget(for: planned, app: app) {
-                text += " Vandaag \(app.display.kg(today.weightKg)) × \(ProgressionEngine.repsLabel(today.reps))."
-            }
-            return (text, delta)
+            return ("\(name) staat \(delta) sinds \(app.display.shortDate(since)).", delta)
         }
         return nil
     }
 
-    private func insightCard(_ insight: (text: String, highlight: String)) -> some View {
-        Text(attributed(insight.text, liming: insight.highlight))
-            .slLead(SL.Weight.medium)
-            .slLineHeight(1.4, size: SL.TypeSize.lead)
-            .padding(SL.Space.s4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .slCard(radius: SL.Radius.lg)
-    }
+    // MARK: - What the card offers
 
-    private func attributed(_ text: String, liming fragment: String) -> AttributedString {
-        var string = AttributedString(text)
-        string.foregroundColor = SL.Ink.primary
-        if let range = string.range(of: fragment) {
-            string[range].foregroundColor = SL.Signal.action
+    /// One commit per date. Today starts or resumes — the only lime action on
+    /// this screen; every other date opens what it holds.
+    @ViewBuilder
+    private func cardActions(_ day: AgendaDay) -> some View {
+        if day.isToday, let paused = app.resumableSession, let resumed = app.day(for: paused) {
+            VStack(spacing: SL.Space.s1) {
+                Button { onResume(resumed, paused) } label: { startLabel(resumeLabel(paused)) }
+                    .buttonStyle(SLPrimaryButtonStyle())
+                Button { confirmsEnd = true } label: { Text("Beëindig sessie") }
+                    .buttonStyle(SLQuietButtonStyle())
+                    .accessibilityHint("Bewaart wat je logde en sluit de sessie af")
+            }
+        } else if day.isToday, let workout = day.plannedDay {
+            VStack(spacing: SL.Space.s1) {
+                Button { onStart(workout) } label: { startLabel("Start training") }
+                    .buttonStyle(SLPrimaryButtonStyle())
+                Button { sheet = .preview(day) } label: { chevroned("Oefeningen bekijken") }
+                    .buttonStyle(SLQuietButtonStyle())
+                    .accessibilityHint("Toont de oefeningen van vandaag. Er start niets.")
+            }
+        } else if let session = day.session {
+            Button { openedSession = OpenedSession(id: session.id) } label: { chevroned("Resultaten bekijken") }
+                .buttonStyle(SLOutlineButtonStyle())
+        } else if day.isPast, let workout = day.plannedDay {
+            // A day that has gone by with nothing logged. The work may well
+            // have been done; this is where it gets written down, on the date
+            // it happened rather than on today.
+            VStack(spacing: SL.Space.s1) {
+                Button { onLogPast(workout, day.date) } label: { chevroned("Achteraf loggen") }
+                    .buttonStyle(SLOutlineButtonStyle())
+                    .accessibilityHint("Schrijft \(workout.short) op, op \(Agenda.when(day.date))")
+                Button { sheet = .agenda } label: { chevroned("Details in agenda") }
+                    .buttonStyle(SLQuietButtonStyle())
+            }
+        } else if day.plannedDay != nil {
+            Button { sheet = .agenda } label: { chevroned("Details in agenda") }
+                .buttonStyle(SLOutlineButtonStyle())
+                .accessibilityHint("Opent wat er \(Agenda.when(day.date)) gepland staat. Er start niets.")
         }
-        return string
     }
 
-    private func loggedSummary(_ session: TrainingSession) -> String {
-        let volume = RecordsEngine.volumeLoad(session.results.flatMap(\.sets))
-        if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
-            return "\(completed) van \(planned) sets · \(app.display.volumeKg(volume)) volume"
-        }
-        return "\(session.completion)% afgerond · \(app.display.volumeKg(volume)) volume"
-    }
-
-    /// The volume that day would come to at the weights it would open with —
-    /// the same reading the pre-flight card makes.
-    private func expectedVolume(_ workout: WorkoutDay, before date: Date) -> Decimal {
-        workout.exercises.reduce(Decimal(0)) { total, planned in
-            let history = app.history(for: planned, before: date)
-            let proposal = ProgressionEngine.proposal(
-                planned: planned, exercise: app.exercise(planned.exerciseID), history: history
-            )
-            guard let weight = proposal.weightKg ?? history.mostRecent?.sets.first?.weightKg else { return total }
-            let reps = planned.sets.reduce(0) { $0 + $1.repRange.upperBound }
-            return total + weight * Decimal(reps)
+    private func startLabel(_ title: String) -> some View {
+        HStack(spacing: 10) {
+            SLGlyph(name: .play, size: 16)
+            Text(title)
         }
     }
 
-    private func lastSession(for day: AgendaDay) -> TrainingSession? {
-        guard let workout = day.plannedDay else { return nil }
-        return app.sessions
-            .filter { $0.kind == .workout && $0.dayID == workout.id && $0.date < day.date }
-            .max { $0.date < $1.date }
-    }
-
-    private func previousSession(before session: TrainingSession) -> TrainingSession? {
-        app.sessions
-            .filter { $0.kind == .workout && $0.dayID == session.dayID && $0.date < session.date }
-            .max { $0.date < $1.date }
-    }
-
-    private func volumeDelta(_ session: TrainingSession, _ previous: TrainingSession) -> Decimal? {
-        let now = RecordsEngine.volumeLoad(session.results.flatMap(\.sets))
-        let before = RecordsEngine.volumeLoad(previous.results.flatMap(\.sets))
-        guard before > 0, now != before else { return nil }
-        return now - before
+    private func chevroned(_ title: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+            SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
+        }
     }
 
     private func resumeLabel(_ paused: ActiveSessionSnapshot) -> String {
         let when = app.pausedWhenLabel(for: paused)
-        return when == "vandaag" ? "Hervat sessie" : "Hervat sessie \(when)"
+        return when == "vandaag" ? "Hervat training" : "Hervat training \(when)"
     }
 
     private var endMessage: String {
@@ -759,4 +579,207 @@ struct TrainingHomeView: View {
             : "Je logde nog niets, dus er wordt niets bewaard."
     }
 
+    // MARK: - From day to day
+
+    private func neighbour(_ step: Int) -> AgendaDay? {
+        guard let key = selectedDay?.key, let index = week.firstIndex(where: { $0.key == key }) else { return nil }
+        let target = index + step
+        return week.indices.contains(target) ? week[target] : nil
+    }
+
+    private var dayNav: some View {
+        HStack(spacing: SL.Space.s2) {
+            navButton(neighbour(-1), direction: -1)
+            Text("veeg om van dag te wisselen")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                .foregroundStyle(SL.Ink.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .accessibilityHidden(true)
+            navButton(neighbour(1), direction: 1)
+        }
+    }
+
+    /// The day before or after, by name. Where the week ends there is no
+    /// button, and the space stays so the hint keeps its place.
+    private func navButton(_ day: AgendaDay?, direction: Int) -> some View {
+        Button {
+            if let day { go(to: day, direction: direction) }
+        } label: {
+            HStack(spacing: SL.Space.s1) {
+                if direction < 0 { SLGlyph(name: .chevronLeft, size: 14) }
+                Text(day.map { "\($0.weekday) \($0.dayNumber)" } ?? "")
+                    .slMeta()
+                    .slNumerals()
+                if direction > 0 { SLGlyph(name: .chevronRight, size: 14) }
+            }
+            .foregroundStyle(SL.Ink.secondary)
+            .padding(.horizontal, SL.Space.s2)
+            .frame(minWidth: 72, minHeight: SL.Space.hitMin, alignment: direction < 0 ? .leading : .trailing)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+        .opacity(day == nil ? 0 : 1)
+        .disabled(day == nil)
+        .accessibilityHidden(day == nil)
+        .accessibilityLabel(day.map { "\(direction < 0 ? "Vorige" : "Volgende") dag, \(StripDay.spokenLabel($0))" } ?? "")
+    }
+
+    /// The design's 220 ms `cubic-bezier(.2,.8,.2,1)`.
+    private static let slide = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.22)
+
+    /// Selecting a date reads it and nothing else: no session, no schedule,
+    /// no programme, no history is touched by looking.
+    private func select(_ day: AgendaDay) {
+        selectedDate = day.isToday ? nil : day.date
+    }
+
+    /// Moves the card to another day, sliding in from the side it came from.
+    private func go(to day: AgendaDay, direction: Int? = nil) {
+        guard day.key != selectedDay?.key else {
+            if dragX != 0 { withAnimation(reduceMotion ? nil : Self.slide) { dragX = 0 } }
+            return
+        }
+        let current = selectedDay?.date ?? Date()
+        let step = direction ?? (day.date > current ? 1 : -1)
+        var jump = Transaction()
+        jump.disablesAnimations = true
+        withTransaction(jump) {
+            select(day)
+            dragX = reduceMotion ? 0 : CGFloat(step) * 56
+        }
+        guard !reduceMotion else { return }
+        // One turn of the run loop, so the card is drawn at its starting
+        // point before it moves.
+        Task { @MainActor in
+            withAnimation(Self.slide) { dragX = 0 }
+        }
+    }
+
+    /// A horizontal drag carries the card; past 64 it lands on the next day.
+    private var swipe: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                let (dx, dy) = (value.translation.width, value.translation.height)
+                if !isDragging {
+                    guard abs(dx) > 10, abs(dx) > abs(dy) * 1.5 else { return }
+                    isDragging = true
+                }
+                dragX = reduceMotion ? 0 : dx * 0.9
+            }
+            .onEnded { value in
+                guard isDragging else { return }
+                isDragging = false
+                let dx = value.translation.width
+                if dx < -64, let next = neighbour(1) {
+                    go(to: next, direction: 1)
+                } else if dx > 64, let previous = neighbour(-1) {
+                    go(to: previous, direction: -1)
+                } else {
+                    withAnimation(reduceMotion ? nil : Self.slide) { dragX = 0 }
+                }
+            }
+    }
+
+    // MARK: - Herstel
+
+    /// Shown while there is something to say: a proposal waiting for an
+    /// answer, the lighter days it led to, or that it was just waved away.
+    private var recoveryStatus: DeloadCard.Status? {
+        // Read before anything can return: waving a proposal away is
+        // remembered outside anything SwiftUI watches, so this flag is what
+        // redraws the card — and a flag the body never read redraws nothing.
+        let ignored = ignoredProposal
+        if app.activeDeload != nil { return .applied }
+        if ignored { return .ignored }
+        return app.proposesDeload ? .open : nil
+    }
+
+    private func recoverySection(_ status: DeloadCard.Status) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(spacing: SL.Space.s2) {
+                SLGlyph(name: .moon, size: 18).foregroundStyle(SL.Signal.recovery)
+                Text("Herstel")
+                    .slLead()
+                    .foregroundStyle(SL.Ink.primary)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            .padding(.horizontal, SL.Space.s1)
+
+            DeloadCard(
+                reading: app.fatigue,
+                proposal: app.activeDeload ?? Deload(startedAt: Date()),
+                status: status,
+                onApply: { Task { await app.applyDeload() } },
+                onDismiss: {
+                    ignoredProposal = true
+                    app.dismissDeload()
+                }
+            )
+        }
+    }
+
+    // MARK: - Offline
+
+    /// Sync failure is a state of the data, not a red box: amber says so, the
+    /// reassurance is in plain words, and everything on the screen keeps
+    /// working — logging is local.
+    private var offlineCard: some View {
+        SLAttentionCard(title: "Offline") {
+            Text(offlineText.slUnbroken)
+                .slBody()
+                .slNumerals()
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.primary)
+            Button { Task { await app.syncNow() } } label: {
+                Text(app.sync == .syncing ? "Bezig met syncen…" : "Nu opnieuw proberen")
+            }
+            .buttonStyle(SLOutlineButtonStyle())
+            .disabled(app.sync == .syncing)
+            .padding(.top, SL.Space.s2)
+        }
+    }
+
+    private var offlineText: String {
+        let count = queue.count
+        let waiting = count == 0 ? ""
+            : count == 1 ? " 1 wijziging wacht op sync."
+            : " \(count) wijzigingen wachten op sync."
+        return "Niets verloren: alles wordt lokaal bewaard.\(waiting) Loggen werkt offline; syncen gebeurt zodra er verbinding is."
+    }
+
+    private var queueSection: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLSectionHead(title: "In de wachtrij")
+            VStack(spacing: 0) {
+                ForEach(Array(queue.enumerated()), id: \.offset) { index, row in
+                    HStack(alignment: .center, spacing: SL.Space.s3) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(row.title).slLead().foregroundStyle(SL.Ink.primary)
+                            Text(row.detail).slBody().slNumerals().foregroundStyle(SL.Ink.secondary)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Wacht").slMeta(SL.Weight.semibold).foregroundStyle(SL.Signal.attention)
+                    }
+                    .padding(.horizontal, SL.Space.s4)
+                    .padding(.vertical, SL.Space.s3)
+                    .frame(minHeight: 72)
+                    .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .slBorderBox()
+            .slListCard()
+
+            Text("SETLINE schrijft eerst lokaal en synct daarna. Exporteren werkt ook offline.")
+                .slMeta()
+                .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.horizontal, SL.Space.s1)
+        }
+    }
 }

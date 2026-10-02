@@ -84,6 +84,52 @@ public struct CheckInGallery: Equatable, Sendable {
         )
     }
 
+    // MARK: - Two of them, side by side
+
+    /// Two check-ins next to each other: the earlier one, the later one, and
+    /// what lies between them.
+    public struct Comparison: Equatable, Sendable {
+        public let before: Shown
+        public let after: Shown
+        /// Whole weeks between the two, never less than one.
+        public let weeks: Int
+        /// What the scale did between them, when both have a weigh-in.
+        public let change: Decimal?
+    }
+
+    /// The pair the screen compares. By default the first check-in against
+    /// the latest; any two can be chosen instead, and whichever is earlier is
+    /// the "before" — the order they were picked in does not matter.
+    ///
+    /// `nil` until there are two different check-ins to compare. An id that no
+    /// longer exists (the photo was removed) falls back to the default.
+    public func comparison(
+        _ firstID: String? = nil,
+        _ secondID: String? = nil,
+        calendar: Calendar = .current
+    ) -> Comparison? {
+        func find(_ id: String?) -> Shown? { id.flatMap { id in all.first { $0.checkIn.id == id } } }
+        var pair: (Shown, Shown)?
+        if let one = find(firstID), let other = find(secondID), one.checkIn.id != other.checkIn.id {
+            pair = one.date <= other.date ? (one, other) : (other, one)
+        } else if let first, let latest, first.checkIn.id != latest.checkIn.id {
+            pair = (first, latest)
+        }
+        guard let (before, after) = pair else { return nil }
+
+        let days = calendar.dateComponents([.day], from: before.date, to: after.date).day ?? 0
+        let change: Decimal? = {
+            guard let from = before.weightKg, let to = after.weightKg else { return nil }
+            return to - from
+        }()
+        return Comparison(
+            before: before,
+            after: after,
+            weeks: max(1, Int((Double(days) / 7).rounded())),
+            change: change
+        )
+    }
+
     private static func dateFormatter(_ calendar: Calendar) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = calendar

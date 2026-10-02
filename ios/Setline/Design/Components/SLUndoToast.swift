@@ -13,12 +13,12 @@ struct SLUndoToast: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        // 16 draws the one undo in the bar: a 54-high capsule on raised2 with
-        // the .16 edge, 20 in from each end, the message at 15/500 and
+        // The one undo in the dock: as high as the action it sits above, on
+        // surface-2 inside the strong hairline, the message at 15 and
         // `Ongedaan maken` in lime at the same size.
         HStack(alignment: .center, spacing: SL.Space.s3) {
             Text(message)
-                .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                .font(.sl(SL.TypeSize.body, SL.Weight.regular))
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 // A message that wraps keeps clear of the capsule's ends.
@@ -27,7 +27,7 @@ struct SLUndoToast: View {
             if let onUndo {
                 Button(action: onUndo) {
                     Text("Ongedaan maken")
-                        .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                        .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
                         .foregroundStyle(SL.Signal.action)
                         .fixedSize()
                         .slHitTarget()
@@ -36,25 +36,25 @@ struct SLUndoToast: View {
             } else {
                 Button(action: onDismiss) {
                     Text("Sluiten")
-                        .font(.sl(SL.TypeSize.body, SL.Weight.medium))
-                        .foregroundStyle(SL.Ink.tertiary)
+                        .font(.sl(SL.TypeSize.body, SL.Weight.regular))
+                        .foregroundStyle(SL.Ink.secondary)
                         .fixedSize()
                         .slHitTarget()
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, SL.Space.s5)
+        .padding(.horizontal, SL.Space.s4)
         .frame(maxWidth: .infinity, minHeight: SL.Metric.primaryPillHeight, alignment: .leading)
         .slBorderBox()
-        // The pill's own radius, 27, rather than a capsule: a message that
-        // wraps at a large text size keeps square enough ends to stay inside.
         .background(shape.fill(SL.Surface.raised2))
         .overlay(shape.strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border))
         .accessibilityElement(children: .contain)
     }
 
+    /// The action's own radius: a message that wraps at a large text size
+    /// keeps square enough corners to stay inside.
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: SL.Metric.primaryPillHeight / 2, style: .continuous)
+        RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
     }
 }
