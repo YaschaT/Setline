@@ -275,11 +275,21 @@ struct TrainingHomeView: View {
         }
     }
 
+    /// One shell for every kind of date. At ordinary text sizes each region
+    /// keeps the height Redesign 1a gives today's card — 287 pt outside — so
+    /// swiping from a workout to a rest day moves nothing: the title, the
+    /// meta row and the top of the action sit where they sat. At the
+    /// accessibility sizes the regions let go and the card grows instead.
     private func dayCard(_ day: AgendaDay) -> some View {
-        VStack(alignment: .leading, spacing: SL.Space.s4) {
+        let holdsShape = !typeSize.isAccessibilitySize
+        return VStack(alignment: .leading, spacing: SL.Space.s4) {
             cardTop(day)
-            cardBody(day)
+            ZStack(alignment: .topLeading) {
+                if holdsShape { bodyMeasure }
+                cardBody(day)
+            }
             cardActions(day)
+                .frame(maxWidth: .infinity, minHeight: holdsShape ? Self.actionRegion : nil, alignment: .top)
         }
         .padding(SL.Space.s4)
         .slBorderBox()
@@ -331,51 +341,75 @@ struct TrainingHomeView: View {
         return "\(week) · \(ProgramCatalog.current(in: state, plan: app.plan).name)"
     }
 
+    /// 1a's three slots, in its order: the name, what it works, one meta row.
     private func cardBody(_ day: AgendaDay) -> some View {
         let content = card(for: day)
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             // No oversized word behind the title: the name says it once.
             VStack(alignment: .leading, spacing: 6) {
-                Text(content.title)
-                    .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
-                    .tracking(-0.01 * SL.TypeSize.display)
-                    .slLineHeight(1.05, size: SL.TypeSize.display)
+                titleText(content.title)
                     .foregroundStyle(content.isRest ? SL.Signal.recovery : SL.Ink.primary)
                     .minimumScaleFactor(0.75)
                     .accessibilityAddTraits(.isHeader)
                 if let focus = content.focus {
-                    Text(focus.slUnbroken)
-                        .slLead(SL.Weight.regular)
-                        .slNumerals()
-                        .slLineHeight(1.35, size: SL.TypeSize.lead)
+                    focusText(focus.slUnbroken)
                         .foregroundStyle(SL.Ink.primary)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if !content.meta.isEmpty {
-                SLFlow(spacing: SL.Space.s3, lineSpacing: SL.Space.s1) {
-                    ForEach(Array(content.meta.enumerated()), id: \.offset) { _, item in
-                        HStack(spacing: 5) {
-                            if item.timed { SLGlyph(name: .clock, size: 15) }
-                            Text(item.text.slUnbroken).slBody().slNumerals()
-                        }
-                        .foregroundStyle(SL.Ink.meta)
-                    }
+            if let meta = content.meta {
+                HStack(spacing: 5) {
+                    if meta.timed { SLGlyph(name: .clock, size: 15) }
+                    metaText(meta.text.slUnbroken)
                 }
+                .foregroundStyle(SL.Ink.meta)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .combine)
             }
-
-            ForEach(Array(content.notes.enumerated()), id: \.offset) { _, note in
-                Text(note)
-                    .slBody()
-                    .slNumerals()
-                    .slLineHeight(1.4, size: SL.TypeSize.body)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private func titleText(_ text: String) -> some View {
+        Text(text)
+            .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
+            .tracking(-0.01 * SL.TypeSize.display)
+            .slLineHeight(1.05, size: SL.TypeSize.display)
+    }
+
+    private func focusText(_ text: String) -> some View {
+        Text(text)
+            .slLead(SL.Weight.regular)
+            .slNumerals()
+            .slLineHeight(1.35, size: SL.TypeSize.lead)
+    }
+
+    private func metaText(_ text: String) -> some View {
+        Text(text).slBody().slNumerals()
+    }
+
+    /// The body region at its full height — one line in each of the three
+    /// slots, in the card's own type — laid down unseen behind the real
+    /// content. A date with less to say keeps the same height; one with a
+    /// longer line than that still grows rather than clip.
+    private var bodyMeasure: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            VStack(alignment: .leading, spacing: 6) {
+                titleText("Ag")
+                focusText("Ag")
+            }
+            metaText("Ag")
+        }
+        .hidden()
+        .accessibilityHidden(true)
+    }
+
+    /// The action region: the primary at the top, room for one quiet
+    /// secondary under it — 56 + 4 + 44, as 1a stacks `Start training` and
+    /// `Oefeningen bekijken`.
+    private static let actionRegion = SL.Metric.primaryPillHeight + SL.Space.s1 + SL.Space.hitMin
 
     // MARK: - What the card says
 
@@ -384,10 +418,13 @@ struct TrainingHomeView: View {
         var title: String
         var focus: String?
         var isRest = false
-        var meta: [Meta] = []
-        var notes: [AttributedString] = []
+        var meta: Meta?
     }
 
+    /// What each date puts in 1a's slots. The values are the account's own;
+    /// the card shows only what 1a's hierarchy has room for, and the rest —
+    /// a move, the volume, a gain since last time — waits one tap away in the
+    /// preview or the results.
     private func card(for day: AgendaDay) -> Card {
         // A session that was started and paused is the one you are in the
         // middle of, whatever today's plan says.
@@ -396,77 +433,52 @@ struct TrainingHomeView: View {
             return Card(
                 title: resumed.short,
                 focus: resumed.focus.isEmpty ? nil : resumed.focus,
-                meta: [
-                    .init(
-                        text: "\(paused.loggedSetCount) van \(max(planned, paused.plannedSetCount)) sets gelogd"
-                            + " · gepauzeerd \(app.pausedWhenLabel(for: paused).replacingOccurrences(of: "van ", with: ""))"
-                    ),
-                ]
+                meta: .init(text: "\(paused.loggedSetCount) van \(max(planned, paused.plannedSetCount)) sets · gepauzeerd")
             )
         }
 
         switch day.content {
         case .planned(let workout):
-            var card = Card(
-                title: workout.short,
-                focus: workout.focus.isEmpty ? nil : workout.focus
-            )
             // 1a: today reads "◷ 5 oefeningen · ~62 min"; another day only
             // what it holds, "20 sets".
             let exercises = workout.exercises.count == 1 ? "1 oefening" : "\(workout.exercises.count) oefeningen"
-            card.meta = day.isToday
-                ? [.init(text: "\(exercises) · ~\(WeekPlan.minutes(of: workout)) min", timed: true)]
-                : [.init(text: "\(WeekPlan.sets(of: workout)) sets")]
-            if let movedFrom = day.movedFrom {
-                card.notes.append(plain("Verplaatst van \(movedFrom)."))
-            }
-            if day.isToday {
-                if let insight { card.notes.append(attributed(insight.text, liming: insight.highlight)) }
-                if app.sessions.isEmpty {
-                    card.notes.append(plain(
-                        "Nog geen sessies gelogd. Je eerste sessie zet de startgewichten; daarna rekent SETLINE de progressie zelf."
-                    ))
-                }
-            }
-            return card
+            return Card(
+                title: workout.short,
+                focus: workout.focus.isEmpty ? nil : workout.focus,
+                meta: day.isToday
+                    ? .init(text: "\(exercises) · ~\(WeekPlan.minutes(of: workout)) min", timed: true)
+                    : .init(text: "\(WeekPlan.sets(of: workout)) sets")
+            )
 
         case .missed(let workout):
             return Card(
                 title: workout.short,
                 focus: workout.focus.isEmpty ? nil : workout.focus,
-                meta: [.init(text: "\(WeekPlan.sets(of: workout)) sets · niet gelogd")],
-                notes: [plain("SETLINE haalt niets in en verschuift niets. Je plan voor volgende week blijft staan.")]
+                meta: .init(text: "\(WeekPlan.sets(of: workout)) sets · niet gelogd")
             )
 
         case .session(let session):
-            return Card(
-                title: "Voltooid",
-                focus: session.dayLabel,
-                meta: [.init(text: loggedSummary(session))]
-            )
+            // 1a's done card: the word, what it was, how much of it was
+            // done, and the way to the results. Volume and the sets
+            // themselves are on the results.
+            return Card(title: "Voltooid", focus: session.dayLabel, meta: .init(text: doneLine(session)))
 
         case .rest:
             var card = Card(title: "Rust", focus: "Geen training gepland", isRest: true)
             if let next = nextTraining(after: day.date), let workout = next.plannedDay {
-                card.notes.append(plain("\(Agenda.restLine(next: next)) · \(workout.short)"))
+                card.meta = .init(text: "\(Agenda.restLine(next: next)) · \(workout.short)")
             }
             return card
         }
     }
 
-    private func plain(_ text: String) -> AttributedString {
-        var string = AttributedString(text.slUnbroken)
-        string.foregroundColor = SL.Ink.meta
-        return string
-    }
-
-    private func attributed(_ text: String, liming fragment: String) -> AttributedString {
-        var string = AttributedString(text.slUnbroken)
-        string.foregroundColor = SL.Ink.primary
-        if let range = string.range(of: fragment.slUnbroken) {
-            string[range].foregroundColor = SL.Signal.action
+    /// "16 van 19 sets", from the counts stored with the session; an older
+    /// session without them says how much of it was finished.
+    private func doneLine(_ session: TrainingSession) -> String {
+        if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
+            return "\(completed) van \(planned) sets"
         }
-        return string
+        return "\(session.completion)% afgerond"
     }
 
     /// The next session still to come after a date, read the way the strip
@@ -479,35 +491,6 @@ struct TrainingHomeView: View {
             sessions: app.sessions,
             deload: app.activeDeload
         )
-    }
-
-    private func loggedSummary(_ session: TrainingSession) -> String {
-        let volume = RecordsEngine.volumeLoad(session.results.flatMap(\.sets))
-        if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
-            return "\(completed) van \(planned) sets · \(app.display.volumeKg(volume)) volume"
-        }
-        return "\(session.completion)% afgerond · \(app.display.volumeKg(volume)) volume"
-    }
-
-    /// The one progression line: a value that beats the reader's own earlier
-    /// data — "Bankdrukken staat +5 kg sinds 26 aug." The gain is the lime in
-    /// it. Today's weights stay with the session that opens them; and with no
-    /// real gain there is no line at all.
-    private var insight: (text: String, highlight: String)? {
-        guard let day = app.todayDay else { return nil }
-        for planned in day.exercises {
-            let history = app.history(for: planned)
-            guard history.hasReference,
-                  let latest = history.mostRecent?.sets.compactMap(\.weightKg).max(),
-                  let oldest = history.appearances.last?.sets.compactMap(\.weightKg).max(),
-                  latest > oldest,
-                  let since = history.appearances.last?.date
-            else { continue }
-            let name = app.exercise(planned.exerciseID).name
-            let delta = "\(app.display.signedDelta(latest - oldest)) kg"
-            return ("\(name) staat \(delta) sinds \(app.display.shortDate(since)).", delta)
-        }
-        return nil
     }
 
     // MARK: - What the card offers
@@ -550,6 +533,12 @@ struct TrainingHomeView: View {
             Button { sheet = .agenda } label: { chevroned("Details in agenda") }
                 .buttonStyle(SLOutlineButtonStyle())
                 .accessibilityHint("Opent wat er \(Agenda.when(day.date)) gepland staat. Er start niets.")
+        } else {
+            // A rest day: 1a's own label for it. The action sits where every
+            // other date has one, so the card reads the same shape.
+            Button { sheet = .agenda } label: { chevroned("Naar agenda") }
+                .buttonStyle(SLOutlineButtonStyle())
+                .accessibilityHint("Opent de agenda. Daar wijzig je deze dag.")
         }
     }
 

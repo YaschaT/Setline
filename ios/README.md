@@ -102,8 +102,8 @@ Training holds one selected date, and three things divide the work (redesign
 
 - **Training** is what happens on the selected date. Under the date, the week
   strip carries the seven days and the way into the `Agenda`; under it one
-  compact card for the selected date — its name, one line about it, what it is
-  made of, at most one progression line, and one action. Tapping a day or swiping the
+  compact card for the selected date — its name, one line about it, one meta
+  row, and one action. Tapping a day or swiping the
   card selects another date. Selecting a date is reading: it never creates a
   session, moves the schedule or touches history, and the lime stays
   Training's own — `Start training` starts today's workout and nothing else,
@@ -266,10 +266,14 @@ first):
   logging starts from Training, and Account stays the screen it was, a tab of
   its own, with the redesign's type and colour only.
 - **Training has no greeting, no avatar and no `Rest van de week`.** Its head is
-  the date the card is on. The card draws no oversized word behind the name,
-  and it carries one progression line at most ("Flat bench press staat +5 kg
-  sinds 10 sep."), none when there is no real gain, and none once today is
-  logged. It grows with its text rather than to a fixed height.
+  the date the card is on. The card draws no oversized word behind the name.
+  Every kind of date — today, a later one, rest, missed, done — fills the
+  same shell at 1a's height for today (287 pt outside at ordinary text
+  sizes), so the title, the meta row and the top of the action never move
+  when the date changes; at the accessibility sizes the card grows instead.
+  To fit that height it holds only 1a's slots: no progression line, no
+  "verplaatst van" note, no volume on a done day — the preview and the
+  results carry those. A rest day takes 1a's own `Naar agenda`.
 - **Herstel is built from logged sets**, not from sleep, readiness and HRV
   (HealthKit is out of scope). The card keeps the design's shape — the
   proposal, the evidence under a hairline, `Overnemen` and `Negeren` — and is
