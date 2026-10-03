@@ -202,7 +202,8 @@ struct TrainingHomeView: View {
     // MARK: - The date
 
     /// The head is the date the card is on, as Main has it: no greeting and
-    /// no avatar — Account is a tab of its own.
+    /// no avatar — Account is a tab of its own. It keeps 1a's head spacing,
+    /// 4 above and 8 below, so the week starts as far under it as 1a has it.
     private var header: some View {
         Text(longDate)
             .slTitle()
@@ -213,6 +214,7 @@ struct TrainingHomeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
             .padding(.top, SL.Space.s1)
+            .padding(.bottom, SL.Space.s2)
     }
 
     /// "Woensdag 9 september" — the date the card is on.
