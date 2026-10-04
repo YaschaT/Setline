@@ -566,7 +566,9 @@ struct TrainingHomeView: View {
     private var endMessage: String {
         guard let paused = app.resumableSession else { return "" }
         return paused.hasProgress
-            ? "De \(paused.loggedSetCount) sets die je logde worden bewaard. De rest telt als niet getraind."
+            ? (paused.loggedSetCount == 1
+                ? "De set die je logde wordt bewaard. De rest telt als niet getraind."
+                : "De \(paused.loggedSetCount) sets die je logde worden bewaard. De rest telt als niet getraind.")
             : "Je logde nog niets, dus er wordt niets bewaard."
     }
 

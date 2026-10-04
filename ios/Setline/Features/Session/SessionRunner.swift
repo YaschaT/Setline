@@ -66,6 +66,8 @@ final class SessionRunner {
     var isTimerExpanded = false
     /// The session exactly as it opened — fresh, or as it was resumed.
     private var openingSlots: [SessionSlot] = []
+    /// The rest it opened with: one carried back from a pause, or none.
+    private var openingRest: RestTimerState?
 
     var currentIndex: Int = 0
     var editing: (slot: Int, set: Int)?
@@ -120,13 +122,15 @@ final class SessionRunner {
         // banked time in, rather than recomputing from `startedAt`.
         clock = WorkoutClock(accumulatedSeconds: snapshot?.activeSeconds ?? 0, segmentStartedAt: Date())
         openingSlots = slots.map(\.model)
+        openingRest = restTimer
     }
 
     /// Nothing has been written, swapped, added or adjusted since the session
-    /// opened. Leaving it then is just leaving: there is no state to park, and
-    /// parking it anyway would leave a "paused session" behind that nobody
-    /// started — `Loggen` is one tap from every tab.
-    var isUntouched: Bool { slots.map(\.model) == openingSlots }
+    /// opened — the rest included. Leaving it then is just leaving: there is
+    /// no state to park, and parking it anyway would leave a "paused session"
+    /// behind that nobody started. A rest skipped or adjusted after a resume
+    /// is a change, or the pause would hand the old one back next time.
+    var isUntouched: Bool { slots.map(\.model) == openingSlots && restTimer == openingRest }
 
     private static func resolve(
         _ model: SessionSlot,
@@ -210,10 +214,17 @@ final class SessionRunner {
         }
         currentIndex = min(max(0, snapshot.currentIndex), max(0, slots.count - 1))
         startedAt = snapshot.startedAt
-        // A resumed session never resumes a rest countdown: the clock kept
-        // running while the app was closed, and inventing time left would be
-        // a lie.
-        restTimer = nil
+        // A rest that was counting when the session was paused comes back
+        // with the time it has left: it kept running while the session was
+        // parked, so nothing is invented. One that ran out meanwhile is over,
+        // and a session paused between rests opens without a timer.
+        if let rest = snapshot.restToResume(at: Date()) {
+            restTimer = rest.timer
+            restTitle = rest.title
+            restCompletionSignalled = false
+        } else {
+            restTimer = nil
+        }
     }
 
     func snapshot() -> ActiveSessionSnapshot {
@@ -231,7 +242,8 @@ final class SessionRunner {
                 )]
             },
             activeSeconds: clock.activeSeconds(at: Date()),
-            slots: slots.map(\.model)
+            slots: slots.map(\.model),
+            rest: .counting(restTimer, title: restTitle, at: Date())
         )
     }
 
@@ -801,6 +813,13 @@ final class SessionRunner {
     /// announce the end of a rest that no longer exists.
     func stopRestSignals() {
         RestNotifier.cancel()
+    }
+
+    /// The session is on screen again. A rest it carried back from a pause
+    /// asks again for the notification that pausing withdrew.
+    func resumeRestSignals() {
+        guard let timer = restTimer, timer.remaining(at: Date()) > 0 else { return }
+        RestNotifier.schedule(at: timer.fireDate)
     }
 
     func toggleTimerExpanded() {

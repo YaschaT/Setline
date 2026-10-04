@@ -110,7 +110,10 @@ struct SessionView: View {
             try? await Task.sleep(for: .seconds(SL.Metric.undoWindow))
             if toast?.id == id { toast = nil }
         }
-        .onAppear { runner.configureWarmups(hidden: app.hiddenWarmups) }
+        .onAppear {
+            runner.configureWarmups(hidden: app.hiddenWarmups)
+            runner.resumeRestSignals()
+        }
         .onChange(of: app.hiddenWarmups) { _, hidden in runner.configureWarmups(hidden: hidden) }
         .slRespondsToTextSize()
         .task {

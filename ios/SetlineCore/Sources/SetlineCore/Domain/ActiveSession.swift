@@ -27,6 +27,29 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
     /// the sets logged on it — survive a pause. `nil` in snapshots written
     /// before slots were saved; those still restore by exercise id.
     public var slots: [SessionSlot]?
+    /// The rest that was counting down when the session was paused. `nil` for
+    /// a session paused between rests, and in snapshots written before rests
+    /// were kept.
+    public var rest: PausedRest?
+
+    /// A rest timer as it stood at the pause: its absolute start, its target
+    /// and any ± adjustment, and the label it was started with.
+    public struct PausedRest: Codable, Hashable, Sendable {
+        public var timer: RestTimerState
+        public var title: String
+
+        public init(timer: RestTimerState, title: String) {
+            self.timer = timer
+            self.title = title
+        }
+
+        /// The rest worth keeping at a pause: one that is still counting.
+        /// No timer, or one already at zero, keeps nothing.
+        public static func counting(_ timer: RestTimerState?, title: String, at now: Date) -> PausedRest? {
+            guard let timer, timer.remaining(at: now) > 0 else { return nil }
+            return PausedRest(timer: timer, title: title)
+        }
+    }
 
     public init(
         dayID: String,
@@ -36,7 +59,8 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         results: [ExerciseResult],
         proposedReps: [String: Int] = [:],
         activeSeconds: Int = 0,
-        slots: [SessionSlot]? = nil
+        slots: [SessionSlot]? = nil,
+        rest: PausedRest? = nil
     ) {
         self.dayID = dayID
         self.dayLabel = dayLabel
@@ -46,13 +70,14 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         self.proposedReps = proposedReps
         self.activeSeconds = max(0, activeSeconds)
         self.slots = slots
+        self.rest = rest
     }
 
     private enum CodingKeys: String, CodingKey {
-        case dayID, dayLabel, startedAt, currentIndex, results, proposedReps, activeSeconds, slots
+        case dayID, dayLabel, startedAt, currentIndex, results, proposedReps, activeSeconds, slots, rest
     }
 
-    /// Tolerates a snapshot written before duration was tracked.
+    /// Tolerates a snapshot written before duration, slots or rests were kept.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         dayID = try container.decode(String.self, forKey: .dayID)
@@ -63,6 +88,16 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         proposedReps = try container.decodeIfPresent([String: Int].self, forKey: .proposedReps) ?? [:]
         activeSeconds = try container.decodeIfPresent(Int.self, forKey: .activeSeconds) ?? 0
         slots = try container.decodeIfPresent([SessionSlot].self, forKey: .slots)
+        rest = try container.decodeIfPresent(PausedRest.self, forKey: .rest)
+    }
+
+    /// The rest a resumed session takes back. Rest is wall-clock time — it
+    /// kept running while the session was parked — so it comes back with the
+    /// time it has left and never more. One that ran out meanwhile is over,
+    /// and a session paused between rests gets none.
+    public func restToResume(at now: Date) -> PausedRest? {
+        guard let rest, rest.timer.remaining(at: now) > 0 else { return nil }
+        return rest
     }
 
     /// Sets actually written, for the resume prompt on the home screen.

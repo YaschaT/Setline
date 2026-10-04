@@ -316,7 +316,11 @@ Screen by screen, against the earlier artboards:
 - **The rest timer** is 1b's one row above the input card — `RUST`, the time,
   `+30s`, skip — and a tap opens the larger version with `−30s`, `+30s`, the
   prescribed rest and skip. It stays the size it was left at; it no longer
-  folds by itself.
+  folds by itself. A rest that is counting when the session is paused rides in
+  the paused session (`ActiveSessionSnapshot.rest`) and comes back on resume
+  with the time it has left — rest is wall-clock time, so it kept running
+  while the session was parked. One that ran out meanwhile does not come back,
+  and a session paused between rests resumes without a timer.
 - **14**: the plate calculator adds correctly where the artboard's own example
   does not.
 - **15**: a `Wissel` pill sits beside the exercise name. Base 15 enters the swap

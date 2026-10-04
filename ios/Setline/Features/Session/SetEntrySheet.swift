@@ -21,6 +21,7 @@ struct SetEntrySheet: View {
     let onRemove: (() -> Void)?
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var weight: Decimal
     @State private var reps: Int
@@ -150,7 +151,25 @@ struct SetEntrySheet: View {
 
     private var increment: Decimal { slot.exercise.incrementKg }
 
+    private static let logControlsID = "log-controls"
+    private static let pausedRowID = "paused-row"
+    private static let partialRowID = "partial-row"
+
+    /// Brings what a chip just opened into view. At ordinary sizes that is
+    /// the commit and its footnote, which take the opened row with them; at
+    /// accessibility sizes the commit is pinned below the content and always
+    /// in view, so it is the opened row itself, just above the commit.
+    private func reveal(_ scroller: ScrollViewProxy, row: String) {
+        let target = isAccessibilityLayout ? row : Self.logControlsID
+        Task { @MainActor in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: SL.Motion.base)) {
+                scroller.scrollTo(target, anchor: .bottom)
+            }
+        }
+    }
+
     var body: some View {
+        ScrollViewReader { scroller in
         ScrollView {
         VStack(alignment: .leading, spacing: 0) {
             grabber
@@ -177,13 +196,13 @@ struct SetEntrySheet: View {
 
             chips.padding(.bottom, SL.Space.s4)
 
-            if let paused = pausedReps { pausedRow(paused).padding(.bottom, SL.Space.s4) }
+            if let paused = pausedReps { pausedRow(paused).id(Self.pausedRowID).padding(.bottom, SL.Space.s4) }
 
-            if partialReps != nil { partialRow.padding(.bottom, SL.Space.s4) }
+            if partialReps != nil { partialRow.id(Self.partialRowID).padding(.bottom, SL.Space.s4) }
 
             if showsKeypad { keypad.padding(.bottom, SL.Space.s3) }
 
-            if !isAccessibilityLayout { logControls }
+            if !isAccessibilityLayout { logControls.id(Self.logControlsID) }
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s4)
@@ -195,6 +214,12 @@ struct SetEntrySheet: View {
         }
         }
         .scrollBounceBehavior(.basedOnSize)
+        // The sheet's height is fixed once it opens, so a pause or partial
+        // row opened afterwards lands below its edge, taking the commit with
+        // it. Bring them back into view: the set stays one tap from saved.
+        .onChange(of: pausedReps != nil) { _, opened in if opened { reveal(scroller, row: Self.pausedRowID) } }
+        .onChange(of: partialReps != nil) { _, opened in if opened { reveal(scroller, row: Self.partialRowID) } }
+        }
         .background(SL.Surface.raised)
         .safeAreaInset(edge: .bottom) {
             // At accessibility sizes the sheet takes the full height and the

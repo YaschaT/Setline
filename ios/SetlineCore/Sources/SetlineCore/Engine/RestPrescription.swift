@@ -41,8 +41,8 @@ public struct RestPrescription: Codable, Hashable, Sendable {
 ///
 /// ±15 s adjusts *this* rest and never resets the running count (13R), and
 /// the fire date is absolute so the count survives suspension — README,
-/// "Native iOS behaviours" item 4.
-public struct RestTimerState: Equatable, Sendable {
+/// "Native iOS behaviours" item 4. Codable so a paused session can carry it.
+public struct RestTimerState: Codable, Hashable, Sendable {
     public var targetSeconds: Int
     public var startedAt: Date
     public var adjustmentSeconds: Int
