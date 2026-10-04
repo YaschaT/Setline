@@ -15,6 +15,8 @@ import SetlineCore
 struct AddFoodSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// The ⊕'s size, which grows with the text like its font does.
+    @ScaledMetric(relativeTo: .body) private var plusSize: CGFloat = 24
 
     let date: Date
     /// Which heading the ⊕ adds to. 42c preselects it from the hour.
@@ -39,8 +41,6 @@ struct AddFoodSheet: View {
     @State private var carbs = ""
     @State private var fat = ""
     @FocusState private var focused: Field?
-
-    private let search = FoodSearchService()
 
     private enum Field: Hashable { case query, name, amount, unit, calories, protein, carbs, fat }
 
@@ -140,6 +140,9 @@ struct AddFoodSheet: View {
                 searching = false
                 return
             }
+            // What was said about the last query does not belong to this one:
+            // "Zoeken lukte niet" over a row reading "Zoeken…" says both.
+            note = nil
             searching = true
             try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }
@@ -244,7 +247,7 @@ struct AddFoodSheet: View {
     }
 
     private func run(_ asked: String) async {
-        let outcome = await search.search(asked, accessToken: app.session?.accessToken)
+        let outcome = await app.searchFood(asked)
         guard !Task.isCancelled else { return }
         searching = false
         switch outcome {
@@ -392,8 +395,10 @@ struct AddFoodSheet: View {
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
                     // 42c hangs the ⊕ 10 past the gutter, so the glyph lines
-                    // up with the text above it rather than its hit area.
-                    .padding(.trailing, -10)
+                    // up with the text above it rather than its hit area. The
+                    // hang is the room the glyph leaves in that area, so a
+                    // glyph grown with the text is never cut off at the edge.
+                    .padding(.trailing, -max(0, (SL.Space.hitMin - plusSize) / 2))
             }
             .frame(minHeight: 50)
             .contentShape(Rectangle())

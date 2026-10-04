@@ -59,12 +59,18 @@ public enum FoodMemory {
     }
 
     /// The same food, logged again: a new entry on this date and meal, at the
-    /// amount it was eaten at before. Its own time is now.
+    /// amount it was eaten at before.
+    ///
+    /// `date` says which day it belongs to; `loggedAt` is the moment it is
+    /// logged, which is now. The two were once one value — the moment the
+    /// food screen was opened — so a lunch logged at 12:40 on a screen opened
+    /// at 12:00 was stamped 12:00.
     public static func repeated(
         _ entry: NutritionEntry,
         on date: Date,
         meal: Meal,
         id: @autoclosure () -> String = "food-\(Int(Date().timeIntervalSince1970 * 1000))",
+        loggedAt: Date = Date(),
         calendar: Calendar = .current
     ) -> NutritionEntry {
         NutritionEntry(
@@ -78,7 +84,7 @@ public enum FoodMemory {
             fat: entry.fat,
             amount: entry.amount,
             unit: entry.unit,
-            loggedAt: date
+            loggedAt: loggedAt
         )
     }
 }

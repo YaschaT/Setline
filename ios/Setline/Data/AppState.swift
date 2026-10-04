@@ -73,6 +73,7 @@ final class AppState {
 
     let display = NumberDisplay.dutch
     private let client: SupabaseClient
+    private let foodSearch = FoodSearchService()
     private var store: LocalStore?
     /// One sync at a time. A change made while one runs asks for another pass.
     private var isSyncing = false
@@ -509,6 +510,13 @@ final class AppState {
 
     func removeFood(id: String) async {
         await record([StateChange(.removeNutritionEntry(id: id))])
+    }
+
+    /// The shared product search, as this account — with a token that is
+    /// refreshed first when it has expired, through the same coordinator
+    /// every sync uses.
+    func searchFood(_ query: String) async -> FoodSearchOutcome {
+        await foodSearch.search(query, auth: auth)
     }
 
     func nutrition(on date: Date = Date()) -> NutritionDay {

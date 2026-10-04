@@ -232,8 +232,9 @@ final class MealSectionTests: XCTestCase {
             calories: 290, protein: 62, amount: 180, unit: "g",
             loggedAt: Date(timeIntervalSince1970: 1_000)
         )
-        let now = LegacyAdapter.isoDate("2026-09-10T18:30:00.000Z")!
-        let again = FoodMemory.repeated(before, on: now, meal: .lunch, id: "food-2", calendar: calendar)
+        let opened = LegacyAdapter.isoDate("2026-09-10T18:00:00.000Z")!
+        let tapped = LegacyAdapter.isoDate("2026-09-10T18:30:00.000Z")!
+        let again = FoodMemory.repeated(before, on: opened, meal: .lunch, id: "food-2", loggedAt: tapped, calendar: calendar)
 
         XCTAssertEqual(again.id, "food-2", "a new row, not the old one rewritten")
         XCTAssertEqual(again.date, "2026-09-10")
@@ -243,7 +244,22 @@ final class MealSectionTests: XCTestCase {
         XCTAssertEqual(again.unit, "g")
         XCTAssertEqual(again.calories, 290)
         XCTAssertEqual(again.protein, 62)
-        XCTAssertEqual(again.loggedAt, now, "logged now, because that is when it was logged")
+        XCTAssertEqual(again.loggedAt, tapped, "the moment it was logged, not the moment the screen opened")
+    }
+
+    /// Left to itself, a repeated entry carries the moment it is made — never
+    /// the day's date, which is the moment the food screen was opened.
+    func testARepeatedEntryIsStampedWhenItIsLogged() throws {
+        let before = entry("Kipfilet", date: "2026-09-02", meal: "Avondeten", amount: 180, unit: "g")
+        let opened = Date().addingTimeInterval(-40 * 60)
+        let ahead = Date()
+        let again = FoodMemory.repeated(before, on: opened, meal: .lunch)
+        let behind = Date()
+
+        let stamped = try XCTUnwrap(again.loggedAt)
+        XCTAssertGreaterThanOrEqual(stamped, ahead)
+        XCTAssertLessThanOrEqual(stamped, behind)
+        XCTAssertEqual(again.date, Schedule.dateKey(opened), "the day is still the one the screen was showing")
     }
 
     // MARK: - Reading a day changes nothing

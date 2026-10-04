@@ -34,6 +34,17 @@ public struct FoodProduct: Identifiable, Equatable, Decodable, Sendable {
     }
 }
 
+/// What one search comes to on screen. When there is nothing to show, the
+/// reason is said in plain words and the screen offers to fill the values in
+/// by hand; no result is ever made up on this side.
+public enum FoodSearchOutcome: Equatable, Sendable {
+    case found([FoodProduct])
+    /// Answered, but only from the generic table — Open Food Facts was out
+    /// of reach at the far end.
+    case partial([FoodProduct], note: String)
+    case failed(String)
+}
+
 /// What the app does with a search, which is deliberately almost nothing.
 ///
 /// The table, the query to Open Food Facts, the filtering and the ordering all
@@ -43,6 +54,70 @@ public struct FoodProduct: Identifiable, Equatable, Decodable, Sendable {
 public enum FoodSearch {
 
     public static let shortestQuery = 2
+
+    /// The screen's words when a search has nothing to show.
+    public enum Message {
+        public static let tooShort = "Typ minstens twee tekens."
+        public static let unreachable = "Zoeken lukte niet. Vul de waarden zelf in."
+        public static let signIn = "Meld je opnieuw aan om producten te zoeken."
+        public static let partial = "Productdatabase tijdelijk niet bereikbaar; generieke schattingen getoond."
+
+        public static func nothingFound(_ query: String) -> String {
+            "Niets gevonden voor \(query). Vul de waarden zelf in."
+        }
+    }
+
+    /// Asks the shared search as this account, with a token that is good for it.
+    ///
+    /// The token comes from `auth`, the coordinator every sync request goes
+    /// through, so one that has expired — or is about to — is refreshed
+    /// before the search is sent. Handing the search the stored token as it
+    /// was meant that an hour after the last sync every search failed with
+    /// "meld je opnieuw aan", while the account was signed in and syncing.
+    ///
+    /// A search the server still turns down does not mark the session
+    /// expired. The endpoint answers 401 whenever it cannot confirm the token
+    /// with Supabase — its own trouble reaching Supabase included — so only
+    /// sync, which asks Supabase directly, decides that signing in is due.
+    public static func search(
+        _ query: String,
+        auth: AuthSessionCoordinator,
+        send: @Sendable (_ path: String, _ accessToken: String) async throws -> (status: Int, data: Data)
+    ) async -> FoodSearchOutcome {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= shortestQuery else { return .failed(Message.tooShort) }
+
+        let session: AuthSession
+        do {
+            session = try await auth.validSession()
+        } catch AuthFailure.expired {
+            return .failed(Message.signIn)
+        } catch {
+            return .failed(Message.unreachable)
+        }
+
+        do {
+            let (status, data) = try await send(path(for: trimmed), session.accessToken)
+            return outcome(status: status, data: data, query: trimmed)
+        } catch {
+            return .failed(Message.unreachable)
+        }
+    }
+
+    /// What an answer means for the screen: the products, in the order the
+    /// server ranked them, or why there are none.
+    public static func outcome(status: Int, data: Data, query: String) -> FoodSearchOutcome {
+        guard (200..<300).contains(status) else {
+            // A refused token is the session's business, and a server error
+            // carries the server's own technical words; neither is something
+            // to read out here. A plain request error keeps its message.
+            if status == 401 || status >= 500 { return .failed(Message.unreachable) }
+            return .failed(message(from: data) ?? Message.unreachable)
+        }
+        guard let products = try? results(from: data) else { return .failed(Message.unreachable) }
+        guard !products.isEmpty else { return .failed(Message.nothingFound(query)) }
+        return isPartial(data) ? .partial(products, note: Message.partial) : .found(products)
+    }
 
     public static func path(for query: String) -> String {
         var components = URLComponents()

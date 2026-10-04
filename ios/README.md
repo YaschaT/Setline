@@ -222,6 +222,11 @@ Lunch, Avondeten, Snacks — and three things divide the work:
   entries — `FoodMemory` reads them, nothing is invented, and a row is offered
   back at the amount it was logged at. The search is the web app's own
   endpoint (`/api/food-search`), shown in the order the server ranked it.
+  It asks with a token that is refreshed first when it has expired, through
+  the coordinator sync uses; a search the server refuses says so, offers
+  `Zelf invullen`, and never signs the account out. Whatever is added is
+  stamped with the moment it is added — not when the sheet or the screen
+  was opened.
 - **The item** (42d) changes one entry: how much of it, which meal it belongs
   to, or nothing at all. The amount is a stepper whose label says what one tap
   is worth, and the macros under it are what that amount is worth, recomputed

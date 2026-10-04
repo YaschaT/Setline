@@ -167,10 +167,12 @@ struct NutritionHomeView: View {
                         .slMeta()
                         .foregroundStyle(SL.Ink.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        // At the font's own line. 1c's `34px/1` as an exact
+                        // line seats the baseline on the box's bottom edge on
+                        // iOS 26, and "kcal" then hangs below it: 4pt taller.
                         Text(app.display.whole(Decimal(value)))
                             .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
                             .slNumerals()
-                            .slLineHeight(1, size: SL.TypeSize.display)
                             .foregroundStyle(isOver ? SL.Signal.attention : SL.Signal.action)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
@@ -208,7 +210,9 @@ struct NutritionHomeView: View {
                         day.hasTarget ? app.display.whole(Decimal(day.targets?.calories ?? 0)) : "—",
                         label: day.hasTarget ? "doel" : "doel instellen"
                     )
-                    .contentShape(Rectangle())
+                    // 1c sets the two figures at the height of their text; the
+                    // tap area reaches past them instead of growing the row.
+                    .slHitTarget()
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Opent je dagdoelen")
@@ -216,7 +220,14 @@ struct NutritionHomeView: View {
             .padding(.top, SL.Space.s3)
             .overlay(alignment: .top) { SLHairline() }
 
-            Button { sheet = .add(likely) } label: {
+            Button {
+                // The clock is read again as the sheet opens: a screen left
+                // open since breakfast must not log lunch as breakfast, or on
+                // yesterday's date.
+                let moment = Date()
+                now = moment
+                sheet = .add(Meal.likely(at: moment))
+            } label: {
                 HStack(spacing: 10) {
                     SLGlyph(name: .plus, size: 16)
                     Text("Maaltijd loggen")
@@ -242,7 +253,7 @@ struct NutritionHomeView: View {
                 .slMeta()
                 .foregroundStyle(SL.Ink.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label), \(value) kcal")
     }

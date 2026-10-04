@@ -7,17 +7,10 @@ import SetlineCore
 /// `/api/food-search`). The web app arrives there with its session cookie;
 /// this app arrives with its Supabase access token, which the endpoint checks
 /// with Supabase before answering. Nothing about the search is reimplemented
-/// here, so the two cannot answer the same question differently.
-actor FoodSearchService {
-
-    enum Outcome: Equatable {
-        case found([FoodProduct])
-        /// Answered, but only from the generic table — Open Food Facts was out
-        /// of reach at the far end.
-        case partial([FoodProduct], note: String)
-        case failed(String)
-    }
-
+/// here, so the two cannot answer the same question differently. What a
+/// search means — which token, which answer — is `FoodSearch.search`; this is
+/// only the request on the wire.
+struct FoodSearchService: Sendable {
     private let session: URLSession
     private let config: WebAppConfig?
 
@@ -26,47 +19,22 @@ actor FoodSearchService {
         self.config = config
     }
 
-    func search(_ query: String, accessToken: String?) async -> Outcome {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= FoodSearch.shortestQuery else {
-            return .failed("Typ minstens twee tekens.")
-        }
+    /// `auth` is the signed-in account's token coordinator, the one sync
+    /// uses; without one there is no account to search as.
+    func search(_ query: String, auth: AuthSessionCoordinator?) async -> FoodSearchOutcome {
         guard let config else {
             return .failed("Zoeken is niet ingesteld op dit toestel. Vul de waarden zelf in.")
         }
-        guard let accessToken else {
-            return .failed("Meld je opnieuw aan om producten te zoeken.")
-        }
-        guard let url = URL(string: FoodSearch.path(for: trimmed), relativeTo: config.url) else {
-            return .failed(Self.unreachable)
-        }
-
-        var request = URLRequest(url: url, timeoutInterval: 12)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-
-        do {
+        guard let auth else { return .failed(FoodSearch.Message.signIn) }
+        let session = self.session
+        let base = config.url
+        return await FoodSearch.search(query, auth: auth) { path, accessToken in
+            guard let url = URL(string: path, relativeTo: base) else { throw URLError(.badURL) }
+            var request = URLRequest(url: url, timeoutInterval: 12)
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
             let (data, response) = try await session.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-            if status == 401 {
-                return .failed("Meld je opnieuw aan om producten te zoeken.")
-            }
-            guard (200..<300).contains(status) else {
-                return .failed(FoodSearch.message(from: data) ?? Self.unreachable)
-            }
-
-            let results = try FoodSearch.results(from: data)
-            guard !results.isEmpty else {
-                return .failed("Niets gevonden voor \(trimmed). Vul de waarden zelf in.")
-            }
-            return FoodSearch.isPartial(data)
-                ? .partial(results, note: "Productdatabase tijdelijk niet bereikbaar; generieke schattingen getoond.")
-                : .found(results)
-        } catch {
-            return .failed("\(Self.unreachable) Vul de waarden zelf in.")
+            return ((response as? HTTPURLResponse)?.statusCode ?? 0, data)
         }
     }
-
-    private static let unreachable = "Zoeken lukte niet."
 }
