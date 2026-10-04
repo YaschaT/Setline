@@ -399,6 +399,13 @@ Implementation rules:
      only ever compared to other paused sets of the same exercise with the same
      `pause.seconds` (±0.5 s tolerance). A set whose reps were only *partly* paused is
      comparable to neither series and stays out of both.
+   - Progressie's best sets state their change against an earlier best by the same rule
+     (`setExecution()` on the web, `SetExecution` on iOS, both checked against
+     `tests/fixtures/best-set-comparison.json`). The strongest set is shown however it
+     was performed; its change is stated only against an earlier set performed the same
+     way, and a partly paused set only against one that paused the same number of reps
+     for the same length. With no such set there is no change, and only an exercise with
+     no earlier set at all reads "nieuw".
    - Stored rows did not change shape. `lib/set-reps.ts` holds the reading on the web,
      `LoggedSet` on iOS, and `tests/fixtures/paused-reps.json` is checked by both.
 3. Changing pause length mid-programme starts a new comparison series and the UI says so

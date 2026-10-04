@@ -284,12 +284,15 @@ struct ProgressHomeView: View {
 
     private func bestRow(_ row: ProgressOverview.RecentBest) -> some View {
         let delta = row.delta
-        let value = delta.map(signed) ?? "nieuw"
+        // The change, where an earlier set was performed the same way; "nieuw"
+        // only where nothing came before. A lift trained before in another
+        // way is neither, and the row then says nothing beside the set.
+        let claim: (value: String, caption: String)? = delta.map { (signed($0), "geschat t.o.v. vorige beste") }
+            ?? (row.hasEarlierBest ? nil : ("nieuw", "geen eerdere beste"))
         let ink: Color = {
             guard let delta else { return SL.Ink.secondary }
             return delta > 0 ? SL.Signal.action : delta < 0 ? SL.Signal.loss : SL.Ink.secondary
         }()
-        let caption = delta == nil ? "geen eerdere beste" : "geschat t.o.v. vorige beste"
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
             : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
@@ -309,17 +312,19 @@ struct ProgressHomeView: View {
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(alignment: typeSize.isAccessibilitySize ? .leading : .trailing, spacing: 2) {
-                    Text(value)
-                        .slLead()
-                        .slNumerals()
-                        .foregroundStyle(ink)
-                    Text(caption)
-                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                        .foregroundStyle(SL.Ink.secondary)
+                if let claim {
+                    VStack(alignment: typeSize.isAccessibilitySize ? .leading : .trailing, spacing: 2) {
+                        Text(claim.value)
+                            .slLead()
+                            .slNumerals()
+                            .foregroundStyle(ink)
+                        Text(claim.caption)
+                            .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                    .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
                 }
-                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
-                .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
             }
             .padding(.horizontal, SL.Space.s4)
             .padding(.vertical, SL.Space.s3)
@@ -329,8 +334,8 @@ struct ProgressHomeView: View {
         .buttonStyle(SLRowButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(row.name), beste set \(app.display.kg(row.weightKg)) × \(row.reps) op \(app.display.shortDate(row.date)), "
-                + (delta.map { "\(signed($0)) \(caption)" } ?? "nieuw, geen eerdere beste")
+            "\(row.name), beste set \(app.display.kg(row.weightKg)) × \(row.reps) op \(app.display.shortDate(row.date))"
+                + (claim.map { ", \($0.value), \($0.caption)" } ?? "")
         )
         .accessibilityHint("Opent de kracht van deze oefening")
     }

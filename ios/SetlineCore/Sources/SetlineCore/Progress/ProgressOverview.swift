@@ -86,35 +86,60 @@ public enum ProgressOverview {
         public let reps: Int
         public let date: Date
         /// Estimated maximum now minus the best one before the window, to the
-        /// half kilo. `nil` when the exercise was never trained before it, or
-        /// when neither side carries an estimate.
+        /// half kilo — measured only against earlier sets performed the same
+        /// way (`SetExecution.isComparable`). `nil` when there is no such set.
         public let delta: Decimal?
+        /// Whether the exercise has an estimated set before the window at all,
+        /// performed any way. Without a delta it tells a new exercise from one
+        /// whose earlier sets were performed differently: only the first is new.
+        public let hasEarlierBest: Bool
 
         public var id: String { exerciseID }
 
-        public init(exerciseID: String, name: String, weightKg: Decimal, reps: Int, date: Date, delta: Decimal?) {
+        public init(
+            exerciseID: String,
+            name: String,
+            weightKg: Decimal,
+            reps: Int,
+            date: Date,
+            delta: Decimal?,
+            hasEarlierBest: Bool
+        ) {
             self.exerciseID = exerciseID
             self.name = name
             self.weightKg = weightKg
             self.reps = reps
             self.date = date
             self.delta = delta
+            self.hasEarlierBest = hasEarlierBest
         }
     }
 
     /// Per exercise, the best set since `since`, most recently trained first.
     ///
     /// Only sets that carry an estimate take part: a comparison between two
-    /// sets of fifteen would be a comparison of nothing.
+    /// sets of fifteen would be a comparison of nothing. The best set is the
+    /// strongest one however it was performed — a set that paused only some
+    /// of its reps included, as the set it was — but its change is stated
+    /// only against earlier sets performed the same way (TRAINING_LOGIC §9.2).
+    /// Measured against an earlier paused best, a touch-and-go set reads as
+    /// progress that is only the pause coming off. `lib/setline-log.ts` keeps
+    /// the web app to the same rule (`tests/fixtures/best-set-comparison.json`).
     public static func bestSets(
         in sessions: [TrainingSession],
         since: Date,
         limit: Int = 5
     ) -> [RecentBest] {
+        struct Scored {
+            let weight: Decimal
+            let reps: Int
+            let estimate: Decimal
+            let execution: SetExecution
+        }
         struct Entry {
             var name: String
-            var best: (weight: Decimal, reps: Int, estimate: Decimal, date: Date)?
-            var before: Decimal?
+            var best: (set: Scored, date: Date)?
+            var earlier: [Scored] = []
             var lastTrained: Date = .distantPast
         }
         var byExercise: [String: Entry] = [:]
@@ -122,25 +147,30 @@ public enum ProgressOverview {
 
         for session in sessions where session.kind == .workout {
             for result in session.results {
-                guard let set = best(of: result.sets),
-                      let weight = set.weightKg,
-                      let estimate = Estimates.e1RM(weightKg: weight, reps: set.reps)
-                else { continue }
+                let scored = result.sets.compactMap { set -> Scored? in
+                    guard weighs(set), let weight = set.weightKg,
+                          let estimate = Estimates.e1RM(weightKg: weight, reps: set.reps)
+                    else { return nil }
+                    return Scored(weight: weight, reps: set.reps, estimate: estimate, execution: set.execution)
+                }
+                guard !scored.isEmpty else { continue }
                 if byExercise[result.exerciseID] == nil {
                     byExercise[result.exerciseID] = Entry(name: result.name)
                     order.append(result.exerciseID)
                 }
                 guard var entry = byExercise[result.exerciseID] else { continue }
                 if session.date >= since {
-                    if entry.best.map({ estimate > $0.estimate }) ?? true {
-                        entry.best = (weight, set.reps, estimate, session.date)
+                    for set in scored {
+                        if entry.best.map({ set.estimate > $0.set.estimate }) ?? true {
+                            entry.best = (set, session.date)
+                        }
                     }
                     if session.date >= entry.lastTrained {
                         entry.lastTrained = session.date
                         entry.name = result.name
                     }
-                } else if entry.before.map({ estimate > $0 }) ?? true {
-                    entry.before = estimate
+                } else {
+                    entry.earlier += scored
                 }
                 byExercise[result.exerciseID] = entry
             }
@@ -153,15 +183,28 @@ public enum ProgressOverview {
             .prefix(limit)
             .compactMap { id, entry in
                 guard let best = entry.best else { return nil }
+                let before = entry.earlier
+                    .filter { $0.execution.isComparable(to: best.set.execution) }
+                    .map(\.estimate)
+                    .max()
                 return RecentBest(
                     exerciseID: id,
                     name: entry.name,
-                    weightKg: best.weight,
-                    reps: best.reps,
+                    weightKg: best.set.weight,
+                    reps: best.set.reps,
                     date: best.date,
-                    delta: entry.before.map { Estimates.round(best.estimate - $0, toIncrement: 0.5) }
+                    delta: before.map { Estimates.round(best.set.estimate - $0, toIncrement: 0.5) },
+                    hasEarlierBest: !entry.earlier.isEmpty
                 )
             }
+    }
+
+    /// The sets the best sets weigh: what progression counts, and a mixed set
+    /// too — it is a set that was performed, and only its comparison is
+    /// restricted. Warm-ups, breakdowns and partial reps stay out.
+    private static func weighs(_ set: LoggedSet) -> Bool {
+        guard set.isLogged, !set.isWarmup, !set.flags.contains(.technicalBreakdown) else { return false }
+        return (set.partialReps ?? 0) == 0
     }
 
     // MARK: - Tonnage per week

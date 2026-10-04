@@ -1,0 +1,129 @@
+{
+  "name": "Best sets state a change only against an earlier set performed the same way, on both clients",
+  "why": "Progressie's best sets compared the best set of the last eight weeks with the best earlier set of any kind, so a touch-and-go bench measured against an earlier paused one read as kilos of progress that were only the pause coming off. Both clients now read how every set was performed from the same stored fields (`sets`), keep showing the strongest set as before, and state a change only against an earlier set performed the same way (`cases`). Estimates are Brzycki, deltas are rounded to the half kilo, and no case lands on a rounding tie.",
+  "readBy": [
+    "tests/set-reps.test.mjs",
+    "tests/setline-log.test.mjs",
+    "ios/SetlineCore/Tests/SetlineCoreTests/BestSetComparisonTests.swift"
+  ],
+  "sets": [
+    { "row": { "weight": "120", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+      "expected": { "reps": 6, "kind": "touch-and-go", "pausedReps": 0, "pauseSeconds": null } },
+    { "row": { "weight": "120", "reps": "6", "pausedReps": "2", "pauseSeconds": "2", "pauseEnabled": true },
+      "expected": { "reps": 6, "kind": "mixed", "pausedReps": 2, "pauseSeconds": 2 } },
+    { "row": { "weight": "120", "reps": "6", "pausedReps": "6", "pauseSeconds": "2", "pauseEnabled": true },
+      "expected": { "reps": 6, "kind": "paused", "pausedReps": 6, "pauseSeconds": 2 } },
+    { "row": { "weight": "120", "reps": "6", "pausedReps": "", "pauseSeconds": "2", "pauseEnabled": true },
+      "expected": { "reps": 6, "kind": "paused", "pausedReps": 6, "pauseSeconds": 2 } },
+    { "row": { "weight": "100", "reps": "5", "pausedReps": "5", "pauseSeconds": "", "pauseEnabled": true },
+      "expected": { "reps": 5, "kind": "paused", "pausedReps": 5, "pauseSeconds": 2 } },
+    { "row": { "weight": "100", "reps": "5", "pausedReps": "", "pauseSeconds": "3", "pauseEnabled": true },
+      "expected": { "reps": 5, "kind": "paused", "pausedReps": 5, "pauseSeconds": 3 } },
+    { "row": { "weight": "60", "reps": "9", "pausedReps": "1", "pauseSeconds": "2", "pauseEnabled": true },
+      "expected": { "reps": 9, "kind": "mixed", "pausedReps": 1, "pauseSeconds": 2 } }
+  ],
+  "comparable": [
+    { "sets": [0, 0], "expected": true, "why": "touch-and-go against touch-and-go" },
+    { "sets": [2, 3], "expected": true, "why": "a paused set, whichever way the pause was written" },
+    { "sets": [2, 4], "expected": true, "why": "a paused set without a length reads as 2 s" },
+    { "sets": [3, 5], "expected": false, "why": "2 s against 3 s is another pause (§9.2, ±0.5 s)" },
+    { "sets": [0, 2], "expected": false, "why": "touch-and-go against paused" },
+    { "sets": [0, 1], "expected": false, "why": "touch-and-go against a mixed set" },
+    { "sets": [1, 2], "expected": false, "why": "a mixed set against a paused one" },
+    { "sets": [1, 6], "expected": false, "why": "two paused reps against one" },
+    { "sets": [1, 1], "expected": true, "why": "the same mix" }
+  ],
+  "since": "2026-08-01",
+  "cases": [
+    {
+      "name": "touch-and-go against touch-and-go",
+      "sessions": [
+        { "date": "2026-07-01T17:00:00.000Z", "sets": [
+          { "weight": "95", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false } ] },
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "100", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false } ] }
+      ],
+      "expected": { "weight": 100, "reps": 5, "delta": 5.5, "hasEarlierBest": true }
+    },
+    {
+      "name": "paused against paused, whichever way the pause was written",
+      "sessions": [
+        { "date": "2026-07-01T17:00:00.000Z", "sets": [
+          { "weight": "85", "reps": "5", "pausedReps": "5", "pauseSeconds": "2", "pauseEnabled": true } ] },
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "90", "reps": "5", "pausedReps": "", "pauseSeconds": "2", "pauseEnabled": true } ] }
+      ],
+      "expected": { "weight": 90, "reps": 5, "delta": 5.5, "hasEarlierBest": true }
+    },
+    {
+      "name": "touch-and-go is not compared with an earlier paused set",
+      "sessions": [
+        { "date": "2026-07-01T17:00:00.000Z", "sets": [
+          { "weight": "90", "reps": "5", "pausedReps": "5", "pauseSeconds": "2", "pauseEnabled": true } ] },
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "100", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false } ] }
+      ],
+      "expected": { "weight": 100, "reps": 5, "delta": null, "hasEarlierBest": true }
+    },
+    {
+      "name": "a heavier earlier paused set does not hide the touch-and-go comparison",
+      "sessions": [
+        { "date": "2026-07-01T17:00:00.000Z", "sets": [
+          { "weight": "95", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+          { "weight": "100", "reps": "5", "pausedReps": "5", "pauseSeconds": "2", "pauseEnabled": true } ] },
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "100", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false } ] }
+      ],
+      "expected": { "weight": 100, "reps": 5, "delta": 5.5, "hasEarlierBest": true }
+    },
+    {
+      "name": "a pause of another length is another execution",
+      "sessions": [
+        { "date": "2026-07-01T17:00:00.000Z", "sets": [
+          { "weight": "90", "reps": "5", "pausedReps": "", "pauseSeconds": "3", "pauseEnabled": true } ] },
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "92.5", "reps": "5", "pausedReps": "", "pauseSeconds": "2", "pauseEnabled": true } ] }
+      ],
+      "expected": { "weight": 92.5, "reps": 5, "delta": null, "hasEarlierBest": true }
+    },
+    {
+      "name": "a mixed set is not compared with touch-and-go, paused or a different mix",
+      "sessions": [
+        { "date": "2026-07-01T17:00:00.000Z", "sets": [
+          { "weight": "115", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false },
+          { "weight": "110", "reps": "6", "pausedReps": "6", "pauseSeconds": "2", "pauseEnabled": true },
+          { "weight": "115", "reps": "6", "pausedReps": "4", "pauseSeconds": "2", "pauseEnabled": true } ] },
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "120", "reps": "6", "pausedReps": "2", "pauseSeconds": "2", "pauseEnabled": true } ] }
+      ],
+      "expected": { "weight": 120, "reps": 6, "delta": null, "hasEarlierBest": true }
+    },
+    {
+      "name": "a mixed set is compared with the same mix, as six reps",
+      "sessions": [
+        { "date": "2026-07-01T17:00:00.000Z", "sets": [
+          { "weight": "115", "reps": "6", "pausedReps": "2", "pauseSeconds": "2", "pauseEnabled": true } ] },
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "120", "reps": "6", "pausedReps": "2", "pauseSeconds": "2", "pauseEnabled": true } ] }
+      ],
+      "expected": { "weight": 120, "reps": 6, "delta": 6, "hasEarlierBest": true }
+    },
+    {
+      "name": "six reps with two paused rank as six reps, not eight",
+      "sessions": [
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "110", "reps": "6", "pausedReps": "2", "pauseSeconds": "2", "pauseEnabled": true },
+          { "weight": "115", "reps": "6", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false } ] }
+      ],
+      "expected": { "weight": 115, "reps": 6, "delta": null, "hasEarlierBest": false }
+    },
+    {
+      "name": "an exercise new in the window is still new",
+      "sessions": [
+        { "date": "2026-09-10T17:00:00.000Z", "sets": [
+          { "weight": "100", "reps": "5", "pausedReps": "", "pauseSeconds": "", "pauseEnabled": false } ] }
+      ],
+      "expected": { "weight": 100, "reps": 5, "delta": null, "hasEarlierBest": false }
+    }
+  ]
+}

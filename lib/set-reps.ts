@@ -56,6 +56,62 @@ export function pausedReps(set: SetRepFields): number {
 }
 
 /**
+ * How the reps of a set were performed, as far as measuring it against
+ * another set goes (TRAINING_LOGIC §9.2): with no pause, with every rep
+ * paused, or with some of them paused — a mixed set, which carries how many.
+ *
+ * Read from the stored fields exactly as the native app reads them
+ * (`LoggedSet.execution`, through `LegacyAdapter`): a count that covers every
+ * rep is a paused set, and so is the pause flag without a count — the shape
+ * the native app writes. A pause without a length reads as the 2 s the native
+ * app has always assumed. The count stays inside the reps either way: six
+ * reps with two paused is a mixed set of six reps.
+ */
+export type SetExecution = {
+  kind: "touch-and-go" | "paused" | "mixed";
+  /** How many of the reps carried the pause: none, all of them, or some. */
+  pausedReps: number;
+  /** The pause in seconds, for a paused or mixed set. */
+  pauseSeconds: number | null;
+};
+
+/** A stored pause length: "2", 2, "2,5". Blank and junk are no length. */
+function seconds(value: string | number | null | undefined): number | null {
+  const text = String(value ?? "").trim().replace(",", ".");
+  if (!text) return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function setExecution(set: SetRepFields): SetExecution {
+  const reps = completedReps(set);
+  const stored = count(set.pausedReps);
+  const length = seconds(set.pauseSeconds);
+  const everyRep = reps > 0 && stored >= reps;
+  const pauseOn =
+    everyRep || (typeof set.pauseEnabled === "boolean" ? set.pauseEnabled : stored > 0 || (length ?? 0) > 0);
+  const pause = pauseOn ? (length ?? 2) : 2;
+  if (everyRep) return { kind: "paused", pausedReps: reps, pauseSeconds: pause };
+  const paused = pausedReps(set);
+  if (paused > 0) return { kind: "mixed", pausedReps: paused, pauseSeconds: pause };
+  if (pauseOn) return { kind: "paused", pausedReps: reps, pauseSeconds: pause };
+  return { kind: "touch-and-go", pausedReps: 0, pauseSeconds: null };
+}
+
+/**
+ * Whether two sets were performed the same way, so one may be measured
+ * against the other: touch-and-go with touch-and-go, a paused set with a
+ * paused set of the same pause length (±0.5 s), and a mixed set only with a
+ * mixed set that paused the same number of reps for the same length.
+ */
+export function sameExecution(a: SetExecution, b: SetExecution): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "mixed" && a.pausedReps !== b.pausedReps) return false;
+  if (a.kind === "touch-and-go") return true;
+  return Math.abs((a.pauseSeconds ?? 2) - (b.pauseSeconds ?? 2)) <= 0.5;
+}
+
+/**
  * The same set with its paused count brought back inside the reps, for the
  * moment a number is typed. A count is left alone while the reps field is
  * still empty: the two are typed in either order, and clearing one must not
