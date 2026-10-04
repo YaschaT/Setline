@@ -186,7 +186,14 @@ final class AppState {
     /// changes stay stored under that account, and sync when it signs in again.
     func signOut() {
         isNewAccount = false
-        Keychain.remove(Self.sessionKey)
+        #if DEBUG
+        // The demo signed nothing in. The session in the keychain belongs to a
+        // real account on this device, and leaving the demo must not end it.
+        let keepsSavedSession = DemoData.isEnabled
+        #else
+        let keepsSavedSession = false
+        #endif
+        if !keepsSavedSession { Keychain.remove(Self.sessionKey) }
         session = nil
         auth = nil
         authGeneration = UUID()

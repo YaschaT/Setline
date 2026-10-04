@@ -190,12 +190,19 @@ struct PhotosHomeView: View {
         }
     }
 
-    /// "14 weken verschil · −2,6 kg" — the weight moves only where both days
-    /// have a weigh-in; it is never guessed.
+    /// "14 weken verschil · −2,6 kg" — never more time than the two dates
+    /// hold, and the weight moves only where both days have a weigh-in; it is
+    /// never guessed. Two pictures of one day share that day's weigh-in, so
+    /// there is no change to state.
     private func between(_ comparison: CheckInGallery.Comparison) -> String {
-        let weeks = comparison.weeks == 1 ? "1 week verschil" : "\(comparison.weeks) weken verschil"
-        guard let change = comparison.change else { return weeks }
-        return "\(weeks) · \(change == 0 ? "0" : app.display.signedDelta(change)) kg"
+        let span: String
+        switch comparison.span {
+        case .sameDay: return "zelfde dag"
+        case .days(let days): span = days == 1 ? "1 dag verschil" : "\(days) dagen verschil"
+        case .weeks(let weeks): span = weeks == 1 ? "1 week verschil" : "\(weeks) weken verschil"
+        }
+        guard let change = comparison.change else { return span }
+        return "\(span) · \(change == 0 ? "0" : app.display.signedDelta(change)) kg"
     }
 
     private func slot(_ shown: CheckInGallery.Shown, tag: String) -> some View {
@@ -255,7 +262,8 @@ struct PhotosHomeView: View {
                     count: typeSize.isAccessibilitySize ? 2 : 3
                 ),
                 alignment: .leading,
-                spacing: SL.Space.s3
+                // 1e's grid gap, between rows as between columns.
+                spacing: SL.Space.s2
             ) {
                 // Newest first: the one just added is the one looked for.
                 ForEach(gallery.all.reversed(), id: \.checkIn.id) { shown in
@@ -325,7 +333,9 @@ struct PhotosHomeView: View {
                 failure = "Die foto kon niet worden gelezen. Probeer een andere."
                 return
             }
-            checkIns = try await store.add(data, on: Date())
+            // Dated by when it was taken, which is what it is compared by;
+            // only a picture that says nothing is dated today.
+            checkIns = try await store.add(data, on: PhotoDate.taken(in: data) ?? Date())
         } catch {
             failure = "De foto kon niet worden bewaard. Er is mogelijk geen ruimte vrij op je toestel."
         }

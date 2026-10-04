@@ -26,24 +26,42 @@ public struct CheckInGallery: Equatable, Sendable {
         public let weightKg: Decimal?
     }
 
+    /// How far apart two check-ins are, as far as their dates can say it: the
+    /// same day, days below a week, and weeks from a week on — rounded, as 97
+    /// days reads "14 weken". Never more time than there was: two pictures a
+    /// day apart are a day apart, not a week.
+    public enum Span: Equatable, Sendable {
+        case sameDay
+        case days(Int)
+        case weeks(Int)
+
+        public init(days: Int) {
+            switch days {
+            case ...0: self = .sameDay
+            case 1..<7: self = .days(days)
+            default: self = .weeks(Int((Double(days) / 7).rounded()))
+            }
+        }
+    }
+
     /// Oldest first, as the strip reads.
     public let all: [Shown]
     public let first: Shown?
     public let latest: Shown?
-    /// Whole weeks between the two shown check-ins.
-    public let weeks: Int?
+    /// How far apart the first and the latest check-in are.
+    public let span: Span?
     /// What the scale did between them, when both have a weigh-in.
     public let change: Decimal?
 
-    public init(all: [Shown], first: Shown?, latest: Shown?, weeks: Int?, change: Decimal?) {
+    public init(all: [Shown], first: Shown?, latest: Shown?, span: Span?, change: Decimal?) {
         self.all = all
         self.first = first
         self.latest = latest
-        self.weeks = weeks
+        self.span = span
         self.change = change
     }
 
-    public static let empty = CheckInGallery(all: [], first: nil, latest: nil, weeks: nil, change: nil)
+    public static let empty = CheckInGallery(all: [], first: nil, latest: nil, span: nil, change: nil)
 
     /// The weight beside a check-in is the account's own weigh-in for that day,
     /// never a number typed twice: add a weigh-in later and the caption fills
@@ -66,7 +84,7 @@ public struct CheckInGallery: Equatable, Sendable {
             .sorted { $0.date < $1.date }
 
         guard let first = shown.first, let latest = shown.last, first.checkIn.id != latest.checkIn.id else {
-            return CheckInGallery(all: shown, first: shown.first, latest: shown.last, weeks: nil, change: nil)
+            return CheckInGallery(all: shown, first: shown.first, latest: shown.last, span: nil, change: nil)
         }
 
         let days = calendar.dateComponents([.day], from: first.date, to: latest.date).day ?? 0
@@ -79,7 +97,7 @@ public struct CheckInGallery: Equatable, Sendable {
             all: shown,
             first: first,
             latest: latest,
-            weeks: max(1, Int((Double(days) / 7).rounded())),
+            span: Span(days: days),
             change: change
         )
     }
@@ -91,8 +109,8 @@ public struct CheckInGallery: Equatable, Sendable {
     public struct Comparison: Equatable, Sendable {
         public let before: Shown
         public let after: Shown
-        /// Whole weeks between the two, never less than one.
-        public let weeks: Int
+        /// How far apart the two are.
+        public let span: Span
         /// What the scale did between them, when both have a weigh-in.
         public let change: Decimal?
     }
@@ -122,12 +140,7 @@ public struct CheckInGallery: Equatable, Sendable {
             guard let from = before.weightKg, let to = after.weightKg else { return nil }
             return to - from
         }()
-        return Comparison(
-            before: before,
-            after: after,
-            weeks: max(1, Int((Double(days) / 7).rounded())),
-            change: change
-        )
+        return Comparison(before: before, after: after, span: Span(days: days), change: change)
     }
 
     private static func dateFormatter(_ calendar: Calendar) -> DateFormatter {

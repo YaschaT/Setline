@@ -263,7 +263,11 @@ What the redesign changed in how the app is used:
   `Alle sessies` open Kracht and Historiek. `+ Weeg jezelf` sits by the
   title; once today is weighed it reads `Weging wijzigen`, without the plus.
 - **Foto's** compares the first and the latest check-in; `Andere datums
-  kiezen` compares any two.
+  kiezen` compares any two. A check-in is dated by when its picture was
+  taken (the camera's own record, `PhotoDate`), not the day it was added,
+  so a July photo picked today sits in July beside July's weigh-in. The
+  time between two is stated as it is — `zelfde dag`, days, then weeks —
+  and the weight between them only when both days have a weigh-in.
 
 Where the app differs from the redesign, on purpose (the user's overrides
 first):
