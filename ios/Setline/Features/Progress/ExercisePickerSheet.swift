@@ -15,6 +15,8 @@ import SetlineCore
 struct ExercisePickerSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// The star's size, which grows with the text like its font does.
+    @ScaledMetric(relativeTo: .body) private var starSize: CGFloat = 18
 
     let rows: [ExercisePicker.Row]
     let selected: String?
@@ -312,7 +314,11 @@ struct ExercisePickerSheet: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.trailing, -10)
+            // The tap area hangs past the list's edge so the glyph lines up
+            // with it — 10 at the default size, where the glyph ends 3 short
+            // of the edge. A glyph grown with the text has less room in its
+            // 44, so the hang shrinks with it and the star is never cut off.
+            .padding(.trailing, -max(0, (SL.Space.hitMin - starSize) / 2 - 3))
             .accessibilityLabel(row.isFavorite ? "Ster weghalen bij \(row.name)" : "\(row.name) een ster geven")
         }
         .padding(.horizontal, 12)

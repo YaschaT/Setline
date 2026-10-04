@@ -17,6 +17,9 @@ struct LichaamSegmentView: View {
     @Environment(AppState.self) private var app
     @State private var progress = BodyProgress.empty
     @State private var weighing = false
+    /// The change column, which grows with the text so the weights stay in
+    /// one column at every size — the first weigh-in has no change to fill it.
+    @ScaledMetric(relativeTo: .body) private var changeWidth: CGFloat = 44
 
     var body: some View {
         ScrollView {
@@ -151,9 +154,9 @@ struct LichaamSegmentView: View {
                         Text(app.display.signedDelta(change))
                             .slMeta()
                             .foregroundStyle(SL.Ink.tertiary)
-                            .frame(minWidth: 44, alignment: .trailing)
+                            .frame(minWidth: changeWidth, alignment: .trailing)
                     } else {
-                        Text("").frame(minWidth: 44)
+                        Text("").frame(minWidth: changeWidth)
                     }
                 }
                 .padding(.vertical, 14)
@@ -174,13 +177,17 @@ struct LichaamSegmentView: View {
         return (low - padding)...(high + padding)
     }
 
+    /// First, middle and last. The chart runs on time, so the middle label is
+    /// the date halfway between the two ends — the middle weigh-in can sit
+    /// anywhere along the line, and naming it under the centre misplaces it.
     private var chartLabels: [String] {
         let points = progress.points
-        guard let first = points.first, let last = points.last else { return [] }
+        guard let first = points.first?.date, let last = points.last?.date else { return [] }
         guard points.count > 2 else {
-            return [app.display.shortDate(first.date), app.display.shortDate(last.date)]
+            return [app.display.shortDate(first), app.display.shortDate(last)]
         }
-        return [first, points[points.count / 2], last].map { app.display.shortDate($0.date) }
+        let middle = first.addingTimeInterval(last.timeIntervalSince(first) / 2)
+        return [first, middle, last].map { app.display.shortDate($0) }
     }
 
     private var emptyState: some View {

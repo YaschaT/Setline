@@ -55,6 +55,9 @@ struct HistoriekSegmentView: View {
             }
             .padding(.horizontal, SL.Space.s5)
             .padding(.top, SL.Space.s5)
+            // The room Kracht and Lichaam leave too, so the last session never
+            // ends against the tab bar.
+            .padding(.bottom, SL.Space.s6)
         }
         .task(id: app.revision) { rows = SessionHistory.rows(from: app.sessions) }
         .fullScreenCover(item: $opened) { workout in

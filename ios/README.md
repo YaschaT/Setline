@@ -256,10 +256,12 @@ at normal width, as the app does.
 
 What the redesign changed in how the app is used:
 
-- **Progressie** opens on an overview — weight, best sets, volume — whose
-  links (`Alle wegingen`, `Kracht per oefening`, `Alle sessies`) open the
-  Lichaam, Kracht and Historiek segments as before. `+ Weeg jezelf` sits by
-  the title.
+- **Progressie** opens on an overview — weight, best sets, volume — at 1d's
+  card heights. The weight card itself opens Lichaam (the chevron by its
+  label says so; a link inside it made the card a row taller than 1d), a
+  best-set row opens its exercise in Kracht, and `Kracht per oefening` and
+  `Alle sessies` open Kracht and Historiek. `+ Weeg jezelf` sits by the
+  title; once today is weighed it reads `Weging wijzigen`, without the plus.
 - **Foto's** compares the first and the latest check-in; `Andere datums
   kiezen` compares any two.
 

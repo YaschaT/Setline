@@ -76,7 +76,7 @@ struct ProgressHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SL.Space.s4) {
                 SLScreenTitle(title: "Progressie", subtitle: range) { weighPill }
-                weightCard
+                weightSection
                 bestSection
                 volumeSection
                 Button { open(.historiek) } label: { chevroned("Alle sessies") }
@@ -118,6 +118,21 @@ struct ProgressHomeView: View {
 
     // MARK: - Body weight
 
+    /// 1d's card, which is also the way to every weigh-in: the whole card
+    /// opens Lichaam, as a best-set row opens its exercise. A link of its own
+    /// made the card a row taller than 1d draws it; the chevron beside the
+    /// card's label is the one mark that says it leads on.
+    @ViewBuilder
+    private var weightSection: some View {
+        if bodyProgress.entries.isEmpty {
+            weightCard
+        } else {
+            Button { open(.lichaam) } label: { weightCard }
+                .buttonStyle(CardPressStyle())
+                .accessibilityHint("Opent al je wegingen")
+        }
+    }
+
     /// A weigh-in is a status, not a training win: the number stays in ink and
     /// its movement in the recovery mint. Lime is only the line of the
     /// average, which is what the design draws the eye to.
@@ -128,14 +143,22 @@ struct ProgressHomeView: View {
         return VStack(alignment: .leading, spacing: SL.Space.s4) {
             head {
                 VStack(alignment: .leading, spacing: SL.Space.s1) {
-                    Text("Lichaamsgewicht")
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
+                    HStack(spacing: SL.Space.s1) {
+                        Text("Lichaamsgewicht")
+                            .slMeta()
+                        if !bodyProgress.entries.isEmpty {
+                            SLGlyph(name: .chevronRight, size: 13)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .foregroundStyle(SL.Ink.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        // At the font's own line. 1d's `34px/1` as an exact
+                        // line seats the baseline on the box's bottom edge on
+                        // iOS 26, and "kg" then hangs below it: 4pt taller.
                         Text(bodyProgress.latest.map { app.display.number($0.weightKg) } ?? "—")
                             .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
                             .slNumerals()
-                            .slLineHeight(1, size: SL.TypeSize.display)
                             .foregroundStyle(SL.Ink.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
@@ -173,12 +196,6 @@ struct ProgressHomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
             }
-
-            if !bodyProgress.entries.isEmpty {
-                Button { open(.lichaam) } label: { chevroned("Alle wegingen") }
-                    .buttonStyle(SLQuietButtonStyle())
-                    .padding(.top, -SL.Space.s2)
-            }
         }
         .padding(SL.Space.s4)
         .slBorderBox()
@@ -193,7 +210,8 @@ struct ProgressHomeView: View {
         let weighed = app.weighIn() != nil
         return Button { weighing = true } label: {
             HStack(spacing: SL.Space.s2) {
-                SLGlyph(name: .plus, size: 14)
+                // The plus adds; a correction adds nothing.
+                if !weighed { SLGlyph(name: .plus, size: 14) }
                 Text(weighed ? "Weging wijzigen" : "Weeg jezelf").slBody(SL.Weight.semibold)
             }
             .foregroundStyle(SL.Signal.onAction)
@@ -419,6 +437,16 @@ struct ProgressHomeView: View {
     }
 }
 
+/// A card that is itself the way on: it dims while pressed, where a row
+/// darkens, because its own surface stays on top.
+private struct CardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
+    }
+}
+
 // MARK: - Charts
 
 /// Body weight as the redesign draws it: every weigh-in in grey, the trailing
@@ -497,20 +525,22 @@ struct WeightTrendChart: View {
         }
     }
 
-    /// Both series on one scale: time left to right, weight bottom to top,
-    /// with the room the design leaves above and below the lines.
+    /// Both series on one scale: time left to right, weight bottom to top.
+    /// 1d draws the lines in a band from 28 % to 70 % of the plot's height —
+    /// around the two hairlines, not past them — so a change of a kilo reads
+    /// as a slope rather than a cliff.
     private func plot(in size: CGSize) -> (daily: [CGPoint], average: [CGPoint]) {
         guard let first = points.first?.date, let last = points.last?.date else { return ([], []) }
         let span = max(last.timeIntervalSince(first), 1)
         let values = points.flatMap { [double($0.weightKg), double($0.average)] }
         let low = values.min() ?? 0
         let range = max((values.max() ?? 1) - low, 0.1)
-        let inset = size.height * 0.13
+        let (top, bottom) = (size.height * 0.28, size.height * 0.70)
 
         func place(_ date: Date, _ value: Decimal) -> CGPoint {
             CGPoint(
                 x: 2 + (size.width - 4) * date.timeIntervalSince(first) / span,
-                y: inset + (size.height - inset * 2) * (1 - (double(value) - low) / range)
+                y: top + (bottom - top) * (1 - (double(value) - low) / range)
             )
         }
         return (

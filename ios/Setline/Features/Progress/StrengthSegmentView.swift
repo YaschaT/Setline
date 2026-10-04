@@ -172,7 +172,7 @@ struct StrengthSegmentView: View {
 
             if let estimate = progress.estimate {
                 // An estimate is stated in the steps a gym actually has, as the
-                // artboard does: Epley's 63,33 reads as 63,5.
+                // artboard does: Brzycki's 124,14 reads as 124.
                 Text(app.display.kg(Estimates.round(estimate, toIncrement: 0.5)))
                     .font(.slCapped(Self.heroSize, SL.Weight.semibold, maxScale: 1.4))
                     .slLineHeight(1, size: Self.heroSize, maxScale: 1.4)
@@ -183,6 +183,10 @@ struct StrengthSegmentView: View {
                     // SwiftUI draws the glyphs of a line tightened below the
                     // font's own height lower in the box than a browser does.
                     .offset(y: -0.117 * Self.heroScaledSize)
+                    // Read, never touched: lifted and given room to overhang,
+                    // the number reaches over the ⓘ above it, and at the
+                    // accessibility sizes it took the ⓘ's taps.
+                    .allowsHitTesting(false)
                     .padding(.top, 6)
 
                 if let change = progress.change, let shown = progress.shownChange() {
@@ -225,10 +229,11 @@ struct StrengthSegmentView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.4)
                     .foregroundStyle(SL.Ink.tertiary)
+                    .allowsHitTesting(false)
                     .padding(.top, 6)
             } else {
-                // §10.2: Epley loses accuracy as reps rise, so above ten reps
-                // the app states no estimate rather than a flattering one.
+                // §10.2: an estimate loses accuracy as reps rise, so above ten
+                // reps the app states none rather than a flattering one.
                 Text("Boven 10 reps rekent SETLINE geen schatting.")
                     .slBody()
                     .fixedSize(horizontal: false, vertical: true)
@@ -293,14 +298,16 @@ struct StrengthSegmentView: View {
         return (low - padding)...(high + padding)
     }
 
-    /// First, middle and last, as the artboard labels them.
+    /// First, middle and last, as the artboard labels them. The chart runs on
+    /// time, so the middle label is the date halfway between the two ends:
+    /// the middle session can sit anywhere along the line.
     private func chartLabels(_ points: [StrengthProgress.Point]) -> [String] {
-        guard let first = points.first, let last = points.last else { return [] }
+        guard let first = points.first?.date, let last = points.last?.date else { return [] }
         guard points.count > 2 else {
-            return [app.display.shortDate(first.date), app.display.shortDate(last.date)]
+            return [app.display.shortDate(first), app.display.shortDate(last)]
         }
-        let middle = points[points.count / 2]
-        return [first, middle, last].map { app.display.shortDate($0.date) }
+        let middle = first.addingTimeInterval(last.timeIntervalSince(first) / 2)
+        return [first, middle, last].map { app.display.shortDate($0) }
     }
 
     // MARK: - Sessions
@@ -378,16 +385,19 @@ struct StrengthSegmentView: View {
     /// is actually built around, then whatever was trained last. A big lift
     /// says more about strength than the last accessory of the last session,
     /// which is why the plan's own primaries come before recency.
+    ///
+    /// With nothing trained yet, it is still the programme's first lift — not
+    /// whichever exercise the catalogue happens to list first.
     private func opening() -> String? {
         if let starred = ExercisePicker.favorites(in: rows).first { return starred.exerciseID }
 
+        let primaries = app.plan.flatMap(\.exercises).filter { $0.role == .primaryStrength }
         let trained = Set(rows.filter(\.hasHistory).map(\.exerciseID))
-        let primary = app.plan
-            .flatMap(\.exercises)
-            .first { $0.role == .primaryStrength && trained.contains($0.exerciseID) }
-        if let primary { return primary.exerciseID }
+        if let primary = primaries.first(where: { trained.contains($0.exerciseID) }) { return primary.exerciseID }
 
-        return ExercisePicker.recent(in: rows, limit: 1).first?.exerciseID ?? rows.first?.exerciseID
+        if let recent = ExercisePicker.recent(in: rows, limit: 1).first { return recent.exerciseID }
+        let listed = Set(rows.map(\.exerciseID))
+        return primaries.first { listed.contains($0.exerciseID) }?.exerciseID ?? rows.first?.exerciseID
     }
 
     private func reloadProgress() {
