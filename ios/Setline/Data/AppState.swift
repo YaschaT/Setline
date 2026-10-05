@@ -32,6 +32,9 @@ final class AppState {
     private(set) var authError: String?
     private(set) var isWorking = false
     var isSignedIn: Bool { session != nil }
+    /// The signed-in account's progress photos: on this device only, and
+    /// apart from every other account's. `nil` while nobody is signed in.
+    private(set) var photos: CheckInStore?
 
     // MARK: Data
     private(set) var state: LegacyState?
@@ -100,6 +103,9 @@ final class AppState {
         #if DEBUG
         if DemoData.isEnabled {
             session = DemoData.session
+            // A folder of its own, and never the photos the phone kept before
+            // photos had owners: those can only be a real account's.
+            openPhotos(for: .demo(DemoData.session.userID), mayAdopt: false)
             // Read back what the device already holds, so a paused session
             // survives a relaunch exactly as it does for a real account.
             // `-SetlineResetDemo` starts from the fabricated data again.
@@ -195,6 +201,8 @@ final class AppState {
         #endif
         if !keepsSavedSession { Keychain.remove(Self.sessionKey) }
         session = nil
+        // Closed, not deleted: they are there again when this account returns.
+        photos = nil
         auth = nil
         authGeneration = UUID()
         clearData()
@@ -206,9 +214,28 @@ final class AppState {
         let generation = UUID()
         authGeneration = generation
         session = newSession
+        openPhotos(for: .account(newSession.userID), mayAdopt: mayAdoptUnownedPhotos(newSession))
         auth = AuthSessionCoordinator(session: newSession, refresher: client) { [weak self] renewed in
             await self?.didRefresh(renewed, generation: generation)
         }
+    }
+
+    /// Opens an owner's photos, by user id. Photos the phone kept before they
+    /// had owners move now, at sign-in, while the account that may have them
+    /// is the one signed in.
+    private func openPhotos(for owner: PhotoOwner, mayAdopt: Bool) {
+        guard photos?.owner != owner else { return }
+        let opened = CheckInStore(owner: owner, mayAdoptUnownedPhotos: mayAdopt)
+        photos = opened
+        Task { await opened.migrateUnownedPhotos() }
+    }
+
+    /// Only while this is the one real account the device keeps data for;
+    /// without the local store to ask, nobody can be shown to own them.
+    private func mayAdoptUnownedPhotos(_ session: AuthSession) -> Bool {
+        guard let store else { return false }
+        return PhotoOwner.account(session.userID)
+            .mayAdoptUnownedPhotos(email: session.email, accountsOnDevice: store.accountEmails())
     }
 
     /// Supabase retires a refresh token as soon as it is used, so the new one

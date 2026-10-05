@@ -268,6 +268,14 @@ What the redesign changed in how the app is used:
   so a July photo picked today sits in July beside July's weigh-in. The
   time between two is stated as it is — `zelfde dag`, days, then weeks —
   and the weight between them only when both days have a weigh-in.
+  Photos stay on the phone, and on the phone each account keeps its own:
+  `CheckIns/accounts/<user id>/`, never by address, and a demo account
+  under `CheckIns/demo/`. Signing out closes them and deletes nothing. The
+  list the app kept for the whole phone before photos had owners moves
+  once, at sign-in, to the account that may have it — the only real account
+  the phone keeps data for — and otherwise stays where it is, untouched
+  (`CheckInStore.migrateUnownedPhotos`). In debug builds,
+  `-SetlineDemoAccount b` signs in a second, separate demo account.
 
 Where the app differs from the redesign, on purpose (the user's overrides
 first):

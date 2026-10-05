@@ -62,6 +62,13 @@ struct LocalStore {
         return try? context.fetch(descriptor).first
     }
 
+    /// Every account this device keeps data for: the one record of who has
+    /// used this phone, which decides who may take the photos kept before
+    /// photos had owners (`PhotoOwner.mayAdoptUnownedPhotos`).
+    func accountEmails() -> [String] {
+        ((try? context.fetch(FetchDescriptor<StoredState>())) ?? []).map(\.ownerEmail)
+    }
+
     func load(for email: String) -> LegacyState? {
         row(for: email).flatMap { try? LegacyState(data: $0.blob) }
     }

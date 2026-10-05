@@ -18,13 +18,31 @@ enum DemoData {
         ProcessInfo.processInfo.arguments.contains("-SetlineDemoData")
     }
 
-    static let session = AuthSession(
-        accessToken: "demo",
-        refreshToken: "demo",
-        userID: "00000000-0000-0000-0000-000000000000",
-        email: "demo@setline.be",
-        expiresAt: nil
-    )
+    /// `-SetlineDemoAccount b` signs in a second demo account instead, with
+    /// its own user id, stored data and photos, so keeping accounts apart can
+    /// be checked on one device without signing in to a real one.
+    static var session: AuthSession {
+        let arguments = ProcessInfo.processInfo.arguments
+        if let flag = arguments.firstIndex(of: "-SetlineDemoAccount"), arguments.indices.contains(flag + 1) {
+            let name = arguments[flag + 1].lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
+            if !name.isEmpty {
+                return AuthSession(
+                    accessToken: "demo",
+                    refreshToken: "demo",
+                    userID: "demo-\(name)",
+                    email: "demo-\(name)@setline.be",
+                    expiresAt: nil
+                )
+            }
+        }
+        return AuthSession(
+            accessToken: "demo",
+            refreshToken: "demo",
+            userID: "00000000-0000-0000-0000-000000000000",
+            email: "demo@setline.be",
+            expiresAt: nil
+        )
+    }
 
     /// Push, three times, at the same load, hitting the top of the range —
     /// so bench reads READY and the first logged set of the new session

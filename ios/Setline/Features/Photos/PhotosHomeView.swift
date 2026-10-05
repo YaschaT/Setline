@@ -10,7 +10,8 @@ import SetlineCore
 /// instead.
 ///
 /// The photos never leave the phone, which the screen says out loud rather
-/// than implying.
+/// than implying, and on the phone they are the signed-in account's alone
+/// (`AppState.photos`).
 struct PhotosHomeView: View {
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -19,7 +20,8 @@ struct PhotosHomeView: View {
     @State private var picking: PhotosPickerItem?
     @State private var removing: CheckIn?
     @State private var failure: String?
-    @State private var loaded = false
+    /// Whose photos are on screen; another account signed in reads its own.
+    @State private var shownOwner: PhotoOwner?
     /// The two pictures chosen for the comparison, by id. Empty is the default
     /// pair: the first against the latest.
     @State private var chosen: [String] = []
@@ -30,8 +32,6 @@ struct PhotosHomeView: View {
     @State private var heldTile = false
 
     private struct Viewed: Identifiable { let id: String }
-
-    private let store = CheckInStore()
 
     private var gallery: CheckInGallery {
         CheckInGallery.make(checkIns, metrics: app.metrics)
@@ -74,10 +74,16 @@ struct PhotosHomeView: View {
             .padding(.top, SL.Space.s5)
             .padding(.bottom, SL.Space.s6)
         }
-        .task {
-            guard !loaded else { return }
-            checkIns = await store.load()
-            loaded = true
+        .task(id: app.photos?.owner) {
+            guard let photos = app.photos else {
+                checkIns = []
+                shownOwner = nil
+                return
+            }
+            guard shownOwner != photos.owner else { return }
+            chosen = []
+            checkIns = await photos.load()
+            shownOwner = photos.owner
         }
         .onChange(of: picking) { _, item in
             guard let item else { return }
@@ -120,7 +126,7 @@ struct PhotosHomeView: View {
             if let shown = gallery.all.first(where: { $0.checkIn.id == viewed.id }) {
                 PhotoViewer(
                     shown: shown,
-                    image: UIImage(contentsOfFile: store.url(for: shown.checkIn).path),
+                    image: app.photos.flatMap { UIImage(contentsOfFile: $0.url(for: shown.checkIn).path) },
                     caption: caption(shown),
                     onRemove: {
                         viewing = nil
@@ -240,7 +246,7 @@ struct PhotosHomeView: View {
         Rectangle()
             .fill(SL.Surface.raised2)
             .overlay {
-                if let image = UIImage(contentsOfFile: store.url(for: checkIn).path) {
+                if let url = app.photos?.url(for: checkIn), let image = UIImage(contentsOfFile: url.path) {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -328,6 +334,8 @@ struct PhotosHomeView: View {
     private func add(_ item: PhotosPickerItem) async {
         failure = nil
         picking = nil
+        // Kept for the signed-in account only; nobody signed in, nowhere to keep it.
+        guard let photos = app.photos else { return }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else {
                 failure = "Die foto kon niet worden gelezen. Probeer een andere."
@@ -335,15 +343,16 @@ struct PhotosHomeView: View {
             }
             // Dated by when it was taken, which is what it is compared by;
             // only a picture that says nothing is dated today.
-            checkIns = try await store.add(data, on: PhotoDate.taken(in: data) ?? Date())
+            checkIns = try await photos.add(data, on: PhotoDate.taken(in: data) ?? Date())
         } catch {
             failure = "De foto kon niet worden bewaard. Er is mogelijk geen ruimte vrij op je toestel."
         }
     }
 
     private func remove(_ checkIn: CheckIn) async {
+        guard let photos = app.photos else { return }
         do {
-            checkIns = try await store.remove(checkIn)
+            checkIns = try await photos.remove(checkIn)
             chosen.removeAll { $0 == checkIn.id }
         } catch {
             failure = "De opname kon niet worden verwijderd."
