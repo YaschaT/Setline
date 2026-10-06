@@ -276,6 +276,13 @@ What the redesign changed in how the app is used:
   the phone keeps data for — and otherwise stays where it is, untouched
   (`CheckInStore.migrateUnownedPhotos`). In debug builds,
   `-SetlineDemoAccount b` signs in a second, separate demo account.
+- **Account** opens with who this is: the avatar, the name and the address.
+  `Wijzig` there sets the name Training greets you with and the picture in
+  the avatar (a centred 512 px square). Both stay on this phone, apart per
+  account like the photos (`Profile/accounts/<user id>/`, demo under
+  `Profile/demo/`, `ProfileStore`), and are never synced: the account has
+  no field for them on the server. Without a picture the avatar shows the
+  name's initial, else the address's.
 
 Where the app differs from the redesign, on purpose (the user's overrides
 first):
@@ -284,8 +291,11 @@ first):
   Foto's, Account — in the redesign's own style. There is no `Loggen` tab:
   logging starts from Training, and Account stays the screen it was, a tab of
   its own, with the redesign's type and colour only.
-- **Training has no greeting and no avatar.** Its head is
-  the date the card is on. The card draws no oversized word behind the name.
+- **Training's head is 1a's** (the greeting and avatar are back since
+  2026-10-06, at the user's request): the avatar, `Hoi` and your first name
+  — just `Hoi` until one is set in Account — and under them the date the card
+  is on. The avatar opens the Account tab; Account stays a tab of its own.
+  The card draws no oversized word behind the name.
   Every kind of date — today, a later one, rest, missed, done — fills the
   same shell at 1a's height for today (287 pt outside at ordinary text
   sizes), so the title, the meta row and the top of the action never move
@@ -301,7 +311,10 @@ first):
   agenda; here the rows sit on the ground between hairlines, as the user's
   reference has them, and a tap looks at that day: the page scrolls back to
   its top, where the date, the strip and the card show it. Nothing starts.
-  On a Sunday there is no list.
+  On a Sunday there is no list. Its rows are 1a's 76 pt at the least. Under
+  the card each section stands apart — 1a's 36 pt from the day row to the
+  first, 32 between the next — and every section is headed alike, in the
+  caps of `DEZE WEEK` (Herstel keeps its moon beside its heading).
 - **Herstel is built from logged sets**, not from sleep, readiness and HRV
   (HealthKit is out of scope). The card keeps the design's shape — the
   proposal, the evidence under a hairline, `Overnemen` and `Negeren` — and is

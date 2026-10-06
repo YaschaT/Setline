@@ -116,7 +116,8 @@ struct RootView: View {
                         // the same session screen, with that date on it.
                         onLogPast: { day, date in
                             running = RunningSession(day: programmed(day), snapshot: nil, loggingFor: date)
-                        }
+                        },
+                        onAccount: { tab = .account }
                     )
                 case .voeding:
                     NutritionHomeView()

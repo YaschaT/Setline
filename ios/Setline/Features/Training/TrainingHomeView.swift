@@ -22,6 +22,8 @@ struct TrainingHomeView: View {
     /// A workout that was done on a date that has passed and never written
     /// down. Same session screen, that date on the result.
     let onLogPast: (WorkoutDay, Date) -> Void
+    /// The avatar's way to Account, which stays a tab of its own.
+    let onAccount: () -> Void
 
     @State private var confirmsEnd = false
     /// The date the screen is on. `nil` is today, which is where every visit
@@ -96,13 +98,15 @@ struct TrainingHomeView: View {
                     if isOffline { offlineCard }
                     weekSection
                     if let day = selectedDay { daySection(day) }
+                    // Below the card each section stands apart: 1a's 36
+                    // from the day row to the first, 32 between the next.
                     if let status = recoveryStatus {
                         recoverySection(status)
-                            .padding(.top, SL.Space.s1)
+                            .padding(.top, Self.afterCard)
                     }
                     if !restOfWeek.isEmpty {
                         restOfWeekSection(scroll)
-                            .padding(.top, SL.Space.s1)
+                            .padding(.top, recoveryStatus == nil ? Self.afterCard : Self.betweenSections)
                     }
                     if isOffline, !queue.isEmpty { queueSection }
                 }
@@ -212,22 +216,44 @@ struct TrainingHomeView: View {
         )
     }
 
-    // MARK: - The date
+    // MARK: - The head
 
-    /// The head is the date the card is on, as Main has it: no greeting and
-    /// no avatar — Account is a tab of its own. It keeps 1a's head spacing,
-    /// 4 above and 8 below, so the week starts as far under it as 1a has it.
+    /// 1a's head: the avatar, "Hoi" and your name, and under them the date
+    /// the card is on. The avatar leads to Account, which stays a tab of its
+    /// own. 1a's spacing — 14 beside the avatar, 4 above and 8 below — so the
+    /// week starts as far under it as 1a has it.
     private var header: some View {
-        Text(longDate)
-            .slTitle()
-            .slNumerals()
-            .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
-            .foregroundStyle(SL.Ink.primary)
+        HStack(alignment: .center, spacing: 14) {
+            Button(action: onAccount) {
+                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .slFocusRing(Circle())
+            .accessibilityLabel("Account")
+            .accessibilityHint("Opent je account")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greeting)
+                    .slTitle()
+                    .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
+                    .foregroundStyle(SL.Ink.primary)
+                    .accessibilityAddTraits(.isHeader)
+                Text(longDate)
+                    .slBody()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityAddTraits(.isHeader)
-            .padding(.top, SL.Space.s1)
-            .padding(.bottom, SL.Space.s2)
+        }
+        .padding(.top, SL.Space.s1)
+        .padding(.bottom, SL.Space.s2)
+    }
+
+    /// "Hoi Yascha", or just "Hoi" until a name is given in Account.
+    private var greeting: String {
+        app.greetingName.map { "Hoi \($0)" } ?? "Hoi"
     }
 
     /// "Woensdag 9 september" — the date the card is on.
@@ -632,6 +658,11 @@ struct TrainingHomeView: View {
         .accessibilityLabel(day.map { "\(direction < 0 ? "Vorige" : "Volgende") dag, \(StripDay.spokenLabel($0))" } ?? "")
     }
 
+    /// Added to the page's 16 between blocks: 36 from the day row to the
+    /// first section under the card, as 1a has it, and 32 between sections.
+    private static let afterCard = SL.Space.s5
+    private static let betweenSections = SL.Space.s4
+
     /// The design's 220 ms `cubic-bezier(.2,.8,.2,1)`.
     private static let slide = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.22)
 
@@ -700,14 +731,13 @@ struct TrainingHomeView: View {
 
     private func recoverySection(_ status: DeloadCard.Status) -> some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            HStack(spacing: SL.Space.s2) {
-                SLGlyph(name: .moon, size: 18).foregroundStyle(SL.Signal.recovery)
-                Text("Herstel")
-                    .slLead()
-                    .foregroundStyle(SL.Ink.primary)
+            // Headed like the page's other sections, the moon kept beside it.
+            HStack(spacing: 6) {
+                SLGlyph(name: .moon, size: 14).foregroundStyle(SL.Signal.recovery)
+                SLOverline(text: "Herstel")
                     .accessibilityAddTraits(.isHeader)
             }
-            .padding(.horizontal, SL.Space.s1)
+            .padding(.leading, SL.Space.s1)
 
             DeloadCard(
                 reading: app.fatigue,
@@ -796,8 +826,10 @@ struct TrainingHomeView: View {
                         .fixedSize()
                 }
             }
+            // 1a's rows: 12 above and below, 76 at the least, so a rest
+            // day stands as tall as a training day.
             .padding(.vertical, SL.Space.s3)
-            .frame(minHeight: SL.Space.hitMin)
+            .frame(minHeight: 76)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

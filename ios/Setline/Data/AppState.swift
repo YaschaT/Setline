@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftData
+import UIKit
 import SetlineCore
 
 enum SyncState: Equatable {
@@ -35,6 +36,11 @@ final class AppState {
     /// The signed-in account's progress photos: on this device only, and
     /// apart from every other account's. `nil` while nobody is signed in.
     private(set) var photos: CheckInStore?
+    /// The name and picture this account shows on this phone — the greeting
+    /// and the avatar. Kept like the photos: here only, apart per account.
+    private(set) var profileName: String?
+    private(set) var profilePhoto: UIImage?
+    private var profile: ProfileStore?
 
     // MARK: Data
     private(set) var state: LegacyState?
@@ -106,6 +112,7 @@ final class AppState {
             // A folder of its own, and never the photos the phone kept before
             // photos had owners: those can only be a real account's.
             openPhotos(for: .demo(DemoData.session.userID), mayAdopt: false)
+            openProfile(for: .demo(DemoData.session.userID))
             // Read back what the device already holds, so a paused session
             // survives a relaunch exactly as it does for a real account.
             // `-SetlineResetDemo` starts from the fabricated data again.
@@ -203,6 +210,9 @@ final class AppState {
         session = nil
         // Closed, not deleted: they are there again when this account returns.
         photos = nil
+        profile = nil
+        profileName = nil
+        profilePhoto = nil
         auth = nil
         authGeneration = UUID()
         clearData()
@@ -215,6 +225,7 @@ final class AppState {
         authGeneration = generation
         session = newSession
         openPhotos(for: .account(newSession.userID), mayAdopt: mayAdoptUnownedPhotos(newSession))
+        openProfile(for: .account(newSession.userID))
         auth = AuthSessionCoordinator(session: newSession, refresher: client) { [weak self] renewed in
             await self?.didRefresh(renewed, generation: generation)
         }
@@ -228,6 +239,51 @@ final class AppState {
         let opened = CheckInStore(owner: owner, mayAdoptUnownedPhotos: mayAdopt)
         photos = opened
         Task { await opened.migrateUnownedPhotos() }
+    }
+
+    // MARK: - Name and picture
+
+    /// What the greeting calls you: the first word of the name you gave.
+    var greetingName: String? { ProfileStore.firstName(of: profileName) }
+
+    /// The letter on an avatar without a picture.
+    var avatarInitial: String? { ProfileStore.initial(name: profileName, email: session?.email) }
+
+    private func openProfile(for owner: PhotoOwner) {
+        guard profile?.owner != owner else { return }
+        let opened = ProfileStore(owner: owner)
+        profile = opened
+        profileName = opened.name()
+        profilePhoto = opened.photo().flatMap { UIImage(data: $0) }
+    }
+
+    /// An empty name removes it; the greeting then says only "Hoi".
+    func setProfileName(_ name: String) {
+        guard let profile else { return }
+        try? profile.setName(name)
+        profileName = profile.name()
+    }
+
+    /// Keeps a square copy of the picture, small enough for an avatar.
+    /// `false` when it could not be read or written.
+    func setProfilePhoto(_ data: Data) async -> Bool {
+        guard let profile else { return false }
+        let square = await Task.detached(priority: .userInitiated) { ProfilePhoto.square(from: data) }.value
+        // Signed out, or into another account, while the picture was read.
+        guard let square, self.profile?.owner == profile.owner else { return false }
+        do {
+            try profile.setPhoto(square)
+        } catch {
+            return false
+        }
+        profilePhoto = UIImage(data: square)
+        return true
+    }
+
+    func removeProfilePhoto() {
+        guard let profile else { return }
+        try? profile.removePhoto()
+        profilePhoto = profile.photo().flatMap { UIImage(data: $0) }
     }
 
     /// Only while this is the one real account the device keeps data for;

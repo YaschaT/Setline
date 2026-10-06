@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import SetlineCore
 
@@ -13,7 +14,8 @@ import SetlineCore
 /// - `Account verwijderen` waits for the server action that performs it.
 ///
 /// `Uitloggen` is the one addition: leaving the account on this device keeps
-/// its local copy and anything still waiting to sync.
+/// its local copy and anything still waiting to sync. Above everything, the
+/// name and picture Training greets you with, kept on this phone only.
 struct AccountView: View {
     @Environment(AppState.self) private var app
     @State private var exports: [URL] = []
@@ -23,6 +25,12 @@ struct AccountView: View {
     @State private var editingTargets = false
     @State private var choosingProgram = false
     @State private var rirEverySet = RIRPreference.everySet
+    @State private var editingProfile = false
+    @State private var namingProfile = false
+    @State private var draftName = ""
+    @State private var pickingPhoto = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var photoFailed = false
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -36,6 +44,7 @@ struct AccountView: View {
                     .padding(.top, SL.Space.s4)
 
                 VStack(alignment: .leading, spacing: 0) {
+                    profileBlock
                     syncBlock
                     section("PLAN")
                     planRows
@@ -83,6 +92,100 @@ struct AccountView: View {
         } message: {
             Text("\(changes(app.pendingChanges.count)) \(verb(app.pendingChanges.count, "staat", "staan")) alleen op dit toestel. \(verb(app.pendingChanges.count, "Hij blijft", "Ze blijven")) bewaard en synct zodra je opnieuw aanmeldt.")
         }
+    }
+
+    // MARK: - Profile
+
+    /// Who this is: the picture and name Training greets you with, and the
+    /// address the account signs in with. One tap target, as the plan rows
+    /// are, ending in the same `Wijzig`.
+    private var profileBlock: some View {
+        Button { editingProfile = true } label: {
+            HStack(alignment: .center, spacing: SL.Space.s4) {
+                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 64)
+                    .overlay(alignment: .bottomTrailing) { cameraBadge }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(app.profileName ?? "Voeg je naam toe")
+                        .slLead(SL.Weight.semibold)
+                        .foregroundStyle(app.profileName == nil ? SL.Signal.action : SL.Ink.primary)
+                    if let email = app.session?.email {
+                        Text(email)
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Wijzig").slBody().foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.bottom, SL.Space.s6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) { SLHairline() }
+        .padding(.bottom, SL.Space.s6)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Wijzig je naam of foto")
+        .confirmationDialog("Profiel", isPresented: $editingProfile, titleVisibility: .hidden) {
+            Button(app.profileName == nil ? "Naam toevoegen" : "Naam wijzigen") {
+                afterDialog {
+                    draftName = app.profileName ?? ""
+                    namingProfile = true
+                }
+            }
+            Button(app.profilePhoto == nil ? "Kies een foto" : "Kies een andere foto") {
+                afterDialog { pickingPhoto = true }
+            }
+            if app.profilePhoto != nil {
+                Button("Verwijder foto", role: .destructive) { app.removeProfilePhoto() }
+            }
+            Button("Annuleer", role: .cancel) {}
+        } message: {
+            Text("Je naam en foto blijven op dit toestel.")
+        }
+        .alert("Je naam", isPresented: $namingProfile) {
+            TextField("Naam", text: $draftName)
+                .textContentType(.name)
+                .textInputAutocapitalization(.words)
+            Button("Bewaar") { app.setProfileName(draftName) }
+            Button("Annuleer", role: .cancel) {}
+        } message: {
+            Text("Training begroet je met je voornaam.")
+        }
+        .alert("Die foto lukte niet", isPresented: $photoFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Ze kon niet worden gelezen of bewaard. Probeer een andere.")
+        }
+        .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images, photoLibrary: .shared())
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            photoItem = nil
+            Task {
+                let data = try? await item.loadTransferable(type: Data.self)
+                let kept = if let data { await app.setProfilePhoto(data) } else { false }
+                if !kept { photoFailed = true }
+            }
+        }
+    }
+
+    /// The options have to be gone before the next thing can be shown, or
+    /// it is never shown.
+    private func afterDialog(_ action: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            action()
+        }
+    }
+
+    /// Says the picture can be changed: the camera, small, on the avatar's edge.
+    private var cameraBadge: some View {
+        SLGlyph(name: .camera, size: 13)
+            .foregroundStyle(SL.Signal.action)
+            .frame(width: 24, height: 24)
+            .background(Circle().fill(SL.Surface.raised))
+            .overlay(Circle().strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border))
+            .offset(x: 2, y: 2)
     }
 
     // MARK: - Sync
