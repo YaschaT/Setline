@@ -283,9 +283,9 @@ struct TrainingHomeView: View {
             dayCard(day)
                 .offset(x: dragX)
                 .opacity(1 - min(abs(dragX) / 400, 0.4))
-                // Beside the scroll view's own drag, never instead of it: a
-                // vertical pull still scrolls the screen.
-                .simultaneousGesture(swipe)
+                // Sideways only: a pull up or down is the page's, so the
+                // screen scrolls wherever the finger lands.
+                .gesture(swipe)
             dayNav
         }
     }
@@ -664,20 +664,15 @@ struct TrainingHomeView: View {
     }
 
     /// A horizontal drag carries the card; past 64 it lands on the next day.
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                let (dx, dy) = (value.translation.width, value.translation.height)
-                if !isDragging {
-                    guard abs(dx) > 10, abs(dx) > abs(dy) * 1.5 else { return }
-                    isDragging = true
-                }
+    private var swipe: SidewaysDrag {
+        SidewaysDrag(
+            onChanged: { dx in
+                isDragging = true
                 dragX = reduceMotion ? 0 : dx * 0.9
-            }
-            .onEnded { value in
+            },
+            onEnded: { dx in
                 guard isDragging else { return }
                 isDragging = false
-                let dx = value.translation.width
                 if dx < -64, let next = neighbour(1) {
                     go(to: next, direction: 1)
                 } else if dx > 64, let previous = neighbour(-1) {
@@ -686,6 +681,7 @@ struct TrainingHomeView: View {
                     withAnimation(reduceMotion ? nil : Self.slide) { dragX = 0 }
                 }
             }
+        )
     }
 
     // MARK: - Herstel
@@ -875,6 +871,52 @@ struct TrainingHomeView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
                 .padding(.horizontal, SL.Space.s1)
+        }
+    }
+}
+
+/// The card's day swipe: a UIKit pan that starts only when the finger sets
+/// off sideways — by half as much again as up or down. A pull that sets off
+/// up or down never becomes it, and the page's own scrolling waits for that
+/// answer, so the screen scrolls wherever the finger lands and a sideways
+/// swipe moves only the card. SwiftUI's drag, even beside the scroll view's,
+/// held the page still whenever a pull started on the card.
+private struct SidewaysDrag: UIGestureRecognizerRepresentable {
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+        let dx = pan.translation(in: pan.view).x
+        switch pan.state {
+        case .began, .changed: onChanged(dx)
+        case .ended: onEnded(dx)
+        case .cancelled, .failed: onEnded(0)
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return true }
+            let move = pan.translation(in: pan.view)
+            return abs(move.x) > abs(move.y) * 1.5
+        }
+
+        /// The page scrolls once the card has said no.
+        func gestureRecognizer(
+            _ recognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy other: UIGestureRecognizer
+        ) -> Bool {
+            guard let page = other.view as? UIScrollView else { return false }
+            return other === page.panGestureRecognizer
         }
     }
 }
