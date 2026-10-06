@@ -124,6 +124,50 @@ final class CheckInTests: XCTestCase {
         XCTAssertNil(gallery.comparison(calendar: calendar))
     }
 
+    // MARK: - The player
+
+    private var year: CheckInGallery {
+        CheckInGallery.make(
+            [
+                checkIn("jan", "2025-10-01"), checkIn("mei", "2026-05-01"), checkIn("jul", "2026-07-15"),
+                checkIn("sep", "2026-09-10"), checkIn("okt", "2026-10-01"),
+            ],
+            metrics: [],
+            calendar: calendar
+        )
+    }
+
+    func testThePlayerShowsEveryPictureOldestFirstCountedFromTheFirst() {
+        let frames = year.frames(in: .all, calendar: calendar)
+        XCTAssertEqual(frames.map(\.shown.checkIn.id), ["jan", "mei", "jul", "sep", "okt"])
+        XCTAssertEqual(frames.first?.since, .sameDay)
+        XCTAssertEqual(frames.last?.since, .weeks(52))
+    }
+
+    func testAPeriodCountsBackFromTheLatestPictureAndStartsItsOwnCount() {
+        let frames = year.frames(in: .quarter, calendar: calendar)
+        XCTAssertEqual(frames.map(\.shown.checkIn.id), ["jul", "sep", "okt"])
+        XCTAssertEqual(frames.first?.since, .sameDay)
+        XCTAssertEqual(frames.last?.since, .weeks(11))
+    }
+
+    func testOnlyPeriodsThatShowSomethingNewAreOffered() {
+        // A year back reaches the very first picture, so it would only repeat
+        // "every picture"; a month back holds two and is offered.
+        XCTAssertEqual(year.periods(calendar: calendar), [.all, .halfYear, .quarter, .month])
+    }
+
+    func testAPeriodWithOnePictureIsNotOffered() {
+        let gallery = CheckInGallery.make(
+            [checkIn("a", "2026-01-01"), checkIn("b", "2026-10-01")],
+            metrics: [],
+            calendar: calendar
+        )
+        XCTAssertEqual(gallery.periods(calendar: calendar), [.all])
+        XCTAssertEqual(CheckInGallery.make([checkIn("a", "2026-01-01")], metrics: [], calendar: calendar)
+            .periods(calendar: calendar), [])
+    }
+
     func testACheckInSurvivesBeingStored() throws {
         let stored = [checkIn("a", "2026-07-13"), checkIn("b", "2026-09-06")]
         let data = try JSONEncoder().encode(stored)

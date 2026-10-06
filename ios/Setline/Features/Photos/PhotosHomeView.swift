@@ -6,8 +6,9 @@ import SetlineCore
 ///
 /// Two pictures the same size, far enough apart in time to show something, and
 /// what lies between them; under that, every picture in a grid. The first
-/// against the latest is what it opens on, and any two can be put side by side
-/// instead.
+/// against the latest is what it opens on, and any two can be compared
+/// instead — over each other with a line to slide between them, or side by
+/// side. `Afspelen` steps through every picture, oldest first.
 ///
 /// The photos never leave the phone, which the screen says out loud rather
 /// than implying, and on the phone they are the signed-in account's alone
@@ -27,11 +28,19 @@ struct PhotosHomeView: View {
     @State private var chosen: [String] = []
     @State private var choosing = false
     @State private var viewing: Viewed?
+    @State private var playingTimeline = false
+    /// Over each other or side by side; remembered on this phone.
+    @AppStorage("setline.photos.compareMode") private var compareMode: CompareMode = .overlay
     /// Holding a picture asks to remove it; the tap that ends the hold must
     /// not open it as well.
     @State private var heldTile = false
 
     private struct Viewed: Identifiable { let id: String }
+
+    private enum CompareMode: String {
+        case overlay
+        case sideBySide
+    }
 
     private var gallery: CheckInGallery {
         CheckInGallery.make(checkIns, metrics: app.metrics)
@@ -122,6 +131,14 @@ struct PhotosHomeView: View {
                 onClose: { choosing = false }
             )
         }
+        .fullScreenCover(isPresented: $playingTimeline) {
+            PhotoTimelapse(
+                gallery: gallery,
+                display: app.display,
+                url: { app.photos?.url(for: $0) },
+                onClose: { playingTimeline = false }
+            )
+        }
         .fullScreenCover(item: $viewing) { viewed in
             if let shown = gallery.all.first(where: { $0.checkIn.id == viewed.id }) {
                 PhotoViewer(
@@ -167,11 +184,27 @@ struct PhotosHomeView: View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLSectionHead(title: "Vergelijking", meta: comparison.map(between))
 
-            HStack(alignment: .top, spacing: SL.Space.s2) {
-                if let comparison {
-                    slot(comparison.before, tag: "voor")
-                    slot(comparison.after, tag: "nu")
-                } else if let only = gallery.first {
+            if let comparison {
+                modeChoice
+                if compareMode == .overlay {
+                    BeforeAfterSlider(
+                        before: app.photos?.url(for: comparison.before.checkIn),
+                        after: app.photos?.url(for: comparison.after.checkIn),
+                        beforeTag: "voor · \(label(comparison.before.date))",
+                        afterTag: "nu · \(label(comparison.after.date))"
+                    )
+                    HStack(alignment: .top, spacing: SL.Space.s2) {
+                        caption(comparison.before, tag: "voor", alignment: .leading)
+                        caption(comparison.after, tag: "nu", alignment: .trailing)
+                    }
+                } else {
+                    HStack(alignment: .top, spacing: SL.Space.s2) {
+                        slot(comparison.before, tag: "voor")
+                        slot(comparison.after, tag: "nu")
+                    }
+                }
+            } else if let only = gallery.first {
+                HStack(alignment: .top, spacing: SL.Space.s2) {
                     slot(only, tag: "voor")
                     // The first picture keeps the shape of the pair it will be
                     // half of, rather than sprawling across the row on its own.
@@ -179,21 +212,92 @@ struct PhotosHomeView: View {
                 }
             }
 
-            if gallery.all.count > 2 {
-                Button { choosing = true } label: {
-                    HStack(spacing: 6) {
-                        Text("Andere datums kiezen")
-                        SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
+            if gallery.all.count > 1 {
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: SL.Space.s2))
+                    : AnyLayout(HStackLayout(spacing: SL.Space.s2))
+                layout {
+                    Button { playingTimeline = true } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(SL.Signal.action)
+                            Text("Afspelen")
+                        }
+                    }
+                    .buttonStyle(SLOutlineButtonStyle())
+                    .accessibilityHint("Toont al je opnames na elkaar, van de eerste tot de laatste")
+
+                    if gallery.all.count > 2 {
+                        Button { choosing = true } label: {
+                            HStack(spacing: 6) {
+                                Text("Andere datums")
+                                SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
+                            }
+                        }
+                        .buttonStyle(SLOutlineButtonStyle())
+                        .accessibilityLabel("Andere datums kiezen")
                     }
                 }
-                .buttonStyle(SLOutlineButtonStyle())
-            } else if gallery.all.count == 1 {
+                .padding(.top, SL.Space.s2)
+            } else {
                 Text("Vanaf twee opnames staat de vergelijking hier.")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                     .padding(.horizontal, SL.Space.s1)
             }
         }
+    }
+
+    /// Over each other, or side by side — in a row while both fit on one
+    /// line each, under each other once the text is too large for that.
+    private var modeChoice: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: SL.Space.s2) { modeChips }
+                .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: SL.Space.s2) { modeChips }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Weergave")
+    }
+
+    @ViewBuilder
+    private var modeChips: some View {
+        SLChip(title: "Over elkaar", look: compareMode == .overlay ? .selected : .unselected) {
+            compareMode = .overlay
+        }
+        SLChip(title: "Naast elkaar", look: compareMode == .sideBySide ? .selected : .unselected) {
+            compareMode = .sideBySide
+        }
+    }
+
+    /// Under the slider: each picture's day and weigh-in, at its own side, and
+    /// the way to open it large.
+    private func caption(
+        _ shown: CheckInGallery.Shown,
+        tag: String,
+        alignment: HorizontalAlignment
+    ) -> some View {
+        Button { viewing = Viewed(id: shown.checkIn.id) } label: {
+            VStack(alignment: alignment, spacing: 0) {
+                Text("\(label(shown.date)) · \(tag)")
+                    .slBody(SL.Weight.semibold)
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+                Text(shown.weightKg.map(app.display.kg) ?? "geen weging")
+                    .slMeta()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+            .frame(minHeight: SL.Space.hitMin)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Opname \(tag), \(caption(shown))")
+        .accessibilityHint("Dubbeltik om de foto te openen")
     }
 
     /// "14 weken verschil · −2,6 kg" — never more time than the two dates

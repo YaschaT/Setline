@@ -143,6 +143,66 @@ public struct CheckInGallery: Equatable, Sendable {
         return Comparison(before: before, after: after, span: Span(days: days), change: change)
     }
 
+    // MARK: - All of them, one after another
+
+    /// One picture in the player: when it was taken counted from the first
+    /// picture the player shows.
+    public struct Frame: Equatable, Sendable {
+        public let shown: Shown
+        public let since: Span
+    }
+
+    /// How far back the player looks: every picture, or the last stretch of
+    /// them — counted back from the latest picture, not from today, so a
+    /// month without photos does not empty "the last three months".
+    public enum Period: String, CaseIterable, Sendable {
+        case all, year, halfYear, quarter, month
+
+        var days: Int? {
+            switch self {
+            case .all: return nil
+            case .year: return 365
+            case .halfYear: return 182
+            case .quarter: return 91
+            case .month: return 30
+            }
+        }
+    }
+
+    /// The pictures of a period, oldest first, each with how long after the
+    /// period's first picture it was taken.
+    public func frames(in period: Period, calendar: Calendar = .current) -> [Frame] {
+        let shown = pictures(in: period, calendar: calendar)
+        guard let start = shown.first?.date else { return [] }
+        return shown.map { picture in
+            let days = calendar.dateComponents([.day], from: start, to: picture.date).day ?? 0
+            return Frame(shown: picture, since: Span(days: days))
+        }
+    }
+
+    /// The periods worth offering: every picture, and each shorter stretch
+    /// that still holds two pictures and shows fewer than the one before it.
+    public func periods(calendar: Calendar = .current) -> [Period] {
+        guard all.count > 1 else { return [] }
+        var offered: [Period] = [.all]
+        var shown = all.count
+        for period in Period.allCases.dropFirst() {
+            let count = pictures(in: period, calendar: calendar).count
+            guard count >= 2 else { break }
+            if count < shown {
+                offered.append(period)
+                shown = count
+            }
+        }
+        return offered
+    }
+
+    private func pictures(in period: Period, calendar: Calendar) -> [Shown] {
+        guard let days = period.days, let latest = all.last?.date,
+              let start = calendar.date(byAdding: .day, value: -days, to: latest) else { return all }
+        return all.filter { $0.date >= start }
+    }
+
     private static func dateFormatter(_ calendar: Calendar) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = calendar

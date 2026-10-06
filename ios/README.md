@@ -263,7 +263,17 @@ What the redesign changed in how the app is used:
   `Alle sessies` open Kracht and Historiek. `+ Weeg jezelf` sits by the
   title; once today is weighed it reads `Weging wijzigen`, without the plus.
 - **Foto's** compares the first and the latest check-in; `Andere datums
-  kiezen` compares any two. A check-in is dated by when its picture was
+  kiezen` compares any two. The pair shows `Over elkaar` — one 3:4 frame,
+  the earlier picture left of a line the finger slides (sideways only, so
+  the page still scrolls; a tap puts the line there) — or `Naast elkaar`,
+  1e's two frames; the choice is remembered on the phone. `Afspelen` opens
+  the Tijdlijn: every picture oldest first, `Traag` to `Snel` (1,6 s to
+  0,12 s a picture), a scrubber, and the periods that show something
+  different — `Alles`, then a year, six, three or one month counted back
+  from the latest picture. Each picture says how long after the period's
+  first one it was taken, with that day's weigh-in, and play stops on the
+  latest. Pictures are read at the size shown (`PhotoThumbnail`) and the
+  player keeps only a few in memory. A check-in is dated by when its picture was
   taken (the camera's own record, `PhotoDate`), not the day it was added,
   so a July photo picked today sits in July beside July's weigh-in. The
   time between two is stated as it is — `zelfde dag`, days, then weeks —
