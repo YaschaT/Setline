@@ -49,7 +49,10 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if app.isSignedIn, app.isNewAccount || showsOnboarding {
+            if app.isLoading {
+                LoadingView()
+                    .transition(.opacity)
+            } else if app.isSignedIn, app.isNewAccount || showsOnboarding {
                 OnboardingFlow(onFinish: {
                     onboarded = true
                     app.finishOnboarding()
@@ -65,6 +68,8 @@ struct RootView: View {
                 )
             }
         }
+        // Whatever loading led to fades in where the loading screen stood.
+        .animation(.easeInOut(duration: 0.25), value: app.isLoading)
         .preferredColorScheme(.dark)
         .tint(SL.Signal.action)
         .task {

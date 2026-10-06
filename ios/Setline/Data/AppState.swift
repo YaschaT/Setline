@@ -33,6 +33,10 @@ final class AppState {
     private(set) var authError: String?
     private(set) var isWorking = false
     var isSignedIn: Bool { session != nil }
+    /// From launch until the device knows who is signed in and has something
+    /// of theirs to show — the copy on this phone, or the first one fetched
+    /// when this phone has none. The loading screen stands in meanwhile.
+    private(set) var isLoading = true
     /// The signed-in account's progress photos: on this device only, and
     /// apart from every other account's. `nil` while nobody is signed in.
     private(set) var photos: CheckInStore?
@@ -108,6 +112,11 @@ final class AppState {
     func restore() async {
         #if DEBUG
         if DemoData.isEnabled {
+            // `-SetlineSlowLoad` holds the loading screen for a few seconds.
+            if ProcessInfo.processInfo.arguments.contains("-SetlineSlowLoad") {
+                try? await Task.sleep(for: .seconds(4))
+            }
+            defer { isLoading = false }
             session = DemoData.session
             // A folder of its own, and never the photos the phone kept before
             // photos had owners: those can only be a real account's.
@@ -129,6 +138,7 @@ final class AppState {
         #endif
         guard await client.isConfigured else {
             sync = .notConfigured
+            isLoading = false
             return
         }
         if let data = Keychain.get(Self.sessionKey)?.data(using: .utf8),
@@ -136,6 +146,7 @@ final class AppState {
             begin(saved)
             await loadState()
         }
+        isLoading = false
     }
 
     // MARK: - Auth
@@ -335,16 +346,27 @@ final class AppState {
     /// The device's copy first, so the screen never waits on the network,
     /// then a sync with the account.
     func loadState() async {
-        guard let session else { return }
+        guard let session else {
+            isLoading = false
+            return
+        }
         pendingChanges = store?.pendingChanges(for: session.email) ?? []
         lastSyncedAt = store?.lastSyncedAt(for: session.email)
         if let local = store?.load(for: session.email) {
+            // The phone's own copy shows at once; the sync catches up behind it.
             apply(local)
+            isLoading = false
+        } else {
+            // Nothing of this account on this phone yet: the loading screen
+            // stays until the account's own state arrives, rather than a
+            // plan that is not theirs.
+            isLoading = true
         }
         await syncNow()
         // A brand-new account starts on the catalogue plan rather than an
         // empty screen.
         if state == nil { apply(LegacyState(raw: [:])) }
+        isLoading = false
     }
 
     /// Brings this device and the account together.

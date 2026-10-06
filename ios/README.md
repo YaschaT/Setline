@@ -31,6 +31,15 @@ a form that cannot work.
 The app signs in against the same Supabase project as the web app and reads
 and writes the same `public.user_state` row, so both stay in step.
 
+Until it knows who is signed in and has something of theirs to show, the app
+shows its loading screen (`LoadingView`, `AppState.isLoading`): the SETLINE
+mark, a turning lime ring, "Je training wordt geladen", and Training's week
+and day sketched as empty shapes under a passing sheen. At launch that lasts
+as long as reading the saved session and the phone's copy; after signing in
+on a phone without a copy, until the account's state arrives — never a plan
+that is not theirs in the meantime. It appears only after 0,3 s, so a quick
+start never flashes it, and with Reduce Motion it stands still.
+
 ## Sync with the web app
 
 Both apps share one `public.user_state` row and follow one loop: read the
@@ -552,6 +561,7 @@ fabricated data; `PRIVATE-DATA/` is never bundled.
 | `-SetlinePreview` | Opens the preview of today's session, on a training day |
 | `-SetlineAccount` | Opens on the Account tab |
 | `-SetlineRestOpen` | Shows the rest timer at its larger size once a rest runs |
+| `-SetlineSlowLoad` | Holds the loading screen for four seconds before the demo opens |
 
 Set them under Product → Scheme → Edit Scheme → Run → Arguments.
 
