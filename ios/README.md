@@ -284,7 +284,7 @@ first):
   Foto's, Account — in the redesign's own style. There is no `Loggen` tab:
   logging starts from Training, and Account stays the screen it was, a tab of
   its own, with the redesign's type and colour only.
-- **Training has no greeting, no avatar and no `Rest van de week`.** Its head is
+- **Training has no greeting and no avatar.** Its head is
   the date the card is on. The card draws no oversized word behind the name.
   Every kind of date — today, a later one, rest, missed, done — fills the
   same shell at 1a's height for today (287 pt outside at ordinary text
@@ -293,6 +293,15 @@ first):
   To fit that height it holds only 1a's slots: no progression line, no
   "verplaatst van" note, no volume on a done day — the preview and the
   results carry those. A rest day takes 1a's own `Naar agenda`.
+- **`Rest van de week` is a plain list on the page**, under the card and under
+  Herstel when that shows (back since 2026-10-06, at the user's request): the
+  days after today in today's week, whichever week the strip shows — the
+  date, the day's name and focus with its set count (a lighter week
+  included), or `Rust`. 1a puts it in a bordered card whose rows open the
+  agenda; here the rows sit on the ground between hairlines, as the user's
+  reference has them, and a tap looks at that day: the page scrolls back to
+  its top, where the date, the strip and the card show it. Nothing starts.
+  On a Sunday there is no list.
 - **Herstel is built from logged sets**, not from sleep, readiness and HRV
   (HealthKit is out of scope). The card keeps the design's shape — the
   proposal, the evidence under a hairline, `Overnemen` and `Negeren` — and is

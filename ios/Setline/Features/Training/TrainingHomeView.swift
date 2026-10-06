@@ -34,6 +34,8 @@ struct TrainingHomeView: View {
     @State private var isDragging = false
     /// The recovery proposal was waved away on this visit; the card says so.
     @State private var ignoredProposal = false
+    /// The date column of `Rest van de week`, growing with the text.
+    @ScaledMetric(relativeTo: .body) private var restDateColumn: CGFloat = 40
 
     private struct OpenedSession: Identifiable { let id: String }
 
@@ -59,6 +61,12 @@ struct TrainingHomeView: View {
     /// picking a date in the agenda brings its week back with it.
     private var week: [AgendaDay] { days(containing: selectedDate ?? Date()) }
 
+    /// The days after today in today's week, whichever week the strip shows,
+    /// as the programme and any change to it have them. Sunday has none.
+    private var restOfWeek: [AgendaDay] {
+        days(containing: Date()).filter { !$0.isPast && !$0.isToday }
+    }
+
     private func days(containing date: Date) -> [AgendaDay] {
         Agenda.week(
             containing: date,
@@ -81,23 +89,28 @@ struct TrainingHomeView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SL.Space.s4) {
-                header
-                if isOffline { offlineCard }
-                weekSection
-                if let day = selectedDay {
-                    daySection(day)
+        ScrollViewReader { scroll in
+            ScrollView {
+                VStack(alignment: .leading, spacing: SL.Space.s4) {
+                    header
+                    if isOffline { offlineCard }
+                    weekSection
+                    if let day = selectedDay { daySection(day) }
+                    if let status = recoveryStatus {
+                        recoverySection(status)
+                            .padding(.top, SL.Space.s1)
+                    }
+                    if !restOfWeek.isEmpty {
+                        restOfWeekSection(scroll)
+                            .padding(.top, SL.Space.s1)
+                    }
+                    if isOffline, !queue.isEmpty { queueSection }
                 }
-                if let status = recoveryStatus {
-                    recoverySection(status)
-                        .padding(.top, SL.Space.s1)
-                }
-                if isOffline, !queue.isEmpty { queueSection }
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.top, SL.Space.s5)
+                .padding(.bottom, SL.Space.s6)
+                .id(Self.pageTop)
             }
-            .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s5)
-            .padding(.bottom, SL.Space.s6)
         }
         .sheet(item: $sheet) { presented in
             switch presented {
@@ -711,6 +724,95 @@ struct TrainingHomeView: View {
                 }
             )
         }
+    }
+
+    // MARK: - Rest van de week
+
+    /// The page as it opens, for a row below to bring back into view.
+    private static let pageTop = "training-page"
+
+    /// 1a's list of what the week still holds, on the page itself: the date,
+    /// what is planned with the sets it holds, or `Rust`.
+    private func restOfWeekSection(_ scroll: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLOverline(text: "Rest van de week")
+                .padding(.leading, SL.Space.s1)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                ForEach(Array(restOfWeek.enumerated()), id: \.element.id) { index, day in
+                    restOfWeekRow(day, scroll: scroll)
+                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                }
+            }
+        }
+    }
+
+    /// A tap looks at that day, as tapping it in the strip does: the screen
+    /// scrolls back to its top, where the date, the strip and the card all
+    /// show it. Nothing starts.
+    private func restOfWeekRow(_ day: AgendaDay, scroll: ScrollViewProxy) -> some View {
+        let planned = day.plannedDay
+        let title = day.title ?? "Rust"
+        let focus = planned.flatMap { $0.focus.isEmpty ? nil : $0.focus }
+        let sets = planned.map { "\(WeekPlan.sets(of: $0)) sets" }
+        return Button {
+            go(to: day)
+            withAnimation(reduceMotion ? nil : Self.slide) {
+                scroll.scrollTo(Self.pageTop, anchor: .top)
+            }
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(day.weekday)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                    Text("\(day.dayNumber)")
+                        .slLead()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                }
+                .frame(width: restDateColumn, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .slLead(SL.Weight.regular)
+                        .foregroundStyle(day.isRest ? SL.Signal.recovery : SL.Ink.primary)
+                    if let focus {
+                        Text(focus.slUnbroken)
+                            .slBody()
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
+                    if typeSize.isAccessibilitySize, let sets {
+                        Text(sets.slUnbroken)
+                            .slBody()
+                            .slNumerals()
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !typeSize.isAccessibilitySize, let sets {
+                    Text(sets.slUnbroken)
+                        .slBody()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize()
+                }
+            }
+            .padding(.vertical, SL.Space.s3)
+            .frame(minHeight: SL.Space.hitMin)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            ["\(WeekPlan.fullWeekday(day.date)) \(day.dayNumber)", title, focus, sets]
+                .compactMap { $0 }
+                .joined(separator: ", ")
+        )
+        .accessibilityHint("Toont deze dag")
     }
 
     // MARK: - Offline
