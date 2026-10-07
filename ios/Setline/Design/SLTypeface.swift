@@ -10,10 +10,11 @@ import UIKit
 /// rather than a separate file: 400, 500, 600 and 700 are the four the design
 /// uses.
 ///
-/// The design names a second face for numbers, "Archivo Expanded". No such
-/// family is published, so the design file itself renders its numbers in
-/// Archivo at normal width — and so does this app. The `wdth` axis is pinned
-/// to 100 to say so explicitly.
+/// The design names a second face for numbers, "Archivo Expanded". The design
+/// file renders its numbers in Archivo at normal width, and so does this app:
+/// the `wdth` axis is pinned to 100 unless a caller asks otherwise. The one
+/// that does is the loading screen's wordmark, drawn at the axis's widest
+/// (125), which is what Archivo Expanded is.
 ///
 /// If the font is ever missing from the bundle the system face is used, so
 /// nothing renders in a fallback serif.
@@ -31,9 +32,9 @@ enum SLTypeface {
     /// time would be wasted work. `NSCache` is safe to share across threads.
     nonisolated(unsafe) private static let cache = NSCache<NSString, UIFont>()
 
-    static func uiFont(size: CGFloat, weight: Font.Weight) -> UIFont {
+    static func uiFont(size: CGFloat, weight: Font.Weight, width: Int = 100) -> UIFont {
         let axisValue = axis(for: weight)
-        let key = "\(size)-\(axisValue)" as NSString
+        let key = "\(size)-\(axisValue)-\(width)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
 
         let font: UIFont
@@ -42,7 +43,7 @@ enum SLTypeface {
                 .name: postScriptName,
                 UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): [
                     weightAxis: axisValue,
-                    widthAxis: 100,
+                    widthAxis: width,
                 ],
             ])
             font = UIFont(descriptor: descriptor, size: size)
@@ -53,8 +54,8 @@ enum SLTypeface {
         return font
     }
 
-    static func font(size: CGFloat, weight: Font.Weight) -> Font {
-        Font(uiFont(size: size, weight: weight) as CTFont)
+    static func font(size: CGFloat, weight: Font.Weight, width: Int = 100) -> Font {
+        Font(uiFont(size: size, weight: weight, width: width) as CTFont)
     }
 
     private static func axis(for weight: Font.Weight) -> Int {
