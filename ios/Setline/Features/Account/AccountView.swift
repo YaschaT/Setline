@@ -39,16 +39,17 @@ struct AccountView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Account").slTitle()
-                    .padding(.horizontal, SL.Space.s5)
-                    .padding(.top, SL.Space.s4)
+                // The same head, at the same place, as every other tab.
+                SLScreenTitle(title: "Account")
+                    .padding(.horizontal, SL.Space.gutterSession)
+                    .padding(.top, SL.Space.s5)
 
                 VStack(alignment: .leading, spacing: 0) {
                     profileBlock
                     syncBlock
-                    section("PLAN")
+                    section("Plan")
                     planRows
-                    section("DATA")
+                    section("Gegevens")
                     exportRow
                     signOutRow
                 }
@@ -385,13 +386,13 @@ struct AccountView: View {
 
     // MARK: - Pieces
 
+    /// The section head every tab uses, so Account reads as part of the app
+    /// rather than a settings page of its own.
     private func section(_ title: String) -> some View {
-        Text(title)
-            .slMeta()
-            .foregroundStyle(SL.Ink.tertiary)
+        SLSectionHead(title: title)
+            .padding(.horizontal, -SL.Space.s1)
             .padding(.top, SL.Space.s8)
             .padding(.bottom, SL.Space.s1)
-            .accessibilityAddTraits(.isHeader)
     }
 
     /// A settings row: the label, its current value on the right, and a

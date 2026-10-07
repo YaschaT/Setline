@@ -251,6 +251,18 @@ final class ProgressOverviewTests: XCTestCase {
         XCTAssertEqual(legs.map { Estimates.round($0.strength[1], toIncrement: 0.1) }, 110)
     }
 
+    func testTheStrengthLineKeepsEachLiftsBestAndEndsAtTheChange() {
+        let sessions = [
+            day("a", "legs", on: 2, [lift("squat", 100, 5)]),
+            day("b", "legs", on: 9, [lift("squat", 110, 5)]),
+            day("c", "legs", on: 16, [lift("squat", 105, 5)]),
+        ]
+        let legs = ProgressOverview.progressByDay(in: sessions, since: date(1)).first
+        let line = legs?.strength.map { Estimates.round($0, toIncrement: 0.1) }
+        XCTAssertEqual(line, [100, 110, 110])
+        XCTAssertEqual(legs?.changePercent, 10)
+    }
+
     func testTheDayChangeIsTheMeanOfItsLifts() {
         let sessions = [
             day("old", "upper", on: 1, month: 7, [lift("bench", 100, 5), lift("row", 100, 5)]),

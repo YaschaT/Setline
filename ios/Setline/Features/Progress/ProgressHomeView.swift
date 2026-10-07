@@ -30,6 +30,7 @@ struct ProgressHomeView: View {
     /// The exercise Kracht opens on, when a best-set row led there.
     @State private var openingExercise: String?
     @State private var weighing = false
+    @State private var explainingDays = false
     /// Whether the weight card shows its chart; remembered across launches.
     @AppStorage("setline.progress.weightChart") private var showsWeightChart = false
 
@@ -80,8 +81,10 @@ struct ProgressHomeView: View {
 
     private var overview: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: SL.Space.s4) {
-                SLScreenTitle(title: "Progressie", subtitle: range) { weighPill }
+            // 24 between sections, 8 from a section's head to its card: the
+            // gap says what belongs together.
+            VStack(alignment: .leading, spacing: SL.Space.s6) {
+                SLScreenTitle(title: "Progressie", subtitle: "Laatste 8 weken")
                 if !days.isEmpty { daySection }
                 bestSection
                 volumeSection
@@ -108,21 +111,6 @@ struct ProgressHomeView: View {
         }
     }
 
-    /// "Juni – september": the months the weigh-ins span.
-    private var range: String {
-        guard let first = bodyProgress.points.first?.date, let last = bodyProgress.points.last?.date else {
-            return "Nog geen wegingen"
-        }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
-        // Weigh-ins are dated in UTC, as `BodyProgress` parses them.
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "MMMM"
-        let (from, to) = (formatter.string(from: first), formatter.string(from: last))
-        let text = from == to ? from : "\(from) – \(to)"
-        return text.prefix(1).uppercased() + text.dropFirst()
-    }
-
     // MARK: - Body weight
 
     /// Body weight, kept small: a status beside the training it follows,
@@ -135,25 +123,10 @@ struct ProgressHomeView: View {
                 .disabled(bodyProgress.entries.isEmpty)
                 .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opent al je wegingen")
 
-            if trend.count > 1 {
-                if showsWeightChart {
-                    WeightTrendChart(points: trend)
-                        .transition(.opacity)
-                }
-                Button {
-                    withAnimation(.easeInOut(duration: SL.Motion.base)) { showsWeightChart.toggle() }
-                } label: {
-                    HStack(spacing: SL.Space.s1) {
-                        Text(showsWeightChart ? "Verberg verloop" : "Toon verloop")
-                        SLGlyph(name: .chevronDown, size: 13)
-                            .rotationEffect(.degrees(showsWeightChart ? 180 : 0))
-                    }
-                    .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
-                    .foregroundStyle(SL.Ink.secondary)
-                    .slHitTarget()
-                }
-                .buttonStyle(.plain)
-            } else {
+            if trend.count > 1, showsWeightChart {
+                WeightTrendChart(points: trend)
+                    .transition(.opacity)
+            } else if trend.count <= 1 {
                 Text(trend.isEmpty
                      ? "Weeg jezelf 's ochtends, nuchter."
                      : "Nog één weging en je verloop staat hier.")
@@ -161,10 +134,33 @@ struct ProgressHomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
             }
+
+            // The card's two actions: the chart, and weighing in. Weighing
+            // lives here, beside the number it changes, so the screen's head
+            // belongs to training.
+            HStack(spacing: SL.Space.s3) {
+                if trend.count > 1 {
+                    Button {
+                        withAnimation(.easeInOut(duration: SL.Motion.base)) { showsWeightChart.toggle() }
+                    } label: {
+                        HStack(spacing: SL.Space.s1) {
+                            Text(showsWeightChart ? "Verberg verloop" : "Toon verloop")
+                            SLGlyph(name: .chevronDown, size: 13)
+                                .rotationEffect(.degrees(showsWeightChart ? 180 : 0))
+                        }
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .slHitTarget()
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+                weighButton
+            }
         }
         .padding(.horizontal, SL.Space.s4)
         .padding(.top, SL.Space.s4)
-        .padding(.bottom, trend.count > 1 ? 0 : SL.Space.s4)
+        .padding(.bottom, SL.Space.s1)
         .slBorderBox()
         .frame(maxWidth: .infinity, alignment: .leading)
         .slListCard()
@@ -213,7 +209,33 @@ struct ProgressHomeView: View {
     /// per session as a small line.
     private var daySection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Per trainingsdag", meta: "laatste 8 weken")
+            HStack(spacing: SL.Space.s1) {
+                Text("Per trainingsdag")
+                    .slLead()
+                    .foregroundStyle(SL.Ink.primary)
+                    .accessibilityAddTraits(.isHeader)
+                Button { explainingDays = true } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 15))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, -12)
+                .accessibilityLabel("Hoe wordt dit gemeten?")
+                Spacer(minLength: SL.Space.s2)
+                // Said once for every row: what the percentages are.
+                Text("geschatte kracht")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .padding(.horizontal, SL.Space.s1)
+            .alert("Kracht per trainingsdag", isPresented: $explainingDays) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Per oefening je beste set van de laatste 8 weken, als geschatte max, tegenover je beste daarvoor, of je eerste sessie als de oefening nieuw is. Het percentage is het gemiddelde over de oefeningen van die dag; de lijn is je beste tot dan toe per sessie.")
+            }
             VStack(spacing: 0) {
                 ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
                     dayRow(day)
@@ -254,19 +276,27 @@ struct ProgressHomeView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // The line is the day's best so far, so it climbs to the
+                // number above it and never contradicts it. Neutral: the
+                // number carries the colour.
                 VStack(alignment: .trailing, spacing: SL.Space.s1) {
-                    Text(changeText ?? "—")
-                        .slLead(SL.Weight.semibold)
-                        .slNumerals()
-                        .foregroundStyle(ink)
-                        .fixedSize()
+                    if let changeText {
+                        Text(changeText)
+                            .slLead(SL.Weight.semibold)
+                            .slNumerals()
+                            .foregroundStyle(ink)
+                    } else {
+                        Text("Te vroeg")
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
                     if day.strength.count > 1 {
                         Sparkline(values: day.strength)
-                            .stroke(ink == SL.Ink.secondary ? SL.Ink.tertiary : ink,
-                                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-                            .frame(width: 52, height: 16)
+                            .stroke(SL.Ink.tertiary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                            .frame(width: 48, height: 14)
                     }
                 }
+                .fixedSize()
             }
             .padding(.horizontal, SL.Space.s4)
             .padding(.vertical, SL.Space.s3)
@@ -283,26 +313,23 @@ struct ProgressHomeView: View {
         .accessibilityHint("Opent de kracht van deze oefeningen")
     }
 
-    /// The screen's one commit, in the place 1e gives its own: a lime pill
-    /// beside the title. A day already weighed offers the correction rather
-    /// than a second weigh-in.
-    private var weighPill: some View {
+    /// Weighing in, from the weight card: lime text rather than a filled
+    /// pill, since training owns the screen. A day already weighed offers the
+    /// correction rather than a second weigh-in.
+    private var weighButton: some View {
         let weighed = app.weighIn() != nil
         return Button { weighing = true } label: {
-            HStack(spacing: SL.Space.s2) {
+            HStack(spacing: SL.Space.s1) {
                 // The plus adds; a correction adds nothing.
-                if !weighed { SLGlyph(name: .plus, size: 14) }
-                Text(weighed ? "Weging wijzigen" : "Weeg jezelf").slBody(SL.Weight.semibold)
+                if !weighed { SLGlyph(name: .plus, size: 13) }
+                Text(weighed ? "Weging wijzigen" : "Weeg jezelf")
             }
-            .foregroundStyle(SL.Signal.onAction)
+            .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+            .foregroundStyle(SL.Signal.action)
             .lineLimit(1)
-            .padding(.horizontal, SL.Space.s4)
-            .frame(minHeight: SL.Space.hitMin)
-            .background(Capsule().fill(SL.Signal.action))
-            .contentShape(Capsule())
+            .slHitTarget()
         }
         .buttonStyle(.plain)
-        .slFocusRing(Capsule())
         .accessibilityHint(weighed
             ? "Opent je weging van vandaag om het gewicht bij te werken"
             : "Opent het veld om je gewicht van vandaag te bewaren")
@@ -331,7 +358,7 @@ struct ProgressHomeView: View {
 
     private var bestSection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Beste sets", meta: "laatste 8 weken")
+            SLSectionHead(title: "Beste sets")
             VStack(spacing: 0) {
                 if best.isEmpty {
                     VStack(alignment: .leading, spacing: SL.Space.s1) {

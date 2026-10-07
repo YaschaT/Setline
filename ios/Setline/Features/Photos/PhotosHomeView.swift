@@ -52,7 +52,8 @@ struct PhotosHomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: SL.Space.s4) {
+            // 24 between sections, 8 from a section's head to its card.
+            VStack(alignment: .leading, spacing: SL.Space.s6) {
                 SLScreenTitle(title: "Foto's", subtitle: count) { addPill }
 
                 if let failure {
@@ -78,6 +79,8 @@ struct PhotosHomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
                     .padding(.horizontal, SL.Space.s1)
+                    // A footnote to the card above it, not a section.
+                    .padding(.top, -SL.Space.s3)
             }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s5)

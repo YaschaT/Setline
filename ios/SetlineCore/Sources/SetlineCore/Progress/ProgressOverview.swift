@@ -222,9 +222,12 @@ public enum ProgressOverview {
         public let changePercent: Decimal?
         /// The lift that gained the most, in kilos of estimated maximum.
         public let leader: Leader?
-        /// Each session's strength against the lifts' baselines, oldest
-        /// first: 100 is where the day started, 107 is seven percent
-        /// stronger. Sessions without a measured lift are left out.
+        /// The day's best so far after each session, against the lifts'
+        /// baselines, oldest first: 100 is where the day started, 107 is
+        /// seven percent stronger. Each lift counts at its best up to that
+        /// session, so the line never dips on a lighter day and ends exactly
+        /// at `changePercent` + 100. Sessions before any measured lift are
+        /// left out.
         public let strength: [Decimal]
         public let lastTrained: Date
 
@@ -351,17 +354,27 @@ public enum ProgressOverview {
                 sessions: days.count,
                 changePercent: mean.map { Estimates.round($0, toIncrement: 0.1) },
                 leader: leader,
-                strength: days.compactMap { session -> Decimal? in
-                    let ratios = session.results.compactMap { result -> Decimal? in
-                        guard let reference = references[result.exerciseID],
-                              let top = scored(result)
-                                .filter({ $0.execution.isComparable(to: reference.execution) })
-                                .map(\.estimate).max()
-                        else { return nil }
-                        return top / reference.estimate * 100
+                strength: {
+                    var bestSoFar: [String: Decimal] = [:]
+                    return days.compactMap { session -> Decimal? in
+                        for result in session.results {
+                            guard let reference = references[result.exerciseID],
+                                  let top = scored(result)
+                                    .filter({ $0.execution.isComparable(to: reference.execution) })
+                                    .map(\.estimate).max()
+                            else { continue }
+                            let ratio = top / reference.estimate * 100
+                            bestSoFar[result.exerciseID] = max(bestSoFar[result.exerciseID] ?? 0, ratio)
+                        }
+                        // A lift measured from before the window starts at its
+                        // baseline even on a session it was not trained.
+                        for id in references.keys where bestSoFar[id] == nil && (before[id]?.isEmpty == false) {
+                            bestSoFar[id] = 100
+                        }
+                        guard !bestSoFar.isEmpty else { return nil }
+                        return bestSoFar.values.reduce(0, +) / Decimal(bestSoFar.count)
                     }
-                    return ratios.isEmpty ? nil : ratios.reduce(0, +) / Decimal(ratios.count)
-                },
+                }(),
                 lastTrained: latest.date
             )
         }

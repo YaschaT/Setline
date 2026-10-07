@@ -65,7 +65,8 @@ struct NutritionHomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: SL.Space.s4) {
+            // 24 between sections, 8 from a section's head to its card.
+            VStack(alignment: .leading, spacing: SL.Space.s6) {
                 SLScreenTitle(title: "Voeding", subtitle: SLDateText.long(now))
                 hero
                 macros
