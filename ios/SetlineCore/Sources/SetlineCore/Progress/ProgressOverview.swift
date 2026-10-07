@@ -222,6 +222,9 @@ public enum ProgressOverview {
         public let changePercent: Decimal?
         /// The lift that gained the most, in kilos of estimated maximum.
         public let leader: Leader?
+        /// Every lift of the day with its best set in the window, in the
+        /// order the day trains them.
+        public let lifts: [Lift]
         /// The day's best so far after each session, against the lifts'
         /// baselines, oldest first: 100 is where the day started, 107 is
         /// seven percent stronger. Each lift counts at its best up to that
@@ -243,17 +246,44 @@ public enum ProgressOverview {
             }
         }
 
+        /// One lift's best set inside the window.
+        public struct Lift: Equatable, Sendable, Identifiable {
+            public let exerciseID: String
+            public let name: String
+            public let weightKg: Decimal
+            public let reps: Int
+            public let date: Date
+            /// Estimated maximum gained since the lift's baseline, to the
+            /// half kilo; `nil` when there is nothing comparable to measure from.
+            public let deltaKg: Decimal?
+            /// No set of this lift before the window and one session in it.
+            public let isNew: Bool
+
+            public var id: String { exerciseID }
+
+            public init(exerciseID: String, name: String, weightKg: Decimal, reps: Int, date: Date, deltaKg: Decimal?, isNew: Bool) {
+                self.exerciseID = exerciseID
+                self.name = name
+                self.weightKg = weightKg
+                self.reps = reps
+                self.date = date
+                self.deltaKg = deltaKg
+                self.isNew = isNew
+            }
+        }
+
         public var id: String { dayID }
 
         public init(
             dayID: String, label: String, sessions: Int, changePercent: Decimal?,
-            leader: Leader?, strength: [Decimal], lastTrained: Date
+            leader: Leader?, lifts: [Lift] = [], strength: [Decimal], lastTrained: Date
         ) {
             self.dayID = dayID
             self.label = label
             self.sessions = sessions
             self.changePercent = changePercent
             self.leader = leader
+            self.lifts = lifts
             self.strength = strength
             self.lastTrained = lastTrained
         }
@@ -273,12 +303,15 @@ public enum ProgressOverview {
         struct Scored {
             let estimate: Decimal
             let execution: SetExecution
+            var weight: Decimal = 0
+            var reps: Int = 0
+            var date: Date = .distantPast
         }
-        func scored(_ result: ExerciseResult) -> [Scored] {
+        func scored(_ result: ExerciseResult, on date: Date = .distantPast) -> [Scored] {
             result.sets.compactMap { set in
                 guard weighs(set), let weight = set.weightKg,
                       let estimate = Estimates.e1RM(weightKg: weight, reps: set.reps) else { return nil }
-                return Scored(estimate: estimate, execution: set.execution)
+                return Scored(estimate: estimate, execution: set.execution, weight: weight, reps: set.reps, date: date)
             }
         }
 
@@ -304,7 +337,7 @@ public enum ProgressOverview {
             var liftOrder: [String] = []
             for session in days {
                 for result in session.results {
-                    let sets = scored(result)
+                    let sets = scored(result, on: session.date)
                     guard !sets.isEmpty else { continue }
                     if lifts[result.exerciseID] == nil { liftOrder.append(result.exerciseID) }
                     lifts[result.exerciseID, default: (result.name, [])].perSession.append(sets)
@@ -316,10 +349,22 @@ public enum ProgressOverview {
             var leader: DayProgress.Leader?
             // Per lift, what it is measured from and how it was performed.
             var references: [String: Scored] = [:]
+            var liftBests: [DayProgress.Lift] = []
             for id in liftOrder {
                 guard let lift = lifts[id] else { continue }
                 let windowSets = lift.perSession.flatMap { $0 }
-                guard let best = windowSets.max(by: { $0.estimate < $1.estimate }) else { continue }
+                // On a tie, the latest: the set shown is the one most recently matched.
+                guard let best = windowSets.reduce(nil as Scored?, { kept, set in
+                    guard let kept else { return set }
+                    return set.estimate >= kept.estimate ? set : kept
+                }) else { continue }
+                let isNew = (before[id] ?? []).isEmpty && lift.perSession.count == 1
+                func keep(_ delta: Decimal?) {
+                    liftBests.append(.init(
+                        exerciseID: id, name: lift.name, weightKg: best.weight, reps: best.reps, date: best.date,
+                        deltaKg: delta, isNew: isNew
+                    ))
+                }
                 let earlier = before[id] ?? []
                 let baseline: Decimal?
                 let current: Decimal
@@ -339,10 +384,14 @@ public enum ProgressOverview {
                     baseline = nil
                     current = best.estimate
                 }
-                guard let baseline, baseline > 0 else { continue }
+                guard let baseline, baseline > 0 else {
+                    keep(nil)
+                    continue
+                }
                 references[id] = Scored(estimate: baseline, execution: best.execution)
                 percents.append((current - baseline) / baseline * 100)
                 let delta = Estimates.round(current - baseline, toIncrement: 0.5)
+                keep(delta)
                 if delta > 0, delta > (leader?.deltaKg ?? 0) {
                     leader = .init(exerciseID: id, name: lift.name, deltaKg: delta)
                 }
@@ -354,6 +403,7 @@ public enum ProgressOverview {
                 sessions: days.count,
                 changePercent: mean.map { Estimates.round($0, toIncrement: 0.1) },
                 leader: leader,
+                lifts: liftBests,
                 strength: {
                     var bestSoFar: [String: Decimal] = [:]
                     return days.compactMap { session -> Decimal? in

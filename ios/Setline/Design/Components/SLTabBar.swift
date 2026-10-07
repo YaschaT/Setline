@@ -33,9 +33,10 @@ enum SLTab: String, CaseIterable, Identifiable {
 }
 
 /// The tab bar: inset 21 from the sides, 56 high, radius 22, on surface-1
-/// inside the hairline. The active tab is lime — icon and a 600 label — on a
-/// lime-tint pill that slides to the tab chosen, so where you are reads at a
-/// glance and not only by colour.
+/// inside the hairline. The active tab sits on a raised neutral pill that
+/// slides to the tab chosen — a lime icon, its label in ink at 600 — so where
+/// you are reads at a glance and not only by colour, and lime stays for
+/// actions and gains.
 ///
 /// A custom bar rather than the stock one: the inset floating shape is not
 /// achievable with `TabView`'s own bar.
@@ -62,18 +63,21 @@ struct SLTabBar: View {
                             .renderingMode(.template)
                             .resizable()
                             .frame(width: 22, height: 22)
+                            .foregroundStyle(isActive ? SL.Signal.action : SL.Ink.secondary)
                             .accessibilityHidden(true)
                         Text(tab.label)
                             .font(.slFixed(SL.TypeSize.tab, isActive ? SL.Weight.semibold : SL.Weight.regular))
                             .lineLimit(1)
                     }
-                    .foregroundStyle(isActive ? SL.Signal.action : SL.Ink.secondary)
+                    .foregroundStyle(isActive ? SL.Ink.primary : SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(height: SL.Metric.tabItemHeight)
                     .background {
                         if isActive {
                             RoundedRectangle(cornerRadius: SL.Radius.xl - Self.pillInset - 1, style: .continuous)
-                                .fill(SL.Signal.actionTint)
+                                // The line colour as a fill: one step above the bar, visible
+                                // without a border of its own.
+                                .fill(SL.Surface.hairline)
                                 .padding(Self.pillInset)
                                 .matchedGeometryEffect(id: "pill", in: pill)
                         }

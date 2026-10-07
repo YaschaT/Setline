@@ -34,6 +34,9 @@ struct TrainingHomeView: View {
     /// The card under the finger, and on its way in after a day change.
     @State private var dragX: CGFloat = 0
     @State private var isDragging = false
+    /// Set by the first swipe that changes the day: from then on the hint
+    /// under the card has said what it had to say.
+    @AppStorage("setline.training.knowsSwipe") private var knowsSwipe = false
     /// The recovery proposal was waved away on this visit; the card says so.
     @State private var ignoredProposal = false
     /// The date column of `Rest van de week`, growing with the text.
@@ -312,7 +315,17 @@ struct TrainingHomeView: View {
                 // Sideways only: a pull up or down is the page's, so the
                 // screen scrolls wherever the finger lands.
                 .gesture(swipe)
-            dayNav
+                // The swipe's equivalent for VoiceOver; the week strip above
+                // is the way for everyone else.
+                .accessibilityActions {
+                    if let previous = neighbour(-1) {
+                        Button("Vorige dag, \(StripDay.spokenLabel(previous))") { go(to: previous, direction: -1) }
+                    }
+                    if let next = neighbour(1) {
+                        Button("Volgende dag, \(StripDay.spokenLabel(next))") { go(to: next, direction: 1) }
+                    }
+                }
+            if !knowsSwipe { swipeHint }
         }
     }
 
@@ -619,43 +632,15 @@ struct TrainingHomeView: View {
         return week.indices.contains(target) ? week[target] : nil
     }
 
-    private var dayNav: some View {
-        HStack(spacing: SL.Space.s2) {
-            navButton(neighbour(-1), direction: -1)
-            Text("veeg om van dag te wisselen")
-                .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                .foregroundStyle(SL.Ink.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .accessibilityHidden(true)
-            navButton(neighbour(1), direction: 1)
-        }
-    }
-
-    /// The day before or after, by name. Where the week ends there is no
-    /// button, and the space stays so the hint keeps its place.
-    private func navButton(_ day: AgendaDay?, direction: Int) -> some View {
-        Button {
-            if let day { go(to: day, direction: direction) }
-        } label: {
-            HStack(spacing: SL.Space.s1) {
-                if direction < 0 { SLGlyph(name: .chevronLeft, size: 14) }
-                Text(day.map { "\($0.weekday) \($0.dayNumber)" } ?? "")
-                    .slMeta()
-                    .slNumerals()
-                if direction > 0 { SLGlyph(name: .chevronRight, size: 14) }
-            }
+    /// Until the first swipe: one quiet line saying the card moves. The week
+    /// strip above already names every day, so there are no arrows here.
+    private var swipeHint: some View {
+        Text("Veeg over de kaart om van dag te wisselen")
+            .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
             .foregroundStyle(SL.Ink.secondary)
-            .padding(.horizontal, SL.Space.s2)
-            .frame(minWidth: 72, minHeight: SL.Space.hitMin, alignment: direction < 0 ? .leading : .trailing)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
-        .opacity(day == nil ? 0 : 1)
-        .disabled(day == nil)
-        .accessibilityHidden(day == nil)
-        .accessibilityLabel(day.map { "\(direction < 0 ? "Vorige" : "Volgende") dag, \(StripDay.spokenLabel($0))" } ?? "")
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, minHeight: 28)
+            .accessibilityHidden(true)
     }
 
     /// Added to the page's 16 between blocks: 36 from the day row to the
@@ -705,8 +690,10 @@ struct TrainingHomeView: View {
                 guard isDragging else { return }
                 isDragging = false
                 if dx < -64, let next = neighbour(1) {
+                    knowsSwipe = true
                     go(to: next, direction: 1)
                 } else if dx > 64, let previous = neighbour(-1) {
+                    knowsSwipe = true
                     go(to: previous, direction: -1)
                 } else {
                     withAnimation(reduceMotion ? nil : Self.slide) { dragX = 0 }

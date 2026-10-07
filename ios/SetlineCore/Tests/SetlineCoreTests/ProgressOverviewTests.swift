@@ -263,6 +263,31 @@ final class ProgressOverviewTests: XCTestCase {
         XCTAssertEqual(legs?.changePercent, 10)
     }
 
+    func testADayListsEachLiftsBestSetAndWhatItGained() {
+        let sessions = [
+            day("old", "push", on: 1, month: 7, [lift("bench", 100, 5)]),
+            day("a", "push", on: 2, [lift("bench", 105, 5), lift("fly", 20, 10)]),
+            day("b", "push", on: 9, [lift("bench", 102.5, 5)]),
+        ]
+        let lifts = ProgressOverview.progressByDay(in: sessions, since: date(1)).first?.lifts ?? []
+        XCTAssertEqual(lifts.map(\.exerciseID), ["bench", "fly"])
+        XCTAssertEqual(lifts[0].weightKg, 105)
+        XCTAssertEqual(lifts[0].date, date(2))
+        XCTAssertNotNil(lifts[0].deltaKg)
+        XCTAssertFalse(lifts[0].isNew)
+        XCTAssertNil(lifts[1].deltaKg)
+        XCTAssertTrue(lifts[1].isNew)
+    }
+
+    func testATiedBestSetIsDatedByItsLatestSession() {
+        let sessions = [
+            day("a", "push", on: 2, [lift("bench", 100, 8)]),
+            day("b", "push", on: 9, [lift("bench", 100, 8)]),
+        ]
+        let bench = ProgressOverview.progressByDay(in: sessions, since: date(1)).first?.lifts.first
+        XCTAssertEqual(bench?.date, date(9))
+    }
+
     func testTheDayChangeIsTheMeanOfItsLifts() {
         let sessions = [
             day("old", "upper", on: 1, month: 7, [lift("bench", 100, 5), lift("row", 100, 5)]),

@@ -4,8 +4,8 @@ import SetlineCore
 /// Redesign 1d · Progressie.
 ///
 /// The tab opens on an overview, training first: how each kind of training
-/// day (Push, Pull, Legs, Upper, Lower) moved over the last eight weeks, the
-/// best set per exercise, the tonnage of the last seven weeks, and last, body
+/// day (Push, Pull, Legs, Upper, Lower) moved over the last eight weeks — each
+/// opening onto its lifts' best sets — the tonnage of the last seven weeks, and last, body
 /// weight as one compact card whose chart opens on request. All of it is read
 /// from what the account logged.
 ///
@@ -24,6 +24,7 @@ struct ProgressHomeView: View {
 
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The subject that is open. `nil` is the overview.
     @State private var segment: Segment?
@@ -36,7 +37,8 @@ struct ProgressHomeView: View {
 
     @State private var bodyProgress = BodyProgress.empty
     @State private var trend: [ProgressOverview.WeightPoint] = []
-    @State private var best: [ProgressOverview.RecentBest] = []
+    /// The training days opened to show their lifts.
+    @State private var openDays: Set<String> = []
     @State private var volume: [ProgressOverview.WeekVolume] = []
     @State private var days: [ProgressOverview.DayProgress] = []
 
@@ -72,7 +74,6 @@ struct ProgressHomeView: View {
         bodyProgress = BodyProgress.make(metrics: app.metrics)
         trend = ProgressOverview.weightTrend(bodyProgress)
         let since = Calendar.current.date(byAdding: .day, value: -Self.bestWindowDays, to: Date()) ?? Date()
-        best = ProgressOverview.bestSets(in: app.sessions, since: since, limit: 3)
         days = ProgressOverview.progressByDay(in: app.sessions, since: since)
         volume = ProgressOverview.weeklyVolume(in: app.sessions)
     }
@@ -85,8 +86,7 @@ struct ProgressHomeView: View {
             // gap says what belongs together.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
                 SLScreenTitle(title: "Progressie", subtitle: "Laatste 8 weken")
-                if !days.isEmpty { daySection }
-                bestSection
+                daySection
                 volumeSection
                 weightSection
                 Button { open(.historiek) } label: { chevroned("Alle sessies") }
@@ -237,14 +237,93 @@ struct ProgressHomeView: View {
                 Text("Per oefening je beste set van de laatste 8 weken, als geschatte max, tegenover je beste daarvoor, of je eerste sessie als de oefening nieuw is. Het percentage is het gemiddelde over de oefeningen van die dag; de lijn is je beste tot dan toe per sessie.")
             }
             VStack(spacing: 0) {
-                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
-                    dayRow(day)
+                if days.isEmpty {
+                    VStack(alignment: .leading, spacing: SL.Space.s1) {
+                        Text("Nog geen sets met gewicht")
+                            .slLead()
+                            .foregroundStyle(SL.Ink.primary)
+                        Text("Sla een training op; je vooruitgang per dag verschijnt hier.")
+                            .slBody()
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
+                    .padding(SL.Space.s4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                        VStack(spacing: 0) {
+                            dayRow(day)
+                            if openDays.contains(day.dayID) {
+                                ForEach(day.lifts) { lift in
+                                    liftRow(lift)
+                                        .overlay(alignment: .top) { SLHairline().padding(.leading, 68) }
+                                }
+                                .transition(.opacity)
+                            }
+                        }
                         .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                    }
                 }
             }
             .slBorderBox()
             .slListCard()
+
+            Button { open(.kracht) } label: { chevroned("Kracht per oefening") }
+                .buttonStyle(SLOutlineButtonStyle())
+                .padding(.top, SL.Space.s1)
         }
+    }
+
+    /// One lift of an opened day: its best set in the window and what it
+    /// gained, or that it is new. Opens Kracht on that lift.
+    private func liftRow(_ lift: ProgressOverview.DayProgress.Lift) -> some View {
+        let gain: String? = lift.deltaKg.map { $0 == 0 ? "0 kg" : "\(app.display.signedDelta($0)) kg" }
+        let ink: Color = {
+            guard let delta = lift.deltaKg else { return SL.Ink.secondary }
+            return delta > 0 ? SL.Signal.action : delta < 0 ? SL.Signal.loss : SL.Ink.secondary
+        }()
+        return Button { open(.kracht, exercise: lift.exerciseID) } label: {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lift.name)
+                        .slBody()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("\(app.display.kg(lift.weightKg)) × \(lift.reps) · \(app.display.shortDate(lift.date))")
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let gain {
+                    Text(gain)
+                        .slBody(SL.Weight.semibold)
+                        .slNumerals()
+                        .foregroundStyle(ink)
+                        .fixedSize()
+                } else if lift.isNew {
+                    Text("Nieuw")
+                        .slMeta(SL.Weight.medium)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .padding(.horizontal, SL.Space.s2)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(SL.Surface.raised2))
+                        .fixedSize()
+                }
+                SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.leading, 68)
+            .padding(.trailing, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(lift.name), beste set \(app.display.kg(lift.weightKg)) × \(lift.reps) op \(app.display.shortDate(lift.date))"
+                + (gain.map { ", \($0) geschat" } ?? (lift.isNew ? ", nieuw" : ""))
+        )
+        .accessibilityHint("Opent de kracht van deze oefening")
     }
 
     private func dayRow(_ day: ProgressOverview.DayProgress) -> some View {
@@ -258,12 +337,17 @@ struct ProgressHomeView: View {
         let detail = [sessions, day.leader.map { "\($0.name) +\(app.display.number($0.deltaKg)) kg" }]
             .compactMap { $0 }
             .joined(separator: " · ")
-        return Button { open(.kracht, exercise: day.leader?.exerciseID) } label: {
+        let isOpen = openDays.contains(day.dayID)
+        return Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: SL.Motion.base)) {
+                if isOpen { openDays.remove(day.dayID) } else { openDays.insert(day.dayID) }
+            }
+        } label: {
             HStack(alignment: .center, spacing: SL.Space.s3) {
                 SLGlyph(name: .category(for: day.label), size: 20)
-                    .foregroundStyle(SL.Signal.action)
+                    .foregroundStyle(SL.Ink.primary)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(SL.Signal.actionTint))
+                    .background(Circle().fill(SL.Surface.raised2))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(day.label)
                         .slLead()
@@ -297,6 +381,9 @@ struct ProgressHomeView: View {
                     }
                 }
                 .fixedSize()
+                SLGlyph(name: .chevronDown, size: 13)
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .rotationEffect(.degrees(isOpen ? 180 : 0))
             }
             .padding(.horizontal, SL.Space.s4)
             .padding(.vertical, SL.Space.s3)
@@ -310,7 +397,8 @@ struct ProgressHomeView: View {
                 + (changeText.map { ", kracht \($0) geschat" } ?? ", nog te weinig om te vergelijken")
                 + (day.leader.map { ", meeste vooruitgang \($0.name) plus \(app.display.number($0.deltaKg)) kilo" } ?? "")
         )
-        .accessibilityHint("Opent de kracht van deze oefeningen")
+        .accessibilityHint(isOpen ? "Verbergt de oefeningen" : "Toont de oefeningen van deze dag")
+        .accessibilityAddTraits(isOpen ? .isSelected : [])
     }
 
     /// Weighing in, from the weight card: lime text rather than a filled
@@ -352,105 +440,6 @@ struct ProgressHomeView: View {
     /// "−0,4 kg", "+0,3 kg", "0 kg".
     private func signed(_ value: Decimal) -> String {
         value == 0 ? "0 kg" : "\(app.display.signedDelta(value)) kg"
-    }
-
-    // MARK: - Best sets
-
-    private var bestSection: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Beste sets")
-            VStack(spacing: 0) {
-                if best.isEmpty {
-                    VStack(alignment: .leading, spacing: SL.Space.s1) {
-                        Text("Nog geen sets met gewicht")
-                            .slLead()
-                            .foregroundStyle(SL.Ink.primary)
-                        Text("Sla een training op; je beste set per oefening verschijnt hier.")
-                            .slBody()
-                            .slLineHeight(1.45, size: SL.TypeSize.body)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(SL.Ink.secondary)
-                    }
-                    .padding(SL.Space.s4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    ForEach(Array(best.enumerated()), id: \.element.id) { index, row in
-                        bestRow(row)
-                            .overlay(alignment: .top) { if index > 0 { SLHairline() } }
-                    }
-                }
-            }
-            .slBorderBox()
-            .slListCard()
-
-            Button { open(.kracht) } label: { chevroned("Kracht per oefening") }
-                .buttonStyle(SLOutlineButtonStyle())
-                .padding(.top, SL.Space.s1)
-        }
-    }
-
-    private func bestRow(_ row: ProgressOverview.RecentBest) -> some View {
-        let delta = row.delta
-        // The change, where an earlier set was performed the same way; "nieuw"
-        // only where nothing came before. A lift trained before in another
-        // way is neither, and the row then says nothing beside the set.
-        let claim: (value: String, caption: String)? = delta.map { (signed($0), "geschat t.o.v. vorige beste") }
-            ?? (row.hasEarlierBest ? nil : ("nieuw", "geen eerdere beste"))
-        let ink: Color = {
-            guard let delta else { return SL.Ink.secondary }
-            return delta > 0 ? SL.Signal.action : delta < 0 ? SL.Signal.loss : SL.Ink.secondary
-        }()
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
-        return Button { open(.kracht, exercise: row.exerciseID) } label: {
-            layout {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(row.name)
-                        .slLead()
-                        .slLineHeight(1.3, size: SL.TypeSize.lead)
-                        .foregroundStyle(SL.Ink.primary)
-                    Text("\(app.display.kg(row.weightKg)) × \(row.reps) · \(app.display.shortDate(row.date))")
-                        .slBody()
-                        .slNumerals()
-                        .foregroundStyle(SL.Ink.secondary)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                // On screen only the claim itself: the change, or a "Nieuw"
-                // tag. What it is measured against is said once, to VoiceOver,
-                // rather than under every row.
-                if delta != nil, let claim {
-                    Text(claim.value)
-                        .slLead()
-                        .slNumerals()
-                        .foregroundStyle(ink)
-                        .lineLimit(1)
-                        .fixedSize()
-                } else if claim != nil {
-                    Text("Nieuw")
-                        .slMeta(SL.Weight.semibold)
-                        .foregroundStyle(SL.Signal.action)
-                        .padding(.horizontal, SL.Space.s2)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(SL.Signal.actionTint))
-                        .fixedSize()
-                }
-            }
-            .padding(.horizontal, SL.Space.s4)
-            .padding(.vertical, SL.Space.s3)
-            .frame(minHeight: 72)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(SLRowButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "\(row.name), beste set \(app.display.kg(row.weightKg)) × \(row.reps) op \(app.display.shortDate(row.date))"
-                + (claim.map { ", \($0.value), \($0.caption)" } ?? "")
-        )
-        .accessibilityHint("Opent de kracht van deze oefening")
     }
 
     // MARK: - Volume
