@@ -57,6 +57,10 @@ public enum StateMerge {
         case .removeSessionSets(let sessionID, let removals):
             removeSessionSets(sessionID: sessionID, removals: removals, into: &raw)
 
+        case .removeSession(let sessionID):
+            // The same tombstone the web app writes when it deletes one.
+            removeItem(sessionID, in: &raw, collection: "sessions", at: change.createdAt)
+
         case .setActiveSession(let snapshot):
             raw[LegacyAdapter.activeSessionKey] = snapshot
 

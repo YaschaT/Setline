@@ -130,6 +130,56 @@ public enum Agenda {
             }
     }
 
+    /// Planned days that passed with nothing saved, newest first: what the
+    /// alert center asks about.
+    ///
+    /// Only the last `days` days count, and never a date before the account's
+    /// first saved workout — a plan picked today has not been "missed" all
+    /// the weeks before it. `dismissed` holds the date keys already answered
+    /// with "niet getraind". Today is never missed: it is not over.
+    public static func missed(
+        lookingBack days: Int = 14,
+        plan: [WorkoutDay],
+        overrides: [String: String],
+        sessions: [TrainingSession],
+        deload: Deload? = nil,
+        dismissed: Set<String> = [],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [AgendaDay] {
+        let today = calendar.startOfDay(for: now)
+        guard let first = sessions.filter({ $0.kind == .workout }).map(\.date).min(),
+              let window = calendar.date(byAdding: .day, value: -days, to: today)
+        else { return [] }
+        let from = max(window, calendar.startOfDay(for: first))
+        guard from < today else { return [] }
+
+        var seen: Set<String> = []
+        var found: [AgendaDay] = []
+        var cursor = from
+        while cursor < today {
+            for day in week(containing: cursor, plan: plan, overrides: overrides, sessions: sessions,
+                            deload: deload, now: now, calendar: calendar)
+            where !seen.contains(day.key) {
+                seen.insert(day.key)
+                guard day.date >= from, day.date < today, !dismissed.contains(day.key),
+                      case .missed = day.content else { continue }
+                found.append(day)
+            }
+            guard let next = calendar.date(byAdding: .day, value: 7, to: cursor) else { break }
+            cursor = next
+        }
+        // The last week may start after `cursor` stepped past `today`'s week.
+        for day in week(containing: today, plan: plan, overrides: overrides, sessions: sessions,
+                        deload: deload, now: now, calendar: calendar)
+        where !seen.contains(day.key) {
+            guard day.date >= from, day.date < today, !dismissed.contains(day.key),
+                  case .missed = day.content else { continue }
+            found.append(day)
+        }
+        return found.sorted { $0.date > $1.date }
+    }
+
     /// One date, read the same way the week reads it.
     public static func day(
         on date: Date,

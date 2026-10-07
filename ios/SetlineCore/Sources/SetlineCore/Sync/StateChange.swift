@@ -21,6 +21,10 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         /// a session whose last set is removed goes with it, because an
         /// empty workout is not a workout.
         case removeSessionSets(sessionID: String, removals: [SetRemoval])
+        /// A whole logged workout taken out of the account. It leaves a
+        /// tombstone, so a client still holding an older copy cannot put it
+        /// back; logging it again afterwards is a new decision and wins.
+        case removeSession(id: String)
         /// The paused workout, or `.null` to clear it explicitly.
         case setActiveSession(JSONValue)
         case addPainFlag(PainFlag)
@@ -94,7 +98,7 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
     }
 
     private enum KindName: String, Codable {
-        case upsertSession, correctSessionSets, removeSessionSets, setActiveSession, addPainFlag, removePainFlag
+        case upsertSession, correctSessionSets, removeSessionSets, removeSession, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
         case setFavoriteExercise
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry
@@ -119,6 +123,8 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
                 sessionID: try container.decode(String.self, forKey: .sessionID),
                 removals: try container.decode([SetRemoval].self, forKey: .removals)
             )
+        case .removeSession:
+            kind = .removeSession(id: try container.decode(String.self, forKey: .targetID))
         case .setActiveSession:
             kind = .setActiveSession(try container.decodeIfPresent(JSONValue.self, forKey: .snapshot) ?? .null)
         case .addPainFlag:
@@ -224,6 +230,9 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case .upsertNutritionEntry(let entry):
             try container.encode(KindName.upsertNutritionEntry, forKey: .kind)
             try container.encode(entry, forKey: .entry)
+        case .removeSession(let sessionID):
+            try container.encode(KindName.removeSession, forKey: .kind)
+            try container.encode(sessionID, forKey: .targetID)
         case .removeNutritionEntry(let entryID):
             try container.encode(KindName.removeNutritionEntry, forKey: .kind)
             try container.encode(entryID, forKey: .targetID)

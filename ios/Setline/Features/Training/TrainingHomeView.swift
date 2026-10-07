@@ -48,12 +48,14 @@ struct TrainingHomeView: View {
     /// agenda's place rather than stacking on it.
     private enum Presented: Identifiable {
         case agenda
+        case alerts
         case preview(AgendaDay)
         case plan(Date)
 
         var id: String {
             switch self {
             case .agenda: return "agenda"
+            case .alerts: return "alerts"
             case .preview(let day): return "preview-\(day.key)"
             case .plan(let date): return "plan-\(Schedule.dateKey(date))"
             }
@@ -130,6 +132,11 @@ struct TrainingHomeView: View {
                         select(day)
                         sheet = .preview(day)
                     },
+                    onClose: { sheet = nil }
+                )
+            case .alerts:
+                AlertCenterSheet(
+                    onLogPast: { workout, date in after(closing: { onLogPast(workout, date) }) },
                     onClose: { sheet = nil }
                 )
             case .preview(let day):
@@ -249,9 +256,41 @@ struct TrainingHomeView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            alertsBell
         }
         .padding(.top, SL.Space.s1)
         .padding(.bottom, SL.Space.s2)
+    }
+
+    /// The way to Meldingen: a bell, with the number of workouts that passed
+    /// unlogged on it. Amber, the app's colour for "this needs you", and only
+    /// while there is something to answer.
+    private var alertsBell: some View {
+        let count = app.missedDays.count
+        return Button { sheet = .alerts } label: {
+            Image(systemName: "bell")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(SL.Ink.primary)
+                .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                .background(Circle().fill(SL.Surface.raised))
+                .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
+                .overlay(alignment: .topTrailing) {
+                    if count > 0 {
+                        Text("\(min(count, 9))")
+                            .font(.slFixed(11, SL.Weight.bold))
+                            .foregroundStyle(SL.Signal.onAction)
+                            .frame(minWidth: 18, minHeight: 18)
+                            .background(Circle().fill(SL.Signal.attention))
+                            .offset(x: 2, y: -2)
+                    }
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .slFocusRing(Circle())
+        .accessibilityLabel(count == 0 ? "Meldingen" : "Meldingen, \(count) niet gelogd")
+        .accessibilityHint("Toont trainingen die je nog niet logde")
     }
 
     /// "Hoi Yascha", or just "Hoi" until a name is given in Account.

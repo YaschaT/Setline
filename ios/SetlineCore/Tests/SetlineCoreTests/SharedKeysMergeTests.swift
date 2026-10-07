@@ -108,6 +108,24 @@ final class SharedKeysMergeTests: XCTestCase {
         XCTAssertEqual(after[StateMerge.tombstonesKey]?["nutritionEntries"]?["m1"], .string(LegacyAdapter.isoString(now)))
     }
 
+    // MARK: Whole sessions
+
+    func testDeletingASessionLeavesATombstoneAnOlderCopyCannotUndo() throws {
+        let stored = JSONValue.object(["id": .string("s1"), "date": .string("2026-09-14T17:00:00.000Z"), "dayId": .string("push")])
+        let kept = JSONValue.object(["id": .string("s2"), "date": .string("2026-09-15T17:00:00.000Z"), "dayId": .string("pull")])
+        let after = StateMerge.apply(
+            [StateChange(.removeSession(id: "s1"), createdAt: now)],
+            to: state(["sessions": .array([stored, kept])]), now: now
+        )
+        XCTAssertEqual(after["sessions"]?.arrayValue?.compactMap { $0["id"]?.stringValue }, ["s2"])
+        XCTAssertEqual(after[StateMerge.tombstonesKey]?["sessions"]?["s1"], .string(LegacyAdapter.isoString(now)))
+
+        let stale = StateChange(.upsertSession(stored), createdAt: now.addingTimeInterval(-60))
+        XCTAssertEqual(StateMerge.apply([stale], to: after, now: now)["sessions"]?.arrayValue?.count, 1, "an older copy stays deleted")
+        let again = StateChange(.upsertSession(stored), createdAt: now.addingTimeInterval(60))
+        XCTAssertEqual(StateMerge.apply([again], to: after, now: now)["sessions"]?.arrayValue?.count, 2, "logged again afterwards wins")
+    }
+
     // MARK: Targets
 
     func testOneTargetFieldMovesAndTheOthersStay() throws {
@@ -277,6 +295,7 @@ final class SharedKeysMergeTests: XCTestCase {
             StateChange(.removeScheduleOverride(key: "personal:2026-09-19"), createdAt: now),
             StateChange(.upsertNutritionEntry(.object(["id": .string("m1")])), createdAt: now),
             StateChange(.removeNutritionEntry(id: "m1"), createdAt: now),
+            StateChange(.removeSession(id: "s1"), createdAt: now),
             StateChange(.setTarget(field: "calories", value: 2300), createdAt: now),
             StateChange(.setProgram(mode: "science", sciencePlanID: "upper-lower"), createdAt: now),
             StateChange(.setProgram(mode: "personal", sciencePlanID: nil), createdAt: now),

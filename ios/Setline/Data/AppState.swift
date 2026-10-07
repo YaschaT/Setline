@@ -608,6 +608,45 @@ final class AppState {
         await commit([StateChange(.removeSessionSets(sessionID: sessionID, removals: removals))])
     }
 
+    /// Takes one logged workout out of the account, everywhere: the web app
+    /// reads the same tombstone and an older copy cannot bring it back.
+    func removeSession(id: String) async {
+        await commit([StateChange(.removeSession(id: id))])
+    }
+
+    // MARK: - Missed days
+
+    /// Date keys answered with "niet getraind" in the alert center. Kept on
+    /// this phone: it only quiets a question, it changes nothing in the account.
+    private static let answeredMissedKey = "setline.alerts.answeredMissed"
+
+    var answeredMissed: Set<String> {
+        get {
+            // Read so a view that asks is drawn again when an answer is given.
+            _ = revision
+            return Set(UserDefaults.standard.stringArray(forKey: Self.answeredMissedKey) ?? [])
+        }
+    }
+
+    func answerMissed(_ key: String) {
+        var keys = answeredMissed
+        keys.insert(key)
+        UserDefaults.standard.set(Array(keys), forKey: Self.answeredMissedKey)
+        revision += 1
+    }
+
+    /// Planned days of the last two weeks that passed with nothing logged and
+    /// were not answered yet, newest first.
+    var missedDays: [AgendaDay] {
+        Agenda.missed(
+            plan: plan,
+            overrides: scheduleOverrides,
+            sessions: sessions,
+            deload: activeDeload,
+            dismissed: answeredMissed
+        )
+    }
+
     /// Records changes the user made outside a workout — a rearranged week,
     /// a meal, a target. Entry-wise, never a key at a time.
     func record(_ changes: [StateChange]) async {

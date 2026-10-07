@@ -258,4 +258,41 @@ final class AgendaTests: XCTestCase {
         let next = week(on: date(14), now: monday)
         XCTAssertEqual(Agenda.summary(of: next, now: monday, calendar: calendar), "geen sessies gelogd")
     }
+
+    // MARK: - Missed days, for the alert center
+
+    private func missed(sessions: [TrainingSession], dismissed: Set<String> = [], now: Date) -> [AgendaDay] {
+        Agenda.missed(plan: plan, overrides: [:], sessions: sessions, dismissed: dismissed, now: now, calendar: calendar)
+    }
+
+    func testMissedDaysArePlannedPastDatesWithoutASessionNewestFirst() {
+        let now = date(17, hour: 12)
+        let days = missed(sessions: [session(on: 7)], now: now)
+        XCTAssertFalse(days.isEmpty)
+        XCTAssertTrue(days.allSatisfy { if case .missed = $0.content { true } else { false } })
+        XCTAssertTrue(days.allSatisfy { $0.date >= date(7, hour: 0) && $0.date < date(17, hour: 0) })
+        XCTAssertFalse(days.contains { $0.dayNumber == 7 }, "logged")
+        XCTAssertFalse(days.contains { $0.dayNumber == 17 }, "today is not over")
+        XCTAssertEqual(days.map(\.date), days.map(\.date).sorted(by: >))
+        // The same days the weeks themselves call missed.
+        let expected = (week(on: date(7), sessions: [session(on: 7)], now: now) + week(on: date(14), sessions: [session(on: 7)], now: now))
+            .filter { if case .missed = $0.content { $0.date < date(17, hour: 0) } else { false } }
+            .map(\.key)
+        XCTAssertEqual(Set(days.map(\.key)), Set(expected))
+    }
+
+    func testNothingIsMissedBeforeTheFirstWorkoutOrWithoutOne() {
+        XCTAssertTrue(missed(sessions: [], now: date(17, hour: 12)).isEmpty)
+        let days = missed(sessions: [session(on: 14)], now: date(17, hour: 12))
+        XCTAssertTrue(days.allSatisfy { $0.date >= date(14, hour: 0) })
+    }
+
+    func testADismissedDayIsNoLongerAsked() throws {
+        let now = date(17, hour: 12)
+        let all = missed(sessions: [session(on: 7)], now: now)
+        let first = try XCTUnwrap(all.first)
+        let rest = missed(sessions: [session(on: 7)], dismissed: [first.key], now: now)
+        XCTAssertEqual(rest.count, all.count - 1)
+        XCTAssertFalse(rest.contains { $0.key == first.key })
+    }
 }

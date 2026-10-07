@@ -17,7 +17,7 @@ struct ProgressHomeView: View {
     enum Segment: String, CaseIterable, Identifiable {
         case kracht = "Kracht"
         case lichaam = "Lichaam"
-        case historiek = "Historiek"
+        case historiek = "Logboek"
 
         var id: String { rawValue }
     }
@@ -85,18 +85,36 @@ struct ProgressHomeView: View {
             // 24 between sections, 8 from a section's head to its card: the
             // gap says what belongs together.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                SLScreenTitle(title: "Progressie", subtitle: "Laatste 8 weken")
+                SLScreenTitle(title: "Progressie", subtitle: "Laatste 8 weken") { logbookPill }
                 daySection
                 volumeSection
                 weightSection
-                Button { open(.historiek) } label: { chevroned("Alle sessies") }
-                    .buttonStyle(SLOutlineButtonStyle())
-                    .accessibilityHint("Opent je sessiehistoriek")
             }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s5)
             .padding(.bottom, SL.Space.s6)
         }
+    }
+
+    /// Every logged workout, one tap from the top of the tab: neutral, since
+    /// it reads rather than commits.
+    private var logbookPill: some View {
+        Button { open(.historiek) } label: {
+            HStack(spacing: SL.Space.s2) {
+                Image(systemName: "list.bullet").font(.system(size: 13, weight: .semibold))
+                Text("Logboek").slBody(SL.Weight.semibold)
+            }
+            .foregroundStyle(SL.Ink.primary)
+            .lineLimit(1)
+            .padding(.horizontal, SL.Space.s4)
+            .frame(minHeight: SL.Space.hitMin)
+            .background(Capsule().fill(SL.Surface.raised))
+            .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .slFocusRing(Capsule())
+        .accessibilityHint("Opent al je gelogde sessies")
     }
 
     private func open(_ target: Segment, exercise: String? = nil) {

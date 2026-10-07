@@ -24,6 +24,7 @@ struct SessionDetailView: View {
     @State private var draft: [ExerciseResult] = []
     @State private var correcting: Target?
     @State private var confirmsDiscard = false
+    @State private var confirmsDelete = false
     @State private var isSaving = false
     /// Sets taken out while editing, by where they sit in the stored session.
     /// Held beside the draft rather than cut from it, so every other set keeps
@@ -77,6 +78,24 @@ struct SessionDetailView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                                 .foregroundStyle(SL.Ink.tertiary)
                                 .padding(.top, SL.Space.s5)
+
+                            // The whole workout, out of the account. Last on
+                            // the page and in the loss red, so it is never
+                            // the thing a thumb lands on by accident.
+                            if !editing {
+                                Button { confirmsDelete = true } label: {
+                                    HStack(spacing: SL.Space.s2) {
+                                        Image(systemName: "trash")
+                                        Text("Verwijder deze sessie")
+                                    }
+                                    .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                                    .foregroundStyle(SL.Signal.loss)
+                                    .frame(maxWidth: .infinity)
+                                    .slHitTarget()
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, SL.Space.s8)
+                            }
                         }
                         .padding(.horizontal, SL.Space.gutterSession)
                         .padding(.top, SL.Space.s3)
@@ -108,7 +127,19 @@ struct SessionDetailView: View {
                 confirmsLastSet = nil
             }
         } message: {
-            Text("Zonder sets blijft er geen sessie over. Hij verdwijnt uit je historiek zodra je bewaart.")
+            Text("Zonder sets blijft er geen sessie over. Hij verdwijnt uit je logboek zodra je bewaart.")
+        }
+        .alert("Deze sessie verwijderen?", isPresented: $confirmsDelete) {
+            Button("Annuleer", role: .cancel) {}
+            Button("Verwijder", role: .destructive) {
+                guard let id = session?.id else { return }
+                Task {
+                    await app.removeSession(id: id)
+                    onClose()
+                }
+            }
+        } message: {
+            Text("Alle sets van deze dag verdwijnen uit je logboek en je progressie, ook op het web.")
         }
         .confirmationDialog(
             "Correcties niet bewaren?",
@@ -169,7 +200,7 @@ struct SessionDetailView: View {
         return VStack(alignment: .leading, spacing: 0) {
             // 35: the date names the screen, the duration travels with the
             // session's own name.
-            SLEyebrow(text: "Historiek · \(WeekPlan.fullWeekday(session.date)) \(app.display.shortDate(session.date))")
+            SLEyebrow(text: "Logboek · \(WeekPlan.fullWeekday(session.date)) \(app.display.shortDate(session.date))")
 
             Text(titleLine(session))
                 .slTitle()
