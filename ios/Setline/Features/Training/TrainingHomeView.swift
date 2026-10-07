@@ -49,6 +49,7 @@ struct TrainingHomeView: View {
     private enum Presented: Identifiable {
         case agenda
         case alerts
+        case streak
         case preview(AgendaDay)
         case plan(Date)
 
@@ -56,6 +57,7 @@ struct TrainingHomeView: View {
             switch self {
             case .agenda: return "agenda"
             case .alerts: return "alerts"
+            case .streak: return "streak"
             case .preview(let day): return "preview-\(day.key)"
             case .plan(let date): return "plan-\(Schedule.dateKey(date))"
             }
@@ -139,6 +141,9 @@ struct TrainingHomeView: View {
                     onLogPast: { workout, date in after(closing: { onLogPast(workout, date) }) },
                     onClose: { sheet = nil }
                 )
+            case .streak:
+                StreakSheet(streak: app.streak, onClose: { sheet = nil })
+                    .presentationDetents([.medium])
             case .preview(let day):
                 preview(day)
             case .plan(let date):
@@ -257,6 +262,7 @@ struct TrainingHomeView: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            SLStreakChip(streak: app.streak) { sheet = .streak }
             alertsBell
         }
         .padding(.top, SL.Space.s1)

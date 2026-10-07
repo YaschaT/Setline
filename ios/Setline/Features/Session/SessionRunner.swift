@@ -400,6 +400,16 @@ final class SessionRunner {
             }
         }
 
+        // What the countdown at the top of the screen names.
+        RestActivity.exercise = slots[slotIndex].exercise.name
+        let sets = slots[slotIndex].sets
+        if let open = sets.firstIndex(where: { !$0.isLogged }) {
+            RestActivity.next = "Set \(open + 1) of \(sets.count)"
+        } else if slotIndex + 1 < slots.count {
+            RestActivity.next = slots[slotIndex + 1].exercise.name
+        } else {
+            RestActivity.next = "Finish your workout"
+        }
         startRest(for: slots[slotIndex].planned)
     }
 
@@ -783,7 +793,7 @@ final class SessionRunner {
         restTitle = "Rust · \(Self.roleLabel(planned.role)) \(prescription.displayLabel)"
         restCompletionSignalled = false
         isTimerExpanded = false
-        RestNotifier.schedule(at: timer.fireDate)
+        RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
     }
 
     /// "3:00 vast": the rest the role prescribes, counted from now. The one
@@ -793,14 +803,14 @@ final class SessionRunner {
         let timer = RestTimerState(targetSeconds: current.targetSeconds, startedAt: Date())
         restTimer = timer
         restCompletionSignalled = false
-        RestNotifier.schedule(at: timer.fireDate)
+        RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
     }
 
     func adjustRest(by seconds: Int) {
         restTimer?.adjust(by: seconds, floorRemainingAt: now)
         guard let timer = restTimer else { return }
         if timer.remaining(at: Date()) > 0 { restCompletionSignalled = false }
-        RestNotifier.schedule(at: timer.fireDate)
+        RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
     }
 
     func endRest() {
@@ -819,7 +829,7 @@ final class SessionRunner {
     /// asks again for the notification that pausing withdrew.
     func resumeRestSignals() {
         guard let timer = restTimer, timer.remaining(at: Date()) > 0 else { return }
-        RestNotifier.schedule(at: timer.fireDate)
+        RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
     }
 
     func toggleTimerExpanded() {

@@ -10,7 +10,11 @@ import SetlineCore
 /// the prescribed rest and skip; adjusting lengthens or shortens the running
 /// rest and never restarts it.
 ///
-/// Mint, because rest is recovery. The only translucent surface in the app.
+/// Neutral, because rest is a status and not an action: the time in ink, the
+/// controls in grey, and mint only on the thin track that empties — the one
+/// cue that says "recovery" without the whole row shouting it. (The redesign
+/// drew every part of it mint, which read as an alarm; Main drew it neutral.)
+/// The only translucent surface in the app.
 struct SLRestPill: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -52,8 +56,7 @@ struct SLRestPill: View {
     }
 
     private var edge: Color {
-        if isDone { return SL.Surface.hairlineStrong }
-        return isExpanded ? SL.Signal.recovery : SL.Signal.recovery.opacity(0.4)
+        SL.Surface.hairlineStrong
     }
 
     private var spoken: String {
@@ -71,14 +74,14 @@ struct SLRestPill: View {
         return layout {
             Button(action: onToggleExpanded) {
                 HStack(alignment: .center, spacing: 10) {
-                    SLOverline(text: isDone ? "Rust afgelopen" : "Rust", color: isDone ? SL.Ink.primary : SL.Signal.recovery)
+                    SLOverline(text: isDone ? "Rust afgelopen" : "Rust", color: isDone ? SL.Ink.primary : SL.Ink.secondary)
                         .lineLimit(1)
                         .fixedSize()
                     if !isDone {
                         Text(clock)
                             .slTitle()
                             .slNumerals()
-                            .foregroundStyle(SL.Signal.recovery)
+                            .foregroundStyle(SL.Ink.primary)
                             .lineLimit(1)
                             .fixedSize()
                             .frame(minWidth: 62, alignment: .leading)
@@ -107,11 +110,11 @@ struct SLRestPill: View {
             Text("+\(step)s")
                 .slBody(SL.Weight.semibold)
                 .slNumerals()
-                .foregroundStyle(SL.Signal.recovery)
+                .foregroundStyle(SL.Ink.primary)
                 .padding(.horizontal, SL.Space.s3)
                 .frame(minWidth: 52, minHeight: SL.Space.hitMin)
                 .slBorderBox()
-                .overlay(Capsule().strokeBorder(SL.Signal.recovery.opacity(0.5), lineWidth: 1))
+                .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -146,7 +149,7 @@ struct SLRestPill: View {
                         .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
                         .slNumerals()
                         .slLineHeight(1, size: SL.TypeSize.display)
-                        .foregroundStyle(isDone ? SL.Ink.primary : SL.Signal.recovery)
+                        .foregroundStyle(SL.Ink.primary)
                         .lineLimit(1)
                         .fixedSize()
                     track
@@ -189,7 +192,7 @@ struct SLRestPill: View {
             Text("Bijstellen verlengt de lopende timer · de sessie loopt door")
                 .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                 .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SL.Signal.recovery.opacity(0.75))
+                .foregroundStyle(SL.Ink.secondary)
                 .padding(.top, 10)
         }
         .padding(14)
@@ -200,14 +203,14 @@ struct SLRestPill: View {
             Text(text)
                 .slBody(SL.Weight.semibold)
                 .slNumerals()
-                .foregroundStyle(SL.Signal.recovery)
+                .foregroundStyle(SL.Ink.primary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 48)
                 .slBorderBox()
                 .overlay(
                     RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .strokeBorder(SL.Signal.recovery.opacity(0.5), lineWidth: 1)
+                        .strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)
                 )
                 .contentShape(Rectangle())
         }
@@ -232,7 +235,7 @@ struct SLRestPill: View {
     private var track: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(isDone ? Color.clear : SL.Signal.recovery.opacity(0.18))
+                Capsule().fill(isDone ? Color.clear : SL.Surface.hairlineStrong)
                 Capsule()
                     .fill(SL.Signal.recovery)
                     .frame(width: proxy.size.width * fraction)

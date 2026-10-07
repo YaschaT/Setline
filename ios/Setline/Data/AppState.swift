@@ -614,6 +614,20 @@ final class AppState {
         await commit([StateChange(.removeSession(id: id))])
     }
 
+    // MARK: - Streak
+
+    /// Weeks in a row with as many workouts as the plan asked for.
+    var streak: TrainingStreak {
+        TrainingStreak.make(sessions: sessions, plan: plan, overrides: scheduleOverrides)
+    }
+
+    /// The streak as it will stand once a workout on `date` is saved: what
+    /// the finish screen promises before the save button is pressed.
+    func streak(adding date: Date, day: WorkoutDay) -> TrainingStreak {
+        let pending = TrainingSession(id: "pending", date: date, dayID: day.id, dayLabel: day.short, completion: 100, results: [])
+        return TrainingStreak.make(sessions: sessions + [pending], plan: plan, overrides: scheduleOverrides)
+    }
+
     // MARK: - Missed days
 
     /// Date keys answered with "niet getraind" in the alert center. Kept on

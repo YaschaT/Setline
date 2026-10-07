@@ -15,9 +15,17 @@ enum RestNotifier {
     /// check resolves late can never land after it was cancelled or replaced.
     private static var generation = 0
 
-    static func schedule(at fireDate: Date) {
+    static func schedule(at fireDate: Date, startedAt: Date = Date()) {
         generation += 1
         let mine = generation
+        // The countdown at the top of the screen says how long is left and
+        // when it is over; a banner on top of it would say it twice. The
+        // notification stays for phones with Live Activities switched off.
+        RestActivity.show(startedAt: startedAt, endsAt: fireDate)
+        if RestActivity.isAvailable {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+            return
+        }
         Task { @MainActor in
             let center = UNUserNotificationCenter.current()
             // Never asked from here. Permission is earned on the sheet that
@@ -55,6 +63,7 @@ enum RestNotifier {
 
     static func cancel() {
         generation += 1
+        RestActivity.end()
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
         center.removeDeliveredNotifications(withIdentifiers: [identifier])

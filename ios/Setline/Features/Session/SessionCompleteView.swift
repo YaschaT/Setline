@@ -48,6 +48,12 @@ struct SessionCompleteView: View {
 
                     volumeBlock
 
+                    // A workout written down for an earlier week does not
+                    // move this week's dots, so it shows none.
+                    if Calendar.current.isDate(runner.startedAt, equalTo: Date(), toGranularity: .weekOfYear) {
+                        streakBlock.padding(.top, SL.Space.s5)
+                    }
+
                     records.padding(.top, SL.Space.s5)
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
@@ -65,6 +71,33 @@ struct SessionCompleteView: View {
             // underneath it instead of showing through the actions.
             .background(SL.Surface.ground.ignoresSafeArea(edges: .bottom))
         }
+    }
+
+    /// Where this workout leaves the week, before it is even saved: the dots
+    /// it fills, and the streak it keeps or starts.
+    private var streakBlock: some View {
+        let streak = app.streak(adding: runner.startedAt, day: runner.day)
+        let completes = streak.thisWeekDone == streak.thisWeekGoal
+        return HStack(spacing: SL.Space.s3) {
+            Image(systemName: streak.weeks > 0 ? "flame.fill" : "flame")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(streak.weeks > 0 ? SL.Signal.action : SL.Ink.secondary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: SL.Space.s1) {
+                Text(completes
+                     ? (streak.weeks == 1 ? "Week goal reached · streak started" : "Week goal reached · \(streak.weeks)-week streak")
+                     : "\(min(streak.thisWeekDone, streak.thisWeekGoal)) of \(streak.thisWeekGoal) workouts this week")
+                    .slBody(SL.Weight.semibold)
+                    .foregroundStyle(SL.Ink.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                SLWeekDots(done: streak.thisWeekDone, goal: streak.thisWeekGoal)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(SL.Space.s4)
+        .slBorderBox()
+        .slListCard()
+        .accessibilityElement(children: .combine)
     }
 
     private var volumeBlock: some View {

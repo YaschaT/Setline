@@ -25,6 +25,9 @@
 	<key>UILaunchScreen</key>
 	<dict/>
 	<!-- Archivo, the redesign's typeface (SIL Open Font License). -->
+	<!-- The rest countdown in the Dynamic Island and on the Lock Screen. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Archivo-Variable.ttf</string>

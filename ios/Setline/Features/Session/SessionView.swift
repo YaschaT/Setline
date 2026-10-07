@@ -172,7 +172,7 @@ struct SessionView: View {
                     asksAboutNotifications = false
                     Task {
                         await RestNotifier.request()
-                        if let timer = runner.restTimer { RestNotifier.schedule(at: timer.fireDate) }
+                        if let timer = runner.restTimer { RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt) }
                     }
                 },
                 onDecline: { asksAboutNotifications = false }
