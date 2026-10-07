@@ -33,13 +33,19 @@ enum SLTab: String, CaseIterable, Identifiable {
 }
 
 /// The tab bar: inset 21 from the sides, 56 high, radius 22, on surface-1
-/// inside the hairline. The active tab is lime — icon and a 600 label — and
-/// carries no fill of its own.
+/// inside the hairline. The active tab is lime — icon and a 600 label — on a
+/// lime-tint pill that slides to the tab chosen, so where you are reads at a
+/// glance and not only by colour.
 ///
 /// A custom bar rather than the stock one: the inset floating shape is not
 /// achievable with `TabView`'s own bar.
 struct SLTabBar: View {
     @Binding var selection: SLTab
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var pill
+
+    /// The pill sits 4 in from each tab's edges; its corners follow the bar's.
+    private static let pillInset: CGFloat = 4
 
     var body: some View {
         HStack(spacing: 0) {
@@ -64,6 +70,14 @@ struct SLTabBar: View {
                     .foregroundStyle(isActive ? SL.Signal.action : SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(height: SL.Metric.tabItemHeight)
+                    .background {
+                        if isActive {
+                            RoundedRectangle(cornerRadius: SL.Radius.xl - Self.pillInset - 1, style: .continuous)
+                                .fill(SL.Signal.actionTint)
+                                .padding(Self.pillInset)
+                                .matchedGeometryEffect(id: "pill", in: pill)
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -72,6 +86,7 @@ struct SLTabBar: View {
                 .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
             }
         }
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86), value: selection)
         .slBorderBox()
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)

@@ -406,21 +406,50 @@ struct PhotosHomeView: View {
         }
     }
 
+    /// Before anything is kept: the two frames a comparison will fill, so the
+    /// screen shows what it is for instead of explaining it. "Nieuwe opname"
+    /// above is the way in; this card does not repeat it.
     private var empty: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s1) {
-            Text("Nog geen opnames")
-                .slLead()
-                .foregroundStyle(SL.Ink.primary)
-            Text("Een foto naast een latere foto laat zien wat de weegschaal niet vertelt. Zelfde pose, licht en afstand.")
-                .slBody()
-                .slLineHeight(1.45, size: SL.TypeSize.body)
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SL.Ink.secondary)
+        VStack(spacing: SL.Space.s4) {
+            HStack(spacing: SL.Space.s3) {
+                emptyFrame("Eerste")
+                emptyFrame("Later")
+            }
+            .accessibilityHidden(true)
+            VStack(spacing: SL.Space.s1) {
+                Text("Nog geen opnames")
+                    .slLead()
+                    .foregroundStyle(SL.Ink.primary)
+                Text("Zelfde pose, licht en afstand: zo zie je wat de weegschaal niet vertelt.")
+                    .slBody()
+                    .slLineHeight(1.45, size: SL.TypeSize.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .accessibilityElement(children: .combine)
         }
-        .padding(SL.Space.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SL.Space.s5)
+        .frame(maxWidth: .infinity)
         .slBorderBox()
         .slListCard()
+    }
+
+    private func emptyFrame(_ label: String) -> some View {
+        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+            .strokeBorder(SL.Surface.mute, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            .aspectRatio(3 / 4, contentMode: .fit)
+            .frame(maxWidth: 120)
+            .overlay {
+                VStack(spacing: SL.Space.s2) {
+                    Image(systemName: "figure.stand")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(SL.Surface.mute)
+                    Text(label)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.tertiary)
+                }
+            }
     }
 
     /// "6 sep"

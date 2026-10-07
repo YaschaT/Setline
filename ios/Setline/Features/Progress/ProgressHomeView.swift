@@ -312,18 +312,24 @@ struct ProgressHomeView: View {
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if let claim {
-                    VStack(alignment: typeSize.isAccessibilitySize ? .leading : .trailing, spacing: 2) {
-                        Text(claim.value)
-                            .slLead()
-                            .slNumerals()
-                            .foregroundStyle(ink)
-                        Text(claim.caption)
-                            .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                            .foregroundStyle(SL.Ink.secondary)
-                    }
-                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
-                    .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
+                // On screen only the claim itself: the change, or a "Nieuw"
+                // tag. What it is measured against is said once, to VoiceOver,
+                // rather than under every row.
+                if delta != nil, let claim {
+                    Text(claim.value)
+                        .slLead()
+                        .slNumerals()
+                        .foregroundStyle(ink)
+                        .lineLimit(1)
+                        .fixedSize()
+                } else if claim != nil {
+                    Text("Nieuw")
+                        .slMeta(SL.Weight.semibold)
+                        .foregroundStyle(SL.Signal.action)
+                        .padding(.horizontal, SL.Space.s2)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(SL.Signal.actionTint))
+                        .fixedSize()
                 }
             }
             .padding(.horizontal, SL.Space.s4)

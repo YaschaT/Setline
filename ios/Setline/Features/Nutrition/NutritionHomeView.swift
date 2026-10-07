@@ -184,18 +184,6 @@ struct NutritionHomeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(label), \(app.display.kcal(Decimal(value)))")
-
-                // The oversized word: decoration, so it keeps its own size and
-                // steps aside when the text is large.
-                if !typeSize.isAccessibilitySize {
-                    Text("KCAL")
-                        .font(.slFixed(48, SL.Weight.bold))
-                        .tracking(-0.48)
-                        .foregroundStyle(SL.Signal.action.opacity(0.18))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .accessibilityHidden(true)
-                }
             }
 
             if day.hasTarget {
@@ -203,22 +191,27 @@ struct NutritionHomeView: View {
                     .accessibilityLabel("\(Int((day.consumed * 100).rounded())) procent van je caloriedoel gegeten")
             }
 
-            HStack(alignment: .top, spacing: SL.Space.s3) {
-                heroStat(app.display.whole(Decimal(day.calories)), label: "gegeten")
-                Button { sheet = .targets } label: {
-                    heroStat(
-                        day.hasTarget ? app.display.whole(Decimal(day.targets?.calories ?? 0)) : "—",
-                        label: day.hasTarget ? "doel" : "doel instellen"
-                    )
-                    // 1c sets the two figures at the height of their text; the
-                    // tap area reaches past them instead of growing the row.
-                    .slHitTarget()
+            // One line for what the big number is counted from: eaten against
+            // the goal, the goal itself the way to change it.
+            Button { sheet = .targets } label: {
+                HStack(spacing: SL.Space.s1) {
+                    if day.hasTarget {
+                        Text("\(app.display.whole(Decimal(day.calories))) van \(app.display.whole(Decimal(day.targets?.calories ?? 0))) kcal gegeten")
+                            .foregroundStyle(SL.Ink.secondary)
+                    } else {
+                        Text("Stel een dagdoel in")
+                            .foregroundStyle(SL.Signal.action)
+                    }
+                    SLGlyph(name: .chevronRight, size: 14)
+                        .foregroundStyle(SL.Ink.tertiary)
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opent je dagdoelen")
+                .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
+                .monospacedDigit()
+                .slHitTarget()
             }
-            .padding(.top, SL.Space.s3)
-            .overlay(alignment: .top) { SLHairline() }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opent je dagdoelen")
 
             Button {
                 // The clock is read again as the sheet opens: a screen left
@@ -242,80 +235,58 @@ struct NutritionHomeView: View {
         .slHeroCard()
     }
 
-    private func heroStat(_ value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            (Text(value).font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
-                + Text(" kcal").font(.sl(SL.TypeSize.meta, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
-                .slNumerals()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .slMeta()
-                .foregroundStyle(SL.Ink.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label), \(value) kcal")
-    }
-
     // MARK: - Macros
 
-    /// The three macros against their targets, once, for the day. Protein is
-    /// the one the reader steers by, so it leads and carries the full lime;
-    /// the other two step back.
+    /// The three macros against their targets, side by side in one card: a
+    /// glance, not a list. Protein is the one the reader steers by, so it
+    /// leads and carries the full lime; the other two step back. At
+    /// accessibility sizes the three stack.
     private var macros: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Macro’s", meta: day.hasTarget ? "gegeten / doel" : "gegeten")
-            VStack(spacing: 0) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s4))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: SL.Space.s4))
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLSectionHead(title: "Macro’s")
+            layout {
                 ForEach(Array(Macro.allCases.enumerated()), id: \.element) { index, macro in
-                    macroRow(macro, level: index)
-                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                    macroColumn(macro, level: index)
                 }
             }
+            .padding(SL.Space.s4)
             .slBorderBox()
             .slListCard()
         }
     }
 
-    private func macroRow(_ macro: Macro, level: Int) -> some View {
+    private func macroColumn(_ macro: Macro, level: Int) -> some View {
         let total = day.total(of: macro)
         let target = day.target(for: macro)
-        let left = (target - total).rounded()
+        let isOver = target > 0 && total > target
         let name = macro == .protein ? "Eiwit" : macro.label
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
-            layout {
-                Text(name)
-                    .slLead()
-                    .foregroundStyle(SL.Ink.primary)
-                if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
-                // Whole grams: a tenth of a gram of fat is not something a day
-                // is steered by.
-                (Text(app.display.whole(Decimal(total))).font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
-                    + Text(target > 0 ? " / \(app.display.whole(Decimal(target))) g" : " g")
-                        .font(.sl(SL.TypeSize.body, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
-                    .slNumerals()
-                    .lineLimit(1)
-            }
+            Text(name)
+                .slBody()
+                .foregroundStyle(SL.Ink.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             if target > 0 {
                 SLBar(
                     fraction: day.fraction(of: macro),
                     height: 6,
-                    fill: SL.Signal.action.opacity([1, 0.6, 0.4][min(level, 2)])
+                    fill: isOver ? SL.Signal.attention : SL.Signal.action.opacity([1, 0.6, 0.4][min(level, 2)])
                 )
-                Text(left >= 0
-                     ? "nog \(app.display.whole(Decimal(left))) g"
-                     : "\(app.display.whole(Decimal(-left))) g boven doel")
-                    .slMeta()
-                    .slNumerals()
-                    .foregroundStyle(SL.Ink.secondary)
             }
+            // Whole grams: a tenth of a gram of fat is not something a day
+            // is steered by.
+            (Text(app.display.whole(Decimal(total))).font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                .foregroundStyle(isOver ? SL.Signal.attention : SL.Ink.primary)
+                + Text(target > 0 ? " / \(app.display.whole(Decimal(target))) g" : " g")
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
+                .slNumerals()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, SL.Space.s4)
-        .padding(.vertical, SL.Space.s3)
-        .frame(minHeight: target > 0 ? 72 : 52)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             target > 0
@@ -339,7 +310,7 @@ struct NutritionHomeView: View {
                         Text("Nog niets gelogd")
                             .slLead()
                             .foregroundStyle(SL.Ink.primary)
-                        Text("Log je eerste maaltijd; je totalen en wat er nog over is rekenen meteen mee.")
+                        Text("Wat je logt, telt meteen mee.")
                             .slBody()
                             .slLineHeight(1.45, size: SL.TypeSize.body)
                             .fixedSize(horizontal: false, vertical: true)

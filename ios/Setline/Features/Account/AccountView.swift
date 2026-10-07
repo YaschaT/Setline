@@ -9,8 +9,8 @@ import SetlineCore
 ///
 /// - every value comes from stored data, so the mock's `2.250 kcal · 165 g`
 ///   only appears when this account really has targets;
-/// - `Wijzig` is drawn only where there is somewhere to go, and nothing is
-///   editable yet, so no row carries it;
+/// - a chevron is drawn only where there is somewhere to go (the mock's
+///   `Wijzig`, quieter: each row already reads label then value);
 /// - `Account verwijderen` waits for the server action that performs it.
 ///
 /// `Uitloggen` is the one addition: leaving the account on this device keeps
@@ -98,7 +98,7 @@ struct AccountView: View {
 
     /// Who this is: the picture and name Training greets you with, and the
     /// address the account signs in with. One tap target, as the plan rows
-    /// are, ending in the same `Wijzig`.
+    /// are, ending in the same chevron.
     private var profileBlock: some View {
         Button { editingProfile = true } label: {
             HStack(alignment: .center, spacing: SL.Space.s4) {
@@ -116,7 +116,7 @@ struct AccountView: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text("Wijzig").slBody().foregroundStyle(SL.Ink.tertiary)
+                Self.chevron
             }
             .padding(.bottom, SL.Space.s6)
             .contentShape(Rectangle())
@@ -190,35 +190,32 @@ struct AccountView: View {
 
     // MARK: - Sync
 
-    /// The screen's one loud element: how this account stands right now.
+    /// How this account stands right now: one quiet row, since it is
+    /// reassurance rather than something to act on. Only an expired session
+    /// asks for anything, and then the button says what.
     private var syncBlock: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: SL.Space.s2) {
+        VStack(alignment: .leading, spacing: SL.Space.s4) {
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
                 Circle().fill(syncTone).frame(width: 10, height: 10)
-                Text("SYNC").slMeta(SL.Weight.medium).foregroundStyle(SL.Ink.tertiary)
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(syncHeadline).slBody(SL.Weight.semibold)
+                    Text(syncDetail)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Text(syncHeadline)
-                .slDisplay(SL.TypeSize.displayXL)
-                .slLineHeight(1.04, size: SL.TypeSize.displayXL)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .padding(.top, SL.Space.s2)
-            Text(syncDetail)
-                .slBody()
-                .foregroundStyle(SL.Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
 
             if standing == .expired {
                 Button("Opnieuw aanmelden") { reauthenticating = true }
                     .buttonStyle(SLPrimaryButtonStyle())
-                    .padding(.top, SL.Space.s4)
             }
         }
+        .padding(SL.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, SL.Space.s1)
-        .padding(.bottom, SL.Space.s6)
-        .overlay(alignment: .bottom) { SLHairline() }
+        .slCard(radius: SL.Radius.lg)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Sync: \(syncHeadline). \(syncDetail)")
     }
@@ -265,17 +262,17 @@ struct AccountView: View {
     private var syncDetail: String {
         switch standing {
         case .synced(let date):
-            return "\(Self.relative.localizedString(for: date, relativeTo: Date())) · \(sessionsSafe) \(verb(summary.sessionCount, "staat", "staan")) veilig"
+            return "\(Self.relative.localizedString(for: date, relativeTo: Date())) · \(sessionsSafe)"
         case .waiting(let count):
-            return "\(changes(count)) \(verb(count, "staat", "staan")) op dit toestel en synct zodra er verbinding is."
+            return "\(changes(count)) op dit toestel"
         case .offline(let count):
             return count > 0
-                ? "Alles wordt lokaal bewaard · \(changes(count)) \(verb(count, "wacht", "wachten")) op sync"
-                : "Alles wordt lokaal bewaard."
+                ? "Lokaal bewaard · \(changes(count)) \(verb(count, "wacht", "wachten"))"
+                : "Lokaal bewaard"
         case .expired:
-            return "Meld je opnieuw aan om te synchroniseren. Je werk blijft op dit toestel."
+            return "Je werk blijft op dit toestel"
         case .never:
-            return "Je werk staat op dit toestel."
+            return "Je werk staat op dit toestel"
         }
     }
 
@@ -303,21 +300,27 @@ struct AccountView: View {
 
     private var planRows: some View {
         VStack(spacing: 0) {
-            row(summary.planName) { choosingProgram = true }
+            row("Schema", value: summary.planName) { choosingProgram = true }
             if !summary.trainingDays.isEmpty {
-                row("Trainingsdagen · \(summary.trainingDays.joined(separator: " "))") { planningWeek = true }
+                row("Trainingsdagen", value: summary.trainingDays.joined(separator: " ")) { planningWeek = true }
             }
             if let targets = summary.targets {
-                row("Dagdoelen · \(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g") {
+                row("Dagdoelen", value: "\(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g") {
                     editingTargets = true
                 }
             }
-            row("Rusttimer", detail: summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: " · "))
+            // The three rests by role read as a sentence for VoiceOver; on
+            // screen the order (primair, samengesteld, isolatie) is enough.
+            row("Rusttimer", value: summary.rest.map(\.label).joined(separator: " · "))
+                .accessibilityLabel("Rusttimer: \(summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: ", "))")
             // 12R: "Per set vragen zet je aan in Account." This is where.
-            row("RIR vragen", detail: rirEverySet ? "Bij elke set" : "Bij de laatste set van een oefening") {
-                rirEverySet.toggle()
-                RIRPreference.everySet = rirEverySet
+            Toggle(isOn: $rirEverySet) {
+                Text("RIR bij elke set").slBody()
             }
+            .tint(SL.Signal.action)
+            .padding(.vertical, SL.Space.s3)
+            .overlay(alignment: .bottom) { SLHairline() }
+            .onChange(of: rirEverySet) { _, value in RIRPreference.everySet = value }
         }
     }
 
@@ -332,7 +335,7 @@ struct AccountView: View {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Exporteer alles").slBody()
-                            Text(exportDetail).slMeta().foregroundStyle(SL.Ink.secondary)
+                            Text("CSV en JSON").slMeta().foregroundStyle(SL.Ink.secondary)
                         }
                         Spacer(minLength: SL.Space.s4)
                         // 23: the design's `download` glyph at 18 beside
@@ -391,20 +394,26 @@ struct AccountView: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// A plan row: what it says now, and — once there is a destination — the
-    /// `Wijzig` that leads there.
-    private func row(_ title: String, detail: String? = nil, change: (() -> Void)? = nil) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s4) {
+    /// A settings row: the label, its current value on the right, and a
+    /// chevron when tapping it leads somewhere.
+    private func row(_ title: String, value: String? = nil, detail: String? = nil, change: (() -> Void)? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).slBody().foregroundStyle(detail == nil ? SL.Ink.secondary : SL.Ink.primary)
+                Text(title).slBody()
                 if let detail {
                     Text(detail).slMeta().foregroundStyle(SL.Ink.secondary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
+            .layoutPriority(1)
+            Spacer(minLength: SL.Space.s2)
+            if let value {
+                Text(value)
+                    .slBody()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .multilineTextAlignment(.trailing)
+            }
             if change != nil {
-                Text("Wijzig").slBody().foregroundStyle(SL.Ink.tertiary)
+                Self.chevron
             }
         }
         .padding(.vertical, SL.Space.s4)
@@ -414,6 +423,12 @@ struct AccountView: View {
         .accessibilityAddTraits(change == nil ? [] : .isButton)
         .accessibilityHint(change == nil ? "" : "Dubbeltik om te wijzigen")
         .onTapGesture { change?() }
+    }
+
+    private static var chevron: some View {
+        SLGlyph(name: .chevronRight, size: 16)
+            .foregroundStyle(SL.Ink.tertiary)
+            .accessibilityHidden(true)
     }
 
     /// Signing in again after the session expired. The account keeps its local
