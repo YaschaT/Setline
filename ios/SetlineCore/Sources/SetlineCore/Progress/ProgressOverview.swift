@@ -207,6 +207,167 @@ public enum ProgressOverview {
         return (set.partialReps ?? 0) == 0
     }
 
+    // MARK: - Progress per training day
+
+    /// How one kind of training day — Push, Pull, Legs, Upper, Lower — has
+    /// moved inside a window.
+    public struct DayProgress: Equatable, Sendable, Identifiable {
+        public let dayID: String
+        /// The name the latest of these sessions carried.
+        public let label: String
+        /// Sessions of this day inside the window.
+        public let sessions: Int
+        /// The mean change of the day's lifts, in percent of estimated
+        /// maximum, to a tenth. `nil` while no lift has two comparable points.
+        public let changePercent: Decimal?
+        /// The lift that gained the most, in kilos of estimated maximum.
+        public let leader: Leader?
+        /// Each session's strength against the lifts' baselines, oldest
+        /// first: 100 is where the day started, 107 is seven percent
+        /// stronger. Sessions without a measured lift are left out.
+        public let strength: [Decimal]
+        public let lastTrained: Date
+
+        public struct Leader: Equatable, Sendable {
+            public let exerciseID: String
+            public let name: String
+            public let deltaKg: Decimal
+
+            public init(exerciseID: String, name: String, deltaKg: Decimal) {
+                self.exerciseID = exerciseID
+                self.name = name
+                self.deltaKg = deltaKg
+            }
+        }
+
+        public var id: String { dayID }
+
+        public init(
+            dayID: String, label: String, sessions: Int, changePercent: Decimal?,
+            leader: Leader?, strength: [Decimal], lastTrained: Date
+        ) {
+            self.dayID = dayID
+            self.label = label
+            self.sessions = sessions
+            self.changePercent = changePercent
+            self.leader = leader
+            self.strength = strength
+            self.lastTrained = lastTrained
+        }
+    }
+
+    /// Per training day, how its lifts moved since `since`, most recently
+    /// trained first.
+    ///
+    /// Each lift of the day is measured from a baseline to its best inside
+    /// the window, both as estimated maxima and only between sets performed
+    /// the same way (`SetExecution.isComparable`), as the best sets are. The
+    /// baseline is the lift's best before the window; for a lift with no
+    /// history before it, its first session inside the window, so a young
+    /// account still sees where it is going. A lift trained once and never
+    /// before has nothing to compare and takes no part.
+    public static func progressByDay(in sessions: [TrainingSession], since: Date) -> [DayProgress] {
+        struct Scored {
+            let estimate: Decimal
+            let execution: SetExecution
+        }
+        func scored(_ result: ExerciseResult) -> [Scored] {
+            result.sets.compactMap { set in
+                guard weighs(set), let weight = set.weightKg,
+                      let estimate = Estimates.e1RM(weightKg: weight, reps: set.reps) else { return nil }
+                return Scored(estimate: estimate, execution: set.execution)
+            }
+        }
+
+        let workouts = sessions.filter { $0.kind == .workout }.sorted { $0.date < $1.date }
+        // Every estimated set before the window, per lift, whichever day it was on.
+        var before: [String: [Scored]] = [:]
+        for session in workouts where session.date < since {
+            for result in session.results { before[result.exerciseID, default: []] += scored(result) }
+        }
+
+        let inWindow = workouts.filter { $0.date >= since }
+        var order: [String] = []
+        var grouped: [String: [TrainingSession]] = [:]
+        for session in inWindow {
+            if grouped[session.dayID] == nil { order.append(session.dayID) }
+            grouped[session.dayID, default: []].append(session)
+        }
+
+        return order.compactMap { dayID -> DayProgress? in
+            guard let days = grouped[dayID], let latest = days.last else { return nil }
+            // Per lift: its sets per session, in order, and its latest name.
+            var lifts: [String: (name: String, perSession: [[Scored]])] = [:]
+            var liftOrder: [String] = []
+            for session in days {
+                for result in session.results {
+                    let sets = scored(result)
+                    guard !sets.isEmpty else { continue }
+                    if lifts[result.exerciseID] == nil { liftOrder.append(result.exerciseID) }
+                    lifts[result.exerciseID, default: (result.name, [])].perSession.append(sets)
+                    lifts[result.exerciseID]?.name = result.name
+                }
+            }
+
+            var percents: [Decimal] = []
+            var leader: DayProgress.Leader?
+            // Per lift, what it is measured from and how it was performed.
+            var references: [String: Scored] = [:]
+            for id in liftOrder {
+                guard let lift = lifts[id] else { continue }
+                let windowSets = lift.perSession.flatMap { $0 }
+                guard let best = windowSets.max(by: { $0.estimate < $1.estimate }) else { continue }
+                let earlier = before[id] ?? []
+                let baseline: Decimal?
+                let current: Decimal
+                if let previous = earlier.filter({ $0.execution.isComparable(to: best.execution) }).map(\.estimate).max() {
+                    baseline = previous
+                    current = best.estimate
+                } else if earlier.isEmpty, lift.perSession.count > 1,
+                          let first = lift.perSession[0].max(by: { $0.estimate < $1.estimate }) {
+                    // Measured from the first session, against the later
+                    // sessions' sets performed the same way.
+                    let later = lift.perSession.dropFirst().flatMap { $0 }
+                        .filter { $0.execution.isComparable(to: first.execution) }
+                        .map(\.estimate).max()
+                    baseline = later == nil ? nil : first.estimate
+                    current = later ?? first.estimate
+                } else {
+                    baseline = nil
+                    current = best.estimate
+                }
+                guard let baseline, baseline > 0 else { continue }
+                references[id] = Scored(estimate: baseline, execution: best.execution)
+                percents.append((current - baseline) / baseline * 100)
+                let delta = Estimates.round(current - baseline, toIncrement: 0.5)
+                if delta > 0, delta > (leader?.deltaKg ?? 0) {
+                    leader = .init(exerciseID: id, name: lift.name, deltaKg: delta)
+                }
+            }
+            let mean = percents.isEmpty ? nil : percents.reduce(0, +) / Decimal(percents.count)
+            return DayProgress(
+                dayID: dayID,
+                label: latest.dayLabel,
+                sessions: days.count,
+                changePercent: mean.map { Estimates.round($0, toIncrement: 0.1) },
+                leader: leader,
+                strength: days.compactMap { session -> Decimal? in
+                    let ratios = session.results.compactMap { result -> Decimal? in
+                        guard let reference = references[result.exerciseID],
+                              let top = scored(result)
+                                .filter({ $0.execution.isComparable(to: reference.execution) })
+                                .map(\.estimate).max()
+                        else { return nil }
+                        return top / reference.estimate * 100
+                    }
+                    return ratios.isEmpty ? nil : ratios.reduce(0, +) / Decimal(ratios.count)
+                },
+                lastTrained: latest.date
+            )
+        }
+        .sorted { $0.lastTrained > $1.lastTrained }
+    }
+
     // MARK: - Tonnage per week
 
     public struct WeekVolume: Equatable, Sendable, Identifiable {

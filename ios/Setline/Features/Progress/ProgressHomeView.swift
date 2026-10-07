@@ -3,9 +3,11 @@ import SetlineCore
 
 /// Redesign 1d · Progressie.
 ///
-/// The tab opens on an overview: body weight with its trend, the best set per
-/// exercise over the last eight weeks, and the tonnage of the last seven. All
-/// of it is read from what the account logged.
+/// The tab opens on an overview, training first: how each kind of training
+/// day (Push, Pull, Legs, Upper, Lower) moved over the last eight weeks, the
+/// best set per exercise, the tonnage of the last seven weeks, and last, body
+/// weight as one compact card whose chart opens on request. All of it is read
+/// from what the account logged.
 ///
 /// Behind the overview sit the three subjects the app has always had, one at a
 /// time with the whole screen to itself: strength per exercise, every
@@ -28,11 +30,14 @@ struct ProgressHomeView: View {
     /// The exercise Kracht opens on, when a best-set row led there.
     @State private var openingExercise: String?
     @State private var weighing = false
+    /// Whether the weight card shows its chart; remembered across launches.
+    @AppStorage("setline.progress.weightChart") private var showsWeightChart = false
 
     @State private var bodyProgress = BodyProgress.empty
     @State private var trend: [ProgressOverview.WeightPoint] = []
     @State private var best: [ProgressOverview.RecentBest] = []
     @State private var volume: [ProgressOverview.WeekVolume] = []
+    @State private var days: [ProgressOverview.DayProgress] = []
 
     /// "Laatste 8 weken".
     private static let bestWindowDays = 56
@@ -66,7 +71,8 @@ struct ProgressHomeView: View {
         bodyProgress = BodyProgress.make(metrics: app.metrics)
         trend = ProgressOverview.weightTrend(bodyProgress)
         let since = Calendar.current.date(byAdding: .day, value: -Self.bestWindowDays, to: Date()) ?? Date()
-        best = ProgressOverview.bestSets(in: app.sessions, since: since)
+        best = ProgressOverview.bestSets(in: app.sessions, since: since, limit: 3)
+        days = ProgressOverview.progressByDay(in: app.sessions, since: since)
         volume = ProgressOverview.weeklyVolume(in: app.sessions)
     }
 
@@ -76,9 +82,10 @@ struct ProgressHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SL.Space.s4) {
                 SLScreenTitle(title: "Progressie", subtitle: range) { weighPill }
-                weightSection
+                if !days.isEmpty { daySection }
                 bestSection
                 volumeSection
+                weightSection
                 Button { open(.historiek) } label: { chevroned("Alle sessies") }
                     .buttonStyle(SLOutlineButtonStyle())
                     .accessibilityHint("Opent je sessiehistoriek")
@@ -118,89 +125,162 @@ struct ProgressHomeView: View {
 
     // MARK: - Body weight
 
-    /// 1d's card, which is also the way to every weigh-in: the whole card
-    /// opens Lichaam, as a best-set row opens its exercise. A link of its own
-    /// made the card a row taller than 1d draws it; the chevron beside the
-    /// card's label is the one mark that says it leads on.
-    @ViewBuilder
+    /// Body weight, kept small: a status beside the training it follows,
+    /// not the screen's subject. The number and its movement on one line —
+    /// tapping them opens every weigh-in — and the chart behind a toggle.
     private var weightSection: some View {
-        if bodyProgress.entries.isEmpty {
-            weightCard
-        } else {
-            Button { open(.lichaam) } label: { weightCard }
-                .buttonStyle(CardPressStyle())
-                .accessibilityHint("Opent al je wegingen")
-        }
-    }
-
-    /// A weigh-in is a status, not a training win: the number stays in ink and
-    /// its movement in the recovery mint. Lime is only the line of the
-    /// average, which is what the design draws the eye to.
-    private var weightCard: some View {
-        let head = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
-            : AnyLayout(HStackLayout(alignment: .bottom, spacing: SL.Space.s3))
-        return VStack(alignment: .leading, spacing: SL.Space.s4) {
-            head {
-                VStack(alignment: .leading, spacing: SL.Space.s1) {
-                    HStack(spacing: SL.Space.s1) {
-                        Text("Lichaamsgewicht")
-                            .slMeta()
-                        if !bodyProgress.entries.isEmpty {
-                            SLGlyph(name: .chevronRight, size: 13)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .foregroundStyle(SL.Ink.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        // At the font's own line. 1d's `34px/1` as an exact
-                        // line seats the baseline on the box's bottom edge on
-                        // iOS 26, and "kg" then hangs below it: 4pt taller.
-                        Text(bodyProgress.latest.map { app.display.number($0.weightKg) } ?? "—")
-                            .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
-                            .slNumerals()
-                            .foregroundStyle(SL.Ink.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                        Text("kg")
-                            .slLead(SL.Weight.regular)
-                            .foregroundStyle(SL.Ink.primary)
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(bodyProgress.latest.map { "Lichaamsgewicht \(app.display.kg($0.weightKg))" } ?? "Nog geen weging")
-                if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
-                if let movement {
-                    VStack(alignment: typeSize.isAccessibilitySize ? .leading : .trailing, spacing: 2) {
-                        Text(movement.value)
-                            .slLead()
-                            .slNumerals()
-                            .foregroundStyle(movement.moved ? SL.Signal.recovery : SL.Ink.primary)
-                        Text(movement.label)
-                            .slMeta()
-                            .slNumerals()
-                            .foregroundStyle(SL.Ink.secondary)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            Button { open(.lichaam) } label: { weightHead }
+                .buttonStyle(.plain)
+                .disabled(bodyProgress.entries.isEmpty)
+                .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opent al je wegingen")
 
             if trend.count > 1 {
-                WeightTrendChart(points: trend)
+                if showsWeightChart {
+                    WeightTrendChart(points: trend)
+                        .transition(.opacity)
+                }
+                Button {
+                    withAnimation(.easeInOut(duration: SL.Motion.base)) { showsWeightChart.toggle() }
+                } label: {
+                    HStack(spacing: SL.Space.s1) {
+                        Text(showsWeightChart ? "Verberg verloop" : "Toon verloop")
+                        SLGlyph(name: .chevronDown, size: 13)
+                            .rotationEffect(.degrees(showsWeightChart ? 180 : 0))
+                    }
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
+                    .foregroundStyle(SL.Ink.secondary)
+                    .slHitTarget()
+                }
+                .buttonStyle(.plain)
             } else {
                 Text(trend.isEmpty
-                     ? "Weeg jezelf 's ochtends, nuchter. Vanaf de tweede weging staat je verloop hier."
-                     : "Nog één weging en je verloop en het 14-daagse gemiddelde staan hier.")
-                    .slBody()
-                    .slLineHeight(1.45, size: SL.TypeSize.body)
+                     ? "Weeg jezelf 's ochtends, nuchter."
+                     : "Nog één weging en je verloop staat hier.")
+                    .slMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
             }
         }
-        .padding(SL.Space.s4)
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.top, SL.Space.s4)
+        .padding(.bottom, trend.count > 1 ? 0 : SL.Space.s4)
         .slBorderBox()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .slHeroCard()
+        .slListCard()
+    }
+
+    /// A weigh-in is a status, not a training win: the number stays in ink and
+    /// its movement in the recovery mint.
+    private var weightHead: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s1))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
+        return layout {
+            HStack(spacing: SL.Space.s1) {
+                Text("Lichaamsgewicht").slBody()
+                if !bodyProgress.entries.isEmpty {
+                    SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
+                }
+            }
+            .foregroundStyle(SL.Ink.primary)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                if let movement {
+                    Text(movement.value)
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(movement.moved ? SL.Signal.recovery : SL.Ink.secondary)
+                }
+                Text(bodyProgress.latest.map { app.display.kg($0.weightKg) } ?? "—")
+                    .slLead(SL.Weight.semibold)
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            (bodyProgress.latest.map { "Lichaamsgewicht \(app.display.kg($0.weightKg))" } ?? "Nog geen weging")
+                + (movement.map { ", \($0.value) \($0.label)" } ?? "")
+        )
+    }
+
+    // MARK: - Per training day
+
+    /// Where the training itself moved: one row per kind of day, with the
+    /// mean change of its lifts, the lift that gained most, and its strength
+    /// per session as a small line.
+    private var daySection: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLSectionHead(title: "Per trainingsdag", meta: "laatste 8 weken")
+            VStack(spacing: 0) {
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                    dayRow(day)
+                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                }
+            }
+            .slBorderBox()
+            .slListCard()
+        }
+    }
+
+    private func dayRow(_ day: ProgressOverview.DayProgress) -> some View {
+        let change = day.changePercent
+        let ink: Color = {
+            guard let change else { return SL.Ink.secondary }
+            return change > 0 ? SL.Signal.action : change < 0 ? SL.Signal.loss : SL.Ink.secondary
+        }()
+        let changeText = change.map { $0 == 0 ? "0 %" : "\(app.display.signedDelta($0)) %" }
+        let sessions = day.sessions == 1 ? "1 sessie" : "\(day.sessions) sessies"
+        let detail = [sessions, day.leader.map { "\($0.name) +\(app.display.number($0.deltaKg)) kg" }]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+        return Button { open(.kracht, exercise: day.leader?.exerciseID) } label: {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                SLGlyph(name: .category(for: day.label), size: 20)
+                    .foregroundStyle(SL.Signal.action)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(SL.Signal.actionTint))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(day.label)
+                        .slLead()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text(detail)
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .trailing, spacing: SL.Space.s1) {
+                    Text(changeText ?? "—")
+                        .slLead(SL.Weight.semibold)
+                        .slNumerals()
+                        .foregroundStyle(ink)
+                        .fixedSize()
+                    if day.strength.count > 1 {
+                        Sparkline(values: day.strength)
+                            .stroke(ink == SL.Ink.secondary ? SL.Ink.tertiary : ink,
+                                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                            .frame(width: 52, height: 16)
+                    }
+                }
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .frame(minHeight: 64)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(day.label), \(sessions)"
+                + (changeText.map { ", kracht \($0) geschat" } ?? ", nog te weinig om te vergelijken")
+                + (day.leader.map { ", meeste vooruitgang \($0.name) plus \(app.display.number($0.deltaKg)) kilo" } ?? "")
+        )
+        .accessibilityHint("Opent de kracht van deze oefeningen")
     }
 
     /// The screen's one commit, in the place 1e gives its own: a lime pill
@@ -448,17 +528,26 @@ struct ProgressHomeView: View {
     }
 }
 
-/// A card that is itself the way on: it dims while pressed, where a row
-/// darkens, because its own surface stays on top.
-private struct CardPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
+// MARK: - Charts
+
+/// A series as a small line across its frame, lowest at the bottom: the shape
+/// of the numbers, not the numbers.
+private struct Sparkline: Shape {
+    let values: [Decimal]
+
+    func path(in rect: CGRect) -> Path {
+        let numbers = values.map { NSDecimalNumber(decimal: $0).doubleValue }
+        guard numbers.count > 1, let low = numbers.min(), let high = numbers.max() else { return Path() }
+        let span = high - low
+        return Path { path in
+            for (index, value) in numbers.enumerated() {
+                let x = rect.minX + rect.width * Double(index) / Double(numbers.count - 1)
+                let y = rect.maxY - (span > 0 ? (value - low) / span : 0.5) * rect.height
+                if index == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+            }
+        }
     }
 }
-
-// MARK: - Charts
 
 /// Body weight as the redesign draws it: every weigh-in in grey, the trailing
 /// average in lime with its latest point marked, two hairlines behind them,

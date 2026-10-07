@@ -207,4 +207,57 @@ final class ProgressOverviewTests: XCTestCase {
         let after = calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 9))!
         XCTAssertEqual(Agenda.weekLabel(containing: after, now: now, calendar: calendar), "Volgende week")
     }
+
+    // MARK: Progress per training day
+
+    private func day(_ id: String, _ dayID: String, on dayOfMonth: Int, month: Int = 9, _ results: [ExerciseResult]) -> TrainingSession {
+        TrainingSession(
+            id: id, date: date(dayOfMonth, month: month), dayID: dayID, dayLabel: dayID.capitalized,
+            completion: 100, kind: .workout, results: results
+        )
+    }
+
+    private func lift(_ id: String, _ weight: Decimal, _ reps: Int) -> ExerciseResult {
+        ExerciseResult(exerciseID: id, name: id.capitalized, sets: [set(0, weight, reps)])
+    }
+
+    func testADayIsMeasuredAgainstItsBestBeforeTheWindow() {
+        let sessions = [
+            day("old", "push", on: 1, month: 7, [lift("bench", 100, 5)]),
+            day("a", "push", on: 2, [lift("bench", 105, 5)]),
+            day("b", "pull", on: 3, [lift("row", 80, 8)]),
+        ]
+        let days = ProgressOverview.progressByDay(in: sessions, since: date(1))
+        XCTAssertEqual(days.map(\.dayID), ["pull", "push"])
+        let push = days[1]
+        XCTAssertEqual(push.sessions, 1)
+        XCTAssertEqual(push.changePercent, 5)
+        XCTAssertEqual(push.leader?.exerciseID, "bench")
+        // Row has no history and one session: nothing to compare yet.
+        XCTAssertNil(days[0].changePercent)
+        XCTAssertNil(days[0].leader)
+    }
+
+    func testANewLiftIsMeasuredFromItsFirstSessionInTheWindow() {
+        let sessions = [
+            day("a", "legs", on: 2, [lift("squat", 100, 5)]),
+            day("b", "legs", on: 9, [lift("squat", 110, 5)]),
+        ]
+        let legs = ProgressOverview.progressByDay(in: sessions, since: date(1)).first
+        XCTAssertEqual(legs?.sessions, 2)
+        XCTAssertEqual(legs?.changePercent, 10)
+        XCTAssertEqual(legs?.leader?.deltaKg, Estimates.round(Estimates.e1RM(weightKg: 110, reps: 5)! - Estimates.e1RM(weightKg: 100, reps: 5)!, toIncrement: 0.5))
+        XCTAssertEqual(legs?.strength.first, 100)
+        XCTAssertEqual(legs.map { Estimates.round($0.strength[1], toIncrement: 0.1) }, 110)
+    }
+
+    func testTheDayChangeIsTheMeanOfItsLifts() {
+        let sessions = [
+            day("old", "upper", on: 1, month: 7, [lift("bench", 100, 5), lift("row", 100, 5)]),
+            day("a", "upper", on: 2, [lift("bench", 110, 5), lift("row", 96, 5)]),
+        ]
+        let upper = ProgressOverview.progressByDay(in: sessions, since: date(1)).first
+        XCTAssertEqual(upper?.changePercent, 3)
+        XCTAssertEqual(upper?.leader?.exerciseID, "bench")
+    }
 }
