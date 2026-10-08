@@ -113,9 +113,9 @@ final class AccountTests: XCTestCase {
         let lines = csv.split(separator: "\n").map(String.init)
 
         XCTAssertEqual(lines.count, 3, "header plus the two written working sets")
-        XCTAssertTrue(lines[0].hasPrefix("datum,dag,sessie_id,oefening"))
+        XCTAssertTrue(lines[0].hasPrefix("date,day,session_id,exercise"))
         XCTAssertTrue(lines[1].contains("Flat bench press,flat-bench,2,100,6,1"), lines[1])
-        XCTAssertTrue(lines[1].contains("voorgeschreven"))
+        XCTAssertTrue(lines[1].contains("prescribed"))
         XCTAssertTrue(lines[2].contains("extra,incline-bench"), lines[2])
         XCTAssertTrue(lines[2].hasSuffix(",50,3,3,100"), "session context travels with every row: \(lines[2])")
     }

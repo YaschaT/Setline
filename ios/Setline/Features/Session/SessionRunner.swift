@@ -848,9 +848,9 @@ final class SessionRunner {
     /// The role name the timer labels itself with.
     static func roleLabel(_ role: ExerciseRole) -> String {
         switch role {
-        case .primaryStrength: return "primaire lift"
-        case .secondaryCompound: return "samengesteld"
-        case .accessory, .isolation: return "isolatie"
+        case .primaryStrength: return "main lift"
+        case .secondaryCompound: return "compound"
+        case .accessory, .isolation: return "isolation"
         }
     }
 

@@ -29,7 +29,7 @@ public enum StateExport {
     /// they are never stored as training data.
     public static func csv(from sessions: [TrainingSession]) -> String {
         var rows = [
-            "datum,dag,sessie_id,oefening,oefening_id,set,gewicht_kg,reps,rir,pauzereps,partiele_reps,type,vervangt,sessieduur_min,sets_gepland,sets_gelogd,voltooid_pct",
+            "date,day,session_id,exercise,exercise_id,set,weight_kg,reps,rir,paused_reps,partial_reps,type,replaces,session_min,sets_planned,sets_logged,completed_pct",
         ]
         for session in sessions.sorted(by: { $0.date < $1.date }) {
             let date = LegacyAdapter.isoString(session.date)
@@ -42,7 +42,7 @@ public enum StateExport {
                     let rir: String = set.rirReported.map(String.init) ?? ""
                     let paused: String = set.pausedReps.map(String.init) ?? ""
                     let partial: String = set.partialReps.map(String.init) ?? ""
-                    let kind: String = set.origin == .sessionAdded ? "extra" : "voorgeschreven"
+                    let kind: String = set.origin == .sessionAdded ? "extra" : "prescribed"
                     let substituted: String = set.substitutedFrom ?? ""
 
                     var fields: [String] = [date, session.dayLabel, session.id, result.name, result.exerciseID]

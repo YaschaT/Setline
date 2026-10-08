@@ -41,18 +41,30 @@ struct SLStepper: View {
     }
 
     /// The number keeps every one of its characters at every text size: it
-    /// shrinks a little before it would ever be cut.
-    @ViewBuilder
-    private func value(fills: Bool) -> some View {
-        let text = Text(display)
-            .font(.sl(valueSize, SL.Weight.semibold))
+    /// steps down a size before it would ever run under the + button. Chosen
+    /// explicitly with `ViewThatFits` — `minimumScaleFactor` does not shrink
+    /// text drawn with the exact line height, so "10" in the 140pt reps tile
+    /// used to slide under the +.
+    private func number(_ size: CGFloat, fills: Bool) -> some View {
+        Text(display)
+            .font(.sl(size, SL.Weight.semibold))
             .monospacedDigit()
-            .slLineHeight(1, size: valueSize)
+            .slLineHeight(1, size: size)
             .foregroundStyle(ink)
             .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .fixedSize(horizontal: false, vertical: fills)
-            .frame(maxWidth: .infinity, alignment: fills ? .leading : .center)
+            .fixedSize(horizontal: true, vertical: fills)
+    }
+
+    @ViewBuilder
+    private func value(fills: Bool) -> some View {
+        let text = ViewThatFits(in: .horizontal) {
+            number(valueSize, fills: fills)
+            number(valueSize * 0.82, fills: fills)
+            number(valueSize * 0.68, fills: fills)
+            number(valueSize * 0.55, fills: fills)
+        }
+        .frame(maxWidth: .infinity, alignment: fills ? .leading : .center)
+        .clipped()
 
         if let onTapValue {
             Button(action: onTapValue) {
@@ -109,7 +121,7 @@ struct SLStepper: View {
         // One adjustable element: swipe up or down to step, and the value's
         // own destination as a named action.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label), \(display)\(isChanged ? ", aangepast" : "")")
+        .accessibilityLabel("\(label), \(display)\(isChanged ? ", changed" : "")")
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: onIncrement()
@@ -119,7 +131,7 @@ struct SLStepper: View {
         }
         .accessibilityActions {
             if let onTapValue {
-                Button(valueHint ?? "Waarde typen", action: onTapValue)
+                Button(valueHint ?? "Type a value", action: onTapValue)
             }
         }
     }

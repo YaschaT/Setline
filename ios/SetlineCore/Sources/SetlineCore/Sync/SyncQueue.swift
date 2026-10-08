@@ -102,7 +102,7 @@ public enum SyncQueue {
                 }
 
             case .addProgramReplacement, .removeProgramReplacement, .addCustomExercise:
-                if !rows.contains(where: { $0.title == "Oefeningen" }) {
+                if !rows.contains(where: { $0.title == "Exercises" }) {
                     rows.append(Row(title: "Exercises", detail: "Replaced or added"))
                 }
 

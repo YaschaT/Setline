@@ -722,9 +722,9 @@ struct SessionView: View {
     private func toneLabel(_ tone: ProposalTone) -> String {
         switch tone {
         case .ready: return "Top of range confirmed"
-        case .close: return "Bijna"
-        case .neutral: return "Voorstel"
-        case .noReference: return "Referentie"
+        case .close: return "Almost"
+        case .neutral: return "Suggestion"
+        case .noReference: return "Reference"
         }
     }
 
@@ -1249,7 +1249,7 @@ struct SessionView: View {
     /// Where the numbers in the card came from, in the design's own words.
     private func status(setIndex: Int, set: LoggedSet) -> String {
         let slotIndex = runner.currentIndex
-        if adjusted.contains(set.id) { return "aangepast" }
+        if adjusted.contains(set.id) { return "adjusted" }
         if setIndex == 0, runner.needsCalibration(slotIndex: slotIndex) { return "kalibratieset" }
         guard let weight = set.weightKg, weight > 0 else { return "no weight yet" }
 
