@@ -31,6 +31,7 @@ struct AccountView: View {
     @State private var pickingPhoto = false
     @State private var photoItem: PhotosPickerItem?
     @State private var photoFailed = false
+    @State private var showsCredits = false
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -51,6 +52,7 @@ struct AccountView: View {
                     planRows
                     section("Data")
                     exportRow
+                    row("Photo credits") { showsCredits = true }
                     signOutRow
                 }
                 .padding(.horizontal, SL.Space.s5)
@@ -61,6 +63,7 @@ struct AccountView: View {
         .task { buildExports() }
         .onChange(of: app.sessions.count) { _, _ in buildExports() }
         .sheet(isPresented: $reauthenticating) { reauthentication }
+        .sheet(isPresented: $showsCredits) { credits }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })
         }
@@ -423,6 +426,35 @@ struct AccountView: View {
         .accessibilityAddTraits(change == nil ? [] : .isButton)
         .accessibilityHint(change == nil ? "" : "Double-tap to change")
         .onTapGesture { change?() }
+    }
+
+    /// Who made the food photos, as their licences ask.
+    private var credits: some View {
+        NavigationStack {
+            List {
+                Section("Quick adds") {
+                    ForEach(FoodIdeas.all) { idea in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(idea.name).slBody()
+                            Text(idea.credit).slMeta().foregroundStyle(SL.Ink.secondary)
+                        }
+                    }
+                }
+                Section("Search results") {
+                    Text("Product photos and data from Open Food Facts, under the Open Database Licence.")
+                        .slMeta().foregroundStyle(SL.Ink.secondary)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SL.Surface.ground)
+            .navigationTitle("Photo credits")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showsCredits = false }
+                }
+            }
+        }
     }
 
     private static var chevron: some View {

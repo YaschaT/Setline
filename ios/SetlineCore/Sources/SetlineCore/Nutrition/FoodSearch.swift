@@ -12,17 +12,36 @@ public struct FoodProduct: Identifiable, Equatable, Decodable, Sendable {
     /// The line under the name: where the numbers came from, in the server's
     /// own words.
     public let note: String
+    /// The product's front photo from Open Food Facts, when it has one. The
+    /// generic table has none.
+    public let imageURL: URL?
 
     private enum CodingKeys: String, CodingKey {
         case id, name, brand, calories, protein, carbs, fat
         case note = "sourceNote"
+        case imageURL = "imageUrl"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        brand = try container.decodeIfPresent(String.self, forKey: .brand) ?? ""
+        calories = try container.decode(Double.self, forKey: .calories)
+        protein = try container.decode(Double.self, forKey: .protein)
+        carbs = try container.decode(Double.self, forKey: .carbs)
+        fat = try container.decode(Double.self, forKey: .fat)
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        let image = try container.decodeIfPresent(String.self, forKey: .imageURL) ?? ""
+        imageURL = image.isEmpty ? nil : URL(string: image)
     }
 
     public init(
         id: String, name: String, brand: String,
         calories: Double, protein: Double, carbs: Double, fat: Double,
-        note: String
+        note: String, imageURL: URL? = nil
     ) {
+        self.imageURL = imageURL
         self.id = id
         self.name = name
         self.brand = brand

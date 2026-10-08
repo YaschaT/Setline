@@ -69,18 +69,7 @@ struct NutritionHomeView: View {
             VStack(alignment: .leading, spacing: SL.Space.s6) {
                 SLScreenTitle(title: "Nutrition", subtitle: SLDateText.long(now))
                 hero
-                macros
-                if let shortfall = ProteinShortfall.make(entries: app.nutritionEntries, targets: app.targets, today: now) {
-                    SLAttentionCard(title: "Heads up") {
-                        Text("\(shortfall.days) days in a row under your protein target. \(shortfall.averageGrams) g short on average.".slUnbroken)
-                            .slBody()
-                            .slNumerals()
-                            .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(SL.Ink.primary)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
+                ideasSection
                 eatenSection
             }
             .padding(.horizontal, SL.Space.gutterSession)
@@ -214,6 +203,18 @@ struct NutritionHomeView: View {
             .buttonStyle(.plain)
             .accessibilityHint("Opens your daily targets")
 
+            // The three macros, in the same card as the energy they make up.
+            let macroLayout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s4))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: SL.Space.s4))
+            macroLayout {
+                ForEach(Array(Macro.allCases.enumerated()), id: \.element) { index, macro in
+                    macroColumn(macro, level: index)
+                }
+            }
+            .padding(.top, SL.Space.s3)
+            .overlay(alignment: .top) { SLHairline() }
+
             Button {
                 // The clock is read again as the sheet opens: a screen left
                 // open since breakfast must not log lunch as breakfast, or on
@@ -234,6 +235,73 @@ struct NutritionHomeView: View {
         .slBorderBox()
         .frame(maxWidth: .infinity, alignment: .leading)
         .slHeroCard()
+    }
+
+    // MARK: - Quick adds
+
+    /// Everyday foods with their photo, one tap to log at the meal the clock
+    /// suggests. Protein-dense ones lead while protein is what is missing,
+    /// and the head says how much is.
+    private var ideasSection: some View {
+        let proteinTarget = day.target(for: .protein)
+        let proteinLeft = max(0, proteinTarget - day.total(of: .protein))
+        let ideas = FoodIdeas.ordered(proteinLeft: proteinLeft)
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLSectionHead(
+                title: "Quick adds",
+                meta: proteinTarget > 0 && proteinLeft > 0 ? "\(app.display.whole(Decimal(proteinLeft))) g protein to go" : nil
+            )
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: SL.Space.s3) {
+                    ForEach(ideas) { idea in ideaCard(idea) }
+                }
+                .padding(.horizontal, SL.Space.gutterSession)
+            }
+            .padding(.horizontal, -SL.Space.gutterSession)
+        }
+    }
+
+    private func ideaCard(_ idea: FoodIdea) -> some View {
+        Button {
+            let moment = Date()
+            now = moment
+            add(idea.entry(id: "food-\(Int(moment.timeIntervalSince1970 * 1000))", date: moment, meal: Meal.likely(at: moment)))
+        } label: {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                SLFoodPhoto(source: .asset(idea.imageName), cornerRadius: SL.Radius.md)
+                    .frame(width: 136, height: 96)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(SL.Signal.onAction)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(SL.Signal.action))
+                            .padding(6)
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(idea.name)
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                        .lineLimit(1)
+                    Text("\(idea.portion) · \(app.display.whole(Decimal(idea.protein))) g protein")
+                        .slMeta()
+                        .monospacedDigit()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                    Text(app.display.kcal(Decimal(idea.calories)))
+                        .slMeta()
+                        .monospacedDigit()
+                        .foregroundStyle(SL.Ink.tertiary)
+                }
+                .padding(.horizontal, 2)
+            }
+            .frame(width: 136, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(idea.name), \(idea.portion), \(app.display.whole(Decimal(idea.protein))) grams of protein, \(app.display.kcal(Decimal(idea.calories)))")
+        .accessibilityHint("Adds it to \(likely.spoken)")
     }
 
     // MARK: - Macros
@@ -465,7 +533,7 @@ struct NutritionHomeView: View {
     private func save(_ changed: NutritionEntry, was previous: NutritionEntry) {
         guard changed != previous else { return }
         Task { await app.log(food: changed) }
-        show("\(changed.name) bijgewerkt") {
+        show("\(changed.name) updated") {
             Task { await app.log(food: previous) }
         }
     }

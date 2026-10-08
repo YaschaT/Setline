@@ -354,7 +354,8 @@ struct AddFoodSheet: View {
     private func productRow(_ product: FoodProduct) -> some View {
         row(
             title: product.name,
-            detail: "100 g · \(app.display.kcal(Decimal(product.calories))) · \(product.brand)"
+            detail: "100 g · \(app.display.kcal(Decimal(product.calories)))\(product.brand.isEmpty ? "" : " · \(product.brand)")",
+            photo: .url(product.imageURL)
         ) {
             let draft = FoodSearch.portion(of: product, grams: 100)
             onLog(
@@ -375,9 +376,12 @@ struct AddFoodSheet: View {
         }
     }
 
-    private func row(title: String, detail: String, add: @escaping () -> Void) -> some View {
+    private func row(title: String, detail: String, photo: SLFoodPhoto.Source? = nil, add: @escaping () -> Void) -> some View {
         Button(action: add) {
             HStack(spacing: SL.Space.s3) {
+                if let photo {
+                    SLFoodPhoto(source: photo).frame(width: 44, height: 44)
+                }
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
                         .slLead()
