@@ -81,6 +81,9 @@ struct RootView: View {
         // Whatever loading led to fades in where the loading screen stood.
         .animation(.easeInOut(duration: 0.25), value: app.isLoading)
         .animation(.easeInOut(duration: 0.3), value: launchIntroDone)
+        // Re-decided whenever the account changes: a logged workout takes
+        // tonight's reminder away.
+        .task(id: app.revision) { await StreakReminder.update(app: app) }
         .onChange(of: app.isLoading, initial: true) { _, loading in
             if !loading { launchLoadDone = true }
         }

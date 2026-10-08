@@ -143,7 +143,7 @@ struct TrainingHomeView: View {
                 )
             case .streak:
                 StreakSheet(streak: app.streak, onClose: { sheet = nil })
-                    .presentationDetents([.medium])
+                    .presentationDetents([.large])
             case .preview(let day):
                 preview(day)
             case .plan(let date):

@@ -72,3 +72,33 @@ final class TrainingStreakTests: XCTestCase {
         XCTAssertEqual(result.thisWeekDone, 1)
     }
 }
+
+final class StreakFreezeTests: XCTestCase {
+    func testOneMissInFourIsForgiven() {
+        let r = TrainingStreak.run([true, true, false, true])
+        XCTAssertEqual(r.streak, 3, "the missed week neither counts nor breaks")
+        XCTAssertEqual(r.sinceFreeze, 1)
+    }
+
+    func testTwoMissesInARowBreakIt() {
+        XCTAssertEqual(TrainingStreak.run([true, true, false, false, true]).streak, 1)
+    }
+
+    func testASecondMissWithinFourWeeksBreaksIt() {
+        XCTAssertEqual(TrainingStreak.run([true, false, true, false, true]).streak, 1)
+    }
+
+    func testTheFreezeComesBackAfterFourWeeks() {
+        XCTAssertEqual(TrainingStreak.run([true, false, true, true, true, true, false, true]).streak, 6)
+    }
+
+    func testBestRemembersTheLongestRun() {
+        let r = TrainingStreak.run([true, true, true, true, false, false, true])
+        XCTAssertEqual(r.best, 4)
+        XCTAssertEqual(r.streak, 1)
+    }
+
+    func testNoFreezeBeforeThereIsAStreak() {
+        XCTAssertFalse(TrainingStreak.run([false]).lastFrozen)
+    }
+}

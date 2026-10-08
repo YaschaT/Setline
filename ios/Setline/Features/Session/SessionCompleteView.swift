@@ -17,6 +17,17 @@ struct SessionCompleteView: View {
     let onBack: () -> Void
     let onSave: () -> Void
 
+    @State private var celebration: Celebration?
+
+    /// Milestones this workout reaches, worked out before it is saved.
+    private var newMilestones: [Milestone] {
+        let pending = runner.finishedSession(existing: nil)
+        let best = app.streak(adding: runner.startedAt, day: runner.day).best
+        let before = Set(Milestones.make(sessions: app.sessions, bestStreak: app.streak.best).filter(\.isReached).map(\.id))
+        return Milestones.make(sessions: app.sessions + [pending], bestStreak: best)
+            .filter { $0.isReached && !before.contains($0.id) }
+    }
+
     var body: some View {
         ZStack {
             SL.Surface.ground.ignoresSafeArea()
@@ -54,11 +65,47 @@ struct SessionCompleteView: View {
                         streakBlock.padding(.top, SL.Space.s5)
                     }
 
+                    ForEach(newMilestones) { milestone in
+                        HStack(spacing: SL.Space.s3) {
+                            Image(systemName: "rosette")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(SL.Signal.action)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("New milestone").slMeta().foregroundStyle(SL.Ink.secondary)
+                                Text(milestone.title).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                            }
+                            Spacer()
+                        }
+                        .padding(SL.Space.s4)
+                        .slBorderBox()
+                        .slListCard()
+                        .padding(.top, SL.Space.s3)
+                        .accessibilityElement(children: .combine)
+                    }
+
                     records.padding(.top, SL.Space.s5)
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.top, SL.Space.s3)
                 .padding(.bottom, SL.Space.s12)
+            }
+        }
+        .slCelebration($celebration)
+        .task {
+            // The moment this workout earns, once, a beat after the screen
+            // appears: a milestone first, else a completed week.
+            try? await Task.sleep(for: .milliseconds(450))
+            if let milestone = newMilestones.first {
+                celebration = Celebration(symbol: "rosette", title: "Milestone reached", detail: milestone.title)
+            } else if Calendar.current.isDate(runner.startedAt, equalTo: Date(), toGranularity: .weekOfYear) {
+                let streak = app.streak(adding: runner.startedAt, day: runner.day)
+                if streak.thisWeekDone == streak.thisWeekGoal {
+                    celebration = Celebration(
+                        symbol: "flame.fill",
+                        title: "Week goal reached",
+                        detail: streak.weeks == 1 ? "Your streak has started" : "\(streak.weeks)-week streak"
+                    )
+                }
             }
         }
         .safeAreaInset(edge: .bottom) {

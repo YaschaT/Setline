@@ -8,19 +8,57 @@ import Foundation
 /// has training days that week — on any days, so a session moved to Sunday
 /// still counts. The week that is running never breaks the streak: until it
 /// is over it can still be met, and once met it joins the count at once.
+///
+/// A streak freeze: one missed week in any four is forgiven — the streak
+/// neither grows nor breaks — so one sick week doesn't undo months of
+/// training. Two misses within four weeks still break it.
 public struct TrainingStreak: Equatable, Sendable {
     /// Weeks met in a row, the running week included once it is met.
     public let weeks: Int
     /// Workouts logged this week, and how many the plan asks for.
     public let thisWeekDone: Int
     public let thisWeekGoal: Int
+    /// The longest streak this account has had, the current one included.
+    public var best: Int = 0
+    /// Whether a missed week would be forgiven right now.
+    public var freezeAvailable: Bool = true
+    /// Last week was missed and the freeze covered it.
+    public var freezeUsedLastWeek: Bool = false
 
     public var thisWeekMet: Bool { thisWeekDone >= thisWeekGoal }
 
-    public init(weeks: Int, thisWeekDone: Int, thisWeekGoal: Int) {
+    public init(weeks: Int, thisWeekDone: Int, thisWeekGoal: Int,
+                best: Int = 0, freezeAvailable: Bool = true, freezeUsedLastWeek: Bool = false) {
         self.weeks = weeks
         self.thisWeekDone = thisWeekDone
         self.thisWeekGoal = thisWeekGoal
+        self.best = max(best, weeks)
+        self.freezeAvailable = freezeAvailable
+        self.freezeUsedLastWeek = freezeUsedLastWeek
+    }
+
+    /// Weeks a freeze needs between uses.
+    public static let freezeEvery = 4
+
+    /// The streak over a run of finished weeks, oldest first: where it stands
+    /// after the last one, the best it reached, and how the freeze stands.
+    static func run(_ met: [Bool]) -> (streak: Int, best: Int, sinceFreeze: Int, lastFrozen: Bool) {
+        var streak = 0, best = 0, sinceFreeze = freezeEvery, lastFrozen = false
+        for week in met {
+            lastFrozen = false
+            if week {
+                streak += 1
+                sinceFreeze += 1
+            } else if streak > 0, sinceFreeze >= freezeEvery {
+                sinceFreeze = 0
+                lastFrozen = true
+            } else {
+                streak = 0
+                sinceFreeze = freezeEvery
+            }
+            best = max(best, streak)
+        }
+        return (streak, best, sinceFreeze, lastFrozen)
     }
 
     public static func make(
@@ -57,14 +95,22 @@ public struct TrainingStreak: Equatable, Sendable {
             return TrainingStreak(weeks: 0, thisWeekDone: current.done, thisWeekGoal: current.goal)
         }
 
-        var weeks = current.done >= current.goal ? 1 : 0
-        var monday = thisMonday
-        while let previous = calendar.date(byAdding: .day, value: -7, to: monday), previous >= firstMonday {
-            let past = week(previous)
-            guard past.done >= past.goal else { break }
-            weeks += 1
-            monday = previous
+        // Every finished week since the first workout, oldest first.
+        var met: [Bool] = []
+        var monday = firstMonday
+        while monday < thisMonday {
+            let past = week(monday)
+            met.append(past.done >= past.goal)
+            guard let next = calendar.date(byAdding: .day, value: 7, to: monday) else { break }
+            monday = next
         }
-        return TrainingStreak(weeks: weeks, thisWeekDone: current.done, thisWeekGoal: current.goal)
+        let history = run(met)
+        let weeks = history.streak + (current.done >= current.goal ? 1 : 0)
+        return TrainingStreak(
+            weeks: weeks, thisWeekDone: current.done, thisWeekGoal: current.goal,
+            best: max(history.best, weeks),
+            freezeAvailable: history.sinceFreeze >= freezeEvery,
+            freezeUsedLastWeek: history.lastFrozen
+        )
     }
 }

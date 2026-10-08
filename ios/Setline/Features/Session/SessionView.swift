@@ -29,6 +29,8 @@ struct SessionView: View {
     /// Proposal notes opened with `Toon` at accessibility text sizes.
     /// The suggestion's reasoning, asked for from its line.
     @State private var explainsSuggestion = false
+    /// A new PR, marked the moment it is saved.
+    @State private var celebration: Celebration?
     /// The session's full exercise list, folded away until asked for.
     @State private var showsExerciseList = false
     @State private var asksAboutNotifications = false
@@ -85,6 +87,7 @@ struct SessionView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { dock }
+        .slCelebration($celebration)
         .animation(
             .easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion)),
             value: runner.completedSetCount
@@ -157,6 +160,7 @@ struct SessionView: View {
                     proposedRIR: rirDraft[row.id],
                     onLog: { entry in
                         runner.log(slotIndex: editing.slot, setIndex: editing.set, entry: entry)
+                        celebrateIfRecord(slotIndex: editing.slot, setIndex: editing.set)
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         closeEntry()
                         Task { await askAboutNotificationsIfWorthIt() }
@@ -1342,6 +1346,20 @@ struct SessionView: View {
         .accessibilityLabel("Save set, \(app.display.kg(weight)) × \(reps)")
     }
 
+    /// A set that is a personal record gets its moment.
+    private func celebrateIfRecord(slotIndex: Int, setIndex: Int) {
+        guard let row = runner.rows(for: slotIndex).first(where: { $0.index == setIndex }),
+              row.delta == .personalRecord,
+              let weight = runner.slots[slotIndex].sets[setIndex].weightKg
+        else { return }
+        let set = runner.slots[slotIndex].sets[setIndex]
+        celebration = Celebration(
+            symbol: "trophy.fill",
+            title: "New PR",
+            detail: "\(runner.slots[slotIndex].exercise.name) · \(app.display.setReference(weightKg: weight, reps: set.reps))"
+        )
+    }
+
     /// One tap: writes the set as the card shows it and starts the rest.
     private func save(slotIndex: Int, setIndex: Int) {
         let slot = runner.slots[slotIndex]
@@ -1367,6 +1385,7 @@ struct SessionView: View {
         AccessibilityNotification.Announcement(
             "Set \(setIndex + 1) saved, \(app.display.kg(weight)) × \(reps)"
         ).post()
+        celebrateIfRecord(slotIndex: slotIndex, setIndex: setIndex)
         Task { await askAboutNotificationsIfWorthIt() }
     }
 

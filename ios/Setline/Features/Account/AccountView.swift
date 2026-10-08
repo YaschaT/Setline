@@ -438,11 +438,13 @@ struct AccountView: View {
                             Text(idea.name).slBody()
                             Text(idea.credit).slMeta().foregroundStyle(SL.Ink.secondary)
                         }
+                        .listRowBackground(SL.Surface.raised)
                     }
                 }
                 Section("Search results") {
                     Text("Product photos and data from Open Food Facts, under the Open Database Licence.")
                         .slMeta().foregroundStyle(SL.Ink.secondary)
+                        .listRowBackground(SL.Surface.raised)
                 }
             }
             .scrollContentBackground(.hidden)
