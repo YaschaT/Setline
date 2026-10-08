@@ -27,7 +27,10 @@ struct SessionView: View {
     @State private var showsPlates = false
     @State private var toast: SessionToast?
     /// Proposal notes opened with `Toon` at accessibility text sizes.
-    @State private var expandedProposals: Set<Int> = []
+    /// The suggestion's reasoning, asked for from its line.
+    @State private var explainsSuggestion = false
+    /// The session's full exercise list, folded away until asked for.
+    @State private var showsExerciseList = false
     @State private var asksAboutNotifications = false
     /// Reps chosen in the input card for a set that is not saved yet. Kept by
     /// set, so the next set opens on its own target again.
@@ -578,154 +581,68 @@ struct SessionView: View {
 
     // MARK: - What SETLINE says before set 1
 
-    /// One note above the sets, and only before the first of them is written:
-    /// the calibration ask for an exercise with no history, or the proposal.
-    /// Neither applies anything — the proposal is already in the input card,
-    /// and is changed there.
+    /// One line above the sets, and only when it adds something the
+    /// pre-filled numbers don't already say: what a calibration set asks for,
+    /// or that the weight goes up (or nearly does) today. A plain "keep
+    /// building" suggestion says nothing the input card doesn't, so it is not
+    /// drawn at all.
     @ViewBuilder
     private var aboveTheSets: some View {
         if let prompt = runner.calibrationPrompt(slotIndex: runner.currentIndex) {
-            SLNoteCard(tone: .action) {
-                SLOverline(text: "Set 1 · calibration", color: SL.Signal.action)
-                Text(prompt.headline)
-                    .slLead()
-                    .slLineHeight(1.3, size: SL.TypeSize.lead)
-                    .foregroundStyle(SL.Ink.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(prompt.body)
-                    .slBody()
-                    .slLineHeight(1.45, size: SL.TypeSize.body)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            hintLine(prompt.headline, tone: SL.Signal.action)
         } else if runner.calibrationSummary(slotIndex: runner.currentIndex) != nil {
-            // Set 1 is named in the card's head and the reference it starts is
-            // named under the sets — nothing to propose yet.
-        } else if runner.showsProposal {
-            proposalNote
+            // Set 1 is in; the reference it starts is named under the sets.
+        } else if runner.showsProposal, let line = suggestionLine {
+            Button { explainsSuggestion = true } label: {
+                hintLine(line.text, tone: line.tone, explains: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows why")
+            .alert(runner.current.proposal.headline, isPresented: $explainsSuggestion) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(runner.current.proposal.body)
+            }
         }
     }
 
-    /// One component, four tones. None of them applies anything.
-    private var proposalNote: some View {
+    /// "↑ 102.5 kg today" where the top of the range is confirmed, the
+    /// headline where it is close; nothing otherwise.
+    private var suggestionLine: (text: String, tone: Color)? {
         let proposal = runner.current.proposal
-        let index = runner.currentIndex
-        let collapsed = typeSize.isAccessibilitySize && !expandedProposals.contains(index)
-        return SLNoteCard(tone: tone(proposal.tone)) {
-            HStack(alignment: .center, spacing: SL.Space.s3) {
-                SLOverline(text: proposal.label ?? toneLabel(proposal.tone), color: tone(proposal.tone).color)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: SL.Space.s2)
-                Button { runner.dismissProposal(slotIndex: index) } label: {
-                    SLGlyph(name: .close, size: 14)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close suggestion")
-                // 44 to touch; the overline keeps its own line height.
-                .padding(.vertical, -14)
-                .padding(.trailing, -SL.Space.s3)
-            }
-
-            Text((collapsed ? compactProposalSummary : proposal.headline).slUnbroken)
-                .slLead()
-                .slNumerals()
-                .slLineHeight(1.3, size: SL.TypeSize.lead)
-                .foregroundStyle(SL.Ink.primary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if collapsed {
-                // At accessibility sizes the full note pushes the first set off
-                // the screen. The same proposal on one line; `Toon` opens it.
-                Button { expandedProposals.insert(index) } label: {
-                    Text("Show")
-                        .slBody(SL.Weight.semibold)
-                        .foregroundStyle(SL.Signal.action)
-                        .frame(minHeight: SL.Space.hitMin)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Show the full suggestion")
-            } else {
-                Text(proposal.body.slUnbroken)
-                    .slBody()
-                    .slNumerals()
-                    .slLineHeight(1.45, size: SL.TypeSize.body)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if proposal.tone != .noReference, runner.proposedTargets(slotIndex: index) != nil {
-                    aimRow
-                }
-            }
+        switch proposal.tone {
+        case .ready:
+            let weight = runner.proposedWeight(slotIndex: runner.currentIndex).map { app.display.kg($0) }
+            return (weight.map { "↑ \($0) today · you earned it" } ?? proposal.headline, SL.Signal.action)
+        case .close:
+            return (proposal.headline, SL.Signal.attention)
+        case .neutral, .noReference:
+            return nil
         }
     }
 
-    /// `Mik op`: the reps every open set aims at, moved together so a mixed
-    /// prescription keeps its shape — `5 · 6 · 6` becomes `6 · 7 · 7`. It
-    /// changes what the sets are pre-filled with and never writes one.
-    private var aimRow: some View {
-        let index = runner.currentIndex
-        let targets = runner.proposedTargets(slotIndex: index) ?? []
-        return HStack(alignment: .center, spacing: SL.Space.s2) {
-            Text("Aim for \(ProgressionEngine.repsLabel(targets))")
-                .slBody(SL.Weight.semibold)
+    /// A dot and one sentence: the quietest way the screen can say something.
+    private func hintLine(_ text: String, tone: Color, explains: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+            Circle().fill(tone).frame(width: 7, height: 7)
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                .accessibilityHidden(true)
+            Text(text.slUnbroken)
+                .slBody(SL.Weight.medium)
                 .slNumerals()
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            aimButton("−", label: "One rep fewer per set") { runner.adjustProposedReps(slotIndex: index, by: -1) }
-            aimButton("+", label: "One rep more per set") { runner.adjustProposedReps(slotIndex: index, by: 1) }
+            if explains {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .accessibilityHidden(true)
+            }
         }
-        .padding(.top, SL.Space.s1)
-        .accessibilityElement(children: .contain)
-    }
-
-    private func aimButton(_ glyph: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(glyph)
-                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
-                .foregroundStyle(SL.Ink.primary)
-                .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
-                .background(
-                    RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                        .fill(SL.Surface.hairline)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
-    private var compactProposalSummary: String {
-        let index = runner.currentIndex
-        let proposal = runner.current.proposal
-        guard proposal.tone != .noReference else { return proposal.headline }
-        let weight = runner.proposedWeight(slotIndex: index).map { app.display.kg($0) } ?? "—"
-        guard let targets = runner.proposedTargets(slotIndex: index) else { return weight }
-        return "\(weight) · aim for \(ProgressionEngine.repsLabel(targets))"
-    }
-
-    /// Only the dot, the overline and the edge change between tones: lime
-    /// where the top of the range is confirmed, amber where it is close, grey
-    /// for the quiet two.
-    private func tone(_ tone: ProposalTone) -> SLNoteTone {
-        switch tone {
-        case .ready: return .action
-        case .close: return .attention
-        case .neutral, .noReference: return .quiet
-        }
-    }
-
-    private func toneLabel(_ tone: ProposalTone) -> String {
-        switch tone {
-        case .ready: return "Top of range confirmed"
-        case .close: return "Almost"
-        case .neutral: return "Suggestion"
-        case .noReference: return "Reference"
-        }
+        .padding(.horizontal, SL.Space.s1)
+        .frame(minHeight: SL.Space.hitMin)
+        .contentShape(Rectangle())
     }
 
     private var increment: Decimal { runner.current.exercise.incrementKg }
@@ -748,7 +665,7 @@ struct SessionView: View {
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             HStack(alignment: .center, spacing: SL.Space.s3) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Opwarmen").slLead().foregroundStyle(SL.Ink.primary)
+                    Text("Warm-up").slLead().foregroundStyle(SL.Ink.primary)
                         .accessibilityAddTraits(.isHeader)
                     Text(warmupLine)
                         .slMeta().slNumerals()
@@ -885,7 +802,7 @@ struct SessionView: View {
         let set = runner.slots[slotIndex].sets[row.index]
         let phase: SLSetRow.Phase = row.status == .written ? .done : row.status == .nextUp ? .open : .pending
         var label = "Set \(row.indexLabel)"
-        if phase == .open { label += " · open" } else if row.isAdded { label += " · extra" }
+        if row.isAdded { label += " · extra" }
 
         let value: String
         switch phase {
@@ -972,27 +889,20 @@ struct SessionView: View {
         return parts.joined(separator: ", ")
     }
 
-    /// Under the sets, once the calibration set is in: what it started.
+    /// Under the sets, once the calibration set is in: what it started, in a
+    /// line.
     private var referenceNote: some View {
-        SLNoteCard {
-            Text("Building a reference · session 1 of \(ExerciseHistory.sessionsBeforeReference)")
-                .slLead()
-                .slNumerals()
-                .foregroundStyle(SL.Ink.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text("After three sessions, SETLINE works out progress for \(runner.current.exercise.name.lowercased()). Until then, no suggestion and no record.")
-                .slBody()
-                .slLineHeight(1.45, size: SL.TypeSize.body)
-                .foregroundStyle(SL.Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: SL.Space.s1) {
+            Text("Building a reference · session 1 of \(ExerciseHistory.sessionsBeforeReference). Suggestions start after three.")
             if runner.didStepUpAfterCalibration(slotIndex: runner.currentIndex) {
-                Text("RIR 3 or more: set 2 is one step higher. Adjust it if that's not right.")
-                    .slBody()
-                    .slLineHeight(1.45, size: SL.TypeSize.body)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text("RIR 3 or more, so set 2 is one step heavier.")
             }
         }
+        .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
+        .monospacedDigit()
+        .foregroundStyle(SL.Ink.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, SL.Space.s1)
         .accessibilityElement(children: .combine)
     }
 
@@ -1001,15 +911,8 @@ struct SessionView: View {
     private var afterSets: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             if let advice = runner.adviceLine(for: runner.currentIndex) {
-                SLNoteCard(tone: advice.hasPrefix("Not") ? .quiet : .action) {
-                    Text(advice.slUnbroken)
-                        .slBody()
-                        .slNumerals()
-                        .slLineHeight(1.45, size: SL.TypeSize.body)
-                        .foregroundStyle(SL.Ink.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .transition(.opacity)
+                hintLine(advice, tone: advice.hasPrefix("Not") ? SL.Ink.tertiary : SL.Signal.action)
+                    .transition(.opacity)
             }
             Text(upNextLine.slUnbroken)
                 .slMeta().slNumerals()
@@ -1033,18 +936,40 @@ struct SessionView: View {
     /// another one. Always one scroll away — including while the rest runs.
     private var sessionSection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(
-                title: "\(runner.day.short) · \(Agenda.when(runner.startedAt))",
-                meta: "\(runner.completedSetCount) of \(runner.plannedSetCount) sets"
-            )
-            VStack(spacing: 0) {
-                ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
-                    exerciseRow(index: index, slot: slot)
-                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+            // Folded: the list is a way to jump, not something to read
+            // between sets.
+            Button {
+                withAnimation(.easeInOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
+                    showsExerciseList.toggle()
                 }
+            } label: {
+                HStack(spacing: SL.Space.s2) {
+                    Text("All exercises").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                    Text("\(runner.completedSetCount) of \(runner.plannedSetCount) sets")
+                        .slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
+                    Spacer(minLength: SL.Space.s2)
+                    SLGlyph(name: .chevronDown, size: 13)
+                        .foregroundStyle(SL.Ink.tertiary)
+                        .rotationEffect(.degrees(showsExerciseList ? 180 : 0))
+                }
+                .padding(.horizontal, SL.Space.s1)
+                .frame(minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
             }
-            .slBorderBox()
-            .slListCard()
+            .buttonStyle(.plain)
+            .accessibilityHint(showsExerciseList ? "Hides the list" : "Shows every exercise of this session")
+
+            if showsExerciseList {
+                VStack(spacing: 0) {
+                    ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
+                        exerciseRow(index: index, slot: slot)
+                            .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                    }
+                }
+                .slBorderBox()
+                .slListCard()
+                .transition(.opacity)
+            }
 
             if runner.hasProgress {
                 Button {
@@ -1166,6 +1091,7 @@ struct SessionView: View {
                     .buttonStyle(SLPrimaryButtonStyle(prominent: true))
                 } else {
                     steppers(slotIndex: slotIndex, setIndex: next, set: set)
+                    if showsPlatesButton { plateLine }
                     if asksForRIR(slotIndex: slotIndex, setIndex: next) {
                         reserveRow(set)
                     }
@@ -1224,24 +1150,24 @@ struct SessionView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
 
-            if !compact && !typeSize.isAccessibilitySize {
+            if !compact {
+                // Everything a set rarely needs — failed, paused, partial,
+                // RIR off-schedule, a typed weight — behind one quiet button.
                 Button {
                     entryOpensOnKeypad = false
                     runner.editing = (runner.currentIndex, setIndex)
-                } label: { Text("More") }
-                    .buttonStyle(SLPillButtonStyle(quiet: true))
-                    .accessibilityLabel("More options for this set")
-                    .accessibilityHint("Reps in reserve, failed, paused reps, partial or type a weight")
-            }
-            if showsPlatesButton && !typeSize.isAccessibilitySize {
-                Button { showsPlates = true } label: {
-                    HStack(spacing: SL.Space.s2) {
-                        SLGlyph(name: .plates, size: 16)
-                        Text("Plates")
-                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .background(Circle().fill(SL.Surface.raised2))
+                        .contentShape(Circle())
                 }
-                .buttonStyle(SLPillButtonStyle(quiet: true))
-                .accessibilityHint("Plates per side for this set")
+                .buttonStyle(.plain)
+                .slFocusRing(Circle())
+                .accessibilityLabel("More options for this set")
+                .accessibilityHint("Failed, paused or partial reps, RIR, or type a weight")
             }
         }
     }
@@ -1250,22 +1176,22 @@ struct SessionView: View {
     private func status(setIndex: Int, set: LoggedSet) -> String {
         let slotIndex = runner.currentIndex
         if adjusted.contains(set.id) { return "adjusted" }
-        if setIndex == 0, runner.needsCalibration(slotIndex: slotIndex) { return "kalibratieset" }
+        if setIndex == 0, runner.needsCalibration(slotIndex: slotIndex) { return "calibration set" }
         guard let weight = set.weightKg, weight > 0 else { return "no weight yet" }
 
         let slot = runner.current
         let reference = slot.history.mostRecent
         let prior = reference?.sets.first { $0.index == set.index }
         if let reference, prior?.weightKg == weight {
-            return "target from \(app.display.shortDate(reference.date))"
+            return "same as \(app.display.shortDate(reference.date))"
         }
         if slot.sets.prefix(setIndex).last(where: \.isLogged)?.weightKg == weight {
-            return "carried over: \(app.display.kg(weight))"
+            return "same as your last set"
         }
         if slot.proposal.weightKg == weight {
-            return "suggested: \(app.display.kg(weight))"
+            return "suggested for today"
         }
-        return "not saved yet"
+        return "ready when you are"
     }
 
     private func openReps(slotIndex: Int, setIndex: Int) -> Int {
@@ -1377,15 +1303,10 @@ struct SessionView: View {
         return Button {
             save(slotIndex: slotIndex, setIndex: setIndex)
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Save set")
-                Text(app.display.setReference(weightKg: weight, reps: reps))
-                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
-                    .slNumerals()
-                    .foregroundStyle(SL.Signal.onAction.opacity(0.72))
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            // The numbers are right above, in the steppers; the button only
+            // has to say what it does.
+            Text("Save set")
+                .lineLimit(1)
         }
         .buttonStyle(SLPrimaryButtonStyle(prominent: true))
         .disabled(weight <= 0 || reps <= 0)
@@ -1431,6 +1352,39 @@ struct SessionView: View {
               let weight = runner.proposedWeight(slotIndex: runner.currentIndex)
         else { return false }
         return weight > 0
+    }
+
+    /// What to put on the bar, without asking: "20 + 10 + 2.5 per side". The
+    /// line opens the calculator for other bars and nearby loads.
+    private var plateLine: some View {
+        let weight = runner.proposedWeight(slotIndex: runner.currentIndex) ?? 0
+        let rack = app.plateInventory
+        let solution = PlateMath.solve(target: weight, bar: rack.barKg, plates: rack.plates)
+        let text: String = {
+            if weight < rack.barKg { return "Lighter than the \(app.display.kg(rack.barKg)) bar" }
+            if solution.perSide.isEmpty { return "Just the bar" }
+            let plates = solution.perSide.map { app.display.number($0) }.joined(separator: " + ")
+            return solution.isExact ? "\(plates) per side" : "\(plates) per side · \(app.display.kg(solution.total))"
+        }()
+        return Button { showsPlates = true } label: {
+            HStack(spacing: SL.Space.s2) {
+                SLGlyph(name: .plates, size: 15).foregroundStyle(SL.Ink.tertiary)
+                Text(text)
+                    .slMeta()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: SL.Space.s1)
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.s2)
+            .frame(minHeight: 36)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Plates: \(text), bar \(app.display.kg(rack.barKg))")
+        .accessibilityHint("Opens the plate calculator")
     }
 
     /// For the set up next. A load chosen here moves every open set, as the
