@@ -432,6 +432,7 @@ struct SessionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: SL.Space.s4) {
                     exerciseHead.id(Self.topAnchor)
+                    if showsExerciseList { exerciseList }
                     changeLines
                     aboveTheSets
                     if showsLadder { warmupSection }
@@ -440,7 +441,6 @@ struct SessionView: View {
                         referenceNote
                     }
                     afterSets
-                    sessionSection
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.top, SL.Space.s2)
@@ -458,36 +458,73 @@ struct SessionView: View {
     /// secondary to logging but always on screen. Long-press is a shortcut for
     /// people who know it, never the only way in.
     private var exerciseHead: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s3))
-        return layout {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(runner.current.exercise.name)
-                    .slTitle()
-                    .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
-                    .foregroundStyle(SL.Ink.primary)
-                    .accessibilityAddTraits(.isHeader)
-                Text("Exercise \(runner.currentIndex + 1) of \(runner.slots.count) · \(Self.equipmentLabel(runner.current.exercise.equipment))")
-                    .slBody()
-                    .slNumerals()
-                    .foregroundStyle(SL.Ink.secondary)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onLongPressGesture { showsSwap = true }
-
-            Button { showsSwap = true } label: {
-                HStack(spacing: 6) {
-                    Text("Swap")
-                    SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            // Where you are in the session, one segment per exercise. The
+            // bar is also the way to the full list.
+            Button {
+                withAnimation(.easeInOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
+                    showsExerciseList.toggle()
                 }
+            } label: {
+                HStack(spacing: 3) {
+                    ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
+                        Capsule()
+                            .fill(segmentColor(index: index, slot: slot))
+                            .frame(height: 4)
+                    }
+                }
+                .frame(minHeight: 20)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(SLPillButtonStyle())
-            .accessibilityLabel("Swap \(runner.current.exercise.name)")
-            .accessibilityHint("Alternatives, change the order or report pain")
+            .buttonStyle(.plain)
+            .accessibilityLabel("Exercise \(runner.currentIndex + 1) of \(runner.slots.count)")
+            .accessibilityHint(showsExerciseList ? "Hides the exercise list" : "Shows every exercise of this session")
+
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s3))
+            layout {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(runner.current.exercise.name)
+                        .slTitle()
+                        .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
+                        .foregroundStyle(SL.Ink.primary)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(headSubtitle)
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onLongPressGesture { showsSwap = true }
+
+                Button { showsSwap = true } label: {
+                    HStack(spacing: 6) {
+                        Text("Swap")
+                        SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
+                    }
+                }
+                .buttonStyle(SLPillButtonStyle())
+                .accessibilityLabel("Swap \(runner.current.exercise.name)")
+                .accessibilityHint("Alternatives, change the order or report pain")
+            }
         }
+    }
+
+    /// "1 of 7 · next: Incline bench press"
+    private var headSubtitle: String {
+        let position = "\(runner.currentIndex + 1) of \(runner.slots.count)"
+        guard let next = runner.nextSlotIndex else { return "\(position) · last exercise" }
+        return "\(position) · next: \(runner.slots[next].exercise.name)"
+    }
+
+    private func segmentColor(index: Int, slot: SessionRunner.ExerciseSlot) -> Color {
+        if index == runner.currentIndex { return SL.Signal.action }
+        if slot.isComplete { return SL.Ink.secondary }
+        return SL.Surface.hairlineStrong
     }
 
     private static func equipmentLabel(_ equipment: Equipment) -> String {
@@ -719,48 +756,82 @@ struct SessionView: View {
 
     // MARK: - The sets
 
-    /// One row per set — each carries its own "last" value, so the card
-    /// needs no summary head. Adding a set lives in the input card's ⋯ menu.
+    /// The sets as chips in one row: what each one is (its result, or what
+    /// it aims at), with last time small underneath. A glance, not a table.
     private var setsCard: some View {
         let slotIndex = runner.currentIndex
         let rows = runner.rows(for: slotIndex)
-        return VStack(spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.index) { position, row in
-                setRow(row, slotIndex: slotIndex)
-                    .overlay(alignment: .top) { if position > 0 { SLHairline() } }
+        let columns = Array(repeating: GridItem(.flexible(), spacing: SL.Space.s2), count: min(max(rows.count, 1), 4))
+        return LazyVGrid(columns: typeSize.isAccessibilitySize ? [GridItem(.flexible())] : columns, spacing: SL.Space.s2) {
+            ForEach(rows, id: \.index) { row in
+                setChip(row, slotIndex: slotIndex)
+            }
+        }
+    }
+
+    private func setChip(_ row: SetRowPresentation, slotIndex: Int) -> some View {
+        let set = runner.slots[slotIndex].sets[row.index]
+        let phase: SLSetRow.Phase = row.status == .written ? .done : row.status == .nextUp ? .open : .pending
+        let reps = phase == .done ? set.reps : openReps(slotIndex: slotIndex, setIndex: row.index)
+        let value: String = {
+            switch phase {
+            case .done:
+                return set.weightKg.map { app.display.setReference(weightKg: $0, reps: set.reps) } ?? "—"
+            case .open:
+                return "\(set.weightKg.map(app.display.number) ?? "—") × \(reps)"
+            case .pending:
+                return row.weightKind == .awaitingCalibration ? "after set 1" : "× \(reps)"
+            }
+        }()
+        let note = phase == .done ? note(for: row) : nil
+        let under = note?.text ?? runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "last \($0)" } ?? (row.isAdded ? "extra" : " ")
+        let shape = RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+        return Button { runner.editing = (slotIndex, row.index) } label: {
+            VStack(spacing: 3) {
+                HStack(spacing: 4) {
+                    if phase == .done {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(SL.Signal.action)
+                    }
+                    Text(value)
+                        .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(phase == .open ? SL.Signal.action : phase == .done ? SL.Ink.primary : SL.Ink.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Text(under)
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                    .monospacedDigit()
+                    .foregroundStyle(note?.tone ?? SL.Ink.tertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(shape.fill(phase == .open ? SL.Signal.actionTint : SL.Surface.raised))
+            .overlay(shape.strokeBorder(phase == .open ? SL.Signal.action.opacity(0.7) : SL.Surface.hairline, lineWidth: 1))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken(row, value: value, phase: phase))
+        .accessibilityHint("Opens this set")
+    }
+
+    /// Every exercise of the session, opened from the progress bar.
+    private var exerciseList: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
+                exerciseRow(index: index, slot: slot)
+                    .overlay(alignment: .top) { if index > 0 { SLHairline() } }
             }
         }
         .slBorderBox()
         .slListCard()
-    }
-
-    private func setRow(_ row: SetRowPresentation, slotIndex: Int) -> some View {
-        let set = runner.slots[slotIndex].sets[row.index]
-        let phase: SLSetRow.Phase = row.status == .written ? .done : row.status == .nextUp ? .open : .pending
-        var label = "Set \(row.indexLabel)"
-        if row.isAdded { label += " · extra" }
-
-        let value: String
-        switch phase {
-        case .done:
-            value = set.weightKg.map { app.display.setReference(weightKg: $0, reps: set.reps) } ?? "—"
-        case .open:
-            let reps = openReps(slotIndex: slotIndex, setIndex: row.index)
-            value = "\(set.weightKg.map(app.display.number) ?? "—") × \(reps)"
-        case .pending:
-            value = row.weightKind == .awaitingCalibration ? row.weightLabel : "—"
-        }
-
-        return SLSetRow(
-            label: label,
-            phase: phase,
-            note: note(for: row),
-            previous: runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "last \($0)" },
-            value: value,
-            valueIsSentence: phase == .pending && row.weightKind == .awaitingCalibration,
-            spoken: spoken(row, value: value, phase: phase),
-            onTap: { runner.editing = (slotIndex, row.index) }
-        )
+        .transition(.opacity)
     }
 
     /// What the set was, where that is more than its numbers.
@@ -850,105 +921,42 @@ struct SessionView: View {
                 hintLine(advice, tone: advice.hasPrefix("Not") ? SL.Ink.tertiary : SL.Signal.action)
                     .transition(.opacity)
             }
-            Text(upNextLine.slUnbroken)
-                .slMeta().slNumerals()
-                .foregroundStyle(SL.Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, SL.Space.s1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var upNextLine: String {
-        guard let next = runner.nextSlotIndex else { return "Last exercise of the session" }
-        let slot = runner.slots[next]
-        let reps = slot.planned.sets.first?.repRange.upperBound ?? 0
-        return "Next · \(slot.exercise.name) · \(slot.planned.targetSets) × \(reps)"
     }
 
     // MARK: - The session
 
     /// Every exercise of the session, where you are in it, and the way to
     /// another one. Always one scroll away — including while the rest runs.
-    private var sessionSection: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
-            // Folded: the list is a way to jump, not something to read
-            // between sets.
-            Button {
-                withAnimation(.easeInOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
-                    showsExerciseList.toggle()
-                }
-            } label: {
-                HStack(spacing: SL.Space.s2) {
-                    Text("All exercises").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                    Text("\(runner.completedSetCount) of \(runner.plannedSetCount) sets")
-                        .slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
-                    Spacer(minLength: SL.Space.s2)
-                    SLGlyph(name: .chevronDown, size: 13)
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .rotationEffect(.degrees(showsExerciseList ? 180 : 0))
-                }
-                .padding(.horizontal, SL.Space.s1)
-                .frame(minHeight: SL.Space.hitMin)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(showsExerciseList ? "Hides the list" : "Shows every exercise of this session")
-
-            if showsExerciseList {
-                VStack(spacing: 0) {
-                    ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
-                        exerciseRow(index: index, slot: slot)
-                            .overlay(alignment: .top) { if index > 0 { SLHairline() } }
-                    }
-                }
-                .slBorderBox()
-                .slListCard()
-                .transition(.opacity)
-            }
-
-            // Finishing early is the top bar's Finish; a second button here
-            // said the same thing twice.
-        }
-        .padding(.top, SL.Space.s2)
-    }
-
     private func exerciseRow(index: Int, slot: SessionRunner.ExerciseSlot) -> some View {
         let isCurrent = index == runner.currentIndex
         let logged = slot.model.loggedSetCount
         let total = slot.model.setCount
-        return Button { runner.currentIndex = index } label: {
+        return Button {
+            runner.currentIndex = index
+            showsExerciseList = false
+        } label: {
             HStack(alignment: .center, spacing: SL.Space.s3) {
                 Text("\(index + 1)")
                     .slMeta().slNumerals()
-                    .foregroundStyle(isCurrent ? SL.Signal.action : SL.Ink.secondary)
-                    .frame(width: 24, alignment: .leading)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(slot.exercise.name)
-                        .slLead()
-                        .slLineHeight(1.3, size: SL.TypeSize.lead)
-                        .foregroundStyle(SL.Ink.primary)
-                    Text("\(logged) of \(total) sets\(slot.isComplete ? " · done" : "")")
-                        .slBody().slNumerals()
-                        .slLineHeight(1.35, size: SL.TypeSize.body)
-                        .foregroundStyle(SL.Ink.secondary)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(isCurrent ? SL.Signal.action : SL.Ink.tertiary)
+                    .frame(width: 20, alignment: .leading)
+                Text(slot.exercise.name)
+                    .slBody(isCurrent ? SL.Weight.semibold : SL.Weight.regular)
+                    .foregroundStyle(SL.Ink.primary)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if slot.isComplete {
                     SLDoneMark()
-                } else if isCurrent {
-                    Text("NOW")
-                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
-                        .tracking(SL.TypeSize.micro * 0.06)
-                        .foregroundStyle(SL.Signal.action)
-                        .accessibilityHidden(true)
+                } else {
+                    Text("\(logged)/\(total)")
+                        .slMeta().slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
                 }
             }
             .padding(.horizontal, SL.Space.s4)
-            .padding(.vertical, SL.Space.s3)
-            .frame(minHeight: 72)
+            .frame(minHeight: SL.Space.hitMin + 4)
             .background(isCurrent ? SL.Signal.action.opacity(0.06) : Color.clear)
             .contentShape(Rectangle())
         }
