@@ -446,6 +446,11 @@ struct SessionView: View {
                 .padding(.top, SL.Space.s2)
                 .padding(.bottom, SL.Space.s3)
             }
+            .onChange(of: runner.completedSetCount) { _, _ in
+                withAnimation(.easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
+                    proxy.scrollTo(Self.activeAnchor, anchor: .center)
+                }
+            }
             .onChange(of: runner.currentIndex) { _, _ in
                 withAnimation(.easeOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
                     proxy.scrollTo(Self.topAnchor, anchor: .top)
@@ -756,69 +761,124 @@ struct SessionView: View {
 
     // MARK: - The sets
 
-    /// The sets as chips in one row: what each one is (its result, or what
-    /// it aims at), with last time small underneath. A glance, not a table.
+    /// One list. Done sets are a line with a check; the set you're on opens
+    /// in place with its controls; the sets still to come are quiet lines.
+    /// Nothing is shown twice, and the eye only ever moves down.
     private var setsCard: some View {
         let slotIndex = runner.currentIndex
         let rows = runner.rows(for: slotIndex)
-        let columns = Array(repeating: GridItem(.flexible(), spacing: SL.Space.s2), count: min(max(rows.count, 1), 4))
-        return LazyVGrid(columns: typeSize.isAccessibilitySize ? [GridItem(.flexible())] : columns, spacing: SL.Space.s2) {
-            ForEach(rows, id: \.index) { row in
-                setChip(row, slotIndex: slotIndex)
+        let active = runner.isComplete ? nil : runner.nextIndex(in: runner.current)
+        return VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.index) { position, row in
+                Group {
+                    if row.index == active {
+                        activeSet(slotIndex: slotIndex, setIndex: row.index)
+                            .id(Self.activeAnchor)
+                    } else {
+                        setLine(row, slotIndex: slotIndex)
+                    }
+                }
+                .overlay(alignment: .top) { if position > 0 { SLHairline() } }
             }
         }
+        .slBorderBox()
+        .slListCard()
     }
 
-    private func setChip(_ row: SetRowPresentation, slotIndex: Int) -> some View {
+    private static let activeAnchor = "active-set"
+
+    /// A done or upcoming set: one line.
+    private func setLine(_ row: SetRowPresentation, slotIndex: Int) -> some View {
         let set = runner.slots[slotIndex].sets[row.index]
-        let phase: SLSetRow.Phase = row.status == .written ? .done : row.status == .nextUp ? .open : .pending
-        let reps = phase == .done ? set.reps : openReps(slotIndex: slotIndex, setIndex: row.index)
-        let value: String = {
-            switch phase {
-            case .done:
-                return set.weightKg.map { app.display.setReference(weightKg: $0, reps: set.reps) } ?? "—"
-            case .open:
-                return "\(set.weightKg.map(app.display.number) ?? "—") × \(reps)"
-            case .pending:
-                return row.weightKind == .awaitingCalibration ? "after set 1" : "× \(reps)"
-            }
-        }()
-        let note = phase == .done ? note(for: row) : nil
-        let under = note?.text ?? runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "last \($0)" } ?? (row.isAdded ? "extra" : " ")
-        let shape = RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-        return Button { runner.editing = (slotIndex, row.index) } label: {
-            VStack(spacing: 3) {
-                HStack(spacing: 4) {
-                    if phase == .done {
+        let done = row.status == .written
+        let reps = done ? set.reps : openReps(slotIndex: slotIndex, setIndex: row.index)
+        let value: String = done
+            ? (set.weightKg.map { app.display.setReference(weightKg: $0, reps: set.reps) } ?? "—")
+            : (row.weightKind == .awaitingCalibration ? "after set 1" : "× \(reps)")
+        let note = done ? note(for: row) : nil
+        let last = runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "last \($0)" }
+        return Button {
+            entryOpensOnKeypad = false
+            runner.editing = (slotIndex, row.index)
+        } label: {
+            HStack(spacing: SL.Space.s3) {
+                ZStack {
+                    if done {
+                        Circle().fill(SL.Signal.actionTint)
                         Image(systemName: "checkmark")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(SL.Signal.action)
+                    } else {
+                        Circle().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1.5)
                     }
-                    Text(value)
-                        .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(phase == .open ? SL.Signal.action : phase == .done ? SL.Ink.primary : SL.Ink.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
                 }
-                Text(under)
-                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                .frame(width: 24, height: 24)
+
+                Text(row.isAdded ? "Extra set" : "Set \(row.indexLabel)")
+                    .slBody()
+                    .foregroundStyle(done ? SL.Ink.primary : SL.Ink.secondary)
+
+                Spacer(minLength: SL.Space.s2)
+
+                if let note {
+                    Text(note.text)
+                        .slMeta(SL.Weight.semibold)
+                        .foregroundStyle(note.tone)
+                } else if !done, let last {
+                    Text(last)
+                        .slMeta()
+                        .monospacedDigit()
+                        .foregroundStyle(SL.Ink.tertiary)
+                }
+                Text(value)
+                    .slBody(done ? SL.Weight.semibold : SL.Weight.regular)
                     .monospacedDigit()
-                    .foregroundStyle(note?.tone ?? SL.Ink.tertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .foregroundStyle(done ? SL.Ink.primary : SL.Ink.secondary)
+                    .frame(minWidth: 72, alignment: .trailing)
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(shape.fill(phase == .open ? SL.Signal.actionTint : SL.Surface.raised))
-            .overlay(shape.strokeBorder(phase == .open ? SL.Signal.action.opacity(0.7) : SL.Surface.hairline, lineWidth: 1))
-            .contentShape(shape)
+            .padding(.horizontal, SL.Space.s4)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SLRowButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(row, value: value, phase: phase))
-        .accessibilityHint("Opens this set")
+        .accessibilityLabel(spoken(row, value: value, phase: done ? .done : .pending))
+        .accessibilityHint(done ? "Opens this set to correct it" : "Opens this set")
+    }
+
+    /// The set you're on, open in place: what it is and what it was last
+    /// time, then the steppers, the plates, RIR when asked, and Save.
+    @ViewBuilder
+    private func activeSet(slotIndex: Int, setIndex: Int) -> some View {
+        let set = runner.slots[slotIndex].sets[setIndex]
+        let needsSheet = (setIndex == 0 && runner.needsCalibration(slotIndex: slotIndex))
+            || (set.weightKg ?? 0) <= 0
+            || typeSize.isAccessibilitySize
+        VStack(spacing: SL.Space.s3) {
+            inputHead(setIndex: setIndex, set: set, compact: needsSheet)
+            if needsSheet {
+                // No weight to step from — a calibration set, or a swap that
+                // starts empty — or text too large for the row: the sheet has
+                // the number field and room for everything.
+                Button {
+                    entryOpensOnKeypad = (set.weightKg ?? 0) <= 0
+                    runner.editing = (slotIndex, setIndex)
+                } label: {
+                    Text(setIndex == 0 && runner.needsCalibration(slotIndex: slotIndex)
+                         ? "Enter calibration set"
+                         : "Enter set \(setIndex + 1)")
+                }
+                .buttonStyle(SLPrimaryButtonStyle(prominent: true))
+            } else {
+                steppers(slotIndex: slotIndex, setIndex: setIndex, set: set)
+                if showsPlatesButton { plateLine }
+                if asksForRIR(slotIndex: slotIndex, setIndex: setIndex) {
+                    reserveRow(set)
+                }
+                saveButton(slotIndex: slotIndex, setIndex: setIndex, set: set)
+            }
+        }
+        .padding(SL.Space.s3)
     }
 
     /// Every exercise of the session, opened from the progress bar.
@@ -979,20 +1039,19 @@ struct SessionView: View {
                 SLUndoToast(message: toast.message, onUndo: toast.undo, onDismiss: { self.toast = nil })
                     .transition(.opacity)
             }
-            // A finished session has no rest left to take; while a set is up
-            // next, the rest lives in the input card's own head.
-            if let timer = runner.restTimer, !runner.isComplete, runner.nextIndex(in: runner.current) == nil {
-                SLRestPill(
-                    title: runner.restTitle,
-                    remaining: timer.remaining(at: runner.now),
-                    total: max(timer.targetSeconds + timer.adjustmentSeconds, timer.remaining(at: runner.now)),
-                    planned: timer.targetSeconds,
-                    isExpanded: runner.isTimerExpanded,
-                    onAdjust: { runner.adjustRest(by: $0) },
-                    onReset: { runner.resetRest() },
-                    onToggleExpanded: { runner.toggleTimerExpanded() },
-                    onSkip: { runner.endRest() }
-                )
+            // The rest, as one slim bar, only while it runs.
+            if let timer = runner.restTimer, !runner.isComplete, timer.remaining(at: runner.now) > 0 {
+                restHead(timer)
+                    .padding(.horizontal, SL.Space.s3)
+                    .padding(.vertical, SL.Space.s2)
+                    .background(
+                        RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                            .fill(SL.Surface.raised)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                            .strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)
+                    )
             }
             inputCard
         }
@@ -1005,53 +1064,12 @@ struct SessionView: View {
     /// One primary action, and it is whichever one is true right now.
     @ViewBuilder
     private var inputCard: some View {
-        let slotIndex = runner.currentIndex
         if runner.isComplete {
             Button { showsComplete = true } label: { Text("Finish session") }
                 .buttonStyle(SLPrimaryButtonStyle(prominent: true))
-        } else if let next = runner.nextIndex(in: runner.current) {
-            let set = runner.current.sets[next]
-            let needsSheet = (next == 0 && runner.needsCalibration(slotIndex: slotIndex))
-                || (set.weightKg ?? 0) <= 0
-                || typeSize.isAccessibilitySize
-            VStack(spacing: SL.Space.s2) {
-                if let timer = runner.restTimer, timer.remaining(at: runner.now) > 0 {
-                    restHead(timer)
-                } else {
-                    inputHead(setIndex: next, set: set, compact: needsSheet)
-                }
-                if needsSheet {
-                    // No weight to step from — a calibration set, or a swap
-                    // that starts empty — or text too large for the card: the
-                    // sheet has the number field and room for everything.
-                    Button {
-                        entryOpensOnKeypad = (set.weightKg ?? 0) <= 0
-                        runner.editing = (slotIndex, next)
-                    } label: {
-                        Text(next == 0 && runner.needsCalibration(slotIndex: slotIndex)
-                             ? "Enter calibration set"
-                             : "Enter set \(next + 1)")
-                    }
-                    .buttonStyle(SLPrimaryButtonStyle(prominent: true))
-                } else {
-                    steppers(slotIndex: slotIndex, setIndex: next, set: set)
-                    if showsPlatesButton { plateLine }
-                    if asksForRIR(slotIndex: slotIndex, setIndex: next) {
-                        reserveRow(set)
-                    }
-                    saveButton(slotIndex: slotIndex, setIndex: next, set: set)
-                }
-            }
-            .padding(SL.Space.s3)
-            .slBorderBox()
-            .background(
-                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                    .fill(SL.Surface.raised)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                    .strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)
-            )
+        } else if runner.nextIndex(in: runner.current) != nil {
+            // The set up next is edited in its own row in the list.
+            EmptyView()
         } else if let next = runner.nextSlotIndex {
             Button { runner.advance() } label: {
                 Text("Next · \(runner.slots[next].exercise.name)")
@@ -1148,7 +1166,7 @@ struct SessionView: View {
                     .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
                     .monospacedDigit()
                     .foregroundStyle(SL.Ink.primary)
-                Text("Rest · then set \((runner.nextIndex(in: runner.current) ?? 0) + 1)")
+                Text(runner.nextIndex(in: runner.current).map { "Rest · then set \($0 + 1)" } ?? "Rest")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
             }
