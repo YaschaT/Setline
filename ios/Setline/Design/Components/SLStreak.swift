@@ -103,7 +103,11 @@ struct StreakSheet: View {
 
             Button { showsMilestones = true } label: {
                 HStack(spacing: SL.Space.s2) {
-                    Image(systemName: "rosette")
+                    HStack(spacing: -10) {
+                        ForEach(Array(milestones.filter(\.isReached).sorted { ($0.reachedOn ?? .distantPast) > ($1.reachedOn ?? .distantPast) }.prefix(3))) { badge in
+                            SLBadge(milestone: badge, size: 30)
+                        }
+                    }
                     Text("Milestones")
                     Text("\(milestones.filter(\.isReached).count) of \(milestones.count)")
                         .foregroundStyle(SL.Ink.secondary)
@@ -162,41 +166,64 @@ struct StreakSheet: View {
 }
 
 
-/// Everything reached, with its date, and what is next in each kind with how
-/// far there is to go. Reached ones are lime; upcoming ones show progress.
+/// The collection: every badge of each kind, earned ones in their metal and
+/// the rest locked with their progress. Tapping one shows it large.
 struct MilestonesView: View {
     let milestones: [Milestone]
     let onClose: () -> Void
     @Environment(AppState.self) private var app
+    @State private var opened: Milestone?
+
+    private let columns = [GridItem(.adaptive(minimum: 100), spacing: SL.Space.s4, alignment: .top)]
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach([Milestone.Kind.sessions, .streak, .heaviest, .volume], id: \.self) { kind in
-                    let items = shown(kind)
-                    if !items.isEmpty {
-                        Section(title(kind)) {
-                            ForEach(items) { row($0).listRowBackground(SL.Surface.raised) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: SL.Space.s8) {
+                    ForEach([Milestone.Kind.sessions, .streak, .heaviest, .volume], id: \.self) { kind in
+                        let items = milestones.filter { $0.kind == kind }
+                        VStack(alignment: .leading, spacing: SL.Space.s4) {
+                            SLSectionHead(title: title(kind), meta: "\(items.filter(\.isReached).count) of \(items.count)")
+                            LazyVGrid(columns: columns, spacing: SL.Space.s5) {
+                                ForEach(items) { item in
+                                    Button { opened = item } label: { cell(item) }
+                                        .buttonStyle(.plain)
+                                }
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.vertical, SL.Space.s5)
             }
-            .scrollContentBackground(.hidden)
             .background(SL.Surface.ground)
             .navigationTitle("Milestones")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done", action: onClose) }
             }
+            .sheet(item: $opened) { item in
+                BadgeDetail(milestone: item)
+                    .presentationDetents([.medium])
+            }
         }
     }
 
-    /// Every reached one, then only the next one ahead: a goal, not a wall.
-    private func shown(_ kind: Milestone.Kind) -> [Milestone] {
-        let all = milestones.filter { $0.kind == kind }
-        let reached = all.filter(\.isReached)
-        let next = all.first { !$0.isReached }
-        return reached.reversed() + (next.map { [$0] } ?? [])
+    private func cell(_ item: Milestone) -> some View {
+        VStack(spacing: SL.Space.s2) {
+            SLBadge(milestone: item, size: 80)
+            Text(item.title)
+                .slMeta(item.isReached ? SL.Weight.semibold : SL.Weight.regular)
+                .foregroundStyle(item.isReached ? SL.Ink.primary : SL.Ink.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            Text(item.reachedOn.map { app.display.shortDate($0) } ?? "\(Int(item.fraction * 100))%")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                .monospacedDigit()
+                .foregroundStyle(item.isReached ? SL.Signal.action : SL.Ink.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
     }
 
     private func title(_ kind: Milestone.Kind) -> String {
@@ -207,23 +234,40 @@ struct MilestonesView: View {
         case .volume: return "Total lifted"
         }
     }
+}
 
-    private func row(_ milestone: Milestone) -> some View {
-        HStack(spacing: SL.Space.s3) {
-            Image(systemName: milestone.isReached ? "rosette" : "circle.dashed")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(milestone.isReached ? SL.Signal.action : SL.Ink.tertiary)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(milestone.title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                if let date = milestone.reachedOn {
-                    Text(app.display.shortDate(date)).slMeta().foregroundStyle(SL.Ink.secondary)
-                } else {
-                    SLBar(fraction: milestone.fraction, height: 4, fill: SL.Signal.action.opacity(0.7))
+/// One badge, large: what it is, when it was earned or how far there is to go.
+struct BadgeDetail: View {
+    let milestone: Milestone
+    @Environment(AppState.self) private var app
+
+    var body: some View {
+        VStack(spacing: SL.Space.s4) {
+            SLBadge(milestone: milestone, size: 150)
+                .padding(.top, SL.Space.s8)
+            Text(milestone.title)
+                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.primary)
+            if let date = milestone.reachedOn {
+                Text("Earned \(app.display.shortDate(date))")
+                    .slBody(SL.Weight.medium)
+                    .foregroundStyle(SL.Signal.action)
+            } else {
+                VStack(spacing: SL.Space.s2) {
+                    SLBar(fraction: milestone.fraction, height: 6, fill: SL.Signal.action)
+                        .frame(width: 180)
+                    Text("\(Int(milestone.fraction * 100))% of the way")
+                        .slMeta().foregroundStyle(SL.Ink.secondary)
                 }
             }
+            Text(milestone.howTo)
+                .slBody()
+                .foregroundStyle(SL.Ink.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, SL.Space.s8)
+            Spacer()
         }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity)
+        .background(SL.Surface.ground.ignoresSafeArea())
     }
 }

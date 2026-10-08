@@ -1,4 +1,5 @@
 import SwiftUI
+import SetlineCore
 
 /// A moment worth marking: a new PR, a week goal, a milestone.
 struct Celebration: Identifiable, Equatable {
@@ -6,6 +7,8 @@ struct Celebration: Identifiable, Equatable {
     let symbol: String
     let title: String
     let detail: String
+    /// A milestone shows its badge instead of a symbol.
+    var badge: Milestone? = nil
 }
 
 /// The celebration itself: a short card that springs in at the top, with a
@@ -20,12 +23,16 @@ private struct SLCelebrationModifier: ViewModifier {
         content.overlay(alignment: .top) {
             if let item {
                 HStack(spacing: SL.Space.s3) {
-                    Image(systemName: item.symbol)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(SL.Signal.onAction)
-                        .frame(width: 48, height: 48)
-                        .background(Circle().fill(SL.Signal.action))
-                        .symbolEffect(.bounce, value: item.id)
+                    if let badge = item.badge {
+                        SLBadge(milestone: badge, size: 52)
+                    } else {
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(SL.Signal.onAction)
+                            .frame(width: 48, height: 48)
+                            .background(Circle().fill(SL.Signal.action))
+                            .symbolEffect(.bounce, value: item.id)
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.title)
                             .slLead(SL.Weight.semibold)

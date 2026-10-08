@@ -67,11 +67,9 @@ struct SessionCompleteView: View {
 
                     ForEach(newMilestones) { milestone in
                         HStack(spacing: SL.Space.s3) {
-                            Image(systemName: "rosette")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(SL.Signal.action)
+                            SLBadge(milestone: milestone, size: 44)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("New milestone").slMeta().foregroundStyle(SL.Ink.secondary)
+                                Text("Badge earned").slMeta().foregroundStyle(SL.Signal.action)
                                 Text(milestone.title).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
                             }
                             Spacer()
@@ -96,7 +94,7 @@ struct SessionCompleteView: View {
             // appears: a milestone first, else a completed week.
             try? await Task.sleep(for: .milliseconds(450))
             if let milestone = newMilestones.first {
-                celebration = Celebration(symbol: "rosette", title: "Milestone reached", detail: milestone.title)
+                celebration = Celebration(symbol: "rosette", title: "Badge earned", detail: milestone.title, badge: milestone)
             } else if Calendar.current.isDate(runner.startedAt, equalTo: Date(), toGranularity: .weekOfYear) {
                 let streak = app.streak(adding: runner.startedAt, day: runner.day)
                 if streak.thisWeekDone == streak.thisWeekGoal {
