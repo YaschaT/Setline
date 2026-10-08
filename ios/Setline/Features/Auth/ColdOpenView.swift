@@ -21,14 +21,14 @@ struct ColdOpenView: View {
 
             Spacer(minLength: SL.Space.s10)
 
-            Text("Til zwaarder,\nelke week.")
+            Text("Lift heavier,\nevery week.")
                 .font(.sl(SL.TypeSize.displayXL, SL.Weight.semibold))
                 .tracking(SL.TypeSize.displayXL * -0.015)
                 .slLineHeight(1.04, size: SL.TypeSize.displayXL)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
 
-            Text("Log je sets in twee taps. Je vorige sessie staat er al.")
+            Text("Log your sets in two taps. Your last session is already there.")
                 .slBody()
                 .slLineHeight(1.5, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -38,12 +38,12 @@ struct ColdOpenView: View {
 
             // 01's bottom block: 28 above the pill, 12 between the pill and
             // the link, 98 below it in the frame.
-            Button { onBegin() } label: { Text("Beginnen") }
+            Button { onBegin() } label: { Text("Get started") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .padding(.top, 28)
 
             Button { onSignIn() } label: {
-                Text("Ik heb al een account")
+                Text("I already have an account")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)

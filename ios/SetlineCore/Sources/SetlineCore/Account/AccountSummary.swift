@@ -94,10 +94,10 @@ public struct AccountSummary: Equatable, Sendable {
             switch sciencePlanID {
             case "upper-lower": return "Upper / Lower"
             case "full-body": return "Full body"
-            default: return "Push / Pull / Benen"
+            default: return "Push / Pull / Legs"
             }
         }
-        return plan.count == 5 ? "Push / Pull / Benen" : "\(plan.count) dagen"
+        return plan.count == 5 ? "Push / Pull / Legs" : "\(plan.count) days"
     }
 
     /// One line per distinct rest prescription, strongest role first. Accessory
@@ -114,9 +114,9 @@ public struct AccountSummary: Equatable, Sendable {
     /// The role names the rest timer already announces during a session.
     public static func roleLabel(_ role: ExerciseRole) -> String {
         switch role {
-        case .primaryStrength: return "primaire lift"
-        case .secondaryCompound: return "samengesteld"
-        case .accessory, .isolation: return "isolatie"
+        case .primaryStrength: return "main lift"
+        case .secondaryCompound: return "compound"
+        case .accessory, .isolation: return "isolation"
         }
     }
 }

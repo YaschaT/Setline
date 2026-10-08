@@ -51,7 +51,7 @@ public enum Fatigue {
         sessions: [TrainingSession],
         now: Date = Date(),
         calendar: Calendar = .current,
-        display: NumberDisplay = .dutch
+        display: NumberDisplay = .english
     ) -> Reading {
         let recent = sessions
             .filter { $0.kind == .workout }
@@ -97,7 +97,7 @@ public enum Fatigue {
                 signals.insert(.completionDrop)
                 evidence.append(Evidence(
                     exerciseName: newest.dayLabel,
-                    detail: "Minder dan 80% van de geplande sets afgerond, twee sessies op rij"
+                    detail: "Less than 80% of planned sets done, two sessions in a row"
                 ))
             }
         }
@@ -187,13 +187,13 @@ public struct Deload: Equatable, Codable, Sendable {
 
     /// The proposal's own words. 40% fewer sets at two more in reserve, for
     /// five days, at the same weight.
-    public var headline: String { "Voorstel: \(days) dagen lichter" }
+    public var headline: String { "Suggestion: \(days) lighter days" }
 
     public var detail: String {
-        "Zelfde oefeningen, \(Int(setReduction * 100))% minder sets, RIR +\(rirIncrease). Gewicht blijft."
+        "Same exercises, \(Int(setReduction * 100))% fewer sets, RIR +\(rirIncrease). Weight stays."
     }
 
-    public static let footnote = "Gebaseerd op je laatste drie sessies, niet op de kalender."
+    public static let footnote = "Based on your last three sessions, not the calendar."
 }
 
 /// The plan a session opened now works from.

@@ -20,18 +20,18 @@ struct AlertCenterSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Meldingen")
+                    Text("Alerts")
                         .slTitle()
                         .foregroundStyle(SL.Ink.primary)
                         .accessibilityAddTraits(.isHeader)
                     Text(missed.isEmpty
-                         ? "Alles is gelogd"
-                         : missed.count == 1 ? "1 training niet gelogd" : "\(missed.count) trainingen niet gelogd")
+                         ? "Everything is logged"
+                         : missed.count == 1 ? "1 workout not logged" : "\(missed.count) workouts not logged")
                         .slBody()
                         .foregroundStyle(SL.Ink.secondary)
                 }
                 Spacer()
-                Button("Klaar", action: onClose)
+                Button("Done", action: onClose)
                     .font(.sl(SL.TypeSize.body, SL.Weight.medium))
                     .foregroundStyle(SL.Ink.secondary)
                     .slHitTarget()
@@ -46,7 +46,7 @@ struct AlertCenterSheet: View {
                         .font(.system(size: 40, weight: .light))
                         .foregroundStyle(SL.Ink.tertiary)
                         .accessibilityHidden(true)
-                    Text("Elke geplande training van de laatste twee weken staat in je logboek.")
+                    Text("Every planned workout of the last two weeks is in your log.")
                         .slBody()
                         .foregroundStyle(SL.Ink.secondary)
                         .multilineTextAlignment(.center)
@@ -102,21 +102,21 @@ struct AlertCenterSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(workout.short), \(WeekPlan.fullWeekday(day.date)) \(app.display.shortDate(day.date)), niet gelogd")
+            .accessibilityLabel("\(workout.short), \(WeekPlan.fullWeekday(day.date)) \(app.display.shortDate(day.date)), not logged")
 
             HStack(spacing: SL.Space.s2) {
                 Button { app.answerMissed(day.key) } label: {
-                    Text("Niet getraind")
+                    Text("Didn't train")
                         .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.horizontal, SL.Space.s2)
                         .slHitTarget()
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("Sluit deze melding. Er verandert niets in je account.")
+                .accessibilityHint("Closes this alert. Nothing changes in your account.")
 
                 Button { onLogPast(workout, day.date) } label: {
-                    Text("Log alsnog")
+                    Text("Log it now")
                         .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
                         .foregroundStyle(SL.Signal.onAction)
                         .padding(.horizontal, SL.Space.s3)
@@ -126,7 +126,7 @@ struct AlertCenterSheet: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("Schrijft \(workout.short) op, op \(Agenda.when(day.date))")
+                .accessibilityHint("Logs \(workout.short) for \(Agenda.when(day.date))")
             }
             .fixedSize()
         }

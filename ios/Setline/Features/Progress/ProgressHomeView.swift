@@ -15,9 +15,9 @@ import SetlineCore
 /// summarises.
 struct ProgressHomeView: View {
     enum Segment: String, CaseIterable, Identifiable {
-        case kracht = "Kracht"
-        case lichaam = "Lichaam"
-        case historiek = "Logboek"
+        case kracht = "Strength"
+        case lichaam = "Body"
+        case historiek = "Log"
 
         var id: String { rawValue }
     }
@@ -85,7 +85,7 @@ struct ProgressHomeView: View {
             // 24 between sections, 8 from a section's head to its card: the
             // gap says what belongs together.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                SLScreenTitle(title: "Progressie", subtitle: "Laatste 8 weken") { logbookPill }
+                SLScreenTitle(title: "Progress", subtitle: "Last 8 weeks") { logbookPill }
                 daySection
                 volumeSection
                 weightSection
@@ -102,7 +102,7 @@ struct ProgressHomeView: View {
         Button { open(.historiek) } label: {
             HStack(spacing: SL.Space.s2) {
                 Image(systemName: "list.bullet").font(.system(size: 13, weight: .semibold))
-                Text("Logboek").slBody(SL.Weight.semibold)
+                Text("Log").slBody(SL.Weight.semibold)
             }
             .foregroundStyle(SL.Ink.primary)
             .lineLimit(1)
@@ -114,7 +114,7 @@ struct ProgressHomeView: View {
         }
         .buttonStyle(.plain)
         .slFocusRing(Capsule())
-        .accessibilityHint("Opent al je gelogde sessies")
+        .accessibilityHint("Opens all your logged sessions")
     }
 
     private func open(_ target: Segment, exercise: String? = nil) {
@@ -139,15 +139,15 @@ struct ProgressHomeView: View {
             Button { open(.lichaam) } label: { weightHead }
                 .buttonStyle(.plain)
                 .disabled(bodyProgress.entries.isEmpty)
-                .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opent al je wegingen")
+                .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opens all your weigh-ins")
 
             if trend.count > 1, showsWeightChart {
                 WeightTrendChart(points: trend)
                     .transition(.opacity)
             } else if trend.count <= 1 {
                 Text(trend.isEmpty
-                     ? "Weeg jezelf 's ochtends, nuchter."
-                     : "Nog één weging en je verloop staat hier.")
+                     ? "Weigh yourself in the morning, before eating."
+                     : "One more weigh-in and your trend shows here.")
                     .slMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
@@ -162,7 +162,7 @@ struct ProgressHomeView: View {
                         withAnimation(.easeInOut(duration: SL.Motion.base)) { showsWeightChart.toggle() }
                     } label: {
                         HStack(spacing: SL.Space.s1) {
-                            Text(showsWeightChart ? "Verberg verloop" : "Toon verloop")
+                            Text(showsWeightChart ? "Hide trend" : "Show trend")
                             SLGlyph(name: .chevronDown, size: 13)
                                 .rotationEffect(.degrees(showsWeightChart ? 180 : 0))
                         }
@@ -192,7 +192,7 @@ struct ProgressHomeView: View {
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
         return layout {
             HStack(spacing: SL.Space.s1) {
-                Text("Lichaamsgewicht").slBody()
+                Text("Body weight").slBody()
                 if !bodyProgress.entries.isEmpty {
                     SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
                 }
@@ -215,7 +215,7 @@ struct ProgressHomeView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            (bodyProgress.latest.map { "Lichaamsgewicht \(app.display.kg($0.weightKg))" } ?? "Nog geen weging")
+            (bodyProgress.latest.map { "Body weight \(app.display.kg($0.weightKg))" } ?? "No weigh-in yet")
                 + (movement.map { ", \($0.value) \($0.label)" } ?? "")
         )
     }
@@ -228,7 +228,7 @@ struct ProgressHomeView: View {
     private var daySection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             HStack(spacing: SL.Space.s1) {
-                Text("Per trainingsdag")
+                Text("Per training day")
                     .slLead()
                     .foregroundStyle(SL.Ink.primary)
                     .accessibilityAddTraits(.isHeader)
@@ -241,26 +241,26 @@ struct ProgressHomeView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.vertical, -12)
-                .accessibilityLabel("Hoe wordt dit gemeten?")
+                .accessibilityLabel("How is this measured?")
                 Spacer(minLength: SL.Space.s2)
                 // Said once for every row: what the percentages are.
-                Text("geschatte kracht")
+                Text("estimated strength")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
             }
             .padding(.horizontal, SL.Space.s1)
-            .alert("Kracht per trainingsdag", isPresented: $explainingDays) {
+            .alert("Strength per training day", isPresented: $explainingDays) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Per oefening je beste set van de laatste 8 weken, als geschatte max, tegenover je beste daarvoor, of je eerste sessie als de oefening nieuw is. Het percentage is het gemiddelde over de oefeningen van die dag; de lijn is je beste tot dan toe per sessie.")
+                Text("For each exercise, your best set of the last 8 weeks as an estimated max, against your best before that — or your first session if the exercise is new. The percentage is the average over that day's exercises; the line is your best so far, session by session.")
             }
             VStack(spacing: 0) {
                 if days.isEmpty {
                     VStack(alignment: .leading, spacing: SL.Space.s1) {
-                        Text("Nog geen sets met gewicht")
+                        Text("No weighted sets yet")
                             .slLead()
                             .foregroundStyle(SL.Ink.primary)
-                        Text("Sla een training op; je vooruitgang per dag verschijnt hier.")
+                        Text("Save a workout; your progress per day shows up here.")
                             .slBody()
                             .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(SL.Ink.secondary)
@@ -286,7 +286,7 @@ struct ProgressHomeView: View {
             .slBorderBox()
             .slListCard()
 
-            Button { open(.kracht) } label: { chevroned("Kracht per oefening") }
+            Button { open(.kracht) } label: { chevroned("Strength per exercise") }
                 .buttonStyle(SLOutlineButtonStyle())
                 .padding(.top, SL.Space.s1)
         }
@@ -319,7 +319,7 @@ struct ProgressHomeView: View {
                         .foregroundStyle(ink)
                         .fixedSize()
                 } else if lift.isNew {
-                    Text("Nieuw")
+                    Text("New")
                         .slMeta(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.horizontal, SL.Space.s2)
@@ -338,10 +338,10 @@ struct ProgressHomeView: View {
         .buttonStyle(SLRowButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(lift.name), beste set \(app.display.kg(lift.weightKg)) × \(lift.reps) op \(app.display.shortDate(lift.date))"
-                + (gain.map { ", \($0) geschat" } ?? (lift.isNew ? ", nieuw" : ""))
+            "\(lift.name), best set \(app.display.kg(lift.weightKg)) × \(lift.reps) on \(app.display.shortDate(lift.date))"
+                + (gain.map { ", \($0) estimated" } ?? (lift.isNew ? ", new" : ""))
         )
-        .accessibilityHint("Opent de kracht van deze oefening")
+        .accessibilityHint("Opens the strength of this exercise")
     }
 
     private func dayRow(_ day: ProgressOverview.DayProgress) -> some View {
@@ -351,7 +351,7 @@ struct ProgressHomeView: View {
             return change > 0 ? SL.Signal.action : change < 0 ? SL.Signal.loss : SL.Ink.secondary
         }()
         let changeText = change.map { $0 == 0 ? "0 %" : "\(app.display.signedDelta($0)) %" }
-        let sessions = day.sessions == 1 ? "1 sessie" : "\(day.sessions) sessies"
+        let sessions = day.sessions == 1 ? "1 session" : "\(day.sessions) sessions"
         let detail = [sessions, day.leader.map { "\($0.name) +\(app.display.number($0.deltaKg)) kg" }]
             .compactMap { $0 }
             .joined(separator: " · ")
@@ -388,7 +388,7 @@ struct ProgressHomeView: View {
                             .slNumerals()
                             .foregroundStyle(ink)
                     } else {
-                        Text("Te vroeg")
+                        Text("Too early")
                             .slMeta()
                             .foregroundStyle(SL.Ink.secondary)
                     }
@@ -412,10 +412,10 @@ struct ProgressHomeView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(day.label), \(sessions)"
-                + (changeText.map { ", kracht \($0) geschat" } ?? ", nog te weinig om te vergelijken")
-                + (day.leader.map { ", meeste vooruitgang \($0.name) plus \(app.display.number($0.deltaKg)) kilo" } ?? "")
+                + (changeText.map { ", strength \($0) estimated" } ?? ", not enough to compare yet")
+                + (day.leader.map { ", most progress \($0.name) plus \(app.display.number($0.deltaKg)) kilos" } ?? "")
         )
-        .accessibilityHint(isOpen ? "Verbergt de oefeningen" : "Toont de oefeningen van deze dag")
+        .accessibilityHint(isOpen ? "Hides the exercises" : "Shows this day's exercises")
         .accessibilityAddTraits(isOpen ? .isSelected : [])
     }
 
@@ -428,7 +428,7 @@ struct ProgressHomeView: View {
             HStack(spacing: SL.Space.s1) {
                 // The plus adds; a correction adds nothing.
                 if !weighed { SLGlyph(name: .plus, size: 13) }
-                Text(weighed ? "Weging wijzigen" : "Weeg jezelf")
+                Text(weighed ? "Edit weigh-in" : "Weigh in")
             }
             .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
             .foregroundStyle(SL.Signal.action)
@@ -437,8 +437,8 @@ struct ProgressHomeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint(weighed
-            ? "Opent je weging van vandaag om het gewicht bij te werken"
-            : "Opent het veld om je gewicht van vandaag te bewaren")
+            ? "Opens today's weigh-in to update the weight"
+            : "Opens the field to save today's weight")
     }
 
     /// How the 14-day average moved over the last fortnight; where the series
@@ -447,10 +447,10 @@ struct ProgressHomeView: View {
         if let last = trend.last,
            let earlier = trend.last(where: { $0.date <= last.date.addingTimeInterval(-14 * 86_400) }) {
             let change = Estimates.round(last.average - earlier.average, toIncrement: 0.1)
-            return (signed(change), "14-daags gem.", change != 0)
+            return (signed(change), "14-day avg.", change != 0)
         }
         if let change = bodyProgress.change {
-            return (signed(change.value), change.weeks == 1 ? "in 1 week" : "in \(change.weeks) weken", change.value != 0)
+            return (signed(change.value), change.weeks == 1 ? "in 1 week" : "in \(change.weeks) weeks", change.value != 0)
         }
         return nil
     }
@@ -490,7 +490,7 @@ struct ProgressHomeView: View {
             Button { segment = nil } label: {
                 HStack(spacing: 2) {
                     SLGlyph(name: .chevronLeft, size: 18)
-                    Text("Progressie").slBody()
+                    Text("Progress").slBody()
                 }
                 .foregroundStyle(SL.Ink.secondary)
                 .frame(minHeight: SL.Space.hitMin)
@@ -499,7 +499,7 @@ struct ProgressHomeView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, SL.Space.s4)
             .padding(.top, SL.Space.s2)
-            .accessibilityLabel("Terug naar het overzicht van Progressie")
+            .accessibilityLabel("Back to the Progress overview")
 
             segmentControl(current)
                 .padding(.horizontal, SL.Space.gutterSession)
@@ -620,7 +620,7 @@ struct WeightTrendChart: View {
             }
             .frame(height: 96)
             .accessibilityElement()
-            .accessibilityLabel("Verloop van je gewicht over \(points.count) wegingen, met het 14-daagse gemiddelde")
+            .accessibilityLabel("Your weight over \(points.count) weigh-ins, with the 14-day average")
 
             if months.count > 1 {
                 HStack(spacing: 0) {
@@ -635,8 +635,8 @@ struct WeightTrendChart: View {
             }
 
             SLFlow(spacing: SL.Space.s4, lineSpacing: SL.Space.s1) {
-                legend("dagwaarde", color: SL.Ink.primary.opacity(0.35), height: 2)
-                legend("14-daags gemiddelde", color: SL.Signal.action, height: 3)
+                legend("daily value", color: SL.Ink.primary.opacity(0.35), height: 2)
+                legend("14-day average", color: SL.Signal.action, height: 3)
             }
             .accessibilityHidden(true)
         }
@@ -693,7 +693,7 @@ struct WeightTrendChart: View {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "MMM"
 
@@ -739,7 +739,7 @@ struct VolumeBars: View {
 
             HStack(spacing: 0) {
                 ForEach(Array(labelled.enumerated()), id: \.element.id) { index, week in
-                    Text(week.isCurrent ? "w\(week.number) · deze week" : "w\(week.number)")
+                    Text(week.isCurrent ? "w\(week.number) · this week" : "w\(week.number)")
                         .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                         .slNumerals()
                         .foregroundStyle(week.isCurrent ? SL.Signal.action : SL.Ink.secondary)

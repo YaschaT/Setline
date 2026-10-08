@@ -427,7 +427,7 @@ final class SubstitutionRankingTests: XCTestCase {
         let results = rank("flat-bench")
         let dumbbell = results.first { $0.exercise.id == "db-bench" }
         XCTAssertNotNil(dumbbell?.curatedWhy)
-        XCTAssertEqual(dumbbell?.curatedFit, "Zelfde rol")
+        XCTAssertEqual(dumbbell?.curatedFit, "Same role")
     }
 
     func testResultsWithoutCuratedCopyStillRank() {

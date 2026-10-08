@@ -22,7 +22,7 @@ struct HistoriekSegmentView: View {
         var order: [String] = []
         var grouped: [String: [SessionHistoryRow]] = [:]
         for row in rows {
-            let title = Self.month.string(from: row.date).capitalized(with: Locale(identifier: "nl_BE"))
+            let title = Self.month.string(from: row.date).capitalized(with: Locale(identifier: "en_US"))
             if grouped[title] == nil { order.append(title) }
             grouped[title, default: []].append(row)
         }
@@ -31,7 +31,7 @@ struct HistoriekSegmentView: View {
 
     private static let month: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "LLLL yyyy"
         return formatter
     }()
@@ -53,7 +53,7 @@ struct HistoriekSegmentView: View {
                                     .listRowBackground(Color.clear)
                                     .listRowSeparatorTint(SL.Surface.hairline)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button("Verwijder", systemImage: "trash") { deleting = row }
+                                        Button("Delete", systemImage: "trash") { deleting = row }
                                             .tint(SL.Signal.loss)
                                     }
                             }
@@ -61,7 +61,7 @@ struct HistoriekSegmentView: View {
                             HStack(alignment: .firstTextBaseline) {
                                 Text(month.title).slLead().foregroundStyle(SL.Ink.primary)
                                 Spacer()
-                                Text(month.rows.count == 1 ? "1 sessie" : "\(month.rows.count) sessies")
+                                Text(month.rows.count == 1 ? "1 session" : "\(month.rows.count) sessions")
                                     .slMeta()
                                     .foregroundStyle(SL.Ink.secondary)
                             }
@@ -85,17 +85,17 @@ struct HistoriekSegmentView: View {
             SessionDetailView(sessionID: workout.id, onClose: { opened = nil })
         }
         .alert(
-            "Deze sessie verwijderen?",
+            "Delete this session?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
         ) {
-            Button("Annuleer", role: .cancel) { deleting = nil }
-            Button("Verwijder", role: .destructive) {
+            Button("Cancel", role: .cancel) { deleting = nil }
+            Button("Delete", role: .destructive) {
                 guard let row = deleting else { return }
                 deleting = nil
                 Task { await app.removeSession(id: row.id) }
             }
         } message: {
-            Text(deleting.map { "\($0.dayLabel) van \(app.display.shortDate($0.date)) verdwijnt uit je logboek en je progressie, ook op het web." } ?? "")
+            Text(deleting.map { "\($0.dayLabel) on \(app.display.shortDate($0.date)) disappears from your log and your progress, on the web too." } ?? "")
         }
     }
 
@@ -126,9 +126,9 @@ struct HistoriekSegmentView: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel(row))
-        .accessibilityHint("Dubbeltik om de sessie te openen")
+        .accessibilityHint("Double-tap to open the session")
         .accessibilityActions {
-            Button("Verwijder") { deleting = row }
+            Button("Delete") { deleting = row }
         }
     }
 
@@ -156,8 +156,8 @@ struct HistoriekSegmentView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            Text("Nog geen sessies").slLead()
-            Text("Je eerste sessie zet de startgewichten.")
+            Text("No sessions yet").slLead()
+            Text("Your first session sets the starting weights.")
                 .slBody()
                 .foregroundStyle(SL.Ink.secondary)
         }

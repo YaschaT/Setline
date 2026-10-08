@@ -34,12 +34,12 @@ final class AccountTests: XCTestCase {
         let logged = session("s1", results: [bench([LoggedSet(index: 0, weightKg: 100, reps: 6)])])
         let summary = AccountSummary.make(state: state(sessions: [logged]), plan: PlanCatalog.personal, now: now)
 
-        XCTAssertEqual(summary.planName, "Push / Pull / Benen")
+        XCTAssertEqual(summary.planName, "Push / Pull / Legs")
         XCTAssertNil(summary.targets, "no stored targets, so the design's example numbers are not shown")
         XCTAssertEqual(summary.sessionCount, 1)
         XCTAssertEqual(summary.loggedExerciseCount, 1)
         XCTAssertEqual(summary.weighInCount, 0)
-        XCTAssertEqual(summary.trainingDays, ["ma", "di", "wo", "vr", "za"], "the week's shape, not a fixed list")
+        XCTAssertEqual(summary.trainingDays, ["Mo", "Tu", "We", "Fr", "Sa"], "the week's shape, not a fixed list")
     }
 
     func testStoredTargetsAndWeighInsAreStated() {
@@ -71,13 +71,13 @@ final class AccountTests: XCTestCase {
 
         let summary = AccountSummary.make(state: stored, plan: PlanCatalog.personal, now: now)
 
-        XCTAssertEqual(summary.trainingDays, ["ma", "vr"])
+        XCTAssertEqual(summary.trainingDays, ["Mo", "Fr"])
     }
 
     func testRestIsStatedPerRoleNotAsOneDefault() {
         let summary = AccountSummary.make(state: state(sessions: []), plan: PlanCatalog.personal, now: now)
         XCTAssertEqual(summary.rest.map(\.label), ["3:00", "2:00", "1:30"])
-        XCTAssertEqual(summary.rest.map(\.roleLabel), ["primaire lift", "samengesteld", "isolatie"])
+        XCTAssertEqual(summary.rest.map(\.roleLabel), ["main lift", "compound", "isolation"])
     }
 
     // MARK: Export

@@ -236,7 +236,7 @@ final class SharedKeysMergeTests: XCTestCase {
 
     func testEveryProgrammeTheAccountCanBeOnIsNamed() {
         let programs = ProgramCatalog.all(personalPlan: PlanCatalog.personal)
-        XCTAssertEqual(programs.map(\.name), ["Push / Pull / Benen", "PPL + Upper / Lower", "Upper / Lower", "Full body"])
+        XCTAssertEqual(programs.map(\.name), ["Push / Pull / Legs", "PPL + Upper / Lower", "Upper / Lower", "Full body"])
         XCTAssertEqual(programs.map(\.id), ["personal", "science-ppl-ul", "science-upper-lower", "science-full-body"])
     }
 

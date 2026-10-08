@@ -90,13 +90,13 @@ public struct DayPlan: Equatable, Sendable {
         // off: the way back to standard has to name what it returns to.
         let standardID = Schedule.canonicalDay(for: date, overrides: [:], calendar: calendar)
         let standard = Schedule.day(for: standardID, in: plan)
-        let standardTitle = standard?.short ?? "rustdag"
+        let standardTitle = standard?.short ?? "rest day"
         let standardDayID = standard?.id ?? "rest"
 
         let title = "\(WeekPlan.fullWeekday(date).capitalized) \(Agenda.shortDate(date))"
 
         if let session = day?.session {
-            var state = "\(session.dayLabel) · gelogd"
+            var state = "\(session.dayLabel) · logged"
             if let seconds = session.durationSeconds, seconds > 0 {
                 state += " · \(max(1, seconds / 60)) min"
             }
@@ -111,9 +111,9 @@ public struct DayPlan: Equatable, Sendable {
         let current = Schedule.day(for: currentID, in: plan)
         let state: String
         if isOverridden {
-            state = "Nu: \(current?.short ?? "rust") · door jou gezet"
+            state = "Now: \(current?.short ?? "rest") · set by you"
         } else {
-            state = "Nu: \(current.map { "\($0.short)" } ?? "rustdag") · volgens je plan"
+            state = "Now: \(current.map { "\($0.short)" } ?? "rest day") · from your plan"
         }
 
         var options: [Option] = plan.map { workout in
@@ -126,21 +126,21 @@ public struct DayPlan: Equatable, Sendable {
         }
         options.append(Option(
             kind: .rest,
-            title: "Rust",
-            hint: current == nil && !isOverridden ? nil : (current == nil ? "huidig" : nil),
+            title: "Rest",
+            hint: current == nil && !isOverridden ? nil : (current == nil ? "current" : nil),
             isCurrent: current == nil
         ))
         // Offered only where there is a change to undo: without one, the date
         // already is the standard.
         if isOverridden {
             options.insert(
-                Option(kind: .standard, title: "Terug naar standaard", hint: standardTitle, isCurrent: false),
+                Option(kind: .standard, title: "Back to standard", hint: standardTitle, isCurrent: false),
                 at: 0
             )
         } else {
             options.append(Option(
                 kind: .standard,
-                title: "Standaard van je plan",
+                title: "Your plan's standard",
                 hint: standardTitle,
                 isCurrent: true
             ))
@@ -165,8 +165,8 @@ public struct DayPlan: Equatable, Sendable {
         let elsewhere = week
             .filter { $0.key != key && $0.plannedDay?.id == workout.id }
             .map { "\($0.weekday) \($0.dayNumber)" }
-        let also = elsewhere.isEmpty ? nil : "ook \(elsewhere.joined(separator: " · "))"
-        if isCurrent { return also.map { "huidig · \($0)" } ?? "huidig" }
+        let also = elsewhere.isEmpty ? nil : "also \(elsewhere.joined(separator: " · "))"
+        if isCurrent { return also.map { "current · \($0)" } ?? "current" }
         return also
     }
 
@@ -177,18 +177,18 @@ public struct DayPlan: Equatable, Sendable {
     public func note(for option: Option, calendar: Calendar = .current) -> String {
         switch option.kind {
         case .standard:
-            return "Een wijziging vervangt de vorige; er stapelt niets. De gestippelde ring in de rail verdwijnt zodra de dag weer standaard is."
+            return "A change replaces the previous one; nothing stacks. The dotted ring on the strip disappears once the day is back to standard."
         case .rest:
-            return "Dit verandert alleen deze datum. Je plan zelf blijft zoals het is."
+            return "This only changes this date. Your plan itself stays as it is."
         case .session:
-            let doubled = option.hint?.contains("ook ") == true
+            let doubled = option.hint?.contains("also ") == true
             let stays = option.hint?
-                .replacingOccurrences(of: "huidig · ", with: "")
-                .replacingOccurrences(of: "ook ", with: "") ?? ""
+                .replacingOccurrences(of: "current · ", with: "")
+                .replacingOccurrences(of: "also ", with: "") ?? ""
             if doubled {
-                return "\(option.title) staat dan twee keer in deze week; \(stays) blijft staan. Dit verandert alleen deze datum, niet de oefeningen in \(option.title)."
+                return "\(option.title) will then be in this week twice; \(stays) stays. This only changes this date, not the exercises in \(option.title)."
             }
-            return "Dit verandert alleen deze datum, niet de oefeningen in \(option.title)."
+            return "This only changes this date, not the exercises in \(option.title)."
         }
     }
 
@@ -196,9 +196,9 @@ public struct DayPlan: Equatable, Sendable {
     public func confirmTitle(for option: Option, calendar: Calendar = .current) -> String {
         let when = "\(Schedule.weekdayLabel(date)) \(calendar.component(.day, from: date))"
         switch option.kind {
-        case .standard: return "Zet terug naar \(standardTitle)"
-        case .rest: return "Zet rust op \(when)"
-        case .session: return "Zet \(option.title) op \(when)"
+        case .standard: return "Reset to \(standardTitle)"
+        case .rest: return "Make \(when) a rest day"
+        case .session: return "Put \(option.title) on \(when)"
         }
     }
 

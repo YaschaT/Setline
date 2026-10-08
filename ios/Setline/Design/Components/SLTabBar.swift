@@ -11,9 +11,9 @@ enum SLTab: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .training: return "Training"
-        case .voeding: return "Voeding"
-        case .progressie: return "Progressie"
-        case .fotos: return "Foto's"
+        case .voeding: return "Nutrition"
+        case .progressie: return "Progress"
+        case .fotos: return "Photos"
         case .account: return "Account"
         }
     }

@@ -23,7 +23,7 @@ struct FoodSearchService: Sendable {
     /// uses; without one there is no account to search as.
     func search(_ query: String, auth: AuthSessionCoordinator?) async -> FoodSearchOutcome {
         guard let config else {
-            return .failed("Zoeken is niet ingesteld op dit toestel. Vul de waarden zelf in.")
+            return .failed("Search isn't set up on this phone. Enter the values yourself.")
         }
         guard let auth else { return .failed(FoodSearch.Message.signIn) }
         let session = self.session

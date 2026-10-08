@@ -193,11 +193,11 @@ final class ProgressOverviewTests: XCTestCase {
 
     func testWeekLabelsCountFromThisWeek() {
         let now = date(9)
-        XCTAssertEqual(Agenda.weekLabel(containing: date(13), now: now, calendar: calendar), "Deze week")
-        XCTAssertEqual(Agenda.weekLabel(containing: date(6), now: now, calendar: calendar), "Vorige week")
-        XCTAssertEqual(Agenda.weekLabel(containing: date(14), now: now, calendar: calendar), "Volgende week")
-        XCTAssertEqual(Agenda.weekLabel(containing: date(18, month: 8), now: now, calendar: calendar), "3 weken geleden")
-        XCTAssertEqual(Agenda.weekLabel(containing: date(22), now: now, calendar: calendar), "Over 2 weken")
+        XCTAssertEqual(Agenda.weekLabel(containing: date(13), now: now, calendar: calendar), "This week")
+        XCTAssertEqual(Agenda.weekLabel(containing: date(6), now: now, calendar: calendar), "Last week")
+        XCTAssertEqual(Agenda.weekLabel(containing: date(14), now: now, calendar: calendar), "Next week")
+        XCTAssertEqual(Agenda.weekLabel(containing: date(18, month: 8), now: now, calendar: calendar), "3 weeks ago")
+        XCTAssertEqual(Agenda.weekLabel(containing: date(22), now: now, calendar: calendar), "In 2 weeks")
     }
 
     /// The week the clocks go back is 167 or 169 hours long; it is still one
@@ -205,7 +205,7 @@ final class ProgressOverviewTests: XCTestCase {
     func testWeekLabelsSurviveTheClockChange() {
         let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 9))!
         let after = calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 9))!
-        XCTAssertEqual(Agenda.weekLabel(containing: after, now: now, calendar: calendar), "Volgende week")
+        XCTAssertEqual(Agenda.weekLabel(containing: after, now: now, calendar: calendar), "Next week")
     }
 
     // MARK: Progress per training day

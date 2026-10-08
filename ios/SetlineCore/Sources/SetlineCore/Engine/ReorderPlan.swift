@@ -20,11 +20,11 @@ public struct ReorderPlan: Hashable, Sendable {
 
     /// `Doe hack squat nu · Kom later terug voor bankdrukken`
     public var headline: String {
-        "Doe \(candidate.name.lowercased()) nu · Kom later terug voor \(current.name.lowercased())"
+        "Do \(candidate.name.lowercased()) now · come back to \(current.name.lowercased()) later"
     }
 
     public var detail: String {
-        "Je houdt \(current.name.lowercased()), inclusief historiek en progressie."
+        "You keep \(current.name.lowercased()), including its history and progress."
     }
 }
 

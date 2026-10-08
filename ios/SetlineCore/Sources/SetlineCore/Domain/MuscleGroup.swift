@@ -14,11 +14,11 @@ public enum MuscleGroup: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .borst: return "Borst"
-        case .rug: return "Rug"
-        case .schouders: return "Schouders"
-        case .armen: return "Armen"
-        case .benen: return "Benen"
+        case .borst: return "Chest"
+        case .rug: return "Back"
+        case .schouders: return "Shoulders"
+        case .armen: return "Arms"
+        case .benen: return "Legs"
         case .core: return "Core"
         }
     }

@@ -103,7 +103,7 @@ struct SessionView: View {
             // Rest is over. The notification covers the background; this is
             // the foreground's equivalent, felt without looking.
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            AccessibilityNotification.Announcement("Rust afgelopen").post()
+            AccessibilityNotification.Announcement("Rest done").post()
         }
         .task(id: toast?.id) {
             guard let id = toast?.id, !UIAccessibility.isVoiceOverRunning else { return }
@@ -195,13 +195,13 @@ struct SessionView: View {
         }
         .sheet(isPresented: $showsPlates) { platesForNextSet }
         .alert(
-            "Sessie afronden met \(runner.completedSetCount) van \(runner.plannedSetCount) sets?",
+            "Finish the session with \(runner.completedSetCount) of \(runner.plannedSetCount) sets?",
             isPresented: $confirmsEarlyFinish
         ) {
-            Button("Verder trainen", role: .cancel) {}
-            Button("Afronden") { showsComplete = true }
+            Button("Keep training", role: .cancel) {}
+            Button("Finish") { showsComplete = true }
         } message: {
-            Text("Wat je logde blijft bewaard. De rest telt als niet getraind — geen straf voor je progressie.")
+            Text("What you logged is kept. The rest counts as not trained — no penalty for your progress.")
         }
         .fullScreenCover(isPresented: $showsComplete) {
             SessionCompleteView(
@@ -258,11 +258,11 @@ struct SessionView: View {
         switch outcome {
         case .reorder(let plan):
             runner.takeReorder(plan)
-            show("Je komt later terug voor \(plan.current.name).") { runner.currentIndex = index }
+            show("You'll come back to \(plan.current.name) later.") { runner.currentIndex = index }
         case .substitute(let exercise, let reason):
             runner.substitute(slotIndex: index, with: exercise, reason: reason)
             let change = runner.latestUndo(slotIndex: index)?.id
-            show("Voor vandaag: \(exercise.name). Gewicht start leeg.") {
+            show("For today: \(exercise.name). Weight starts empty.") {
                 _ = runner.undoChange(slotIndex: index, ifLatestIs: change)
             }
         case .replaceInProgram(let exercise, let scope):
@@ -278,7 +278,7 @@ struct SessionView: View {
             runner.replaceInProgram(slotIndex: index, with: exercise, recording: replacement)
             Task { await app.replaceInProgram(replacement) }
             let change = runner.latestUndo(slotIndex: index)?.id
-            show("\(exercise.name) staat nu in je schema · \(scope.label.lowercased()).") {
+            show("\(exercise.name) is now in your plan · \(scope.label.lowercased()).") {
                 // Only while this change is still the latest: the header line
                 // may already have reversed it.
                 guard let point = runner.undoChange(slotIndex: index, ifLatestIs: change),
@@ -289,12 +289,12 @@ struct SessionView: View {
             Task { await app.addCustomExercise(custom) }
             runner.substitute(slotIndex: index, with: custom.exercise, reason: .preference)
             let change = runner.latestUndo(slotIndex: index)?.id
-            show("\(custom.name) toegevoegd. Set 1 is een kalibratieset.") {
+            show("\(custom.name) added. Set 1 is a calibration set.") {
                 _ = runner.undoChange(slotIndex: index, ifLatestIs: change)
             }
         case .reduceLoad:
             let previous = runner.reduceLoad(slotIndex: index)
-            show("Gewicht twee stappen lichter. Pas aan als dat niet klopt.") {
+            show("Weight two steps lighter. Adjust it if that's not right.") {
                 runner.restoreOpenWeights(slotIndex: index, from: previous)
             }
         case .limitRange:
@@ -302,15 +302,15 @@ struct SessionView: View {
             // next set opens that way — once the swap sheet has left.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                 if !runner.beginPartialSet(slotIndex: index) {
-                    show("Alle sets van deze oefening zijn al gelogd.", undo: nil)
+                    show("All sets of this exercise are already logged.", undo: nil)
                 }
             }
         case .skipExercise:
             if runner.nextSlotIndex != nil {
                 runner.advance()
-                show("Overgeslagen. Dat kost je progressie niets.") { runner.currentIndex = index }
+                show("Skipped. That costs your progress nothing.") { runner.currentIndex = index }
             } else {
-                show("Dit was de laatste oefening. Rond de sessie af wanneer je klaar bent.", undo: nil)
+                show("That was the last exercise. Finish the session when you're ready.", undo: nil)
             }
         }
     }
@@ -327,7 +327,7 @@ struct SessionView: View {
     private func addSet() {
         let index = runner.currentIndex
         guard let row = runner.addSet(slotIndex: index) else { return }
-        show("Set \(row.index + 1) toegevoegd. Alleen voor deze sessie.") {
+        show("Set \(row.index + 1) added. Just for this session.") {
             _ = runner.removeUntouchedAddedSet(slotIndex: index, setID: row.id)
         }
     }
@@ -337,7 +337,7 @@ struct SessionView: View {
     private func removeSet(slot: Int, set: Int) {
         closeEntry()
         guard let removed = runner.removeAddedSet(slotIndex: slot, setIndex: set) else { return }
-        show("Set \(set + 1) verwijderd.") { runner.restore(removed, slotIndex: slot) }
+        show("Set \(set + 1) removed.") { runner.restore(removed, slotIndex: slot) }
     }
 
 
@@ -352,7 +352,7 @@ struct SessionView: View {
                 Button(action: leave) {
                     HStack(spacing: 2) {
                         SLGlyph(name: .chevronLeft, size: 18)
-                        Text(runner.isUntouched ? "Training" : "Pauzeer").slBody()
+                        Text(runner.isUntouched ? "Training" : "Pause").slBody()
                     }
                     .foregroundStyle(SL.Ink.secondary)
                     .lineLimit(1)
@@ -361,8 +361,8 @@ struct SessionView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(runner.isUntouched ? "Terug naar Training" : "Pauzeer de sessie")
-                .accessibilityHint(runner.isUntouched ? "" : "Bewaart waar je bent. Je hervat vanaf Training.")
+                .accessibilityLabel(runner.isUntouched ? "Back to Training" : "Pause the session")
+                .accessibilityHint(runner.isUntouched ? "" : "Saves where you are. Resume from Training.")
 
                 Spacer(minLength: 0)
 
@@ -372,7 +372,7 @@ struct SessionView: View {
 
                 if runner.hasProgress && !runner.isComplete {
                     Button { confirmsEarlyFinish = true } label: {
-                        Text("Afronden")
+                        Text("Finish")
                             .slBody()
                             .foregroundStyle(SL.Ink.secondary)
                             .lineLimit(1)
@@ -404,11 +404,11 @@ struct SessionView: View {
     }
 
     private var sessionLine: String {
-        let count = "\(runner.completedSetCount) van \(runner.plannedSetCount) sets"
+        let count = "\(runner.completedSetCount) of \(runner.plannedSetCount) sets"
         if runner.isLoggedAfterwards {
             return "\(Schedule.weekdayLabel(runner.startedAt).lowercased()) \(app.display.shortDate(runner.startedAt)) · \(count)"
         }
-        return "sessie \(SLRestPill.clockLabel(runner.elapsedSeconds)) · \(count)"
+        return "session \(SLRestPill.clockLabel(runner.elapsedSeconds)) · \(count)"
     }
 
     /// Pausing keeps the session exactly as it stands. A session in which
@@ -465,7 +465,7 @@ struct SessionView: View {
                     .slLineHeight(SL.LineHeight.title, size: SL.TypeSize.title)
                     .foregroundStyle(SL.Ink.primary)
                     .accessibilityAddTraits(.isHeader)
-                Text("Oefening \(runner.currentIndex + 1) van \(runner.slots.count) · \(Self.equipmentLabel(runner.current.exercise.equipment))")
+                Text("Exercise \(runner.currentIndex + 1) of \(runner.slots.count) · \(Self.equipmentLabel(runner.current.exercise.equipment))")
                     .slBody()
                     .slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
@@ -477,13 +477,13 @@ struct SessionView: View {
 
             Button { showsSwap = true } label: {
                 HStack(spacing: 6) {
-                    Text("Wissel")
+                    Text("Swap")
                     SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
                 }
             }
             .buttonStyle(SLPillButtonStyle())
-            .accessibilityLabel("Wissel \(runner.current.exercise.name)")
-            .accessibilityHint("Alternatieven, volgorde wijzigen of iets voelen")
+            .accessibilityLabel("Swap \(runner.current.exercise.name)")
+            .accessibilityHint("Alternatives, change the order or report pain")
         }
     }
 
@@ -491,11 +491,11 @@ struct SessionView: View {
         switch equipment {
         case .barbell: return "barbell"
         case .dumbbell: return "dumbbells"
-        case .machinePlate: return "machine met schijven"
+        case .machinePlate: return "plate-loaded machine"
         case .machineSelectorised: return "machine"
-        case .cable: return "kabel"
-        case .smith: return "smith machine"
-        case .bodyweight: return "lichaamsgewicht"
+        case .cable: return "cable"
+        case .smith: return "Smith machine"
+        case .bodyweight: return "bodyweight"
         case .band: return "band"
         }
     }
@@ -508,9 +508,9 @@ struct SessionView: View {
         // Before the calibration set, "geen historiek" is said once, on the
         // line that already says where the exercise came from.
         let calibrating = runner.calibrationPrompt(slotIndex: runner.currentIndex) != nil
-        let noHistory = calibrating ? " · geen historiek" : ""
+        let noHistory = calibrating ? " · no history" : ""
         if let origin = runner.substitutedOrigin(slotIndex: runner.currentIndex) {
-            undoLine("Gewisseld van \(origin.name)\(noHistory)", accessibility: "Wissel naar \(origin.name) ongedaan maken")
+            undoLine("Swapped from \(origin.name)\(noHistory)", accessibility: "Undo the swap from \(origin.name)")
         } else if let replacement = runner.latestUndo(slotIndex: runner.currentIndex)?.replacement {
             // A program change stays reversible here until the workout ends.
             // The toast is the quick way back; this one is still there after
@@ -518,8 +518,8 @@ struct SessionView: View {
             // settings.
             let origin = app.exercise(replacement.originExerciseID)
             undoLine(
-                "Vervangt \(origin.name) in je schema\(noHistory)",
-                accessibility: "Vervanging van \(origin.name) in je schema ongedaan maken"
+                "Replaces \(origin.name) in your plan\(noHistory)",
+                accessibility: "Undo replacing \(origin.name) in your plan"
             )
         }
 
@@ -544,7 +544,7 @@ struct SessionView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: SL.Space.s2)
             Button { undoLatestChange() } label: {
-                Text("Ongedaan maken")
+                Text("Undo")
                     .slMeta(SL.Weight.semibold)
                     .foregroundStyle(SL.Signal.action)
                     .fixedSize()
@@ -566,14 +566,14 @@ struct SessionView: View {
         toast = nil
         if let replacement = point.replacement {
             Task { await app.undoReplacement(replacement) }
-            show("\(app.exercise(replacement.originExerciseID).name) staat weer in je schema.", undo: nil)
+            show("\(app.exercise(replacement.originExerciseID).name) is back in your plan.", undo: nil)
         }
     }
 
     /// "Bewaard: Flat bench press · 1 set"
     private func preservedLine(_ results: [ExerciseResult]) -> String {
         let parts = results.map { "\($0.name) · \($0.sets.count) \($0.sets.count == 1 ? "set" : "sets")" }
-        return "Bewaard: " + parts.joined(separator: ", ")
+        return "Kept: " + parts.joined(separator: ", ")
     }
 
     // MARK: - What SETLINE says before set 1
@@ -586,7 +586,7 @@ struct SessionView: View {
     private var aboveTheSets: some View {
         if let prompt = runner.calibrationPrompt(slotIndex: runner.currentIndex) {
             SLNoteCard(tone: .action) {
-                SLOverline(text: "Set 1 · kalibratie", color: SL.Signal.action)
+                SLOverline(text: "Set 1 · calibration", color: SL.Signal.action)
                 Text(prompt.headline)
                     .slLead()
                     .slLineHeight(1.3, size: SL.TypeSize.lead)
@@ -623,7 +623,7 @@ struct SessionView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Voorstel sluiten")
+                .accessibilityLabel("Close suggestion")
                 // 44 to touch; the overline keeps its own line height.
                 .padding(.vertical, -14)
                 .padding(.trailing, -SL.Space.s3)
@@ -640,14 +640,14 @@ struct SessionView: View {
                 // At accessibility sizes the full note pushes the first set off
                 // the screen. The same proposal on one line; `Toon` opens it.
                 Button { expandedProposals.insert(index) } label: {
-                    Text("Toon")
+                    Text("Show")
                         .slBody(SL.Weight.semibold)
                         .foregroundStyle(SL.Signal.action)
                         .frame(minHeight: SL.Space.hitMin)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Toon het volledige voorstel")
+                .accessibilityLabel("Show the full suggestion")
             } else {
                 Text(proposal.body.slUnbroken)
                     .slBody()
@@ -670,14 +670,14 @@ struct SessionView: View {
         let index = runner.currentIndex
         let targets = runner.proposedTargets(slotIndex: index) ?? []
         return HStack(alignment: .center, spacing: SL.Space.s2) {
-            Text("Mik op \(ProgressionEngine.repsLabel(targets))")
+            Text("Aim for \(ProgressionEngine.repsLabel(targets))")
                 .slBody(SL.Weight.semibold)
                 .slNumerals()
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            aimButton("−", label: "Eén rep minder per set") { runner.adjustProposedReps(slotIndex: index, by: -1) }
-            aimButton("+", label: "Eén rep meer per set") { runner.adjustProposedReps(slotIndex: index, by: 1) }
+            aimButton("−", label: "One rep fewer per set") { runner.adjustProposedReps(slotIndex: index, by: -1) }
+            aimButton("+", label: "One rep more per set") { runner.adjustProposedReps(slotIndex: index, by: 1) }
         }
         .padding(.top, SL.Space.s1)
         .accessibilityElement(children: .contain)
@@ -705,7 +705,7 @@ struct SessionView: View {
         guard proposal.tone != .noReference else { return proposal.headline }
         let weight = runner.proposedWeight(slotIndex: index).map { app.display.kg($0) } ?? "—"
         guard let targets = runner.proposedTargets(slotIndex: index) else { return weight }
-        return "\(weight) · mik op \(ProgressionEngine.repsLabel(targets))"
+        return "\(weight) · aim for \(ProgressionEngine.repsLabel(targets))"
     }
 
     /// Only the dot, the overline and the edge change between tones: lime
@@ -721,7 +721,7 @@ struct SessionView: View {
 
     private func toneLabel(_ tone: ProposalTone) -> String {
         switch tone {
-        case .ready: return "Bovengrens bevestigd"
+        case .ready: return "Top of range confirmed"
         case .close: return "Bijna"
         case .neutral: return "Voorstel"
         case .noReference: return "Referentie"
@@ -759,7 +759,7 @@ struct SessionView: View {
                 Button {
                     Task { await app.hideWarmup(exerciseID: runner.current.planned.exerciseID) }
                 } label: {
-                    Text("Altijd verbergen")
+                    Text("Always hide")
                         .slMeta()
                         .foregroundStyle(SL.Ink.secondary)
                         .fixedSize()
@@ -796,8 +796,8 @@ struct SessionView: View {
 
     /// "telt niet mee · topset vandaag 102,5 kg × 5"
     private var warmupLine: String {
-        guard let topSet = runner.topSetLabel(slotIndex: runner.currentIndex) else { return "telt niet mee" }
-        return "telt niet mee · topset vandaag \(topSet)"
+        guard let topSet = runner.topSetLabel(slotIndex: runner.currentIndex) else { return "doesn't count" }
+        return "doesn't count · top set today \(topSet)"
     }
 
     // MARK: - The sets
@@ -815,7 +815,7 @@ struct SessionView: View {
             Button { addSet() } label: {
                 HStack(spacing: 6) {
                     SLGlyph(name: .plus, size: 14)
-                    Text("Set toevoegen").slBody()
+                    Text("Add set").slBody()
                 }
                 .foregroundStyle(SL.Ink.secondary)
                 .frame(maxWidth: .infinity)
@@ -824,8 +824,8 @@ struct SessionView: View {
             }
             .buttonStyle(SLRowButtonStyle())
             .overlay(alignment: .top) { SLHairline() }
-            .accessibilityLabel("Set toevoegen aan \(runner.current.exercise.name)")
-            .accessibilityHint("Alleen voor deze sessie. Je schema verandert niet.")
+            .accessibilityLabel("Add a set to \(runner.current.exercise.name)")
+            .accessibilityHint("Just for this session. Your plan doesn't change.")
         }
         .slBorderBox()
         .slListCard()
@@ -840,7 +840,7 @@ struct SessionView: View {
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
         return layout {
             if let previous = runner.previousSummary(for: slot) {
-                Text("Vorige sessie · \(app.display.shortDate(previous.date))")
+                Text("Last session · \(app.display.shortDate(previous.date))")
                     .slMeta().slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize()
@@ -855,7 +855,7 @@ struct SessionView: View {
                     .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let summary = runner.calibrationSummary(slotIndex: runner.currentIndex) {
-                Text("Gekalibreerd op")
+                Text("Calibrated at")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize()
@@ -865,12 +865,12 @@ struct SessionView: View {
                     .foregroundStyle(SL.Ink.primary)
                     .multilineTextAlignment(.trailing)
             } else {
-                Text("Vorige sessie")
+                Text("Last session")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize()
                 Spacer(minLength: 0)
-                Text("geen historiek")
+                Text("no history")
                     .slBody()
                     .foregroundStyle(SL.Ink.secondary)
             }
@@ -902,7 +902,7 @@ struct SessionView: View {
             label: label,
             phase: phase,
             note: note(for: row),
-            previous: runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "vorige \($0)" },
+            previous: runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "last \($0)" },
             value: value,
             valueIsSentence: phase == .pending && row.weightKind == .awaitingCalibration,
             spoken: spoken(row, value: value, phase: phase),
@@ -916,23 +916,23 @@ struct SessionView: View {
         case .personalRecord:
             return .init(text: "PR", tone: SL.Signal.action)
         case .failed:
-            return .init(text: "mislukt", tone: SL.Signal.loss)
+            return .init(text: "failed", tone: SL.Signal.loss)
         case .paused(let reps):
             // "2 pauze-reps" where only some of them were: the count is part
             // of the set, so the row says which reps it describes.
-            return .init(text: reps.map { "\($0) pauze-reps" } ?? "met pauze", tone: SL.Signal.attention)
+            return .init(text: reps.map { "\($0) paused reps" } ?? "paused", tone: SL.Signal.attention)
         case .partial(let count):
-            return .init(text: "partieel +\(count)", tone: SL.Signal.attention)
+            return .init(text: "partial +\(count)", tone: SL.Signal.attention)
         case .pausedAndPartial(let pausedReps, let count):
             // Two true things about one set; neither hides the other.
             return .init(
-                text: "\(pausedReps.map { "\($0) pauze-reps" } ?? "met pauze") · partieel +\(count)",
+                text: "\(pausedReps.map { "\($0) paused reps" } ?? "paused") · partial +\(count)",
                 tone: SL.Signal.attention
             )
         case .calibration:
-            return .init(text: "kalibratie", tone: SL.Ink.secondary)
+            return .init(text: "calibration", tone: SL.Ink.secondary)
         case .baseline:
-            return .init(text: "basis", tone: SL.Ink.secondary)
+            return .init(text: "baseline", tone: SL.Ink.secondary)
         case .reserve(let rir):
             return .init(text: "RIR \(rir)", tone: SL.Ink.secondary)
         case .difference(let text):
@@ -950,23 +950,23 @@ struct SessionView: View {
         switch phase {
         case .done: parts.append(value)
         case .open: parts.append("open, \(value)")
-        case .pending: parts.append(row.weightKind == .awaitingCalibration ? "volgt uit set 1" : "nog te doen")
+        case .pending: parts.append(row.weightKind == .awaitingCalibration ? "follows from set 1" : "to do")
         }
         if let previous = runner.previousSet(slotIndex: runner.currentIndex, setIndex: row.index) {
-            parts.append("vorige keer \(previous)")
+            parts.append("last time \(previous)")
         }
         switch row.delta {
-        case .personalRecord: parts.append("persoonlijk record")
-        case .failed: parts.append("mislukte set")
-        case .paused(let reps): parts.append(reps.map { "\($0) reps met pauze" } ?? "set met pauze")
-        case .partial(let count): parts.append("\(count) partiële reps")
+        case .personalRecord: parts.append("personal record")
+        case .failed: parts.append("failed set")
+        case .paused(let reps): parts.append(reps.map { "\($0) paused reps" } ?? "paused set")
+        case .partial(let count): parts.append("\(count) partial reps")
         case .pausedAndPartial(let pausedReps, let count):
-            parts.append("\(pausedReps.map { "\($0) reps met pauze" } ?? "set met pauze"), \(count) partiële reps")
-        case .calibration: parts.append("kalibratieset")
-        case .baseline: parts.append("basis voor deze oefening")
+            parts.append("\(pausedReps.map { "\($0) paused reps" } ?? "paused set"), \(count) partial reps")
+        case .calibration: parts.append("calibration set")
+        case .baseline: parts.append("baseline for this exercise")
         case .reserve(let rir): parts.append("RIR \(rir)")
-        case .difference(let text): parts.append("\(text) kilo vergeleken met vorige sessie")
-        case .added: parts.append("alleen voor deze sessie")
+        case .difference(let text): parts.append("\(text) kilos compared with last session")
+        case .added: parts.append("just for this session")
         case .reference, .none: break
         }
         return parts.joined(separator: ", ")
@@ -975,18 +975,18 @@ struct SessionView: View {
     /// Under the sets, once the calibration set is in: what it started.
     private var referenceNote: some View {
         SLNoteCard {
-            Text("Referentie opbouwen · sessie 1 van \(ExerciseHistory.sessionsBeforeReference)")
+            Text("Building a reference · session 1 of \(ExerciseHistory.sessionsBeforeReference)")
                 .slLead()
                 .slNumerals()
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Na drie sessies rekent SETLINE progressie voor \(runner.current.exercise.name.lowercased()). Tot dan geen voorstel en geen record.")
+            Text("After three sessions, SETLINE works out progress for \(runner.current.exercise.name.lowercased()). Until then, no suggestion and no record.")
                 .slBody()
                 .slLineHeight(1.45, size: SL.TypeSize.body)
                 .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if runner.didStepUpAfterCalibration(slotIndex: runner.currentIndex) {
-                Text("RIR 3 of meer: set 2 staat één stap hoger. Pas aan als dat niet klopt.")
+                Text("RIR 3 or more: set 2 is one step higher. Adjust it if that's not right.")
                     .slBody()
                     .slLineHeight(1.45, size: SL.TypeSize.body)
                     .foregroundStyle(SL.Ink.secondary)
@@ -1001,7 +1001,7 @@ struct SessionView: View {
     private var afterSets: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             if let advice = runner.adviceLine(for: runner.currentIndex) {
-                SLNoteCard(tone: advice.hasPrefix("Niet") ? .quiet : .action) {
+                SLNoteCard(tone: advice.hasPrefix("Not") ? .quiet : .action) {
                     Text(advice.slUnbroken)
                         .slBody()
                         .slNumerals()
@@ -1021,10 +1021,10 @@ struct SessionView: View {
     }
 
     private var upNextLine: String {
-        guard let next = runner.nextSlotIndex else { return "Laatste oefening van de sessie" }
+        guard let next = runner.nextSlotIndex else { return "Last exercise of the session" }
         let slot = runner.slots[next]
         let reps = slot.planned.sets.first?.repRange.upperBound ?? 0
-        return "Volgende · \(slot.exercise.name) · \(slot.planned.targetSets) × \(reps)"
+        return "Next · \(slot.exercise.name) · \(slot.planned.targetSets) × \(reps)"
     }
 
     // MARK: - The session
@@ -1035,7 +1035,7 @@ struct SessionView: View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLSectionHead(
                 title: "\(runner.day.short) · \(Agenda.when(runner.startedAt))",
-                meta: "\(runner.completedSetCount) van \(runner.plannedSetCount) sets"
+                meta: "\(runner.completedSetCount) of \(runner.plannedSetCount) sets"
             )
             VStack(spacing: 0) {
                 ForEach(Array(runner.slots.enumerated()), id: \.element.id) { index, slot in
@@ -1049,7 +1049,7 @@ struct SessionView: View {
             if runner.hasProgress {
                 Button {
                     if runner.isComplete { showsComplete = true } else { confirmsEarlyFinish = true }
-                } label: { Text("Training afronden") }
+                } label: { Text("Finish training") }
                     .buttonStyle(SLOutlineButtonStyle())
                     .padding(.top, SL.Space.s1)
             }
@@ -1072,7 +1072,7 @@ struct SessionView: View {
                         .slLead()
                         .slLineHeight(1.3, size: SL.TypeSize.lead)
                         .foregroundStyle(SL.Ink.primary)
-                    Text("\(logged) van \(total) sets\(slot.isComplete ? " · klaar" : "")")
+                    Text("\(logged) of \(total) sets\(slot.isComplete ? " · done" : "")")
                         .slBody().slNumerals()
                         .slLineHeight(1.35, size: SL.TypeSize.body)
                         .foregroundStyle(SL.Ink.secondary)
@@ -1083,7 +1083,7 @@ struct SessionView: View {
                 if slot.isComplete {
                     SLDoneMark()
                 } else if isCurrent {
-                    Text("NU")
+                    Text("NOW")
                         .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
                         .tracking(SL.TypeSize.micro * 0.06)
                         .foregroundStyle(SL.Signal.action)
@@ -1098,7 +1098,7 @@ struct SessionView: View {
         }
         .buttonStyle(SLRowButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(slot.exercise.name), \(logged) van \(total) sets\(slot.isComplete ? ", afgerond" : "")")
+        .accessibilityLabel("\(slot.exercise.name), \(logged) of \(total) sets\(slot.isComplete ? ", done" : "")")
         .accessibilityAddTraits(isCurrent ? [.isSelected, .isButton] : .isButton)
     }
 
@@ -1142,7 +1142,7 @@ struct SessionView: View {
     private var inputCard: some View {
         let slotIndex = runner.currentIndex
         if runner.isComplete {
-            Button { showsComplete = true } label: { Text("Sessie afronden") }
+            Button { showsComplete = true } label: { Text("Finish session") }
                 .buttonStyle(SLPrimaryButtonStyle(prominent: true))
         } else if let next = runner.nextIndex(in: runner.current) {
             let set = runner.current.sets[next]
@@ -1160,8 +1160,8 @@ struct SessionView: View {
                         runner.editing = (slotIndex, next)
                     } label: {
                         Text(next == 0 && runner.needsCalibration(slotIndex: slotIndex)
-                             ? "Kalibratieset invoeren"
-                             : "Set \(next + 1) invoeren")
+                             ? "Enter calibration set"
+                             : "Enter set \(next + 1)")
                     }
                     .buttonStyle(SLPrimaryButtonStyle(prominent: true))
                 } else {
@@ -1184,7 +1184,7 @@ struct SessionView: View {
             )
         } else if let next = runner.nextSlotIndex {
             Button { runner.advance() } label: {
-                Text("Volgende · \(runner.slots[next].exercise.name)")
+                Text("Next · \(runner.slots[next].exercise.name)")
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .padding(.horizontal, SL.Space.s3)
@@ -1193,7 +1193,7 @@ struct SessionView: View {
         } else if let open = runner.firstOpenSlotIndex {
             // The last exercise is done and an earlier one is not.
             Button { runner.currentIndex = open } label: {
-                Text("Verder · \(runner.slots[open].exercise.name)")
+                Text("Continue · \(runner.slots[open].exercise.name)")
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .padding(.horizontal, SL.Space.s3)
@@ -1209,7 +1209,7 @@ struct SessionView: View {
                 Circle().fill(SL.Signal.action).frame(width: 8, height: 8)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Set \(setIndex + 1) van \(runner.current.sets.count)")
+                    Text("Set \(setIndex + 1) of \(runner.current.sets.count)")
                         .slLead()
                         .slNumerals()
                         .foregroundStyle(SL.Ink.primary)
@@ -1228,20 +1228,20 @@ struct SessionView: View {
                 Button {
                     entryOpensOnKeypad = false
                     runner.editing = (runner.currentIndex, setIndex)
-                } label: { Text("Meer") }
+                } label: { Text("More") }
                     .buttonStyle(SLPillButtonStyle(quiet: true))
-                    .accessibilityLabel("Meer opties voor deze set")
-                    .accessibilityHint("Reps in reserve, mislukt, pauze-reps, partieel of een gewicht typen")
+                    .accessibilityLabel("More options for this set")
+                    .accessibilityHint("Reps in reserve, failed, paused reps, partial or type a weight")
             }
             if showsPlatesButton && !typeSize.isAccessibilitySize {
                 Button { showsPlates = true } label: {
                     HStack(spacing: SL.Space.s2) {
                         SLGlyph(name: .plates, size: 16)
-                        Text("Schijven")
+                        Text("Plates")
                     }
                 }
                 .buttonStyle(SLPillButtonStyle(quiet: true))
-                .accessibilityHint("Schijven per kant voor deze set")
+                .accessibilityHint("Plates per side for this set")
             }
         }
     }
@@ -1251,21 +1251,21 @@ struct SessionView: View {
         let slotIndex = runner.currentIndex
         if adjusted.contains(set.id) { return "aangepast" }
         if setIndex == 0, runner.needsCalibration(slotIndex: slotIndex) { return "kalibratieset" }
-        guard let weight = set.weightKg, weight > 0 else { return "nog geen gewicht" }
+        guard let weight = set.weightKg, weight > 0 else { return "no weight yet" }
 
         let slot = runner.current
         let reference = slot.history.mostRecent
         let prior = reference?.sets.first { $0.index == set.index }
         if let reference, prior?.weightKg == weight {
-            return "doel uit \(app.display.shortDate(reference.date))"
+            return "target from \(app.display.shortDate(reference.date))"
         }
         if slot.sets.prefix(setIndex).last(where: \.isLogged)?.weightKg == weight {
-            return "overgenomen: \(app.display.kg(weight))"
+            return "carried over: \(app.display.kg(weight))"
         }
         if slot.proposal.weightKg == weight {
-            return "voorstel: \(app.display.kg(weight))"
+            return "suggested: \(app.display.kg(weight))"
         }
-        return "nog niet opgeslagen"
+        return "not saved yet"
     }
 
     private func openReps(slotIndex: Int, setIndex: Int) -> Int {
@@ -1279,7 +1279,7 @@ struct SessionView: View {
         let changed = adjusted.contains(set.id)
         return HStack(alignment: .top, spacing: SL.Space.s2) {
             SLStepper(
-                label: "Gewicht",
+                label: "Weight",
                 display: set.weightKg.map(app.display.number) ?? "—",
                 isChanged: changed && runner.slots[slotIndex].sets[setIndex].weightKg != openingWeight[set.id],
                 onTapValue: {
@@ -1287,7 +1287,7 @@ struct SessionView: View {
                     entryOpensOnKeypad = true
                     runner.editing = (slotIndex, setIndex)
                 },
-                valueHint: "Gewicht typen",
+                valueHint: "Type the weight",
                 onDecrement: { moveWeight(slotIndex: slotIndex, set: set, by: -step) },
                 onIncrement: { moveWeight(slotIndex: slotIndex, set: set, by: step) }
             )
@@ -1363,8 +1363,8 @@ struct SessionView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Reps in reserve: \(value == 4 ? "4 of meer" : "\(value)")")
-                .accessibilityHint("Optioneel")
+                .accessibilityLabel("Reps in reserve: \(value == 4 ? "4 or more" : "\(value)")")
+                .accessibilityHint("Optional")
                 .accessibilityAddTraits(picked == value ? [.isSelected, .isButton] : .isButton)
             }
         }
@@ -1378,7 +1378,7 @@ struct SessionView: View {
             save(slotIndex: slotIndex, setIndex: setIndex)
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("Set opslaan")
+                Text("Save set")
                 Text(app.display.setReference(weightKg: weight, reps: reps))
                     .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
                     .slNumerals()
@@ -1389,7 +1389,7 @@ struct SessionView: View {
         }
         .buttonStyle(SLPrimaryButtonStyle(prominent: true))
         .disabled(weight <= 0 || reps <= 0)
-        .accessibilityLabel("Set opslaan, \(app.display.kg(weight)) × \(reps)")
+        .accessibilityLabel("Save set, \(app.display.kg(weight)) × \(reps)")
     }
 
     /// One tap: writes the set as the card shows it and starts the rest.
@@ -1415,7 +1415,7 @@ struct SessionView: View {
         )
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         AccessibilityNotification.Announcement(
-            "Set \(setIndex + 1) opgeslagen, \(app.display.kg(weight)) × \(reps)"
+            "Set \(setIndex + 1) saved, \(app.display.kg(weight)) × \(reps)"
         ).post()
         Task { await askAboutNotificationsIfWorthIt() }
     }

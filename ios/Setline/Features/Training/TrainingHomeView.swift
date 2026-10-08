@@ -179,9 +179,9 @@ struct TrainingHomeView: View {
             }
         }
         #endif
-        .alert("Sessie beëindigen?", isPresented: $confirmsEnd) {
-            Button("Annuleer", role: .cancel) {}
-            Button("Beëindigen") { Task { await app.endActiveSession() } }
+        .alert("End the session?", isPresented: $confirmsEnd) {
+            Button("Cancel", role: .cancel) {}
+            Button("End") { Task { await app.endActiveSession() } }
         } message: {
             Text(endMessage)
         }
@@ -246,7 +246,7 @@ struct TrainingHomeView: View {
             .buttonStyle(.plain)
             .slFocusRing(Circle())
             .accessibilityLabel("Account")
-            .accessibilityHint("Opent je account")
+            .accessibilityHint("Opens your account")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(greeting)
@@ -295,13 +295,13 @@ struct TrainingHomeView: View {
         }
         .buttonStyle(.plain)
         .slFocusRing(Circle())
-        .accessibilityLabel(count == 0 ? "Meldingen" : "Meldingen, \(count) niet gelogd")
-        .accessibilityHint("Toont trainingen die je nog niet logde")
+        .accessibilityLabel(count == 0 ? "Alerts" : "Alerts, \(count) not logged")
+        .accessibilityHint("Shows workouts you haven't logged yet")
     }
 
     /// "Hoi Yascha", or just "Hoi" until a name is given in Account.
     private var greeting: String {
-        app.greetingName.map { "Hoi \($0)" } ?? "Hoi"
+        app.greetingName.map { "Hi \($0)" } ?? "Hi"
     }
 
     /// "Woensdag 9 september" — the date the card is on.
@@ -336,7 +336,7 @@ struct TrainingHomeView: View {
                 .buttonStyle(.plain)
                 .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
                 .padding(.trailing, typeSize.isAccessibilitySize ? 0 : -SL.Space.s2)
-                .accessibilityHint("Opent planning en resultaten")
+                .accessibilityHint("Opens planning and results")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -364,10 +364,10 @@ struct TrainingHomeView: View {
                 // is the way for everyone else.
                 .accessibilityActions {
                     if let previous = neighbour(-1) {
-                        Button("Vorige dag, \(StripDay.spokenLabel(previous))") { go(to: previous, direction: -1) }
+                        Button("Previous day, \(StripDay.spokenLabel(previous))") { go(to: previous, direction: -1) }
                     }
                     if let next = neighbour(1) {
-                        Button("Volgende dag, \(StripDay.spokenLabel(next))") { go(to: next, direction: 1) }
+                        Button("Next day, \(StripDay.spokenLabel(next))") { go(to: next, direction: 1) }
                     }
                 }
             if !knowsSwipe { swipeHint }
@@ -414,7 +414,7 @@ struct TrainingHomeView: View {
                 } label: {
                     HStack(spacing: SL.Space.s1) {
                         SLGlyph(name: .chevronLeft, size: 14)
-                        Text("Naar vandaag").slMeta(SL.Weight.semibold)
+                        Text("Back to today").slMeta(SL.Weight.semibold)
                     }
                     .foregroundStyle(SL.Signal.action)
                     .padding(.horizontal, SL.Space.s2)
@@ -532,7 +532,7 @@ struct TrainingHomeView: View {
             return Card(
                 title: resumed.short,
                 focus: resumed.focus.isEmpty ? nil : resumed.focus,
-                meta: .init(text: "\(paused.loggedSetCount) van \(max(planned, paused.plannedSetCount)) sets · gepauzeerd")
+                meta: .init(text: "\(paused.loggedSetCount) of \(max(planned, paused.plannedSetCount)) sets · paused")
             )
         }
 
@@ -540,7 +540,7 @@ struct TrainingHomeView: View {
         case .planned(let workout):
             // 1a: today reads "◷ 5 oefeningen · ~62 min"; another day only
             // what it holds, "20 sets".
-            let exercises = workout.exercises.count == 1 ? "1 oefening" : "\(workout.exercises.count) oefeningen"
+            let exercises = workout.exercises.count == 1 ? "1 exercise" : "\(workout.exercises.count) exercises"
             return Card(
                 title: workout.short,
                 focus: workout.focus.isEmpty ? nil : workout.focus,
@@ -553,7 +553,7 @@ struct TrainingHomeView: View {
             return Card(
                 title: workout.short,
                 focus: workout.focus.isEmpty ? nil : workout.focus,
-                meta: .init(text: "\(WeekPlan.sets(of: workout)) sets · niet gelogd")
+                meta: .init(text: "\(WeekPlan.sets(of: workout)) sets · not logged")
             )
 
         case .session(let session):
@@ -563,7 +563,7 @@ struct TrainingHomeView: View {
             return Card(title: "Voltooid", focus: session.dayLabel, meta: .init(text: doneLine(session)))
 
         case .rest:
-            var card = Card(title: "Rust", focus: "Geen training gepland", isRest: true)
+            var card = Card(title: "Rest", focus: "No training planned", isRest: true)
             if let next = nextTraining(after: day.date), let workout = next.plannedDay {
                 card.meta = .init(text: "\(Agenda.restLine(next: next)) · \(workout.short)")
             }
@@ -575,7 +575,7 @@ struct TrainingHomeView: View {
     /// session without them says how much of it was finished.
     private func doneLine(_ session: TrainingSession) -> String {
         if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
-            return "\(completed) van \(planned) sets"
+            return "\(completed) of \(planned) sets"
         }
         return "\(session.completion)% afgerond"
     }
@@ -602,42 +602,42 @@ struct TrainingHomeView: View {
             VStack(spacing: SL.Space.s1) {
                 Button { onResume(resumed, paused) } label: { startLabel(resumeLabel(paused)) }
                     .buttonStyle(SLPrimaryButtonStyle())
-                Button { confirmsEnd = true } label: { Text("Beëindig sessie") }
+                Button { confirmsEnd = true } label: { Text("End session") }
                     .buttonStyle(SLQuietButtonStyle())
-                    .accessibilityHint("Bewaart wat je logde en sluit de sessie af")
+                    .accessibilityHint("Keeps what you logged and closes the session")
             }
         } else if day.isToday, let workout = day.plannedDay {
             VStack(spacing: SL.Space.s1) {
                 Button { onStart(workout) } label: { startLabel("Start training") }
                     .buttonStyle(SLPrimaryButtonStyle())
-                Button { sheet = .preview(day) } label: { chevroned("Oefeningen bekijken") }
+                Button { sheet = .preview(day) } label: { chevroned("View exercises") }
                     .buttonStyle(SLQuietButtonStyle())
-                    .accessibilityHint("Toont de oefeningen van vandaag. Er start niets.")
+                    .accessibilityHint("Shows today's exercises. Nothing starts.")
             }
         } else if let session = day.session {
-            Button { openedSession = OpenedSession(id: session.id) } label: { chevroned("Resultaten bekijken") }
+            Button { openedSession = OpenedSession(id: session.id) } label: { chevroned("View results") }
                 .buttonStyle(SLOutlineButtonStyle())
         } else if day.isPast, let workout = day.plannedDay {
             // A day that has gone by with nothing logged. The work may well
             // have been done; this is where it gets written down, on the date
             // it happened rather than on today.
             VStack(spacing: SL.Space.s1) {
-                Button { onLogPast(workout, day.date) } label: { chevroned("Achteraf loggen") }
+                Button { onLogPast(workout, day.date) } label: { chevroned("Log afterwards") }
                     .buttonStyle(SLOutlineButtonStyle())
-                    .accessibilityHint("Schrijft \(workout.short) op, op \(Agenda.when(day.date))")
+                    .accessibilityHint("Logs \(workout.short) for \(Agenda.when(day.date))")
                 Button { sheet = .agenda } label: { chevroned("Details in agenda") }
                     .buttonStyle(SLQuietButtonStyle())
             }
         } else if day.plannedDay != nil {
             Button { sheet = .agenda } label: { chevroned("Details in agenda") }
                 .buttonStyle(SLOutlineButtonStyle())
-                .accessibilityHint("Opent wat er \(Agenda.when(day.date)) gepland staat. Er start niets.")
+                .accessibilityHint("Opens what's planned for \(Agenda.when(day.date)). Nothing starts.")
         } else {
             // A rest day: 1a's own label for it. The action sits where every
             // other date has one, so the card reads the same shape.
-            Button { sheet = .agenda } label: { chevroned("Naar agenda") }
+            Button { sheet = .agenda } label: { chevroned("Go to agenda") }
                 .buttonStyle(SLOutlineButtonStyle())
-                .accessibilityHint("Opent de agenda. Daar wijzig je deze dag.")
+                .accessibilityHint("Opens the agenda. That's where you change this day.")
         }
     }
 
@@ -657,16 +657,16 @@ struct TrainingHomeView: View {
 
     private func resumeLabel(_ paused: ActiveSessionSnapshot) -> String {
         let when = app.pausedWhenLabel(for: paused)
-        return when == "vandaag" ? "Hervat training" : "Hervat training \(when)"
+        return when == "today" ? "Resume training" : "Resume training \(when)"
     }
 
     private var endMessage: String {
         guard let paused = app.resumableSession else { return "" }
         return paused.hasProgress
             ? (paused.loggedSetCount == 1
-                ? "De set die je logde wordt bewaard. De rest telt als niet getraind."
-                : "De \(paused.loggedSetCount) sets die je logde worden bewaard. De rest telt als niet getraind.")
-            : "Je logde nog niets, dus er wordt niets bewaard."
+                ? "The set you logged is kept. The rest counts as not trained."
+                : "The \(paused.loggedSetCount) sets you logged are kept. The rest counts as not trained.")
+            : "You haven't logged anything, so nothing is kept."
     }
 
     // MARK: - From day to day
@@ -680,7 +680,7 @@ struct TrainingHomeView: View {
     /// Until the first swipe: one quiet line saying the card moves. The week
     /// strip above already names every day, so there are no arrows here.
     private var swipeHint: some View {
-        Text("Veeg over de kaart om van dag te wisselen")
+        Text("Swipe the card to change day")
             .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
             .foregroundStyle(SL.Ink.secondary)
             .multilineTextAlignment(.center)
@@ -793,7 +793,7 @@ struct TrainingHomeView: View {
     /// what is planned with the sets it holds, or `Rust`.
     private func restOfWeekSection(_ scroll: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLOverline(text: "Rest van de week")
+            SLOverline(text: "Rest of the week")
                 .padding(.leading, SL.Space.s1)
                 .accessibilityAddTraits(.isHeader)
             VStack(spacing: 0) {
@@ -810,7 +810,7 @@ struct TrainingHomeView: View {
     /// show it. Nothing starts.
     private func restOfWeekRow(_ day: AgendaDay, scroll: ScrollViewProxy) -> some View {
         let planned = day.plannedDay
-        let title = day.title ?? "Rust"
+        let title = day.title ?? "Rest"
         let focus = planned.flatMap { $0.focus.isEmpty ? nil : $0.focus }
         let sets = planned.map { "\(WeekPlan.sets(of: $0)) sets" }
         return Button {
@@ -872,7 +872,7 @@ struct TrainingHomeView: View {
                 .compactMap { $0 }
                 .joined(separator: ", ")
         )
-        .accessibilityHint("Toont deze dag")
+        .accessibilityHint("Shows this day")
     }
 
     // MARK: - Offline
@@ -889,7 +889,7 @@ struct TrainingHomeView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
             Button { Task { await app.syncNow() } } label: {
-                Text(app.sync == .syncing ? "Bezig met syncen…" : "Nu opnieuw proberen")
+                Text(app.sync == .syncing ? "Syncing…" : "Try again now")
             }
             .buttonStyle(SLOutlineButtonStyle())
             .disabled(app.sync == .syncing)
@@ -900,14 +900,14 @@ struct TrainingHomeView: View {
     private var offlineText: String {
         let count = queue.count
         let waiting = count == 0 ? ""
-            : count == 1 ? " 1 wijziging wacht op sync."
-            : " \(count) wijzigingen wachten op sync."
-        return "Niets verloren: alles wordt lokaal bewaard.\(waiting) Loggen werkt offline; syncen gebeurt zodra er verbinding is."
+            : count == 1 ? " 1 change waiting to sync."
+            : " \(count) changes waiting to sync."
+        return "Nothing lost: everything is saved on this phone.\(waiting) Logging works offline; syncing happens as soon as you're connected."
     }
 
     private var queueSection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "In de wachtrij")
+            SLSectionHead(title: "Waiting to sync")
             VStack(spacing: 0) {
                 ForEach(Array(queue.enumerated()), id: \.offset) { index, row in
                     HStack(alignment: .center, spacing: SL.Space.s3) {
@@ -929,7 +929,7 @@ struct TrainingHomeView: View {
             .slBorderBox()
             .slListCard()
 
-            Text("SETLINE schrijft eerst lokaal en synct daarna. Exporteren werkt ook offline.")
+            Text("SETLINE saves on your phone first and syncs after. Export works offline too.")
                 .slMeta()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                 .fixedSize(horizontal: false, vertical: true)

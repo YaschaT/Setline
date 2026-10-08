@@ -9,14 +9,14 @@ public enum PainRegion: String, Codable, Sendable, CaseIterable {
 
     public var label: String {
         switch self {
-        case .shoulder: return "Schouder"
-        case .elbow: return "Elleboog"
-        case .upperBack: return "Bovenrug"
-        case .lowerBack: return "Onderrug"
-        case .hip: return "Heup"
-        case .knee: return "Knie"
-        case .wrist: return "Handgewricht"
-        case .other: return "Elders"
+        case .shoulder: return "Shoulder"
+        case .elbow: return "Elbow"
+        case .upperBack: return "Upper back"
+        case .lowerBack: return "Lower back"
+        case .hip: return "Hip"
+        case .knee: return "Knee"
+        case .wrist: return "Wrist"
+        case .other: return "Elsewhere"
         }
     }
 
@@ -25,13 +25,13 @@ public enum PainRegion: String, Codable, Sendable, CaseIterable {
     /// list, so there is never anything to claim about it.
     public var sentenceName: String? {
         switch self {
-        case .shoulder: return "schouder"
-        case .elbow: return "elleboog"
-        case .upperBack: return "bovenrug"
-        case .wrist: return "pols"
-        case .lowerBack: return "onderrug"
-        case .hip: return "heup"
-        case .knee: return "knie"
+        case .shoulder: return "shoulder"
+        case .elbow: return "elbow"
+        case .upperBack: return "upper back"
+        case .wrist: return "wrist"
+        case .lowerBack: return "lower back"
+        case .hip: return "hip"
+        case .knee: return "knee"
         case .other: return nil
         }
     }
@@ -59,9 +59,9 @@ public enum PainTiming: String, Codable, Sendable, CaseIterable {
 
     public var label: String {
         switch self {
-        case .duringSet: return "Tijdens de beweging"
-        case .afterTraining: return "Na de training"
-        case .outsideTheGym: return "De hele tijd"
+        case .duringSet: return "During the movement"
+        case .afterTraining: return "After training"
+        case .outsideTheGym: return "All the time"
         }
     }
 

@@ -22,204 +22,204 @@ public struct ExerciseGuide: Codable, Hashable, Sendable {
 public enum GuidanceCatalog {
 
     public static let `default` = ExerciseGuide(
-        warmup: "1–2 lichte oplopende sets zonder vermoeidheid.",
-        progression: "Haal alle voorgeschreven sets aan de bovengrens in 2 sessies; verhoog daarna de kleinste stap."
+        warmup: "1–2 light ramp-up sets without getting tired.",
+        progression: "Hit the top of the range on all prescribed sets in 2 sessions; then go up by the smallest step."
     )
 
     public static let byExercise: [String: ExerciseGuide] = [
         "flat-bench": ExerciseGuide(
-            warmup: "Stang×15 → 60×8 → 80×5 → 100×3 → 110×1. Geen set tot falen.",
-            progression: "120 kg×6 met RIR 1 in 2 sessies? Ga naar 122,5 kg voor 4–6; back-offs pas verhogen wanneer beide 8 halen.",
+            warmup: "Bar×15 → 60×8 → 80×5 → 100×3 → 110×1. No set to failure.",
+            progression: "120 kg×6 at RIR 1 in 2 sessions? Go to 122.5 kg for 4–6; only raise the back-offs once both reach 8.",
             advanceAt: 6
         ),
         "upper-paused-bench": ExerciseGuide(
-            warmup: "Stang×10 → 60×5 → 80×3 → 100×1 met 2 sec pauze. Alles ruim voor falen.",
-            progression: "Alle 3 sets 6 met een echte 2 sec borstpauze en RIR 2 in 2 sessies? Voeg 2,5 kg toe en start opnieuw bij 4–5 reps.",
+            warmup: "Bar×10 → 60×5 → 80×3 → 100×1 with a 2 sec pause. All well short of failure.",
+            progression: "All 3 sets of 6 with a real 2 sec chest pause and RIR 2 in 2 sessions? Add 2.5 kg and start again at 4–5 reps.",
             advanceAt: 6
         ),
         "incline-bench": ExerciseGuide(
-            warmup: "Stang×12 → 60×6 → 80×3 → 90×1. Na flat bench volstaan meestal de laatste 2 stappen.",
-            progression: "100 kg×6 in 2 sessies? Verhoog naar 102,5 kg. Eerst alle back-offs op 8 krijgen.",
+            warmup: "Bar×12 → 60×6 → 80×3 → 90×1. After flat bench, the last 2 steps are usually enough.",
+            progression: "100 kg×6 in 2 sessions? Go up to 102.5 kg. Get all back-offs to 8 first.",
             advanceAt: 6
         ),
         "pec-fly": ExerciseGuide(
-            warmup: "1 lichte set van 15 met volledige stretch; niet vermoeien.",
-            progression: "Beide sets 15 technisch zuiver? Volgende plaatje en terug naar 10–12 reps.",
+            warmup: "1 light set of 15 with a full stretch; don't tire yourself.",
+            progression: "Both sets of 15 with clean technique? Next plate and back to 10–12 reps.",
             advanceAt: 15
         ),
         "push-shoulder": ExerciseGuide(
-            warmup: "2 oplopende sets: ongeveer 50%×10 en 70%×4.",
-            progression: "Beide sets 10 met RIR 1? Kleinste gewichtsstap verhogen.",
+            warmup: "2 ramp-up sets: about 50%×10 and 70%×4.",
+            progression: "Both sets of 10 at RIR 1? Go up by the smallest step.",
             advanceAt: 10
         ),
         "upper-shoulder": ExerciseGuide(
-            warmup: "1–2 oplopende sets: ongeveer 50%×10 en 70%×4.",
-            progression: "Beide sets 12 met RIR 1? Kleinste gewichtsstap verhogen.",
+            warmup: "1–2 ramp-up sets: about 50%×10 and 70%×4.",
+            progression: "Both sets of 12 at RIR 1? Go up by the smallest step.",
             advanceAt: 12
         ),
         "push-lateral": ExerciseGuide(
-            warmup: "1 zeer lichte set van 15–20.",
-            progression: "Alle 4 sets 20 zonder zwaaien? Kleinste stap verhogen en terug naar 12–15.",
+            warmup: "1 very light set of 15–20.",
+            progression: "All 4 sets of 20 without swinging? Go up by the smallest step and back to 12–15.",
             advanceAt: 20
         ),
         "legs-lateral": ExerciseGuide(
-            warmup: "Geen extra set nodig na eerdere schoudertraining; start gecontroleerd.",
-            progression: "Alle 3 sets 20 strikt? Kleinste stap verhogen.",
+            warmup: "No extra set needed after earlier shoulder work; start controlled.",
+            progression: "All 3 sets of 20 strict? Go up by the smallest step.",
             advanceAt: 20
         ),
         "upper-lateral": ExerciseGuide(
-            warmup: "1 zeer lichte set van 15–20.",
-            progression: "Alle 3 sets 20 strikt? Kleinste stap verhogen.",
+            warmup: "1 very light set of 15–20.",
+            progression: "All 3 sets of 20 strict? Go up by the smallest step.",
             advanceAt: 20
         ),
         "overhead-triceps": ExerciseGuide(
-            warmup: "1 lichte set van 12–15 om ellebogen warm te maken.",
-            progression: "3×15 met dezelfde ROM? Eén kabelstap verhogen.",
+            warmup: "1 light set of 12–15 to warm up your elbows.",
+            progression: "3×15 with the same ROM? Go up one cable step.",
             advanceAt: 15
         ),
         "pressdown": ExerciseGuide(
-            warmup: "1 lichte set van 15.",
-            progression: "Beide sets 12 met RIR 1? Eén kabelstap verhogen.",
+            warmup: "1 light set of 15.",
+            progression: "Both sets of 12 at RIR 1? Go up one cable step.",
             advanceAt: 12
         ),
         "upper-pressdown": ExerciseGuide(
-            warmup: "Meestal geen aparte opwarming nodig na presses.",
-            progression: "Beide sets 15? Eén kabelstap verhogen.",
+            warmup: "Usually no separate warm-up needed after presses.",
+            progression: "Both sets of 15? Go up one cable step.",
             advanceAt: 15
         ),
         "pull-up": ExerciseGuide(
             warmup: "Scapular pull-up×8 → bodyweight×5 → +5 kg×3.",
-            progression: "3×8 met +10 kg in 2 sessies? Ga naar +12,5 kg en mik opnieuw op 5–6.",
+            progression: "3×8 with +10 kg in 2 sessions? Go to +12.5 kg and aim for 5–6 again.",
             advanceAt: 8
         ),
         "lat-pulldown": ExerciseGuide(
             warmup: "40 kg×10 → 60 kg×5 → 75 kg×2.",
-            progression: "86 kg×6 én back-off 82 kg×10 in 2 sessies? Verhoog top- en back-offset één stap.",
+            progression: "86 kg×6 and a back-off of 82 kg×10 in 2 sessions? Raise the top and back-off set one step.",
             advanceAt: 6
         ),
         "neutral-row": ExerciseGuide(
             warmup: "50 kg×10 → 70 kg×5 → 80 kg×2.",
-            progression: "Alle 3 sets 10 rond 90 kg? Verhoog 2,5–5 kg en begin weer bij 6–8.",
+            progression: "All 3 sets of 10 around 90 kg? Add 2.5–5 kg and start again at 6–8.",
             advanceAt: 10
         ),
         "wide-row": ExerciseGuide(
-            warmup: "1 lichte set van 10; je rug is al warm van de neutral row.",
-            progression: "Beide sets 12 zonder schouders op te trekken? Kleinste stap verhogen.",
+            warmup: "1 light set of 10; your back is already warm from the neutral row.",
+            progression: "Both sets of 12 without shrugging? Go up by the smallest step.",
             advanceAt: 12
         ),
         "upper-wide-row": ExerciseGuide(
             warmup: "50%×10 → 70%×4.",
-            progression: "3×12 met dezelfde borstpositie? Kleinste stap verhogen.",
+            progression: "3×12 with the same chest position? Go up by the smallest step.",
             advanceAt: 12
         ),
         "reverse-pec": ExerciseGuide(
-            warmup: "1 lichte set van 15.",
-            progression: "3×20 zonder momentum? Eén plaatje verhogen.",
+            warmup: "1 light set of 15.",
+            progression: "3×20 without momentum? Go up one plate.",
             advanceAt: 20
         ),
         "rear-delt": ExerciseGuide(
-            warmup: "Geen extra set nodig na rows; begin licht.",
-            progression: "Beide sets 20 zuiver? Eén plaatje verhogen.",
+            warmup: "No extra set needed after rows; start light.",
+            progression: "Both sets of 20 clean? Go up one plate.",
             advanceAt: 20
         ),
         "strict-curl": ExerciseGuide(
-            warmup: "8 kg×12 → 12 kg×6 → 16 kg×3; alles ver van falen.",
-            progression: "18 kg pas verhogen nadat je 10 strikt gecontroleerde reps in 2 opeenvolgende sessies haalt. Dan 20 kg voor 5–7; geen heupzwaai.",
+            warmup: "8 kg×12 → 12 kg×6 → 16 kg×3; all far from failure.",
+            progression: "Only raise 18 kg once you hit 10 strict, controlled reps in 2 sessions in a row. Then 20 kg for 5–7; no hip swing.",
             advanceAt: 10
         ),
         "hammer-curl": ExerciseGuide(
-            warmup: "1 lichte set van 8–10; biceps zijn al warm.",
-            progression: "Beide sets 12 zonder zwaaien? Ga 2 kg omhoog en mik op 8.",
+            warmup: "1 light set of 8–10; your biceps are already warm.",
+            progression: "Both sets of 12 without swinging? Go up 2 kg and aim for 8.",
             advanceAt: 12
         ),
         "cable-curl": ExerciseGuide(
-            warmup: "Geen aparte opwarming nodig na je rugwerk.",
-            progression: "Beide sets 15? Eén kabelstap verhogen.",
+            warmup: "No separate warm-up needed after your back work.",
+            progression: "Both sets of 15? Go up one cable step.",
             advanceAt: 15
         ),
         "hack-squat": ExerciseGuide(
-            warmup: "5 min fiets → lege machine×12 → 40%×8 → 60%×5 → 75%×2.",
-            progression: "3×10 op dezelfde diepte en RIR 1–2? Voeg 5–10 kg totaal toe.",
+            warmup: "5 min bike → empty machine×12 → 40%×8 → 60%×5 → 75%×2.",
+            progression: "3×10 at the same depth and RIR 1–2? Add 5–10 kg in total.",
             advanceAt: 10
         ),
         "bulgarian": ExerciseGuide(
-            warmup: "Bodyweight×8 per been → 1 lichte dumbbellset×5.",
-            progression: "3×12 per been stabiel? Voeg de kleinste dumbbellstap toe.",
+            warmup: "Bodyweight×8 per leg → 1 light dumbbell set×5.",
+            progression: "3×12 per leg, stable? Add the smallest dumbbell step.",
             advanceAt: 12
         ),
         "seated-curl": ExerciseGuide(
-            warmup: "1 lichte set van 12–15.",
-            progression: "3×12 met volledige kniebuiging? Eén plaatje verhogen.",
+            warmup: "1 light set of 12–15.",
+            progression: "3×12 with full knee bend? Go up one plate.",
             advanceAt: 12
         ),
         "leg-extension": ExerciseGuide(
-            warmup: "1 lichte, pijnvrije set van 15.",
-            progression: "Beide sets 15 zonder knie-irritatie? Eén plaatje verhogen.",
+            warmup: "1 light, pain-free set of 15.",
+            progression: "Both sets of 15 without knee irritation? Go up one plate.",
             advanceAt: 15
         ),
         "standing-calf": ExerciseGuide(
-            warmup: "Bodyweight×15 met 2 sec stretch onderaan.",
-            progression: "4×15 met volledige ROM? Kleinste stap verhogen.",
+            warmup: "Bodyweight×15 with a 2 sec stretch at the bottom.",
+            progression: "4×15 with full ROM? Go up by the smallest step.",
             advanceAt: 15
         ),
         "cable-crunch": ExerciseGuide(
-            warmup: "1 lichte set van 10 om de beweging te voelen.",
-            progression: "3×15 zonder heupbeweging? Eén kabelstap verhogen.",
+            warmup: "1 light set of 10 to feel the movement.",
+            progression: "3×15 without hip movement? Go up one cable step.",
             advanceAt: 15
         ),
         "rdl": ExerciseGuide(
-            warmup: "Stang×10 → 40%×8 → 60%×5 → 75%×2.",
-            progression: "3×10 met neutrale rug en dezelfde hamstringstretch? Voeg 5 kg toe.",
+            warmup: "Bar×10 → 40%×8 → 60%×5 → 75%×2.",
+            progression: "3×10 with a neutral back and the same hamstring stretch? Add 5 kg.",
             advanceAt: 10
         ),
         "leg-press": ExerciseGuide(
-            warmup: "Lege slee×12 → 50%×8 → 70%×4.",
-            progression: "3×15 op dezelfde diepte? Voeg 5–10 kg totaal toe.",
+            warmup: "Empty sled×12 → 50%×8 → 70%×4.",
+            progression: "3×15 at the same depth? Add 5–10 kg in total.",
             advanceAt: 15
         ),
         "hip-thrust": ExerciseGuide(
             warmup: "Bodyweight bridge×12 → 50%×8 → 70%×4.",
-            progression: "Beide sets 12 met 1 sec lock-out? Voeg 5 kg toe.",
+            progression: "Both sets of 12 with a 1 sec lockout? Add 5 kg.",
             advanceAt: 12
         ),
         "lying-curl": ExerciseGuide(
-            warmup: "1 lichte set van 12–15.",
-            progression: "3×15 met volledige ROM? Eén plaatje verhogen.",
+            warmup: "1 light set of 12–15.",
+            progression: "3×15 with full ROM? Go up one plate.",
             advanceAt: 15
         ),
         "seated-calf": ExerciseGuide(
-            warmup: "1 lichte set van 15 met trage stretch.",
-            progression: "3×20 met volledige ROM? Kleinste stap verhogen.",
+            warmup: "1 light set of 15 with a slow stretch.",
+            progression: "3×20 with full ROM? Go up by the smallest step.",
             advanceAt: 20
         ),
         "hanging-raise": ExerciseGuide(
-            warmup: "Dead hang 20 sec → 6 rustige knee raises.",
-            progression: "3×15 zonder zwaaien? Ga naar gestrekte benen of voeg licht gewicht toe.",
+            warmup: "Dead hang 20 sec → 6 slow knee raises.",
+            progression: "3×15 without swinging? Move to straight legs or add a light weight.",
             advanceAt: 15
         ),
         "incline-machine": ExerciseGuide(
             warmup: "50%×10 → 70%×4.",
-            progression: "3×12 met RIR 1–2? Eén machinestap verhogen.",
+            progression: "3×12 at RIR 1–2? Go up one machine step.",
             advanceAt: 12
         ),
         "kneeling-lat": ExerciseGuide(
-            warmup: "1 lichte set per kant van 10.",
-            progression: "Beide kanten 15 met volledige stretch? Eén kabelstap verhogen.",
+            warmup: "1 light set of 10 per side.",
+            progression: "Both sides 15 with a full stretch? Go up one cable step.",
             advanceAt: 15
         ),
         "upper-fly": ExerciseGuide(
-            warmup: "1 lichte set van 12.",
-            progression: "Beide sets 15 met controle? Eén plaatje verhogen.",
+            warmup: "1 light set of 12.",
+            progression: "Both sets of 15 under control? Go up one plate.",
             advanceAt: 15
         ),
         "science-lateral": ExerciseGuide(
-            warmup: "1 zeer lichte set van 15–20.",
-            progression: "3×20 strikt in 2 sessies? Verhoog de kleinste kabelstap.",
+            warmup: "1 very light set of 15–20.",
+            progression: "3×20 strict in 2 sessions? Go up by the smallest cable step.",
             advanceAt: 20
         ),
         "science-preacher": ExerciseGuide(
-            warmup: "1–2 lichte sets van 10 en 5 reps.",
-            progression: "3×12 zonder schouderbeweging in 2 sessies? Verhoog de kleinste stap.",
+            warmup: "1–2 light sets of 10 and 5 reps.",
+            progression: "3×12 without shoulder movement in 2 sessions? Go up by the smallest step.",
             advanceAt: 12
         ),
     ]

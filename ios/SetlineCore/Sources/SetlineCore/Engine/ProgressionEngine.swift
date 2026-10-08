@@ -151,7 +151,7 @@ public enum ProgressionEngine {
         planned: PlannedExercise,
         exercise: Exercise,
         history: ExerciseHistory,
-        formatter: NumberDisplay = .dutch
+        formatter: NumberDisplay = .english
     ) -> ProgressionProposal {
         guard history.hasReference else {
             return ProgressionProposal(
@@ -159,8 +159,8 @@ public enum ProgressionEngine {
                 weightKg: nil,
                 targetReps: nil,
                 label: nil,
-                headline: "Referentie opbouwen · sessie \(history.referenceSessionNumber) van \(ExerciseHistory.sessionsBeforeReference)",
-                body: "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen."
+                headline: "Building a reference · session \(history.referenceSessionNumber) of \(ExerciseHistory.sessionsBeforeReference)",
+                body: "After three comparable sessions, SETLINE can show reliable progression suggestions and records."
             )
         }
 
@@ -174,8 +174,8 @@ public enum ProgressionEngine {
                 weightKg: nil,
                 targetReps: lows.first,
                 label: nil,
-                headline: "Bouw verder",
-                body: "Voorstel: geen. Nog geen reden om te verhogen of te verlagen.",
+                headline: "Keep building",
+                body: "Suggestion: none. No reason yet to go up or down.",
                 setTargets: lows
             )
         }
@@ -192,9 +192,9 @@ public enum ProgressionEngine {
                 tone: .ready,
                 weightKg: next,
                 targetReps: lowTarget,
-                label: "BOVENGRENS BEVESTIGD",
-                headline: "Klaar om te verhogen vanaf \(formatter.kg(load))",
-                body: "Voorstel: \(formatter.kg(next)), mik op \(repsLabel(lows)). \(confirmationSentence(streak: streak, load: load, rirCeiling: rirCeiling, formatter: formatter))",
+                label: "TOP OF RANGE CONFIRMED",
+                headline: "Ready to go up from \(formatter.kg(load))",
+                body: "Suggestion: \(formatter.kg(next)), aim for \(repsLabel(lows)). \(confirmationSentence(streak: streak, load: load, rirCeiling: rirCeiling, formatter: formatter))",
                 setTargets: lows
             )
         }
@@ -205,8 +205,8 @@ public enum ProgressionEngine {
                 weightKg: load,
                 targetReps: topTarget,
                 label: nil,
-                headline: "Nog 1 bevestiging op \(formatter.kg(load))",
-                body: "Voorstel: \(formatter.kg(load)), mik op \(repsLabel(tops)). Haal je dat opnieuw, dan gaat het gewicht omhoog.",
+                headline: "1 more confirmation at \(formatter.kg(load))",
+                body: "Suggestion: \(formatter.kg(load)), aim for \(repsLabel(tops)). Hit that again and the weight goes up.",
                 setTargets: tops
             )
         }
@@ -216,8 +216,8 @@ public enum ProgressionEngine {
             weightKg: load,
             targetReps: topTarget,
             label: nil,
-            headline: "Bouw verder op \(formatter.kg(load))",
-            body: "Voorstel: \(formatter.kg(load)), mik op \(repsLabel(tops)). Nog geen reden om te verhogen of te verlagen.",
+            headline: "Keep building at \(formatter.kg(load))",
+            body: "Suggestion: \(formatter.kg(load)), aim for \(repsLabel(tops)). No reason yet to go up or down.",
             setTargets: tops
         )
     }
@@ -235,7 +235,7 @@ public enum ProgressionEngine {
         rirCeiling: Int,
         formatter: NumberDisplay
     ) -> String {
-        let sessions = streak == 1 ? "Eén sessie" : "Twee sessies"
-        return "\(sessions) op \(formatter.kg(load)) met RIR \(rirCeiling) of lager."
+        let sessions = streak == 1 ? "One session" : "Two sessions"
+        return "\(sessions) at \(formatter.kg(load)) with RIR \(rirCeiling) or lower."
     }
 }

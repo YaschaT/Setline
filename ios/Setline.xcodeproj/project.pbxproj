@@ -168,10 +168,10 @@
 				};
 			};
 			buildConfigurationList = A100000000000000000070 /* Build configuration list for PBXProject "Setline" */;
-			developmentRegion = nl;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				nl,
+				en,
 				Base,
 			);
 			mainGroup = A100000000000000000050;

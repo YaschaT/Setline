@@ -80,7 +80,7 @@ struct StrengthSegmentView: View {
             HStack(spacing: SL.Space.s3) {
                 Button { picking = true } label: {
                     HStack(spacing: 6) {
-                        Text(progress?.name ?? "Oefening")
+                        Text(progress?.name ?? "Exercise")
                             .font(.sl(28, SL.Weight.semibold))
                             .foregroundStyle(SL.Ink.primary)
                             .lineLimit(2)
@@ -94,8 +94,8 @@ struct StrengthSegmentView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Oefening: \(progress?.name ?? "geen")")
-                .accessibilityHint("Dubbeltik om een andere oefening te kiezen")
+                .accessibilityLabel("Exercise: \(progress?.name ?? "none")")
+                .accessibilityHint("Double-tap to pick another exercise")
                 .accessibilityAddTraits(.isHeader)
 
                 Spacer(minLength: SL.Space.s2)
@@ -111,7 +111,7 @@ struct StrengthSegmentView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(current.isFavorite ? "Ster weghalen" : "Deze oefening een ster geven")
+                    .accessibilityLabel(current.isFavorite ? "Remove star" : "Star this exercise")
                 }
             }
 
@@ -138,7 +138,7 @@ struct StrengthSegmentView: View {
     private var standing: String? {
         guard let current else { return nil }
         var parts = [current.group.title]
-        if current.isFavorite { parts.append("favoriet") }
+        if current.isFavorite { parts.append("favourite") }
         if series.count > 1, let shown = series.first { parts.append(shown.label) }
         return parts.joined(separator: " · ")
     }
@@ -148,7 +148,7 @@ struct StrengthSegmentView: View {
     private func estimateBlock(_ progress: StrengthProgress) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: SL.Space.s1) {
-                Text("GESCHAT 1RM")
+                Text("ESTIMATED 1RM")
                     .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
                     .tracking(SL.TypeSize.micro * 0.06)
                     .foregroundStyle(SL.Ink.tertiary)
@@ -164,7 +164,7 @@ struct StrengthSegmentView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Wat is geschat 1RM?")
+                    .accessibilityLabel("What is estimated 1RM?")
                 }
             }
             .frame(height: 24)
@@ -198,23 +198,23 @@ struct StrengthSegmentView: View {
                             // it is a fact about the weeks, not a failure to
                             // colour, and lime on it would read as a win.
                             .foregroundColor(shown > 0 ? SL.Signal.action : SL.Ink.primary)
-                        + Text(" sinds \(app.display.shortDate(change.since))")
+                        + Text(" since \(app.display.shortDate(change.since))")
                             .font(.sl(SL.TypeSize.body, SL.Weight.regular))
                             .foregroundColor(SL.Ink.secondary)
                     )
                     .slNumerals()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
-                    .accessibilityLabel("\(app.display.signedDelta(shown)) kilo sinds \(app.display.shortDate(change.since))")
+                    .accessibilityLabel("\(app.display.signedDelta(shown)) kilos since \(app.display.shortDate(change.since))")
                 } else if !progress.hasReference {
-                    Text("Referentie opbouwen · sessie \(progress.referenceSessionNumber) van \(ExerciseHistory.sessionsBeforeReference)")
+                    Text("Building a reference · session \(progress.referenceSessionNumber) of \(ExerciseHistory.sessionsBeforeReference)")
                         .slBody()
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.top, 10)
                 }
 
                 if let source = progress.source {
-                    Text("Berekend uit je beste set: \(app.display.kg(source.weightKg)) × \(source.reps) op \(app.display.shortDate(source.date))")
+                    Text("Worked out from your best set: \(app.display.kg(source.weightKg)) × \(source.reps) on \(app.display.shortDate(source.date))")
                         .slMeta()
                         .slNumerals()
                         .fixedSize(horizontal: false, vertical: true)
@@ -222,7 +222,7 @@ struct StrengthSegmentView: View {
                         .padding(.top, SL.Space.s1)
                 }
             } else if progress.rows.isEmpty {
-                Text("Nog niet gelogd")
+                Text("Not logged yet")
                     .font(.slCapped(Self.heroSize, SL.Weight.semibold, maxScale: 1.4))
                     .slLineHeight(1, size: Self.heroSize, maxScale: 1.4)
                     .offset(y: -0.117 * Self.heroScaledSize)
@@ -234,7 +234,7 @@ struct StrengthSegmentView: View {
             } else {
                 // §10.2: an estimate loses accuracy as reps rise, so above ten
                 // reps the app states none rather than a flattering one.
-                Text("Boven 10 reps rekent SETLINE geen schatting.")
+                Text("Above 10 reps, SETLINE makes no estimate.")
                     .slBody()
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
@@ -257,8 +257,8 @@ struct StrengthSegmentView: View {
         VStack(alignment: .leading, spacing: 0) {
             Chart(progress.points, id: \.date) { point in
                 LineMark(
-                    x: .value("Datum", point.date),
-                    y: .value("Geschatte 1RM", (point.estimate as NSDecimalNumber).doubleValue)
+                    x: .value("Date", point.date),
+                    y: .value("Estimated 1RM", (point.estimate as NSDecimalNumber).doubleValue)
                 )
                 .interpolationMethod(.linear)
                 .lineStyle(StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
@@ -271,7 +271,7 @@ struct StrengthSegmentView: View {
             .chartYScale(domain: chartRange(progress.points))
             .frame(height: 100)
             .background(alignment: .bottom) { SLHairline() }
-            .accessibilityLabel("Verloop van de geschatte 1RM over \(progress.points.count) sessies")
+            .accessibilityLabel("Estimated 1RM over \(progress.points.count) sessions")
 
             let labels = chartLabels(progress.points)
             HStack(spacing: 0) {
@@ -314,7 +314,7 @@ struct StrengthSegmentView: View {
 
     private func sessionList(_ progress: StrengthProgress) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("ZWAARSTE SET PER SESSIE")
+            Text("HEAVIEST SET PER SESSION")
                 .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
                 .tracking(SL.TypeSize.micro * 0.06)
                 .foregroundStyle(SL.Ink.tertiary)
@@ -350,7 +350,7 @@ struct StrengthSegmentView: View {
     /// An exercise the catalogue offers and this account has never done. It is
     /// pickable on purpose — that is how you find out what is there.
     private var untrained: some View {
-        Text("Log deze oefening een keer en je ziet hier je zwaarste set per sessie.")
+        Text("Log this exercise once and you'll see your heaviest set per session here.")
             .slBody()
             .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
             .fixedSize(horizontal: false, vertical: true)
@@ -362,8 +362,8 @@ struct StrengthSegmentView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            Text("Nog geen oefeningen").slLead()
-            Text("Je eerste sessie zet de startgewichten.")
+            Text("No exercises yet").slLead()
+            Text("Your first session sets the starting weights.")
                 .slBody()
                 .foregroundStyle(SL.Ink.secondary)
         }

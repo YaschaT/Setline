@@ -61,8 +61,8 @@ struct SLRestPill: View {
 
     private var spoken: String {
         isDone
-            ? "Rust afgelopen"
-            : "\(title), nog \(remaining / 60) minuten \(remaining % 60) seconden"
+            ? "Rest done"
+            : "\(title), \(remaining / 60) minutes \(remaining % 60) seconds left"
     }
 
     // MARK: - One row
@@ -74,7 +74,7 @@ struct SLRestPill: View {
         return layout {
             Button(action: onToggleExpanded) {
                 HStack(alignment: .center, spacing: 10) {
-                    SLOverline(text: isDone ? "Rust afgelopen" : "Rust", color: isDone ? SL.Ink.primary : SL.Ink.secondary)
+                    SLOverline(text: isDone ? "Rest done" : "Rest", color: isDone ? SL.Ink.primary : SL.Ink.secondary)
                         .lineLimit(1)
                         .fixedSize()
                     if !isDone {
@@ -93,7 +93,7 @@ struct SLRestPill: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(spoken)
-            .accessibilityHint("Dubbeltik om de rust bij te stellen")
+            .accessibilityHint("Double-tap to adjust the rest")
 
             HStack(spacing: 0) {
                 addButton
@@ -119,7 +119,7 @@ struct SLRestPill: View {
         }
         .buttonStyle(.plain)
         .slFocusRing(Capsule())
-        .accessibilityLabel("Rust \(step) seconden langer")
+        .accessibilityLabel("Rest \(step) seconds longer")
     }
 
     private func skipButton(width: CGFloat?) -> some View {
@@ -136,7 +136,7 @@ struct SLRestPill: View {
         }
         .buttonStyle(.plain)
         .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
-        .accessibilityLabel(isDone ? "Timer sluiten" : "Rust overslaan")
+        .accessibilityLabel(isDone ? "Close timer" : "Skip rest")
     }
 
     // MARK: - Opened
@@ -159,13 +159,13 @@ struct SLRestPill: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(spoken)
-            .accessibilityHint("Dubbeltik om de bediening te sluiten")
+            .accessibilityHint("Double-tap to close the controls")
 
             SLWeightedRow(spacing: 6) {
-                control("−\(step)s", label: "Rust \(step) seconden korter", disabled: isDone) { onAdjust(-step) }
-                control("+\(step)s", label: "Rust \(step) seconden langer") { onAdjust(step) }
+                control("−\(step)s", label: "Rest \(step) seconds shorter", disabled: isDone) { onAdjust(-step) }
+                control("+\(step)s", label: "Rest \(step) seconds longer") { onAdjust(step) }
                 Button(action: onReset) {
-                    Text("\(Self.clockLabel(planned)) vast")
+                    Text("\(Self.clockLabel(planned)) reset")
                         .slBody()
                         .slNumerals()
                         .foregroundStyle(SL.Ink.primary.opacity(0.7))
@@ -183,13 +183,13 @@ struct SLRestPill: View {
                 .buttonStyle(.plain)
                 .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
                 .slWeight(1.4)
-                .accessibilityLabel("Rust terugzetten naar \(planned / 60) minuten \(planned % 60) seconden")
+                .accessibilityLabel("Reset rest to \(planned / 60) minutes \(planned % 60) seconds")
 
                 skipButton(width: 48).slWeight(0)
             }
             .padding(.top, SL.Space.s3)
 
-            Text("Bijstellen verlengt de lopende timer · de sessie loopt door")
+            Text("Adjusting changes the running timer · the session keeps going")
                 .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)

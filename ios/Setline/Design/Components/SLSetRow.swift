@@ -81,7 +81,7 @@ struct SLSetRow: View {
         .buttonStyle(SLRowButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
-        .accessibilityHint(phase == .done ? "Dubbeltik om deze set te corrigeren" : "Dubbeltik voor alle opties van deze set")
+        .accessibilityHint(phase == .done ? "Double-tap to correct this set" : "Double-tap for all options for this set")
     }
 
     private var labels: some View {

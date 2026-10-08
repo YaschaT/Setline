@@ -21,13 +21,13 @@ actor SupabaseClient: TokenRefresher {
         var errorDescription: String? {
             switch self {
             case .notConfigured:
-                return "Accounts zijn nog niet aangesloten. Zet SUPABASE_URL en SUPABASE_ANON_KEY in Setline.xcconfig en start opnieuw."
+                return "Accounts aren't connected yet. Set SUPABASE_URL and SUPABASE_ANON_KEY in Setline.xcconfig and restart."
             case .message(let text):
                 return text
             case .network:
-                return "We krijgen geen antwoord van de server. Check je verbinding en probeer het zo opnieuw."
+                return "No answer from the server. Check your connection and try again in a moment."
             case .conflict:
-                return "Er is intussen al iets anders opgeslagen. Probeer het zo opnieuw."
+                return "Something else was saved in the meantime. Try again in a moment."
             }
         }
     }
@@ -98,7 +98,7 @@ actor SupabaseClient: TokenRefresher {
             // A sign-up on a project that requires e-mail confirmation
             // returns a user but no session. Say so rather than failing
             // opaquely.
-            throw Failure.message("Je account is aangemaakt. Bevestig je e-mailadres en meld je daarna aan.")
+            throw Failure.message("Your account is created. Confirm your email address, then sign in.")
         }
         return session
     }
@@ -240,14 +240,14 @@ actor SupabaseClient: TokenRefresher {
             for key in ["error_description", "msg", "message", "error"] {
                 if let text = object[key] as? String, !text.isEmpty {
                     if text.lowercased().contains("invalid login credentials") {
-                        return "E-mailadres of wachtwoord klopt niet."
+                        return "Email or password is incorrect."
                     }
                     return text
                 }
             }
         }
-        if status == 401 || status == 403 { return "Je sessie is verlopen. Meld je opnieuw aan." }
-        return "Er ging iets mis bij de server. Probeer het zo opnieuw."
+        if status == 401 || status == 403 { return "Your session has expired. Sign in again." }
+        return "Something went wrong on the server. Try again in a moment."
     }
 }
 

@@ -9,12 +9,12 @@ struct HowItWorksView: View {
     let onContinue: () -> Void
 
     private let beats: [(title: String, body: String, lime: String?)] = [
-        ("Je plan staat klaar", "Oefeningen, sets en reps per dag. Geen leeg logboek.", nil),
-        ("Loggen in twee taps", "Het gewicht van vorige keer staat al ingevuld. Tik af en rust.", nil),
+        ("Your plan is ready", "Exercises, sets and reps for every day. No empty log.", nil),
+        ("Log in two taps", "Last time's weight is already filled in. Tap it off and rest.", nil),
         (
-            "SETLINE rekent vooruit",
-            "Alle reps gehaald, dan volgende sessie +2,5 kg. Niet gehaald, dan hetzelfde gewicht.",
-            "+2,5 kg"
+            "SETLINE plans ahead",
+            "All reps done? Next session +2.5 kg. Not done? Same weight.",
+            "+2.5 kg"
         ),
     ]
 
@@ -23,13 +23,13 @@ struct HowItWorksView: View {
         // down by the pill, and the room between them flexible.
         SLAnchoredScroll {
             VStack(alignment: .leading, spacing: 0) {
-                Text("ZO WERKT HET")
+                Text("HOW IT WORKS")
                     .font(.sl(SL.TypeSize.meta, SL.Weight.medium))
                     .tracking(SL.TypeSize.meta * 0.14)
                     .foregroundStyle(SL.Ink.tertiary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("Elke week iets\nzwaarder tillen.")
+                Text("Lift a little\nheavier every week.")
                     .font(.sl(SL.TypeSize.displayL, SL.Weight.semibold))
                     .tracking(SL.TypeSize.displayL * -0.015)
                     .slLineHeight(1.06, size: SL.TypeSize.displayL)
@@ -49,7 +49,7 @@ struct HowItWorksView: View {
                     }
                 }
 
-                Text("Je hoeft niks te programmeren. Je hoeft alleen te komen.")
+                Text("You don't have to program anything. You just have to show up.")
                     .slMeta()
                     .slLineHeight(1.5, size: SL.TypeSize.meta)
                     .fixedSize(horizontal: false, vertical: true)
@@ -62,7 +62,7 @@ struct HowItWorksView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(SL.Surface.ground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            Button { onContinue() } label: { Text("Verder") }
+            Button { onContinue() } label: { Text("Continue") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .padding(.horizontal, SL.Space.gutterEntry)
                 .padding(.top, SL.Space.s6)
@@ -111,16 +111,16 @@ struct IntakeIntroView: View {
     let onSkip: () -> Void
 
     private let rows: [(String, String)] = [
-        ("Dagen per week", "vorm van je week"),
-        ("Hoe lang je tilt", "tempo progressie"),
-        ("Planvorm", "indeling per dag"),
-        ("Schijven in je gym", "kleinste sprong"),
+        ("Days a week", "shape of your week"),
+        ("How long you've lifted", "progress pace"),
+        ("Plan shape", "split per day"),
+        ("Plates in your gym", "smallest jump"),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: onBack) {
-                Text("Terug")
+                Text("Back")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(minHeight: SL.Space.hitMin)
@@ -131,13 +131,13 @@ struct IntakeIntroView: View {
 
             SLAnchoredScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Vier vragen en je\nplan staat er.")
+                    Text("Four questions and\nyour plan is ready.")
                         .slDisplay()
                         .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
-                    Text("We vragen alleen wat het scherm van vandaag verandert. Ongeveer 40 seconden.")
+                    Text("We only ask what changes today's screen. About 40 seconds.")
                         .slBody()
                         .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
@@ -163,7 +163,7 @@ struct IntakeIntroView: View {
                     .padding(.vertical, 6)
                     .slCard()
 
-                    Text("Alles blijft later te wijzigen in Account. Overslaan geeft je een standaardplan van vier dagen.")
+                    Text("You can change everything later in Account. Skipping gives you a standard four-day plan.")
                         .slMeta()
                         .slLineHeight(1.5, size: SL.TypeSize.meta)
                         .fixedSize(horizontal: false, vertical: true)
@@ -180,10 +180,10 @@ struct IntakeIntroView: View {
         .background(SL.Surface.ground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: SL.Space.s2) {
-                Button { onBegin() } label: { Text("Beginnen met vraag 1") }
+                Button { onBegin() } label: { Text("Start with question 1") }
                     .buttonStyle(SLPrimaryButtonStyle())
                 Button { onSkip() } label: {
-                    Text("Overslaan · standaardplan")
+                    Text("Skip · standard plan")
                         .slBody(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.secondary)
                         .frame(maxWidth: .infinity)

@@ -74,7 +74,7 @@ struct FoodEntrySheet: View {
                         // is nothing to scale. Its own numbers stand, and the
                         // meal and the delete are still here.
                         macros.padding(.top, SL.Space.s5)
-                        Text("Deze regel is zonder hoeveelheid gelogd, dus die is hier niet te wijzigen.")
+                        Text("This item was logged without an amount, so it can't be changed here.")
                             .slMeta()
                             .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                             .fixedSize(horizontal: false, vertical: true)
@@ -82,7 +82,7 @@ struct FoodEntrySheet: View {
                             .padding(.top, SL.Space.s3)
                     }
 
-                    eyebrow("MAALTIJD")
+                    eyebrow("MEAL")
                         .padding(.top, SL.Space.s6)
                         .padding(.bottom, SL.Space.s2)
                     MealSegment(selection: $meal)
@@ -93,12 +93,12 @@ struct FoodEntrySheet: View {
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            Button { onSave(edited) } label: { Text("Bewaar") }
+            Button { onSave(edited) } label: { Text("Save") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .disabled(!touched || edited == entry)
 
             Button { onDelete(entry) } label: {
-                Text("Verwijderen")
+                Text("Delete")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
@@ -152,7 +152,7 @@ struct FoodEntrySheet: View {
     private var standing: String {
         let heading = MealSection.title(of: Meal(rawValue: entry.meal) ?? .snack)
         guard let loggedAt = entry.loggedAt else { return heading }
-        return "\(heading) · gelogd \(app.display.clock(loggedAt))"
+        return "\(heading) · logged \(app.display.clock(loggedAt))"
     }
 
     // MARK: - How much of it
@@ -161,10 +161,10 @@ struct FoodEntrySheet: View {
     /// jumps by a surprise.
     private var quantity: some View {
         VStack(alignment: .leading, spacing: 0) {
-            eyebrow("HOEVEELHEID · PER \(stepLabel)")
+            eyebrow("AMOUNT · PER \(stepLabel)")
 
             HStack(spacing: 0) {
-                step("minus", by: -entry.step, label: "Minder")
+                step("minus", by: -entry.step, label: "Less")
                 Spacer(minLength: 0)
                 Text(amountLabel)
                     .font(.sl(28, SL.Weight.semibold))
@@ -173,7 +173,7 @@ struct FoodEntrySheet: View {
                     .minimumScaleFactor(0.6)
                     .foregroundStyle(SL.Ink.primary)
                 Spacer(minLength: 0)
-                step("plus", by: entry.step, label: "Meer")
+                step("plus", by: entry.step, label: "More")
             }
             .padding(.horizontal, 6)
             .frame(minHeight: 56)
@@ -184,7 +184,7 @@ struct FoodEntrySheet: View {
             )
             .padding(.top, SL.Space.s2)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Hoeveelheid, \(amountLabel)")
+            .accessibilityLabel("Amount, \(amountLabel)")
             .accessibilityAdjustableAction { direction in
                 switch direction {
                 case .increment: change(by: entry.step)
@@ -237,9 +237,9 @@ struct FoodEntrySheet: View {
         let shown = edited
         let columns: [(String, String)] = [
             ("kcal", app.display.whole(Decimal(shown.calories))),
-            ("Proteïne", app.display.grams(Decimal(shown.protein))),
-            ("KH", app.display.grams(Decimal(shown.carbs))),
-            ("Vet", app.display.grams(Decimal(shown.fat))),
+            ("Protein", app.display.grams(Decimal(shown.protein))),
+            ("Carbs", app.display.grams(Decimal(shown.carbs))),
+            ("Fat", app.display.grams(Decimal(shown.fat))),
         ]
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))

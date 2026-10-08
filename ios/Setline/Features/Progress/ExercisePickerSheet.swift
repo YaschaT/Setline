@@ -86,7 +86,7 @@ struct ExercisePickerSheet: View {
                     HStack(spacing: 2) {
                         Image(systemName: "chevron.left")
                             .font(.sl(20, SL.Weight.medium))
-                        Text("Spiergroepen").slBody(SL.Weight.medium)
+                        Text("Muscle groups").slBody(SL.Weight.medium)
                     }
                     .foregroundStyle(SL.Ink.secondary)
                     .padding(.leading, -6)
@@ -95,7 +95,7 @@ struct ExercisePickerSheet: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                Text("Oefening")
+                Text("Exercise")
                     .slTitle()
                     .foregroundStyle(SL.Ink.primary)
                     .accessibilityAddTraits(.isHeader)
@@ -104,7 +104,7 @@ struct ExercisePickerSheet: View {
             Spacer(minLength: SL.Space.s2)
 
             Button(action: onClose) {
-                Text("Sluiten")
+                Text("Close")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .slHitTarget()
@@ -141,7 +141,7 @@ struct ExercisePickerSheet: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, -6)
-                .accessibilityLabel("Zoekterm wissen")
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.leading, 14)
@@ -158,7 +158,7 @@ struct ExercisePickerSheet: View {
     /// The count is the catalogue's own, so the sheet never promises more
     /// exercises than it holds.
     private var placeholder: String {
-        "Zoek in \(rows.count) oefeningen"
+        "Search \(rows.count) exercises"
     }
 
     // MARK: - 40b / 40c · where the sheet opens
@@ -173,7 +173,7 @@ struct ExercisePickerSheet: View {
                 Image(systemName: "star")
                     .font(.sl(20, SL.Weight.regular))
                     .foregroundStyle(SL.Ink.tertiary)
-                Text("Tik de ster bij een oefening om hem hier bovenaan te zetten.")
+                Text("Tap the star on an exercise to pin it here.")
                     .slBody()
                     .slLineHeight(1.4, size: SL.TypeSize.body)
                     .fixedSize(horizontal: false, vertical: true)
@@ -191,12 +191,12 @@ struct ExercisePickerSheet: View {
                 }
             }
         } else {
-            section("FAVORIETEN", top: 22) {
+            section("FAVOURITES", top: 22) {
                 ForEach(favorites) { row in card(row, detail: standing(row)) }
             }
         }
 
-        section("SPIERGROEP", top: 22) {
+        section("MUSCLE GROUP", top: 22) {
             ForEach(ExercisePicker.groups(in: rows), id: \.group) { entry in
                 Button {
                     withAnimation(.easeOut(duration: SL.Motion.fast)) { group = entry.group }
@@ -218,8 +218,8 @@ struct ExercisePickerSheet: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(entry.group.title), \(entry.count) oefeningen")
-                .accessibilityHint("Dubbeltik om de oefeningen te zien")
+                .accessibilityLabel("\(entry.group.title), \(entry.count) exercises")
+                .accessibilityHint("Double-tap to see the exercises")
             }
         }
     }
@@ -250,7 +250,7 @@ struct ExercisePickerSheet: View {
     private var results: some View {
         let found = ExercisePicker.search(query, in: rows)
         if found.isEmpty {
-            Text("Niets gevonden voor \(query.trimmingCharacters(in: .whitespaces)).")
+            Text("Nothing found for \(query.trimmingCharacters(in: .whitespaces)).")
                 .slBody()
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
@@ -265,18 +265,18 @@ struct ExercisePickerSheet: View {
 
     /// "Borst · 7 sep", or where it sits when it has never been logged.
     private func standing(_ row: ExercisePicker.Row) -> String {
-        guard let last = row.lastTrained else { return "\(row.group.title) · nog niet gelogd" }
+        guard let last = row.lastTrained else { return "\(row.group.title) · not logged yet" }
         return "\(row.group.title) · \(app.display.shortDate(last))"
     }
 
     /// "laatst 7 sep · 50 kg × 8" — 40d's second line, inside a group where
     /// the group's name would say nothing new.
     private func lastSet(_ row: ExercisePicker.Row) -> String {
-        guard let last = row.lastTrained else { return "nog niet gelogd" }
+        guard let last = row.lastTrained else { return "not logged yet" }
         guard let weight = row.topSetKg, let reps = row.topSetReps else {
-            return "laatst \(app.display.shortDate(last))"
+            return "last \(app.display.shortDate(last))"
         }
-        return "laatst \(app.display.shortDate(last)) · \(app.display.kg(weight)) × \(reps)"
+        return "last \(app.display.shortDate(last)) · \(app.display.kg(weight)) × \(reps)"
     }
 
     private func card(_ row: ExercisePicker.Row, detail: String) -> some View {
@@ -319,7 +319,7 @@ struct ExercisePickerSheet: View {
             // of the edge. A glyph grown with the text has less room in its
             // 44, so the hang shrinks with it and the star is never cut off.
             .padding(.trailing, -max(0, (SL.Space.hitMin - starSize) / 2 - 3))
-            .accessibilityLabel(row.isFavorite ? "Ster weghalen bij \(row.name)" : "\(row.name) een ster geven")
+            .accessibilityLabel(row.isFavorite ? "Remove star from \(row.name)" : "Star \(row.name)")
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 52)

@@ -142,7 +142,7 @@ final class FoodSearchSessionTests: XCTestCase {
         let empty = Data(#"{"results":[],"query":"xyzzy","disclaimer":"x"}"#.utf8)
         XCTAssertEqual(
             FoodSearch.outcome(status: 200, data: empty, query: "xyzzy"),
-            .failed("Niets gevonden voor xyzzy. Vul de waarden zelf in.")
+            .failed("Nothing found for xyzzy. Enter the values yourself.")
         )
     }
 

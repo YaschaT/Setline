@@ -491,12 +491,12 @@ final class AddedSetTests: XCTestCase {
 
         XCTAssertEqual(
             advice([logged(0, 100, 6), logged(1, 100, 8), logged(2, 100, 8), logged(3, 100, 4, origin: .sessionAdded)]),
-            "Alle reps gehaald. Volgende keer 102,5 kg.",
+            "All reps done. Next time 102.5 kg.",
             "a short extra set does not take away what the prescription earned"
         )
         XCTAssertEqual(
             advice([logged(0, 100, 6), logged(1, 100, 8), logged(2, 100, 5), logged(3, 100, 8, origin: .sessionAdded)]),
-            "Niet alle reps gehaald. Volgende keer hetzelfde gewicht.",
+            "Not all reps done. Same weight next time.",
             "and a strong one does not make up for a missed set"
         )
         XCTAssertNotNil(

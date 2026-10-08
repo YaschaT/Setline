@@ -57,11 +57,11 @@ struct WeekPlanView: View {
                 )
             }
         }
-        .confirmationDialog("Wijzigingen niet bewaren?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-            Button("Verwerp", role: .destructive) { onClose() }
-            Button("Annuleer", role: .cancel) {}
+        .confirmationDialog("Discard changes?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            Button("Discard", role: .destructive) { onClose() }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("De week blijft zoals hij was.")
+            Text("The week stays as it was.")
         }
         .slRespondsToTextSize()
     }
@@ -73,7 +73,7 @@ struct WeekPlanView: View {
             Button {
                 if draft?.isChanged == true { confirmsDiscard = true } else { onClose() }
             } label: {
-                Text("Terug")
+                Text("Back")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .slHitTarget()
@@ -83,7 +83,7 @@ struct WeekPlanView: View {
             Spacer()
 
             Button { save() } label: {
-                Text("Bewaar")
+                Text("Save")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(hasChanges ? SL.Signal.action : SL.Ink.tertiary)
                     .slHitTarget()
@@ -101,8 +101,8 @@ struct WeekPlanView: View {
 
     private var subtitle: String {
         let count = week.filter(\.isTraining).count
-        let days = count == 1 ? "1 trainingsdag" : "\(count) trainingsdagen"
-        return "Sleep een sessie naar een andere dag. \(days) ingesteld."
+        let days = count == 1 ? "1 training day" : "\(count) training days"
+        return "Drag a session to another day. \(days) set."
     }
 
     // MARK: - Rows
@@ -127,7 +127,7 @@ struct WeekPlanView: View {
                 Text(workout.short)
                     .slLead()
                     .foregroundStyle(SL.Ink.primary)
-                Text(day.movedFrom.map { "Verplaatst van \($0)" }
+                Text(day.movedFrom.map { "Moved from \($0)" }
                     ?? "\(WeekPlan.sets(of: workout)) sets · ±\(WeekPlan.minutes(of: workout)) min")
                     .slMeta().slNumerals()
                     .foregroundStyle(moved ? SL.Ink.secondary : SL.Ink.tertiary)
@@ -167,7 +167,7 @@ struct WeekPlanView: View {
         } label: {
             HStack(spacing: 14) {
                 weekday(day, bright: false)
-                Text(decided ? "Rustdag" : "Leeg · markeer als rustdag")
+                Text(decided ? "Rest day" : "Empty · mark as rest day")
                     .slBody()
                     .foregroundStyle(SL.Ink.tertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -187,8 +187,8 @@ struct WeekPlanView: View {
                 )
         )
         .dropDestination(for: String.self) { items, _ in drop(items, on: day) } isTargeted: { targeted = $0 ? day.key : nil }
-        .accessibilityLabel("\(WeekPlan.fullWeekday(day.date)), \(decided ? "rustdag" : "niets gepland")")
-        .accessibilityHint(decided ? "Dubbeltik om terug naar het planschema te gaan" : "Dubbeltik om als rustdag te markeren")
+        .accessibilityLabel("\(WeekPlan.fullWeekday(day.date)), \(decided ? "rest day" : "nothing planned")")
+        .accessibilityHint(decided ? "Double-tap to go back to the plan" : "Double-tap to mark as a rest day")
         .accessibilityActions { moveActions(day) }
     }
 
@@ -249,7 +249,7 @@ struct WeekPlanView: View {
     private func moveActions(_ day: WeekPlan.Day) -> some View {
         if day.isTraining {
             ForEach(week.filter { $0.key != day.key }) { other in
-                Button("Verplaats naar \(WeekPlan.fullWeekday(other.date))") {
+                Button("Move to \(WeekPlan.fullWeekday(other.date))") {
                     _ = drop([day.key], on: other)
                 }
             }
@@ -259,9 +259,9 @@ struct WeekPlanView: View {
     private func accessibilityLabel(_ day: WeekPlan.Day, _ workout: WorkoutDay) -> String {
         var parts = ["\(WeekPlan.fullWeekday(day.date)), \(workout.short)"]
         if let movedFrom = day.movedFrom {
-            parts.append("verplaatst van \(movedFrom)")
+            parts.append("moved from \(movedFrom)")
         } else {
-            parts.append("\(WeekPlan.sets(of: workout)) sets, ongeveer \(WeekPlan.minutes(of: workout)) minuten")
+            parts.append("\(WeekPlan.sets(of: workout)) sets, about \(WeekPlan.minutes(of: workout)) minutes")
         }
         return parts.joined(separator: ", ")
     }

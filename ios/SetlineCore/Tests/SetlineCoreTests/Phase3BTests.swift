@@ -55,7 +55,7 @@ final class ReorderPlannerTests: XCTestCase {
         let plan = ReorderPlanner.plan(
             current: bench, currentIndex: 0, later: [item("pec-fly", .isolation)]
         )
-        XCTAssertEqual(plan?.headline, "Doe pec-flymachine nu · Kom later terug voor flat bench press")
+        XCTAssertEqual(plan?.headline, "Do pec fly machine now · come back to flat bench press later")
     }
 }
 
@@ -210,7 +210,7 @@ final class ProgramReplacementTests: XCTestCase {
     func testEveryScopeHasDistinctCopy() {
         let labels = ReplacementScope.allCases.map(\.label)
         XCTAssertEqual(Set(labels).count, labels.count)
-        XCTAssertEqual(labels, ["Alleen deze dag", "Dit schema", "Alle keren"])
+        XCTAssertEqual(labels, ["This day only", "This plan", "Every time"])
     }
 }
 
@@ -229,18 +229,18 @@ final class SubstitutionCopyTests: XCTestCase {
         )
     }
 
-    /// "Sterke match" is a claim, so it has to clear both bars.
+    /// "Strong match" is a claim, so it has to clear both bars.
     func testStrongMatchNeedsScoreAndOverlap() {
-        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.85)), "Sterke match")
-        XCTAssertNotEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.70)), "Sterke match")
-        XCTAssertNotEqual(SubstitutionCopy.fit(alternative(score: 0.60, overlap: 0.95)), "Sterke match")
+        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.85)), "Strong match")
+        XCTAssertNotEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.70)), "Strong match")
+        XCTAssertNotEqual(SubstitutionCopy.fit(alternative(score: 0.60, overlap: 0.95)), "Strong match")
     }
 
     func testHonestLabelsStepDown() {
-        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.70, overlap: 0.70)), "Goede match")
-        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.50, overlap: 0.45)), "Deels vergelijkbaar")
-        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.90, match: .related)), "Andere beweging")
-        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.90, match: .broader)), "Andere opzet")
+        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.70, overlap: 0.70)), "Good match")
+        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.50, overlap: 0.45)), "Partly similar")
+        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.90, match: .related)), "Different movement")
+        XCTAssertEqual(SubstitutionCopy.fit(alternative(score: 0.90, overlap: 0.90, match: .broader)), "Different setup")
     }
 
     func testCuratedCopyAlwaysWins() {
@@ -269,7 +269,7 @@ final class SubstitutionCopyTests: XCTestCase {
     /// every attribute we record, both fall back to the plain line rather
     /// than carrying the same distinguishing phrase.
     func testNoLineClaimsADifferenceThatIsNotThere() {
-        let plain = "Traint dezelfde spieren in dezelfde beweging."
+        let plain = "Trains the same muscles in the same movement."
         for id in ExerciseCatalog.all.keys {
             guard let origin = ExerciseCatalog.exercise(id) else { continue }
             let results = SubstitutionRanker.rank(
@@ -287,7 +287,7 @@ final class SubstitutionCopyTests: XCTestCase {
 
     /// No result anywhere may promise a converted weight.
     func testNoCopyPromisesAWeight() {
-        XCTAssertEqual(SubstitutionCopy.carryOver, "Sets, reps en RIR blijven · gewicht reset")
+        XCTAssertEqual(SubstitutionCopy.carryOver, "Sets, reps and RIR stay · weight resets")
         let bench = ExerciseCatalog.exercise("flat-bench")!
         for id in ExerciseCatalog.all.keys {
             for result in SubstitutionRanker.rank(

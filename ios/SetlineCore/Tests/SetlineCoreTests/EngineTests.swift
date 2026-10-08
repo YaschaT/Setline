@@ -33,7 +33,7 @@ final class ProgressionEngineTests: XCTestCase {
         )
         XCTAssertEqual(proposal.tone, .noReference)
         XCTAssertNil(proposal.weightKg)
-        XCTAssertEqual(proposal.headline, "Referentie opbouwen · sessie 3 van 3")
+        XCTAssertEqual(proposal.headline, "Building a reference · session 3 of 3")
     }
 
     func testTwoQualifyingSessionsAtTheSameLoadReadyTheIncrease() {
@@ -46,7 +46,7 @@ final class ProgressionEngineTests: XCTestCase {
             history: history(sessions)
         )
         XCTAssertEqual(proposal.tone, .ready)
-        XCTAssertEqual(proposal.label, "BOVENGRENS BEVESTIGD")
+        XCTAssertEqual(proposal.label, "TOP OF RANGE CONFIRMED")
         XCTAssertEqual(proposal.weightKg, 102.5, "Barbell steps 2,5 kg")
         XCTAssertEqual(proposal.targetReps, 6, "Reps reset to the bottom of the range")
     }
@@ -63,7 +63,7 @@ final class ProgressionEngineTests: XCTestCase {
             history: history(sessions)
         )
         XCTAssertEqual(proposal.tone, .close)
-        XCTAssertEqual(proposal.headline, "Nog 1 bevestiging op 100 kg")
+        XCTAssertEqual(proposal.headline, "1 more confirmation at 100 kg")
         XCTAssertEqual(proposal.weightKg, 100, "The proposal holds the load, it does not advance it")
     }
 
@@ -77,7 +77,7 @@ final class ProgressionEngineTests: XCTestCase {
             history: history(sessions)
         )
         XCTAssertEqual(proposal.tone, .neutral)
-        XCTAssertEqual(proposal.headline, "Bouw verder op 100 kg")
+        XCTAssertEqual(proposal.headline, "Keep building at 100 kg")
     }
 
     /// §3.1: a session where every set hit the top of the range at RIR 4 is
@@ -142,12 +142,12 @@ final class RecordsEngineTests: XCTestCase {
             for: [LoggedSet(index: 0, weightKg: 200, reps: 5)],
             history: history(sessions)
         )
-        XCTAssertEqual(record?.headline, "Referentie opbouwen · sessie 3 van 3")
+        XCTAssertEqual(record?.headline, "Building a reference · session 3 of 3")
         // Phase 2 replaced this copy: artboard 08 had promised progression
         // after one session, which the three-session gate then withheld.
         XCTAssertEqual(
             record?.detail,
-            "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen."
+            "After three comparable sessions, SETLINE can show reliable progression suggestions and records."
         )
     }
 
@@ -157,11 +157,11 @@ final class RecordsEngineTests: XCTestCase {
             history: history(threeSessions)
         )
         XCTAssertEqual(record?.type, .load)
-        XCTAssertEqual(record?.headline, "Zwaarste ooit · 105 kg × 6")
+        XCTAssertEqual(record?.headline, "Heaviest ever · 105 kg × 6")
         // 17R: the previous best in full — unit, reps and the day it was
         // first done ("Vorige beste 122,5 kg × 3 op 31 aug").
         let first = history(threeSessions).appearances.map(\.date).min()!
-        XCTAssertEqual(record?.detail, "Vorige beste 100 kg × 6 op \(NumberDisplay.dutch.shortDate(first))")
+        XCTAssertEqual(record?.detail, "Previous best 100 kg × 6 on \(NumberDisplay.english.shortDate(first))")
     }
 
     func testRepPRAtAKnownLoad() {
@@ -170,8 +170,8 @@ final class RecordsEngineTests: XCTestCase {
             history: history(threeSessions)
         )
         XCTAssertEqual(record?.type, .rep)
-        XCTAssertEqual(record?.headline, "+2 reps op 100 kg")
-        XCTAssertEqual(record?.detail, "8 reps, vorige keer 6")
+        XCTAssertEqual(record?.headline, "+2 reps at 100 kg")
+        XCTAssertEqual(record?.detail, "8 reps, last time 6")
     }
 
     /// §15 change 5: the epsilon is 0.5 kg, not 0.05, so rounding noise
@@ -206,8 +206,8 @@ final class RecordsEngineTests: XCTestCase {
             history: history(sessions)
         )
         XCTAssertEqual(record?.type, .estimatedStrength)
-        XCTAssertTrue(record?.headline.contains("Geschatte kracht") == true)
-        XCTAssertTrue(record?.detail.contains("Niet gemeten") == true)
+        XCTAssertTrue(record?.headline.contains("Estimated strength") == true)
+        XCTAssertTrue(record?.detail.contains("Not measured") == true)
     }
 
     /// §9.2 and §1: a paused set is only ever compared to other paused sets.
@@ -248,7 +248,7 @@ final class SetRowPresenterTests: XCTestCase {
         XCTAssertEqual(rows[0].repsLabel, "8")
         XCTAssertEqual(rows[1].status, .nextUp)
         XCTAssertEqual(rows[1].repsLabel, "—")
-        XCTAssertEqual(rows[1].delta, .reference("47,5 × 8"))
+        XCTAssertEqual(rows[1].delta, .reference("47.5 × 8"))
     }
 
     func testAHeavierCompleteSetReadsPRAtTheMomentItHappens() {
@@ -286,7 +286,7 @@ final class SetRowPresenterTests: XCTestCase {
         ]
         XCTAssertEqual(
             SetRowPresenter.adviceLine(sets: complete, planned: planned, exercise: exercise, history: history),
-            "Alle reps gehaald. Volgende keer 102,5 kg."
+            "All reps done. Next time 102.5 kg."
         )
     }
 }
@@ -329,7 +329,7 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(AlternativesCatalog.byExercise.values.map(\.count).reduce(0, +), 78)
         XCTAssertEqual(
             GuidanceCatalog.guide(for: "flat-bench").warmup,
-            "Stang×15 → 60×8 → 80×5 → 100×3 → 110×1. Geen set tot falen."
+            "Bar×15 → 60×8 → 80×5 → 100×3 → 110×1. No set to failure."
         )
     }
 
@@ -354,12 +354,12 @@ final class CatalogTests: XCTestCase {
     }
 
     func testDutchNumberFormatting() {
-        let display = NumberDisplay.dutch
-        XCTAssertEqual(display.kg(102.5), "102,5 kg")
-        XCTAssertEqual(display.volumeKg(6480), "6.480 kg")
-        XCTAssertEqual(display.signedDelta(2.5), "+2,5")
+        let display = NumberDisplay.english
+        XCTAssertEqual(display.kg(102.5), "102.5 kg")
+        XCTAssertEqual(display.volumeKg(6480), "6,480 kg")
+        XCTAssertEqual(display.signedDelta(2.5), "+2.5")
         XCTAssertEqual(display.signedDelta(0), "=")
-        XCTAssertEqual(display.setReference(weightKg: 47.5, reps: 8), "47,5 × 8")
+        XCTAssertEqual(display.setReference(weightKg: 47.5, reps: 8), "47.5 × 8")
     }
 }
 

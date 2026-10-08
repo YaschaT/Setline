@@ -38,13 +38,13 @@ final class MealSectionTests: XCTestCase {
     // MARK: - 42a · four headings, always four
 
     func testADayIsReadUnderFourHeadingsInTheOrderTheyAreEaten() {
-        XCTAssertEqual(day([]).sections.map(\.title), ["Ontbijt", "Lunch", "Avondeten", "Snacks"])
+        XCTAssertEqual(day([]).sections.map(\.title), ["Breakfast", "Lunch", "Dinner", "Snacks"])
     }
 
     func testAnEmptyMealKeepsItsHeadingSoALogAtNoonStillHasAShape() {
         let sections = day([entry("Kaas", meal: "Lunch", calories: 100)]).sections
         XCTAssertEqual(sections.count, 4)
-        XCTAssertEqual(sections.filter(\.isEmpty).map(\.title), ["Ontbijt", "Avondeten", "Snacks"])
+        XCTAssertEqual(sections.filter(\.isEmpty).map(\.title), ["Breakfast", "Dinner", "Snacks"])
         XCTAssertEqual(sections.first { $0.title == "Lunch" }?.calories, 100)
     }
 
@@ -65,7 +65,7 @@ final class MealSectionTests: XCTestCase {
             entry("Magere kwark", meal: "Ontbijt", calories: 145),
             entry("Kaas", meal: "Lunch", calories: 100),
         ]).sections
-        XCTAssertEqual(sections.first { $0.title == "Ontbijt" }?.calories, 520)
+        XCTAssertEqual(sections.first { $0.title == "Breakfast" }?.calories, 520)
         XCTAssertEqual(sections.first { $0.title == "Lunch" }?.calories, 100)
     }
 

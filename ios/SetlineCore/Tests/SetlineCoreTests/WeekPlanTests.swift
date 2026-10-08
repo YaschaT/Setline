@@ -36,7 +36,7 @@ final class WeekPlanTests: XCTestCase {
             "2026-09-18", "2026-09-19", "2026-09-20",
         ])
         XCTAssertEqual(days.map { $0.workout?.id }, ["push", "pull", "legs", nil, "lower", "upper", nil])
-        XCTAssertEqual(days.first?.weekday, "ma")
+        XCTAssertEqual(days.first?.weekday, "Mo")
     }
 
     func testADayThePlanRestsOnAndNobodyTouchedIsOpen() {
@@ -54,7 +54,7 @@ final class WeekPlanTests: XCTestCase {
     func testASessionSittingElsewhereSaysWhereItUsuallyIs() {
         let days = week(["2026-09-14": "rest", "2026-09-17": "push"])
         XCTAssertEqual(days[3].workout?.id, "push")
-        XCTAssertEqual(days[3].movedFrom, "maandag")
+        XCTAssertEqual(days[3].movedFrom, "Monday")
         XCTAssertEqual(days[0].kind, .rest)
     }
 
@@ -74,7 +74,7 @@ final class WeekPlanTests: XCTestCase {
         XCTAssertEqual(draft.canonical(on: "2026-09-14"), "rest", "or the plan would put push straight back")
 
         let days = draft.week(plan: plan)
-        XCTAssertEqual(days[3].movedFrom, "maandag")
+        XCTAssertEqual(days[3].movedFrom, "Monday")
         XCTAssertEqual(days[0].kind, .rest)
     }
 
@@ -169,12 +169,12 @@ final class WeekPlanTests: XCTestCase {
     // MARK: Labels
 
     func testTheWeekIsNamedByItsDates() {
-        XCTAssertEqual(WeekPlan.range(Schedule.mondayFirstWeek(containing: monday, calendar: calendar), calendar: calendar), "14–20 sep")
+        XCTAssertEqual(WeekPlan.range(Schedule.mondayFirstWeek(containing: monday, calendar: calendar), calendar: calendar), "14–20 Sep")
     }
 
     func testAWeekAcrossTwoMonthsNamesBoth() {
         let end = LegacyAdapter.isoDate("2026-09-30T12:00:00.000Z")!
-        XCTAssertEqual(WeekPlan.range(Schedule.mondayFirstWeek(containing: end, calendar: calendar), calendar: calendar), "28 sep–4 okt")
+        XCTAssertEqual(WeekPlan.range(Schedule.mondayFirstWeek(containing: end, calendar: calendar), calendar: calendar), "28 Sep–4 Oct")
     }
 
     func testWeekOneIsTheWeekOfTheFirstSession() {

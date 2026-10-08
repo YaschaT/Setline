@@ -110,10 +110,10 @@ final class ExercisePickerTests: XCTestCase {
         let sessions = [session(18, [(id: "flat-bench", name: "Bankdrukken", weightKg: 100, reps: 8)])]
         let rows = ExercisePicker.rows(sessions: sessions)
         let total = rows.filter { $0.group == .borst }.count
-        XCTAssertEqual(ExercisePicker.summary(of: .borst, in: rows), "\(total) oefeningen · 1 met historiek")
+        XCTAssertEqual(ExercisePicker.summary(of: .borst, in: rows), "\(total) exercises · 1 with history")
         XCTAssertEqual(
             ExercisePicker.summary(of: .core, in: rows),
-            "\(rows.filter { $0.group == .core }.count) oefeningen · nog niets gelogd"
+            "\(rows.filter { $0.group == .core }.count) exercises · nothing logged yet"
         )
     }
 

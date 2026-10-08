@@ -15,13 +15,13 @@ public enum SubstitutionCopy {
 
     public static func fit(_ alternative: RankedAlternative) -> String {
         if let curated = alternative.curatedFit { return curated }
-        if alternative.match == .broader { return "Andere opzet" }
-        if alternative.match == .related { return "Andere beweging" }
+        if alternative.match == .broader { return "Different setup" }
+        if alternative.match == .related { return "Different movement" }
         if alternative.score >= strongScore && alternative.muscleOverlap >= strongOverlap {
-            return "Sterke match"
+            return "Strong match"
         }
-        if alternative.muscleOverlap >= 0.65 { return "Goede match" }
-        return "Deels vergelijkbaar"
+        if alternative.muscleOverlap >= 0.65 { return "Good match" }
+        return "Partly similar"
     }
 
     /// One line of honest reasoning. Generated from what actually carried the
@@ -37,32 +37,32 @@ public enum SubstitutionCopy {
         var reasons: [String] = []
 
         if alternative.match == .broader {
-            reasons.append("Traint dezelfde spier, maar als \(exercise.isCompound ? "samengestelde" : "andere") oefening")
+            reasons.append("Trains the same muscle, but as \(exercise.isCompound ? "a compound" : "a different") exercise")
         } else if alternative.match == .related {
-            reasons.append("Andere beweging dan \(origin.name.lowercased()), zelfde spiergroep")
+            reasons.append("Different movement from \(origin.name.lowercased()), same muscle group")
         } else if alternative.muscleOverlap >= strongOverlap {
-            reasons.append("Traint dezelfde spieren in dezelfde beweging")
+            reasons.append("Trains the same muscles in the same movement")
         } else {
-            reasons.append("Zelfde beweging, iets andere nadruk")
+            reasons.append("Same movement, slightly different emphasis")
         }
 
         var namedADifference = false
         for driver in alternative.drivers.prefix(2) {
             switch driver {
             case .easierToStabilise:
-                reasons.append("minder stabiliteit nodig")
+                reasons.append("needs less stability")
                 namedADifference = true
             case .quickerToSetUp:
-                reasons.append("sneller klaar te zetten")
+                reasons.append("quicker to set up")
                 namedADifference = true
             case .differentEquipment:
-                reasons.append("ander materiaal")
+                reasons.append("different equipment")
                 namedADifference = true
             case .differentStation:
-                reasons.append("ander toestel")
+                reasons.append("different machine")
                 namedADifference = true
             case .alreadyFamiliar:
-                reasons.append("je deed deze al eerder")
+                reasons.append("you've done this one before")
                 namedADifference = true
             case .sameMuscles, .samePattern, .sameJointActions,
                  .sameResistanceProfile, .fitsRole:
@@ -92,7 +92,7 @@ public enum SubstitutionCopy {
         let candidates: [(RankedAlternative) -> String?] = [
             { equipmentPhrase($0.exercise.equipment) },
             { $0.exercise.attributes.map { profilePhrase($0.resistanceProfile) } },
-            { $0.exercise.unilateral ? "per kant" : nil },
+            { $0.exercise.unilateral ? "per side" : nil },
             { $0.exercise.attributes.map { setupPhrase($0.heuristics.setupCost) } },
         ]
         for candidate in candidates {
@@ -109,36 +109,36 @@ public enum SubstitutionCopy {
 
     private static func profilePhrase(_ profile: ResistanceProfile) -> String {
         switch profile {
-        case .lengthenedBias: return "zwaarst in de rek"
-        case .shortenedBias: return "zwaarst in de samentrekking"
-        case .flatCable: return "gelijkmatige weerstand"
-        case .midRangeBias: return "zwaarst in het midden"
+        case .lengthenedBias: return "hardest in the stretch"
+        case .shortenedBias: return "hardest in the squeeze"
+        case .flatCable: return "even resistance"
+        case .midRangeBias: return "hardest mid-range"
         }
     }
 
     private static func setupPhrase(_ cost: Int) -> String {
         switch cost {
-        case ...1: return "meteen klaar"
-        case 2: return "even klaarzetten"
-        default: return "schijven laden"
+        case ...1: return "ready right away"
+        case 2: return "quick setup"
+        default: return "load plates"
         }
     }
 
     private static func equipmentPhrase(_ equipment: Equipment) -> String {
         switch equipment {
-        case .barbell: return "met een barbell"
-        case .dumbbell: return "met dumbbells"
-        case .machinePlate: return "op een machine met schijven"
-        case .machineSelectorised: return "op een machine met pin"
-        case .cable: return "aan de kabel"
-        case .smith: return "in de smith"
-        case .bodyweight: return "met je lichaamsgewicht"
-        case .band: return "met een band"
+        case .barbell: return "with a barbell"
+        case .dumbbell: return "with dumbbells"
+        case .machinePlate: return "on a plate-loaded machine"
+        case .machineSelectorised: return "on a pin-loaded machine"
+        case .cable: return "on the cable"
+        case .smith: return "in the Smith machine"
+        case .bodyweight: return "with your bodyweight"
+        case .band: return "with a band"
         }
     }
 
     /// The line that appears under every alternative, without exception. It
     /// is the promise the swap makes: the prescription survives, the load
     /// does not carry over (§12.3 — no conversion, in either direction).
-    public static let carryOver = "Sets, reps en RIR blijven · gewicht reset"
+    public static let carryOver = "Sets, reps and RIR stay · weight resets"
 }

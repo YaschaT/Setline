@@ -57,13 +57,13 @@ public enum FoodSearch {
 
     /// The screen's words when a search has nothing to show.
     public enum Message {
-        public static let tooShort = "Typ minstens twee tekens."
-        public static let unreachable = "Zoeken lukte niet. Vul de waarden zelf in."
-        public static let signIn = "Meld je opnieuw aan om producten te zoeken."
-        public static let partial = "Productdatabase tijdelijk niet bereikbaar; generieke schattingen getoond."
+        public static let tooShort = "Type at least two characters."
+        public static let unreachable = "Search didn't work. Enter the values yourself."
+        public static let signIn = "Sign in again to search for products."
+        public static let partial = "Product database temporarily unavailable; showing generic estimates."
 
         public static func nothingFound(_ query: String) -> String {
-            "Niets gevonden voor \(query). Vul de waarden zelf in."
+            "Nothing found for \(query). Enter the values yourself."
         }
     }
 

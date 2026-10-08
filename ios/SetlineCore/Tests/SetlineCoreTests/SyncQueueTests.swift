@@ -29,7 +29,7 @@ final class SyncQueueTests: XCTestCase {
         let rows = SyncQueue.rows(from: [StateChange(.upsertSession(session("s1", day: "Push", sets: 3, load: "100")), createdAt: now)])
         XCTAssertEqual(rows.count, 1)
         XCTAssertTrue(rows[0].title.hasPrefix("Push · "))
-        XCTAssertEqual(rows[0].detail, "3 sets · 2.400 kg")
+        XCTAssertEqual(rows[0].detail, "3 sets · 2,400 kg")
     }
 
     func testASessionSavedTwiceIsStillOneThingWaiting() {
@@ -38,7 +38,7 @@ final class SyncQueueTests: XCTestCase {
             StateChange(.upsertSession(session("s1", day: "Push", sets: 3, load: "100")), createdAt: now),
         ])
         XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows[0].detail, "3 sets · 2.400 kg", "the latest save is what waits")
+        XCTAssertEqual(rows[0].detail, "3 sets · 2,400 kg", "the latest save is what waits")
     }
 
     func testARearrangedWeekIsOneRowHoweverManyDatesItTouched() {
@@ -47,7 +47,7 @@ final class SyncQueueTests: XCTestCase {
             StateChange(.setScheduleDay(key: "personal:2026-09-17", dayID: "push"), createdAt: now),
             StateChange(.removeScheduleOverride(key: "personal:2026-09-20"), createdAt: now),
         ])
-        XCTAssertEqual(rows, [SyncQueue.Row(title: "Weekplanning", detail: "3 dagen gewijzigd")])
+        XCTAssertEqual(rows, [SyncQueue.Row(title: "Week plan", detail: "3 days changed")])
     }
 
     func testBookkeepingNobodyWaitsOnIsNotListed() {
@@ -62,7 +62,7 @@ final class SyncQueueTests: XCTestCase {
         let rows = SyncQueue.rows(from: [StateChange(.upsertNutritionEntry(.object([
             "id": .string("m1"), "name": .string("Kip, rijst"), "calories": .number(740),
         ])), createdAt: now)])
-        XCTAssertEqual(rows, [SyncQueue.Row(title: "Kip, rijst", detail: "Voeding · 740 kcal")])
+        XCTAssertEqual(rows, [SyncQueue.Row(title: "Kip, rijst", detail: "Nutrition · 740 kcal")])
     }
 
     func testSeveralTargetEditsAreOneRow() {

@@ -123,10 +123,10 @@ public enum ExercisePicker {
     /// "7 oefeningen · 4 met historiek" — 40d's line under the group's name.
     public static func summary(of group: MuscleGroup, in rows: [Row]) -> String {
         let inside = rows.filter { $0.group == group }
-        let noun = inside.count == 1 ? "oefening" : "oefeningen"
+        let noun = inside.count == 1 ? "exercise" : "exercises"
         let logged = inside.filter(\.hasHistory).count
-        guard logged > 0 else { return "\(inside.count) \(noun) · nog niets gelogd" }
-        return "\(inside.count) \(noun) · \(logged) met historiek"
+        guard logged > 0 else { return "\(inside.count) \(noun) · nothing logged yet" }
+        return "\(inside.count) \(noun) · \(logged) with history"
     }
 
     /// Typed search over the same rows. Matches anywhere in the name, because

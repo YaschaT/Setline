@@ -146,6 +146,6 @@ final class WorkoutClockTests: XCTestCase {
         let session = snapshot.finishedSession()
         XCTAssertEqual(session.durationSeconds, 2_700, "45 minutes trained, not the 22 hours elapsed")
         XCTAssertEqual(session.date, start, "The session still belongs to the day it started")
-        XCTAssertEqual(NumberDisplay.dutch.minutes(session.durationSeconds ?? 0), "45 min")
+        XCTAssertEqual(NumberDisplay.english.minutes(session.durationSeconds ?? 0), "45 min")
     }
 }

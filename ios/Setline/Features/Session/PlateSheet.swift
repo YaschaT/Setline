@@ -1,7 +1,7 @@
 import SwiftUI
 import SetlineCore
 
-/// Redesign 1b · "Schijven per kant".
+/// Redesign 1b · "Plates per side".
 ///
 /// Reached from the input card, and it answers one question: what goes on
 /// each side. One side of the bar is drawn from the answer, the same answer is
@@ -26,7 +26,7 @@ struct PlateSheet: View {
     /// The bar the plates are reckoned against. Opens on the account's own.
     @State private var chosenBar: Decimal?
 
-    private let display = NumberDisplay.dutch
+    private let display = NumberDisplay.english
 
     private var rack: PlateInventory { app.plateInventory }
     private var bar: Decimal { chosenBar ?? rack.barKg }
@@ -49,18 +49,18 @@ struct PlateSheet: View {
             // Which set this is stays on the session behind the sheet.
             // VoiceOver still hears it first.
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                Text("Schijven per kant")
+                Text("Plates per side")
                     .slLead()
                     .foregroundStyle(SL.Ink.primary)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: SL.Space.s2)
-                Text("stang \(display.kg(bar)) · \(display.kg(target)) totaal")
+                Text("bar \(display.kg(bar)) · \(display.kg(target)) total")
                     .slMeta().slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
                     .multilineTextAlignment(.trailing)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(exercise), set \(setNumber), \(display.kg(target)) × \(reps). Schijven per kant, stang \(display.kg(bar))")
+            .accessibilityLabel("\(exercise), set \(setNumber), \(display.kg(target)) × \(reps). Plates per side, bar \(display.kg(bar))")
 
             stack.padding(.top, SL.Space.s4)
 
@@ -147,8 +147,8 @@ struct PlateSheet: View {
 
     /// "1 × 20 + 1 × 10 + 1 × 1,25 per kant"
     private var perSide: String {
-        if target < bar { return "Lichter dan de stang van \(display.kg(bar))" }
-        guard !solution.perSide.isEmpty else { return "Alleen de stang" }
+        if target < bar { return "Lighter than the \(display.kg(bar)) bar" }
+        guard !solution.perSide.isEmpty else { return "Just the bar" }
         var counts: [(plate: Decimal, count: Int)] = []
         for plate in solution.perSide {
             if let last = counts.indices.last, counts[last].plate == plate {
@@ -157,13 +157,13 @@ struct PlateSheet: View {
                 counts.append((plate, 1))
             }
         }
-        return counts.map { "\($0.count) × \(display.number($0.plate))" }.joined(separator: " + ") + " per kant"
+        return counts.map { "\($0.count) × \(display.number($0.plate))" }.joined(separator: " + ") + " per side"
     }
 
     private var footnote: String {
-        if target < bar { return "De stang alleen weegt al \(display.kg(bar))." }
-        if solution.isExact { return "Haalbaar met jouw schijven." }
-        return "\(display.kg(target)) past niet met jouw schijven; dit is \(display.kg(solution.total)), het dichtste dat wel kan."
+        if target < bar { return "The bar alone already weighs \(display.kg(bar))." }
+        if solution.isExact { return "Possible with your plates." }
+        return "\(display.kg(target)) isn't possible with your plates; this is \(display.kg(solution.total)), the closest that is."
     }
 
     // MARK: - Loads these plates can make
@@ -172,7 +172,7 @@ struct PlateSheet: View {
     /// sets the weight of the set.
     private var nearby: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            Text("Haalbare gewichten")
+            Text("Possible weights")
                 .slMeta()
                 .foregroundStyle(SL.Ink.secondary)
             HStack(spacing: SL.Space.s2) {
@@ -202,7 +202,7 @@ struct PlateSheet: View {
                     .buttonStyle(.plain)
                     .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
                     .accessibilityLabel(display.kg(load))
-                    .accessibilityHint(load == target ? "" : "Zet deze set op dit gewicht")
+                    .accessibilityHint(load == target ? "" : "Sets this set to this weight")
                     .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
                 }
             }
@@ -216,7 +216,7 @@ struct PlateSheet: View {
             ForEach(bars, id: \.self) { option in
                 let selected = option == bar
                 Button { chosenBar = option } label: {
-                    Text("stang \(display.kg(option))")
+                    Text("bar \(display.kg(option))")
                         .slBody(selected ? SL.Weight.semibold : SL.Weight.regular)
                         .slNumerals()
                         .foregroundStyle(selected ? SL.Signal.action : SL.Ink.primary)
@@ -241,7 +241,7 @@ struct PlateSheet: View {
             }
 
             Button(action: onClose) {
-                Text("Sluiten")
+                Text("Close")
                     .slBody(SL.Weight.semibold)
                     .foregroundStyle(SL.Ink.primary)
                     .frame(maxWidth: .infinity)

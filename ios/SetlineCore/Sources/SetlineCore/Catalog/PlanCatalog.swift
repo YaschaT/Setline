@@ -17,9 +17,9 @@ public enum PlanCatalog {
     public static let personal: [WorkoutDay] = [
         WorkoutDay(
             id: "push",
-            label: "Maandag · Push",
+            label: "Monday · Push",
             short: "Push",
-            focus: "Zware borst · schouders · triceps",
+            focus: "Heavy chest · shoulders · triceps",
             exercises: [
                 PlannedExercise(
                     exerciseID: "flat-bench",
@@ -86,7 +86,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "4×12–20",
-                        load: "Strikt",
+                        load: "Strict",
                         rest: "60–90 sec"
                     )
                 ),
@@ -121,9 +121,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "pull",
-            label: "Dinsdag · Pull",
+            label: "Tuesday · Pull",
             short: "Pull",
-            focus: "Latbreedte · rugdikte · biceps",
+            focus: "Lat width · back thickness · biceps",
             exercises: [
                 PlannedExercise(
                     exerciseID: "pull-up",
@@ -162,7 +162,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "Start rond 90 kg",
+                        load: "Start around 90 kg",
                         rest: "2–3 min"
                     )
                 ),
@@ -189,7 +189,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×12–20",
-                        load: "Gecontroleerd",
+                        load: "Controlled",
                         rest: "60–90 sec"
                     )
                 ),
@@ -224,9 +224,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "legs",
-            label: "Woensdag · Legs",
+            label: "Wednesday · Legs",
             short: "Legs",
-            focus: "Quadriceps · kuiten · core",
+            focus: "Quads · calves · core",
             exercises: [
                 PlannedExercise(
                     exerciseID: "hack-squat",
@@ -251,8 +251,8 @@ public enum PlanCatalog {
                         SetPrescription(repRange: 8...12, targetRIR: 1...2),
                     ],
                     authoredNote: LegacyPrescriptionNote(
-                        prescription: "3×8–12 / been",
-                        load: "Pijnvrije ROM",
+                        prescription: "3×8–12 / leg",
+                        load: "Pain-free ROM",
                         rest: "2–3 min"
                     )
                 ),
@@ -279,7 +279,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "2×12–15",
-                        load: "Gecontroleerd",
+                        load: "Controlled",
                         rest: "90 sec"
                     )
                 ),
@@ -294,7 +294,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "4×8–15",
-                        load: "Volledige stretch",
+                        load: "Full stretch",
                         rest: "90 sec"
                     )
                 ),
@@ -308,7 +308,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×15–20",
-                        load: "Strikt",
+                        load: "Strict",
                         rest: "60 sec"
                     )
                 ),
@@ -322,7 +322,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×10–15",
-                        load: "Progressief",
+                        load: "Progressive",
                         rest: "90 sec"
                     )
                 ),
@@ -330,9 +330,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "lower",
-            label: "Vrijdag · Lower",
+            label: "Friday · Lower",
             short: "Lower",
-            focus: "Hamstrings · billen · core",
+            focus: "Hamstrings · glutes · core",
             exercises: [
                 PlannedExercise(
                     exerciseID: "rdl",
@@ -399,7 +399,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×12–20",
-                        load: "Volledige ROM",
+                        load: "Full ROM",
                         rest: "90 sec"
                     )
                 ),
@@ -413,7 +413,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–15",
-                        load: "Gecontroleerd",
+                        load: "Controlled",
                         rest: "90 sec"
                     )
                 ),
@@ -421,9 +421,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "upper",
-            label: "Zaterdag · Upper",
+            label: "Saturday · Upper",
             short: "Upper",
-            focus: "Bench-techniek · lats · schouders",
+            focus: "Bench technique · lats · shoulders",
             exercises: [
                 PlannedExercise(
                     exerciseID: "upper-paused-bench",
@@ -436,7 +436,7 @@ public enum PlanCatalog {
                     modifiers: SetModifiers(pauseEnabled: true, pauseSeconds: 2),
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×4–6",
-                        load: "105–110 kg · 2 sec pauze · RIR 2",
+                        load: "105–110 kg · 2 sec pause · RIR 2",
                         rest: "4 min"
                     )
                 ),
@@ -462,8 +462,8 @@ public enum PlanCatalog {
                         SetPrescription(repRange: 10...15, targetRIR: 0...2),
                     ],
                     authoredNote: LegacyPrescriptionNote(
-                        prescription: "2×10–15 / kant",
-                        load: "Volledige stretch",
+                        prescription: "2×10–15 / side",
+                        load: "Full stretch",
                         rest: "90 sec"
                     )
                 ),
@@ -503,7 +503,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×12–20",
-                        load: "Strikt",
+                        load: "Strict",
                         rest: "60–90 sec"
                     )
                 ),
@@ -516,7 +516,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "2×15–20",
-                        load: "Gecontroleerd",
+                        load: "Controlled",
                         rest: "60–90 sec"
                     )
                 ),
@@ -554,9 +554,9 @@ public enum PlanCatalog {
     public static let sciencePPLUL: [WorkoutDay] = [
         WorkoutDay(
             id: "science-push",
-            label: "Maandag · Push",
+            label: "Monday · Push",
             short: "Push",
-            focus: "Krachtbasis · borst · delts · triceps",
+            focus: "Strength base · chest · delts · triceps",
             exercises: [
                 PlannedExercise(
                     exerciseID: "flat-bench",
@@ -582,7 +582,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–12",
-                        load: "RIR 1–2 · diepe stretch",
+                        load: "RIR 1–2 · deep stretch",
                         rest: "2–3 min"
                     )
                 ),
@@ -608,7 +608,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "2×12–15",
-                        load: "RIR 1 · volledige ROM",
+                        load: "RIR 1 · full ROM",
                         rest: "90–120 sec"
                     )
                 ),
@@ -622,7 +622,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×12–20",
-                        load: "RIR 1 · strikt",
+                        load: "RIR 1 · strict",
                         rest: "60–90 sec"
                     )
                 ),
@@ -636,7 +636,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×10–15",
-                        load: "RIR 1 · lange spierlengte",
+                        load: "RIR 1 · long muscle length",
                         rest: "90–120 sec"
                     )
                 ),
@@ -649,7 +649,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "2×10–15",
-                        load: "Laatste set RIR 0–1",
+                        load: "Last set RIR 0–1",
                         rest: "90 sec"
                     )
                 ),
@@ -657,9 +657,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-pull",
-            label: "Dinsdag · Pull",
+            label: "Tuesday · Pull",
             short: "Pull",
-            focus: "Verticale pull · rugdikte · biceps",
+            focus: "Vertical pull · back thickness · biceps",
             exercises: [
                 PlannedExercise(
                     exerciseID: "pull-up",
@@ -685,7 +685,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "RIR 1–2 · stabiele borst",
+                        load: "RIR 1–2 · stable chest",
                         rest: "2–3 min"
                     )
                 ),
@@ -697,8 +697,8 @@ public enum PlanCatalog {
                         SetPrescription(repRange: 10...15, targetRIR: 0...2),
                     ],
                     authoredNote: LegacyPrescriptionNote(
-                        prescription: "2×10–15 / kant",
-                        load: "Volledige stretch",
+                        prescription: "2×10–15 / side",
+                        load: "Full stretch",
                         rest: "90–120 sec"
                     )
                 ),
@@ -711,7 +711,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "2×12–20",
-                        load: "RIR 1 · gecontroleerd",
+                        load: "RIR 1 · controlled",
                         rest: "90 sec"
                     )
                 ),
@@ -725,7 +725,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–12",
-                        load: "RIR 1 · geen momentum",
+                        load: "RIR 1 · no momentum",
                         rest: "2 min"
                     )
                 ),
@@ -746,9 +746,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-legs",
-            label: "Woensdag · Legs",
+            label: "Wednesday · Legs",
             short: "Legs",
-            focus: "Quads · hamstrings · volledige ROM",
+            focus: "Quads · hamstrings · full ROM",
             exercises: [
                 PlannedExercise(
                     exerciseID: "hack-squat",
@@ -760,7 +760,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "RIR 1–2 · constante diepte",
+                        load: "RIR 1–2 · consistent depth",
                         rest: "3 min"
                     )
                 ),
@@ -774,7 +774,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "RIR 1–2 · hamstringstretch",
+                        load: "RIR 1–2 · hamstring stretch",
                         rest: "3 min"
                     )
                 ),
@@ -786,8 +786,8 @@ public enum PlanCatalog {
                         SetPrescription(repRange: 8...12, targetRIR: 1...2),
                     ],
                     authoredNote: LegacyPrescriptionNote(
-                        prescription: "2×8–12 / been",
-                        load: "RIR 1–2 · pijnvrije ROM",
+                        prescription: "2×8–12 / leg",
+                        load: "RIR 1–2 · pain-free ROM",
                         rest: "2–3 min"
                     )
                 ),
@@ -801,7 +801,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×10–15",
-                        load: "RIR 1 · heup gebogen",
+                        load: "RIR 1 · hip flexed",
                         rest: "2 min"
                     )
                 ),
@@ -814,7 +814,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "2×12–15",
-                        load: "Laatste set RIR 0–1",
+                        load: "Last set RIR 0–1",
                         rest: "90 sec"
                     )
                 ),
@@ -828,7 +828,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–15",
-                        load: "2 sec stretch onderaan",
+                        load: "2 sec stretch at the bottom",
                         rest: "90 sec"
                     )
                 ),
@@ -842,7 +842,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×10–15",
-                        load: "Progressief",
+                        load: "Progressive",
                         rest: "90 sec"
                     )
                 ),
@@ -850,9 +850,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-lower",
-            label: "Vrijdag · Lower",
+            label: "Friday · Lower",
             short: "Lower",
-            focus: "Tweede beenprikkel · herstelbaar volume",
+            focus: "Second leg stimulus · recoverable volume",
             exercises: [
                 PlannedExercise(
                     exerciseID: "leg-press",
@@ -864,7 +864,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–12",
-                        load: "RIR 1–2 · diepe ROM",
+                        load: "RIR 1–2 · deep ROM",
                         rest: "3 min"
                     )
                 ),
@@ -918,7 +918,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×12–20",
-                        load: "Volledige stretch",
+                        load: "Full stretch",
                         rest: "90 sec"
                     )
                 ),
@@ -932,7 +932,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–15",
-                        load: "Geen zwaai",
+                        load: "No swinging",
                         rest: "90 sec"
                     )
                 ),
@@ -940,9 +940,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-upper",
-            label: "Zaterdag · Upper",
+            label: "Saturday · Upper",
             short: "Upper",
-            focus: "Tweede benchprikkel · gebalanceerd",
+            focus: "Second bench stimulus · balanced",
             exercises: [
                 PlannedExercise(
                     exerciseID: "upper-paused-bench",
@@ -955,7 +955,7 @@ public enum PlanCatalog {
                     modifiers: SetModifiers(pauseEnabled: true, pauseSeconds: 2),
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×4–6",
-                        load: "105–110 kg · 2 sec pauze · RIR 2",
+                        load: "105–110 kg · 2 sec pause · RIR 2",
                         rest: "4 min"
                     )
                 ),
@@ -969,7 +969,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "RIR 1–2 · volledige stretch",
+                        load: "RIR 1–2 · full stretch",
                         rest: "2–3 min"
                     )
                 ),
@@ -1061,9 +1061,9 @@ public enum PlanCatalog {
     public static let scienceUpperLower: [WorkoutDay] = [
         WorkoutDay(
             id: "science-ul-upper-a",
-            label: "Maandag · Upper A",
+            label: "Monday · Upper A",
             short: "Upper A",
-            focus: "Bench-kracht · rug · schouders",
+            focus: "Bench strength · back · shoulders",
             exercises: [
                 PlannedExercise(
                     exerciseID: "flat-bench",
@@ -1130,7 +1130,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×12–20",
-                        load: "RIR 1 · strikt",
+                        load: "RIR 1 · strict",
                         rest: "60–90 sec"
                     )
                 ),
@@ -1164,9 +1164,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-ul-lower-a",
-            label: "Dinsdag · Lower A",
+            label: "Tuesday · Lower A",
             short: "Lower A",
-            focus: "Quads · hamstrings · kuiten",
+            focus: "Quads · hamstrings · calves",
             exercises: [
                 PlannedExercise(
                     exerciseID: "hack-squat",
@@ -1178,7 +1178,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "RIR 1–2 · constante diepte",
+                        load: "RIR 1–2 · consistent depth",
                         rest: "3 min"
                     )
                 ),
@@ -1192,7 +1192,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "RIR 1–2 · hamstringstretch",
+                        load: "RIR 1–2 · hamstring stretch",
                         rest: "3 min"
                     )
                 ),
@@ -1247,7 +1247,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×10–15",
-                        load: "Progressief",
+                        load: "Progressive",
                         rest: "90 sec"
                     )
                 ),
@@ -1255,9 +1255,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-ul-upper-b",
-            label: "Donderdag · Upper B",
+            label: "Thursday · Upper B",
             short: "Upper B",
-            focus: "Paused bench · lats · armen",
+            focus: "Paused bench · lats · arms",
             exercises: [
                 PlannedExercise(
                     exerciseID: "upper-paused-bench",
@@ -1270,7 +1270,7 @@ public enum PlanCatalog {
                     modifiers: SetModifiers(pauseEnabled: true, pauseSeconds: 2),
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×4–6",
-                        load: "105–110 kg · 2 sec pauze · RIR 2",
+                        load: "105–110 kg · 2 sec pause · RIR 2",
                         rest: "4 min"
                     )
                 ),
@@ -1284,7 +1284,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×6–10",
-                        load: "RIR 1–2 · volledige stretch",
+                        load: "RIR 1–2 · full stretch",
                         rest: "2–3 min"
                     )
                 ),
@@ -1372,9 +1372,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-ul-lower-b",
-            label: "Vrijdag · Lower B",
+            label: "Friday · Lower B",
             short: "Lower B",
-            focus: "Tweede beenprikkel · billen · core",
+            focus: "Second leg stimulus · glutes · core",
             exercises: [
                 PlannedExercise(
                     exerciseID: "leg-press",
@@ -1386,7 +1386,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–12",
-                        load: "RIR 1–2 · diepe ROM",
+                        load: "RIR 1–2 · deep ROM",
                         rest: "3 min"
                     )
                 ),
@@ -1411,8 +1411,8 @@ public enum PlanCatalog {
                         SetPrescription(repRange: 8...12, targetRIR: 1...2),
                     ],
                     authoredNote: LegacyPrescriptionNote(
-                        prescription: "2×8–12 / been",
-                        load: "Pijnvrije ROM",
+                        prescription: "2×8–12 / leg",
+                        load: "Pain-free ROM",
                         rest: "2–3 min"
                     )
                 ),
@@ -1440,7 +1440,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×12–20",
-                        load: "Volledige stretch",
+                        load: "Full stretch",
                         rest: "90 sec"
                     )
                 ),
@@ -1454,7 +1454,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–15",
-                        load: "Geen zwaai",
+                        load: "No swinging",
                         rest: "90 sec"
                     )
                 ),
@@ -1466,9 +1466,9 @@ public enum PlanCatalog {
     public static let scienceFullBody: [WorkoutDay] = [
         WorkoutDay(
             id: "science-fb-a",
-            label: "Maandag · Full body A",
+            label: "Monday · Full body A",
             short: "Full body A",
-            focus: "Bench-kracht · squat · verticale pull",
+            focus: "Bench strength · squat · vertical pull",
             exercises: [
                 PlannedExercise(
                     exerciseID: "flat-bench",
@@ -1555,9 +1555,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-fb-b",
-            label: "Woensdag · Full body B",
+            label: "Wednesday · Full body B",
             short: "Full body B",
-            focus: "Bovenborst · benen · rugdikte",
+            focus: "Upper chest · legs · back thickness",
             exercises: [
                 PlannedExercise(
                     exerciseID: "leg-press",
@@ -1651,7 +1651,7 @@ public enum PlanCatalog {
                     ],
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×8–15",
-                        load: "Volledige stretch",
+                        load: "Full stretch",
                         rest: "90 sec"
                     )
                 ),
@@ -1659,9 +1659,9 @@ public enum PlanCatalog {
         ),
         WorkoutDay(
             id: "science-fb-c",
-            label: "Vrijdag · Full body C",
+            label: "Friday · Full body C",
             short: "Full body C",
-            focus: "Paused bench · unilateraal · lats",
+            focus: "Paused bench · unilateral · lats",
             exercises: [
                 PlannedExercise(
                     exerciseID: "upper-paused-bench",
@@ -1674,7 +1674,7 @@ public enum PlanCatalog {
                     modifiers: SetModifiers(pauseEnabled: true, pauseSeconds: 2),
                     authoredNote: LegacyPrescriptionNote(
                         prescription: "3×4–6",
-                        load: "105–110 kg · 2 sec pauze · RIR 2",
+                        load: "105–110 kg · 2 sec pause · RIR 2",
                         rest: "4 min"
                     )
                 ),
@@ -1687,8 +1687,8 @@ public enum PlanCatalog {
                         SetPrescription(repRange: 8...12, targetRIR: 1...2),
                     ],
                     authoredNote: LegacyPrescriptionNote(
-                        prescription: "3×8–12 / been",
-                        load: "Pijnvrije ROM",
+                        prescription: "3×8–12 / leg",
+                        load: "Pain-free ROM",
                         rest: "2–3 min"
                     )
                 ),

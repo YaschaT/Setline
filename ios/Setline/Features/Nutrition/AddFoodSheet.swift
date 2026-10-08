@@ -90,7 +90,7 @@ struct AddFoodSheet: View {
                                     productRow(product)
                                 }
                             }
-                            Text("Controleer de verpakking; Open Food Facts wordt door gebruikers bijgehouden.")
+                            Text("Check the packaging; Open Food Facts is maintained by its users.")
                                 .slMeta()
                                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -114,7 +114,7 @@ struct AddFoodSheet: View {
         .background(SL.Surface.raised)
         .safeAreaInset(edge: .bottom) {
             if manual {
-                Button { logOwn() } label: { Text("Voeg toe aan \(chosen.spoken)") }
+                Button { logOwn() } label: { Text("Add to \(chosen.spoken)") }
                     .buttonStyle(SLPrimaryButtonStyle())
                     .disabled(!isLoggable)
                     .padding(.horizontal, SL.Space.gutterSession)
@@ -141,7 +141,7 @@ struct AddFoodSheet: View {
                 return
             }
             // What was said about the last query does not belong to this one:
-            // "Zoeken lukte niet" over a row reading "Zoeken…" says both.
+            // "Zoeken lukte niet" over a row reading "Searching…" says both.
             note = nil
             searching = true
             try? await Task.sleep(for: .milliseconds(450))
@@ -167,7 +167,7 @@ struct AddFoodSheet: View {
 
     private var head: some View {
         HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-            Text(manual ? "Zelf invullen" : "Toevoegen")
+            Text(manual ? "Enter manually" : "Add food")
                 .slTitle()
                 .foregroundStyle(SL.Ink.primary)
                 .accessibilityAddTraits(.isHeader)
@@ -175,7 +175,7 @@ struct AddFoodSheet: View {
             Button {
                 if manual { manual = false } else { onClose() }
             } label: {
-                Text(manual ? "Terug" : "Sluiten")
+                Text(manual ? "Back" : "Close")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .slHitTarget()
@@ -197,7 +197,7 @@ struct AddFoodSheet: View {
             TextField(
                 "",
                 text: $query,
-                prompt: Text("Zoek voeding").foregroundColor(SL.Ink.tertiary)
+                prompt: Text("Search food").foregroundColor(SL.Ink.tertiary)
             )
             .font(.sl(SL.TypeSize.lead, SL.Weight.regular))
             .textInputAutocapitalization(.never)
@@ -208,7 +208,7 @@ struct AddFoodSheet: View {
             .focused($focused, equals: .query)
             if !query.isEmpty {
                 Button { query = "" } label: {
-                    Text("Wis")
+                    Text("Clear")
                         .slMeta(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.tertiary)
                         .frame(minWidth: 40, minHeight: 40)
@@ -216,7 +216,7 @@ struct AddFoodSheet: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, -6)
-                .accessibilityLabel("Zoekterm wissen")
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.leading, 14)
@@ -239,11 +239,11 @@ struct AddFoodSheet: View {
                 .fill(SL.Surface.raised2)
                 .frame(width: 120, height: 12)
             Spacer()
-            Text("Zoeken…").slMeta().foregroundStyle(SL.Ink.tertiary)
+            Text("Searching…").slMeta().foregroundStyle(SL.Ink.tertiary)
         }
         .frame(minHeight: 50)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Zoeken")
+        .accessibilityLabel("Search")
     }
 
     private func run(_ asked: String) async {
@@ -277,7 +277,7 @@ struct AddFoodSheet: View {
             .filter { entry in !often.contains { $0.name.lowercased() == entry.name.lowercased() } }
 
         if often.isEmpty && recent.isEmpty {
-            Text("Zoek een product, of vul het zelf in. Wat je logt komt hier te staan.")
+            Text("Search for a product, or enter it yourself. What you log appears here.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -286,7 +286,7 @@ struct AddFoodSheet: View {
             ownValuesInvitation.padding(.top, SL.Space.s4)
         } else {
             if !often.isEmpty {
-                group("VAAK BIJ \(chosen.rawValue.uppercased())", top: 22) {
+                group("OFTEN AT \(chosen.label.uppercased())", top: 22) {
                     ForEach(often) { entry in
                         memoryRow(entry)
                     }
@@ -313,8 +313,8 @@ struct AddFoodSheet: View {
     /// reason — opening the sheet from a meal's own ⊕ chose it instead.
     private var footnote: String {
         chosen == Meal.likely(at: Date())
-            ? "\(MealSection.title(of: chosen)) staat voorgekozen omdat het \(app.display.clock(Date())) is. Eén tik op ⊕ zet het item erin met deze hoeveelheid."
-            : "Eén tik op ⊕ zet het item in \(chosen.spoken), met deze hoeveelheid."
+            ? "\(MealSection.title(of: chosen)) is preselected because it's \(app.display.clock(Date())). One tap on ⊕ adds the item with this amount."
+            : "One tap on ⊕ adds the item to \(chosen.spoken), with this amount."
     }
 
     private func group<Content: View>(
@@ -405,7 +405,7 @@ struct AddFoodSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(title), \(detail)")
-        .accessibilityHint("Dubbeltik om toe te voegen aan \(chosen.spoken)")
+        .accessibilityHint("Double-tap to add to \(chosen.spoken)")
     }
 
     // MARK: - Food no database has
@@ -413,7 +413,7 @@ struct AddFoodSheet: View {
     private var ownValuesInvitation: some View {
         Button { manual = true } label: {
             HStack(spacing: SL.Space.s3) {
-                Text("Zelf invullen")
+                Text("Enter manually")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                 Spacer(minLength: SL.Space.s2)
@@ -434,25 +434,25 @@ struct AddFoodSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Voor eten dat de zoekfunctie niet kent")
+        .accessibilityHint("For food the search doesn't know")
     }
 
     private var ownValues: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 0) {
-                field("Naam", text: $name, field: .name)
+                field("Name", text: $name, field: .name)
                 SLHairline().padding(.horizontal, 14)
-                field("Hoeveelheid", text: $amount, field: .amount, numeric: true)
+                field("Amount", text: $amount, field: .amount, numeric: true)
                 SLHairline().padding(.horizontal, 14)
-                field("Eenheid", text: $unit, field: .unit)
+                field("Unit", text: $unit, field: .unit)
                 SLHairline().padding(.horizontal, 14)
-                field("Calorieën", text: $calories, field: .calories, unit: "kcal", numeric: true)
+                field("Calories", text: $calories, field: .calories, unit: "kcal", numeric: true)
                 SLHairline().padding(.horizontal, 14)
-                field("Proteïne", text: $protein, field: .protein, unit: "g", numeric: true)
+                field("Protein", text: $protein, field: .protein, unit: "g", numeric: true)
                 SLHairline().padding(.horizontal, 14)
-                field("Koolhydraten", text: $carbs, field: .carbs, unit: "g", numeric: true)
+                field("Carbs", text: $carbs, field: .carbs, unit: "g", numeric: true)
                 SLHairline().padding(.horizontal, 14)
-                field("Vet", text: $fat, field: .fat, unit: "g", numeric: true)
+                field("Fat", text: $fat, field: .fat, unit: "g", numeric: true)
             }
             .padding(6)
             .slBorderBox()
@@ -535,7 +535,7 @@ struct AddFoodSheet: View {
     /// left blank.
     private var energyNote: String? {
         guard value(calories) <= 0, energy > 0 else { return nil }
-        return "Gerekend uit de macro's: \(app.display.kcal(Decimal(energy)))."
+        return "Worked out from the macros: \(app.display.kcal(Decimal(energy)))."
     }
 
     private var isLoggable: Bool {
@@ -625,6 +625,6 @@ struct MealSegment: View {
                 .strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Maaltijd")
+        .accessibilityLabel("Meal")
     }
 }

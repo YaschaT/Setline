@@ -144,7 +144,7 @@ final class WeighInTests: XCTestCase {
         }
         XCTAssertEqual(json["id"]?.stringValue, "q")
         XCTAssertEqual(json["weight"]?.decimalValue, Decimal(string: "83.4"))
-        XCTAssertEqual(SyncQueue.rows(from: restored).first?.title, "Weging")
+        XCTAssertEqual(SyncQueue.rows(from: restored).first?.title, "Weigh-in")
     }
 
     func testTheWeightIsWrittenAsATenthAndNotAsABinaryApproximation() {

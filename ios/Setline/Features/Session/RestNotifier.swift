@@ -38,8 +38,8 @@ enum RestNotifier {
             guard interval > 1 else { return }
 
             let content = UNMutableNotificationContent()
-            content.title = "Rust voorbij"
-            content.body = "Tijd voor je volgende set."
+            content.title = "Rest done"
+            content.body = "Time for your next set."
             content.sound = .default
 
             center.removePendingNotificationRequests(withIdentifiers: [identifier])

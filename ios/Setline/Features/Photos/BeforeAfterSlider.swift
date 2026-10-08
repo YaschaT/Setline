@@ -62,9 +62,9 @@ struct BeforeAfterSlider: View {
         .clipShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
         .task(id: [before, after]) { await load() }
         .accessibilityElement()
-        .accessibilityLabel("Voor en na, \(beforeTag) tegenover \(afterTag)")
-        .accessibilityValue("\(Int((split * 100).rounded())) procent voor")
-        .accessibilityHint("Veeg omhoog of omlaag om de lijn te verschuiven")
+        .accessibilityLabel("Before and after, \(beforeTag) against \(afterTag)")
+        .accessibilityValue("\(Int((split * 100).rounded())) percent before")
+        .accessibilityHint("Swipe up or down to move the line")
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: split = Self.clamped(split + 0.1)

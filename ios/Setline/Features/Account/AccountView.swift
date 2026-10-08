@@ -49,7 +49,7 @@ struct AccountView: View {
                     syncBlock
                     section("Plan")
                     planRows
-                    section("Gegevens")
+                    section("Data")
                     exportRow
                     signOutRow
                 }
@@ -87,11 +87,11 @@ struct AccountView: View {
                 editingTargets = false
             }
         }
-        .confirmationDialog("Uitloggen?", isPresented: $confirmSignOut, titleVisibility: .visible) {
-            Button("Uitloggen", role: .destructive) { app.signOut() }
-            Button("Annuleer", role: .cancel) {}
+        .confirmationDialog("Sign out?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+            Button("Sign out", role: .destructive) { app.signOut() }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("\(changes(app.pendingChanges.count)) \(verb(app.pendingChanges.count, "staat", "staan")) alleen op dit toestel. \(verb(app.pendingChanges.count, "Hij blijft", "Ze blijven")) bewaard en synct zodra je opnieuw aanmeldt.")
+            Text("\(changes(app.pendingChanges.count)) \(verb(app.pendingChanges.count, "is", "are")) only on this phone. \(verb(app.pendingChanges.count, "It's", "They're")) kept and will sync when you sign in again.")
         }
     }
 
@@ -106,7 +106,7 @@ struct AccountView: View {
                 SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 64)
                     .overlay(alignment: .bottomTrailing) { cameraBadge }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(app.profileName ?? "Voeg je naam toe")
+                    Text(app.profileName ?? "Add your name")
                         .slLead(SL.Weight.semibold)
                         .foregroundStyle(app.profileName == nil ? SL.Signal.action : SL.Ink.primary)
                     if let email = app.session?.email {
@@ -126,37 +126,37 @@ struct AccountView: View {
         .overlay(alignment: .bottom) { SLHairline() }
         .padding(.bottom, SL.Space.s6)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Wijzig je naam of foto")
-        .confirmationDialog("Profiel", isPresented: $editingProfile, titleVisibility: .hidden) {
-            Button(app.profileName == nil ? "Naam toevoegen" : "Naam wijzigen") {
+        .accessibilityHint("Change your name or photo")
+        .confirmationDialog("Profile", isPresented: $editingProfile, titleVisibility: .hidden) {
+            Button(app.profileName == nil ? "Add name" : "Change name") {
                 afterDialog {
                     draftName = app.profileName ?? ""
                     namingProfile = true
                 }
             }
-            Button(app.profilePhoto == nil ? "Kies een foto" : "Kies een andere foto") {
+            Button(app.profilePhoto == nil ? "Choose a photo" : "Choose another photo") {
                 afterDialog { pickingPhoto = true }
             }
             if app.profilePhoto != nil {
-                Button("Verwijder foto", role: .destructive) { app.removeProfilePhoto() }
+                Button("Remove photo", role: .destructive) { app.removeProfilePhoto() }
             }
-            Button("Annuleer", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Je naam en foto blijven op dit toestel.")
+            Text("Your name and photo stay on this phone.")
         }
-        .alert("Je naam", isPresented: $namingProfile) {
-            TextField("Naam", text: $draftName)
+        .alert("Your name", isPresented: $namingProfile) {
+            TextField("Name", text: $draftName)
                 .textContentType(.name)
                 .textInputAutocapitalization(.words)
-            Button("Bewaar") { app.setProfileName(draftName) }
-            Button("Annuleer", role: .cancel) {}
+            Button("Save") { app.setProfileName(draftName) }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Training begroet je met je voornaam.")
+            Text("Training greets you by your first name.")
         }
-        .alert("Die foto lukte niet", isPresented: $photoFailed) {
+        .alert("That photo didn't work", isPresented: $photoFailed) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Ze kon niet worden gelezen of bewaard. Probeer een andere.")
+            Text("It couldn't be read or saved. Try another one.")
         }
         .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images, photoLibrary: .shared())
         .onChange(of: photoItem) { _, item in
@@ -210,7 +210,7 @@ struct AccountView: View {
             }
 
             if standing == .expired {
-                Button("Opnieuw aanmelden") { reauthenticating = true }
+                Button("Sign in again") { reauthenticating = true }
                     .buttonStyle(SLPrimaryButtonStyle())
             }
         }
@@ -252,11 +252,11 @@ struct AccountView: View {
 
     private var syncHeadline: String {
         switch standing {
-        case .synced: return "Bijgewerkt"
-        case .waiting: return "Wachten op sync"
+        case .synced: return "Up to date"
+        case .waiting: return "Waiting to sync"
         case .offline: return "Offline"
-        case .expired: return "Sessie verlopen"
-        case .never: return "Nog niet gesynct"
+        case .expired: return "Session expired"
+        case .never: return "Not synced yet"
         }
     }
 
@@ -265,20 +265,20 @@ struct AccountView: View {
         case .synced(let date):
             return "\(Self.relative.localizedString(for: date, relativeTo: Date())) · \(sessionsSafe)"
         case .waiting(let count):
-            return "\(changes(count)) op dit toestel"
+            return "\(changes(count)) on this phone"
         case .offline(let count):
             return count > 0
-                ? "Lokaal bewaard · \(changes(count)) \(verb(count, "wacht", "wachten"))"
-                : "Lokaal bewaard"
+                ? "Saved on this phone · \(changes(count)) waiting"
+                : "Saved on this phone"
         case .expired:
-            return "Je werk blijft op dit toestel"
+            return "Your work stays on this phone"
         case .never:
-            return "Je werk staat op dit toestel"
+            return "Your work is on this phone"
         }
     }
 
     private func changes(_ count: Int) -> String {
-        count == 1 ? "1 wijziging" : "\(count) wijzigingen"
+        count == 1 ? "1 change" : "\(count) changes"
     }
 
     /// One change stays; two stay. The count decides the verb, not the noun.
@@ -287,12 +287,12 @@ struct AccountView: View {
     }
 
     private var sessionsSafe: String {
-        summary.sessionCount == 1 ? "1 sessie" : "\(summary.sessionCount) sessies"
+        summary.sessionCount == 1 ? "1 session" : "\(summary.sessionCount) sessions"
     }
 
     private static let relative: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.unitsStyle = .full
         return formatter
     }()
@@ -301,22 +301,22 @@ struct AccountView: View {
 
     private var planRows: some View {
         VStack(spacing: 0) {
-            row("Schema", value: summary.planName) { choosingProgram = true }
+            row("Plan", value: summary.planName) { choosingProgram = true }
             if !summary.trainingDays.isEmpty {
-                row("Trainingsdagen", value: summary.trainingDays.joined(separator: " ")) { planningWeek = true }
+                row("Training days", value: summary.trainingDays.joined(separator: " ")) { planningWeek = true }
             }
             if let targets = summary.targets {
-                row("Dagdoelen", value: "\(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g") {
+                row("Daily targets", value: "\(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g") {
                     editingTargets = true
                 }
             }
             // The three rests by role read as a sentence for VoiceOver; on
             // screen the order (primair, samengesteld, isolatie) is enough.
-            row("Rusttimer", value: summary.rest.map(\.label).joined(separator: " · "))
-                .accessibilityLabel("Rusttimer: \(summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: ", "))")
+            row("Rest timer", value: summary.rest.map(\.label).joined(separator: " · "))
+                .accessibilityLabel("Rest timer: \(summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: ", "))")
             // 12R: "Per set vragen zet je aan in Account." This is where.
             Toggle(isOn: $rirEverySet) {
-                Text("RIR bij elke set").slBody()
+                Text("RIR on every set").slBody()
             }
             .tint(SL.Signal.action)
             .padding(.vertical, SL.Space.s3)
@@ -330,13 +330,13 @@ struct AccountView: View {
     private var exportRow: some View {
         Group {
             if exports.isEmpty {
-                row("Exporteer alles", detail: "Nog geen data om te exporteren")
+                row("Export everything", detail: "No data to export yet")
             } else {
                 ShareLink(items: exports) {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Exporteer alles").slBody()
-                            Text("CSV en JSON").slMeta().foregroundStyle(SL.Ink.secondary)
+                            Text("Export everything").slBody()
+                            Text("CSV and JSON").slMeta().foregroundStyle(SL.Ink.secondary)
                         }
                         Spacer(minLength: SL.Space.s4)
                         // 23: the design's `download` glyph at 18 beside
@@ -352,17 +352,16 @@ struct AccountView: View {
                 }
                 .buttonStyle(.plain)
                 .overlay(alignment: .bottom) { SLHairline() }
-                .accessibilityLabel("Exporteer alles. \(exportDetail)")
+                .accessibilityLabel("Export everything. \(exportDetail)")
             }
         }
     }
 
     private var exportDetail: String {
-        var parts = ["CSV en JSON", sessionsSafe.replacingOccurrences(of: " staan veilig", with: "")]
-        parts[1] = summary.sessionCount == 1 ? "1 sessie" : "\(summary.sessionCount) sessies"
-        parts.append(summary.loggedExerciseCount == 1 ? "1 oefening" : "\(summary.loggedExerciseCount) oefeningen")
+        var parts = ["CSV and JSON", sessionsSafe]
+        parts.append(summary.loggedExerciseCount == 1 ? "1 exercise" : "\(summary.loggedExerciseCount) exercises")
         if summary.weighInCount > 0 {
-            parts.append(summary.weighInCount == 1 ? "1 weging" : "\(summary.weighInCount) wegingen")
+            parts.append(summary.weighInCount == 1 ? "1 weigh-in" : "\(summary.weighInCount) weigh-ins")
         }
         return parts.joined(separator: " · ")
     }
@@ -372,7 +371,7 @@ struct AccountView: View {
             if app.hasPendingChanges { confirmSignOut = true } else { app.signOut() }
         } label: {
             HStack {
-                Text("Uitloggen").slBody()
+                Text("Sign out").slBody()
                 Spacer()
             }
             .padding(.vertical, SL.Space.s4)
@@ -422,7 +421,7 @@ struct AccountView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(change == nil ? [] : .isButton)
-        .accessibilityHint(change == nil ? "" : "Dubbeltik om te wijzigen")
+        .accessibilityHint(change == nil ? "" : "Double-tap to change")
         .onTapGesture { change?() }
     }
 

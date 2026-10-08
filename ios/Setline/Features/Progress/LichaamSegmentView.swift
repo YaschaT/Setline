@@ -62,17 +62,17 @@ struct LichaamSegmentView: View {
     /// offers a correction rather than a second row.
     private var weighInButton: some View {
         Button { weighing = true } label: {
-            Text(today == nil ? "Weeg jezelf" : "Weging van vandaag wijzigen")
+            Text(today == nil ? "Weigh in" : "Edit today's weigh-in")
         }
         .buttonStyle(SLOutlineButtonStyle())
         .accessibilityHint(today == nil
-            ? "Opent het veld om je gewicht van vandaag te bewaren"
-            : "Opent je weging van vandaag om het gewicht bij te werken")
+            ? "Opens the field to save today's weight"
+            : "Opens today's weigh-in to update the weight")
     }
 
     private func header(_ latest: BodyProgress.Entry) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("LICHAAMSGEWICHT")
+            Text("BODY WEIGHT")
                 .slMeta(SL.Weight.medium)
                 .foregroundStyle(SL.Ink.tertiary)
             SLValueRow {
@@ -82,7 +82,7 @@ struct LichaamSegmentView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                 if let change = progress.change {
-                    Text("\(app.display.signedDelta(change.value)) / \(change.weeks) weken")
+                    Text("\(app.display.signedDelta(change.value)) / \(change.weeks) weeks")
                         .slLead()
                         .foregroundStyle(SL.Signal.recovery)
                 }
@@ -90,7 +90,7 @@ struct LichaamSegmentView: View {
             .padding(.top, SL.Space.s2)
             .accessibilityElement(children: .combine)
 
-            Text("Laatste weging · \(app.display.shortDate(latest.date))")
+            Text("Last weigh-in · \(app.display.shortDate(latest.date))")
                 .slMeta()
                 .foregroundStyle(SL.Ink.tertiary)
                 .padding(.top, SL.Space.s1)
@@ -102,8 +102,8 @@ struct LichaamSegmentView: View {
         VStack(alignment: .leading, spacing: 0) {
             Chart(progress.points) { entry in
                 LineMark(
-                    x: .value("Datum", entry.date),
-                    y: .value("Gewicht", (entry.weightKg as NSDecimalNumber).doubleValue)
+                    x: .value("Date", entry.date),
+                    y: .value("Weight", (entry.weightKg as NSDecimalNumber).doubleValue)
                 )
                 .interpolationMethod(.linear)
                 .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -120,7 +120,7 @@ struct LichaamSegmentView: View {
                     SLHairline()
                 }
             }
-            .accessibilityLabel("Verloop van je gewicht over \(progress.points.count) wegingen")
+            .accessibilityLabel("Your weight over \(progress.points.count) weigh-ins")
 
             let labels = chartLabels
             HStack(spacing: 0) {
@@ -139,7 +139,7 @@ struct LichaamSegmentView: View {
 
     private var entries: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("WEGINGEN")
+            Text("WEIGH-INS")
                 .slMeta(SL.Weight.medium)
                 .foregroundStyle(SL.Ink.tertiary)
                 .padding(.bottom, SL.Space.s1)
@@ -192,8 +192,8 @@ struct LichaamSegmentView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            Text("Nog geen wegingen").slLead()
-            Text("Weeg jezelf 's ochtends, nuchter. Vanaf de tweede weging staat je verloop hier.")
+            Text("No weigh-ins yet").slLead()
+            Text("Weigh yourself in the morning, before eating. From the second weigh-in, your trend shows here.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .foregroundStyle(SL.Ink.secondary)

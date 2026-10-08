@@ -258,7 +258,7 @@ public enum Agenda {
         /// "Week 6 · deze week", or the week with the Monday it starts on.
         public var label: String {
             guard let first = days.first else { return "Week \(number)" }
-            return isCurrent ? "Week \(number) · deze week" : "Week \(number) · \(shortDate(first.date))"
+            return isCurrent ? "Week \(number) · this week" : "Week \(number) · \(shortDate(first.date))"
         }
     }
 
@@ -342,11 +342,11 @@ public enum Agenda {
             to: calendar.startOfDay(for: date)
         ).day ?? 0
         switch days {
-        case 0: return "vandaag"
-        case 1: return "morgen"
-        case 2: return "overmorgen"
-        case -1: return "gisteren"
-        case -2: return "eergisteren"
+        case 0: return "today"
+        case 1: return "tomorrow"
+        case 2: return "the day after tomorrow"
+        case -1: return "yesterday"
+        case -2: return "two days ago"
         default:
             let thisWeek = Schedule.mondayFirstWeek(containing: now, calendar: calendar)
             if thisWeek.contains(where: { calendar.isDate($0, inSameDayAs: date) }) {
@@ -359,8 +359,8 @@ public enum Agenda {
     /// 39a's supporting line: "Volgende training morgen", or that nothing is
     /// planned at all.
     public static func restLine(next: AgendaDay?, now: Date = Date(), calendar: Calendar = .current) -> String {
-        guard let next else { return "Geen training gepland" }
-        return "Volgende training \(when(next.date, from: now, calendar: calendar))"
+        guard let next else { return "No training planned" }
+        return "Next training \(when(next.date, from: now, calendar: calendar))"
     }
 
     /// 39a's next-session row, right side: "vr 11 sep · ±55 min". The minutes
@@ -372,24 +372,24 @@ public enum Agenda {
 
     // MARK: - What a week says about itself
 
-    /// "4 sessies gelogd", "geen sessies gelogd", or where today is
+    /// "4 sessies gelogd", "no sessions logged", or where today is
     /// (34a: "vandaag maandag 7 sep").
     public static func summary(of week: [AgendaDay], now: Date = Date(), calendar: Calendar = .current) -> String {
         if let today = week.first(where: \.isToday) {
-            return "vandaag \(WeekPlan.fullWeekday(today.date).lowercased()) \(shortDate(today.date))"
+            return "today, \(WeekPlan.fullWeekday(today.date)) \(shortDate(today.date))"
         }
         let count = week.filter(\.isLogged).count
         switch count {
-        case 0: return "geen sessies gelogd"
-        case 1: return "1 sessie gelogd"
-        default: return "\(count) sessies gelogd"
+        case 0: return "no sessions logged"
+        case 1: return "1 session logged"
+        default: return "\(count) sessions logged"
         }
     }
 
     /// "7 sep"
     static func shortDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "d MMM"
         return formatter.string(from: date).replacingOccurrences(of: ".", with: "")
     }

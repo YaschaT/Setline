@@ -75,7 +75,7 @@ final class SessionRunner {
     /// "Beperk de beweging" promise, kept.
     var editingStartsPartial = false
 
-    private let display = NumberDisplay.dutch
+    private let display = NumberDisplay.english
     private let exerciseNamed: @MainActor (String) -> Exercise
     private let historyFor: @MainActor (PlannedExercise) -> ExerciseHistory
     /// Exercises handed to a swap directly. A custom exercise is saved to the
@@ -763,7 +763,7 @@ final class SessionRunner {
     /// "Opwarming · 3 sets" for the collapsed affordance.
     func collapsedWarmupLabel(slotIndex: Int) -> String {
         let count = warmupLadder(slotIndex: slotIndex).count
-        return "Opwarming · \(count) \(count == 1 ? "set" : "sets")"
+        return "Warm-up · \(count) \(count == 1 ? "set" : "sets")"
     }
 
     func showWarmup(slotIndex: Int) {
@@ -774,7 +774,7 @@ final class SessionRunner {
         reopenedWarmups.remove(slots[slotIndex].planned.exerciseID)
     }
 
-    func topSetLabel(slotIndex: Int, formatter: NumberDisplay = .dutch) -> String? {
+    func topSetLabel(slotIndex: Int, formatter: NumberDisplay = .english) -> String? {
         let slot = slots[slotIndex]
         guard let topSet = slot.sets.compactMap(\.weightKg).max() else { return nil }
         let reps = slot.planned.sets.map(\.repRange.upperBound).min() ?? 0
@@ -790,7 +790,7 @@ final class SessionRunner {
         let prescription = RestPrescription.forRole(planned.role)
         let timer = RestTimerState(targetSeconds: prescription.defaultSeconds, startedAt: Date())
         restTimer = timer
-        restTitle = "Rust · \(Self.roleLabel(planned.role)) \(prescription.displayLabel)"
+        restTitle = "Rest · \(Self.roleLabel(planned.role)) \(prescription.displayLabel)"
         restCompletionSignalled = false
         isTimerExpanded = false
         RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
@@ -887,7 +887,7 @@ final class SessionRunner {
         let sets = last.sets.filter(\.countsTowardVolume)
         guard let weight = sets.first?.weightKg else { return nil }
         let reps = sets.map { "\($0.reps)" }.joined(separator: " · ")
-        return ("Vorige · \(display.shortDate(last.date))", "\(display.kg(weight)) × \(reps)")
+        return ("Last · \(display.shortDate(last.date))", "\(display.kg(weight)) × \(reps)")
     }
 
     /// The card's head: "Vorige sessie · 2 sep" and what was lifted then —
@@ -919,7 +919,7 @@ final class SessionRunner {
     }
 
     var columnHeaderDate: String {
-        guard let reference = slots.compactMap({ $0.history.mostRecent?.date }).max() else { return "Vorige" }
+        guard let reference = slots.compactMap({ $0.history.mostRecent?.date }).max() else { return "Last" }
         return "vs \(display.shortDate(reference))"
     }
 

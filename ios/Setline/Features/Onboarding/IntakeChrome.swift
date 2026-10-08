@@ -28,7 +28,7 @@ struct IntakeStep<Content: View>: View {
                     .foregroundStyle(SL.Ink.tertiary)
                 Spacer()
                 Button { onSkip() } label: {
-                    Text("Overslaan")
+                    Text("Skip")
                         .slBody(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.secondary)
                         .slHitTarget()
@@ -101,7 +101,7 @@ struct IntakeStep<Content: View>: View {
         }
         .frame(height: 2)
         .accessibilityElement()
-        .accessibilityLabel("Stap \(step) van \(total)")
+        .accessibilityLabel("Step \(step) of \(total)")
     }
 }
 

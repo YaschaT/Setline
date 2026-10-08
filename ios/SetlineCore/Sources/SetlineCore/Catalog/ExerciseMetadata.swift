@@ -918,7 +918,7 @@ enum ExerciseMetadata {
         "Flat bench press": "flat-bench",
         "Hack squat": "hack-squat",
         "Heel-elevated Smith squat": "smith-squat",
-        "Incline chest-pressmachine": "incline-machine",
+        "Incline chest press machine": "incline-machine",
         "Incline dumbbell curl": "incline-db-curl",
         "Incline dumbbell press": "db-incline",
         "Leg press": "leg-press",

@@ -8,7 +8,7 @@ import Foundation
 /// three-session reference gate is still closed, and `hasReference` is what
 /// every record and proposal checks.
 public struct CalibrationPrompt: Hashable, Sendable {
-    /// "Geen historiek", or the origin exercise once swapping exists (§12).
+    /// "No history", or the origin exercise once swapping exists (§12).
     public let contextLabel: String
     public let headline: String
     public let body: String
@@ -45,13 +45,13 @@ public enum Calibration {
         // The label joins the header's eyebrow ("Gewisseld van squat · geen
         // historiek"), so the card itself opens on the set, as artboard 28
         // draws it.
-        let context = "Geen historiek"
+        let context = "No history"
         let body = origin.map {
-            "SETLINE stelt hier geen gewicht voor: \(exercise.name.lowercased()) is een andere oefening dan \($0). Je sets, reps en RIR blijven behouden."
-        } ?? "SETLINE stelt hier geen gewicht voor: er is nog niets om mee te vergelijken. Je sets, reps en RIR blijven behouden."
+            "SETLINE suggests no weight here: \(exercise.name.lowercased()) is a different exercise from \($0). Your sets, reps and RIR are kept."
+        } ?? "SETLINE suggests no weight here: there's nothing to compare with yet. Your sets, reps and RIR are kept."
         return CalibrationPrompt(
             contextLabel: context,
-            headline: "Kies een gewicht waarmee je \(targetReps) reps haalt met \(targetRIR) in reserve.",
+            headline: "Pick a weight you can lift for \(targetReps) reps with \(targetRIR) in reserve.",
             body: body,
             targetReps: targetReps,
             targetRIR: targetRIR
@@ -78,7 +78,7 @@ public enum Calibration {
     /// "Gekalibreerd op 80 kg × 8 · RIR 2"
     public static func summary(
         for set: LoggedSet,
-        formatter: NumberDisplay = .dutch
+        formatter: NumberDisplay = .english
     ) -> String? {
         guard let weight = set.weightKg, set.reps > 0 else { return nil }
         var text = "\(formatter.kg(weight)) × \(set.reps)"

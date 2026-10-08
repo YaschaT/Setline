@@ -36,7 +36,7 @@ struct SignInView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if let onBack {
                     Button(action: onBack) {
-                        Text("Terug")
+                        Text("Back")
                             .slBody(SL.Weight.medium)
                             .foregroundStyle(SL.Ink.secondary)
                             .frame(minHeight: SL.Space.hitMin)
@@ -46,12 +46,12 @@ struct SignInView: View {
                     .padding(.bottom, SL.Space.s6)
                 }
 
-                Text(isRegistering ? "Registreren" : "Aanmelden")
+                Text(isRegistering ? "Create account" : "Sign in")
                     .slDisplay()
                     .foregroundStyle(SL.Ink.primary)
                     .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
 
-                Text("Je data blijft van jou en is altijd te exporteren.")
+                Text("Your data stays yours and can always be exported.")
                     .slBody()
                     .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                     .foregroundStyle(SL.Ink.secondary)
@@ -67,7 +67,7 @@ struct SignInView: View {
                     Button {
                         Task { await app.sendPasswordReset(email: email) }
                     } label: {
-                        Text("Wachtwoord vergeten")
+                        Text("Forgot password")
                             .slMeta()
                             .foregroundStyle(SL.Ink.secondary)
                             .frame(minHeight: SL.Space.hitMin, alignment: .trailing)
@@ -87,7 +87,7 @@ struct SignInView: View {
                 }
 
                 if case .notConfigured = app.sync {
-                    Text("Accounts zijn nog niet aangesloten. Zet SUPABASE_URL en SUPABASE_ANON_KEY in Setline.xcconfig.")
+                    Text("Accounts aren't connected yet. Set SUPABASE_URL and SUPABASE_ANON_KEY in Setline.xcconfig.")
                         .slMeta()
                         .foregroundStyle(SL.Signal.attention)
                         .padding(.top, SL.Space.s3)
@@ -104,7 +104,7 @@ struct SignInView: View {
                         }
                     }
                 } label: {
-                    Text(isRegistering ? "Registreren" : "Aanmelden")
+                    Text(isRegistering ? "Create account" : "Sign in")
                 }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .disabled(!canSubmit)
@@ -112,7 +112,7 @@ struct SignInView: View {
                 Button {
                     isRegistering.toggle()
                 } label: {
-                    Text(isRegistering ? "Ik heb al een account" : "Nog geen account · registreren")
+                    Text(isRegistering ? "I already have an account" : "No account yet · create one")
                         .slBody(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.secondary)
                         .frame(maxWidth: .infinity)
@@ -149,7 +149,7 @@ struct SignInView: View {
             )
             SLHairline().padding(.horizontal, 14)
             field(
-                label: "Wachtwoord",
+                label: "Password",
                 text: $password,
                 isSecure: true,
                 field: .password

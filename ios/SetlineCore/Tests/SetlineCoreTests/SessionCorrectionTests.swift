@@ -343,7 +343,7 @@ final class SessionCorrectionTests: XCTestCase {
     func testAQueuedCorrectionSaysWhatIsWaiting() {
         let rows = SyncQueue.rows(from: [.correct(sessionID: "s-2", [correction(), correction(setIndex: 2)])])
         XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows.first?.title, "Correctie")
-        XCTAssertEqual(rows.first?.detail, "2 sets in een eerdere sessie")
+        XCTAssertEqual(rows.first?.title, "Correction")
+        XCTAssertEqual(rows.first?.detail, "2 sets in an earlier session")
     }
 }

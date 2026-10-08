@@ -11,7 +11,7 @@ import SetlineCore
 /// It reads dates. A row opens what its day holds — the results of a session
 /// that was saved, the exercises of one that is planned, the choice of what a
 /// rest day should become — and nothing is written until that choice is made
-/// in "Wijzig deze dag".
+/// in "Change this day".
 struct AgendaSheet: View {
     @Environment(AppState.self) private var app
 
@@ -28,7 +28,7 @@ struct AgendaSheet: View {
     @State private var showsMonth = false
     @State private var openedSession: OpenedSession?
     @State private var planning: PlannedDate?
-    /// Holding a row opens "Wijzig deze dag"; the tap that ends the hold must
+    /// Holding a row opens "Change this day"; the tap that ends the hold must
     /// not open the row as well.
     @State private var heldRow = false
 
@@ -50,7 +50,7 @@ struct AgendaSheet: View {
     }
 
     var body: some View {
-        SLSheet(title: "Agenda", subtitle: "Planning en resultaten", onClose: onClose) {
+        SLSheet(title: "Agenda", subtitle: "Planning and results", onClose: onClose) {
             VStack(alignment: .leading, spacing: SL.Space.s3) {
                 stepper
                 tools
@@ -62,7 +62,7 @@ struct AgendaSheet: View {
                     weekList
                     if !previousSessions.isEmpty {
                         SLSectionHead(
-                            title: isThisWeek ? "Vorige week" : "Week ervoor",
+                            title: isThisWeek ? "Last week" : "Week before",
                             meta: WeekPlan.range(previousWeekDates)
                         )
                         .padding(.top, SL.Space.s1)
@@ -127,7 +127,7 @@ struct AgendaSheet: View {
     /// The week, or with the month open the month, and a step either side.
     private var stepper: some View {
         HStack(spacing: SL.Space.s2) {
-            step(.chevronLeft, label: showsMonth ? "Vorige maand" : "Vorige week", by: -1)
+            step(.chevronLeft, label: showsMonth ? "Previous month" : "Previous week", by: -1)
             VStack(spacing: 0) {
                 Text(showsMonth ? monthLabel : weekLabel)
                     .slLead()
@@ -143,7 +143,7 @@ struct AgendaSheet: View {
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            step(.chevronRight, label: showsMonth ? "Volgende maand" : "Volgende week", by: 1)
+            step(.chevronRight, label: showsMonth ? "Next month" : "Next week", by: 1)
         }
     }
 
@@ -168,7 +168,7 @@ struct AgendaSheet: View {
             if showsMonth ? !monthHoldsToday : !isThisWeek {
                 Button {
                     anchor = Date()
-                } label: { Text(showsMonth ? "Naar deze maand" : "Naar deze week") }
+                } label: { Text(showsMonth ? "This month" : "This week") }
                     .buttonStyle(SLOutlineButtonStyle())
             }
             Button {
@@ -176,11 +176,11 @@ struct AgendaSheet: View {
             } label: {
                 HStack(spacing: 6) {
                     SLGlyph(name: .calendar, size: 16)
-                    Text(showsMonth ? "Week tonen" : "Hele maand")
+                    Text(showsMonth ? "Show week" : "Whole month")
                 }
             }
             .buttonStyle(SLOutlineButtonStyle())
-            .accessibilityHint(showsMonth ? "Toont weer één week" : "Toont een maand om een datum te kiezen")
+            .accessibilityHint(showsMonth ? "Shows one week again" : "Shows a month to pick a date")
         }
     }
 
@@ -188,7 +188,7 @@ struct AgendaSheet: View {
 
     private var monthLabel: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: anchor).capitalized
     }
@@ -285,11 +285,11 @@ struct AgendaSheet: View {
         let trained = week.filter { !$0.isRest }.count
         let done = week.filter(\.isLogged).count
         let isAhead = week.allSatisfy { !$0.isToday && !$0.isPast }
-        let count = isAhead ? "\(trained)" : "\(done) van \(trained)"
-        let noun = trained == 1 && isAhead ? "training" : "trainingen"
+        let count = isAhead ? "\(trained)" : "\(done) of \(trained)"
+        let noun = trained == 1 && isAhead ? "workout" : "workouts"
         let rest = isAhead
-            ? " \(noun) gepland \(weekLabel.lowercased())"
-            : " \(noun) gedaan \(weekLabel.lowercased())"
+            ? " \(noun) planned \(weekLabel.lowercased())"
+            : " \(noun) done \(weekLabel.lowercased())"
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             (Text(count).font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
                 + Text(rest).font(.sl(SL.TypeSize.body, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
@@ -370,20 +370,20 @@ struct AgendaSheet: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(StripDay.spokenLabel(day))
         .accessibilityHint(hint(for: day))
-        .accessibilityAction(named: "Wijzig deze dag") { planning = PlannedDate(date: day.date) }
+        .accessibilityAction(named: "Change this day") { planning = PlannedDate(date: day.date) }
     }
 
     @ViewBuilder
     private func rowMain(_ day: AgendaDay) -> some View {
         switch day.content {
         case .session(let session):
-            rowText("Voltooid", "\(session.dayLabel) · \(setsLine(session))")
+            rowText("Done", "\(session.dayLabel) · \(setsLine(session))")
         case .planned(let workout):
             rowText(workout.short, plannedLine(workout))
         case .missed(let workout):
-            rowText(workout.short, "Niet gelogd · \(WeekPlan.sets(of: workout)) sets")
+            rowText(workout.short, "Not logged · \(WeekPlan.sets(of: workout)) sets")
         case .rest:
-            Text("Rust")
+            Text("Rest")
                 .slBody()
                 .foregroundStyle(SL.Ink.secondary)
         }
@@ -414,16 +414,16 @@ struct AgendaSheet: View {
     /// "18 van 18 sets", or the share older sessions stored instead.
     private func setsLine(_ session: TrainingSession) -> String {
         if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
-            return "\(completed) van \(planned) sets"
+            return "\(completed) of \(planned) sets"
         }
-        return "\(session.completion)% afgerond"
+        return "\(session.completion)% done"
     }
 
     private func hint(for day: AgendaDay) -> String {
         switch day.content {
-        case .session: return "Dubbeltik om de resultaten te bekijken"
-        case .planned, .missed: return "Dubbeltik om de oefeningen te bekijken. Er start niets."
-        case .rest: return "Dubbeltik om deze dag te wijzigen"
+        case .session: return "Double-tap to view the results"
+        case .planned, .missed: return "Double-tap to view the exercises. Nothing starts."
+        case .rest: return "Double-tap to change this day"
         }
     }
 
@@ -483,7 +483,7 @@ struct AgendaSheet: View {
                 .buttonStyle(SLRowButtonStyle())
                 .overlay(alignment: .top) { if index > 0 { SLHairline() } }
                 .accessibilityElement(children: .combine)
-                .accessibilityHint("Dubbeltik om de resultaten te bekijken")
+                .accessibilityHint("Double-tap to view the results")
             }
         }
         .slBorderBox()
@@ -493,6 +493,6 @@ struct AgendaSheet: View {
     /// "Beste set Bankdrukken 92,5 kg × 5"
     private func bestLine(_ session: TrainingSession) -> String {
         guard let best = ProgressOverview.best(in: session) else { return setsLine(session) }
-        return "Beste set \(best.name) \(app.display.kg(best.weightKg)) × \(best.reps)"
+        return "Best set \(best.name) \(app.display.kg(best.weightKg)) × \(best.reps)"
     }
 }

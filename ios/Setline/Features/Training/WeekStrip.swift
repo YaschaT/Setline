@@ -28,9 +28,9 @@ struct WeekStrip: View {
                     .accessibilityLabel(StripDay.spokenLabel(day))
                     .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
                     .accessibilityHint(isSelected
-                        ? "Houd ingedrukt om deze dag te wijzigen"
-                        : "Dubbeltik om deze dag te bekijken, houd ingedrukt om hem te wijzigen")
-                    .accessibilityAction(named: "Wijzig deze dag") { onPlan(day) }
+                        ? "Press and hold to change this day"
+                        : "Double-tap to view this day, press and hold to change it")
+                    .accessibilityAction(named: "Change this day") { onPlan(day) }
             }
         }
     }
@@ -81,11 +81,11 @@ struct StripDay: View {
     /// Spoken as the date, today, what it holds and how it got there.
     static func spokenLabel(_ day: AgendaDay) -> String {
         var parts = ["\(WeekPlan.fullWeekday(day.date)) \(spokenDate(day.date))"]
-        if day.isToday { parts.append("vandaag") }
+        if day.isToday { parts.append("today") }
         switch day.content {
-        case .session(let session): parts.append("\(session.dayLabel), gelogd")
+        case .session(let session): parts.append("\(session.dayLabel), logged")
         case .planned(let workout): parts.append("\(workout.short), gepland")
-        case .missed(let workout): parts.append("\(workout.short), niet gelogd")
+        case .missed(let workout): parts.append("\(workout.short), not logged")
         case .rest: parts.append("rustdag")
         }
         if day.isMoved || day.isOverridden { parts.append("door jou gezet") }
@@ -95,7 +95,7 @@ struct StripDay: View {
     /// "10 september"
     private static func spokenDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "d MMMM"
         return formatter.string(from: date)
     }

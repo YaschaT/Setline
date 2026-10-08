@@ -56,9 +56,9 @@ final class DayPlanTests: XCTestCase {
         let sheet = make(10)
         XCTAssertFalse(sheet.isLocked)
         XCTAssertFalse(sheet.isOverridden)
-        XCTAssertEqual(sheet.title, "Donderdag 10 sep")
-        XCTAssertEqual(sheet.state, "Nu: rustdag · volgens je plan")
-        XCTAssertEqual(sheet.standardTitle, "rustdag")
+        XCTAssertEqual(sheet.title, "Thursday 10 Sep")
+        XCTAssertEqual(sheet.state, "Now: rest day · from your plan")
+        XCTAssertEqual(sheet.standardTitle, "rest day")
 
         XCTAssertEqual(
             sheet.options.map(\.id),
@@ -71,12 +71,12 @@ final class DayPlanTests: XCTestCase {
     func testASessionAlreadyElsewhereThisWeekSaysSo() throws {
         let sheet = make(10)
         let lower = try option(sheet, "session-lower")
-        XCTAssertEqual(lower.hint, "ook vr 11", "Lower already falls on Friday")
+        XCTAssertEqual(lower.hint, "also Fr 11", "Lower already falls on Friday")
         XCTAssertEqual(
             sheet.note(for: lower),
-            "Lower staat dan twee keer in deze week; vr 11 blijft staan. Dit verandert alleen deze datum, niet de oefeningen in Lower."
+            "Lower will then be in this week twice; Fr 11 stays. This only changes this date, not the exercises in Lower."
         )
-        XCTAssertEqual(sheet.confirmTitle(for: lower), "Zet Lower op do 10")
+        XCTAssertEqual(sheet.confirmTitle(for: lower), "Put Lower on Th 10")
     }
 
     func testAssigningADateWritesThatDateAndNothingElse() throws {
@@ -119,11 +119,11 @@ final class DayPlanTests: XCTestCase {
     func testAChangedDateOffersTheWayBackFirst() throws {
         let sheet = make(11, overrides: ["2026-09-11": "pull"])
         XCTAssertTrue(sheet.isOverridden)
-        XCTAssertEqual(sheet.state, "Nu: Pull · door jou gezet")
+        XCTAssertEqual(sheet.state, "Now: Pull · set by you")
         XCTAssertEqual(sheet.options.first?.kind, .standard)
-        XCTAssertEqual(sheet.options.first?.title, "Terug naar standaard")
+        XCTAssertEqual(sheet.options.first?.title, "Back to standard")
         XCTAssertEqual(sheet.options.first?.hint, "Lower", "what it goes back to")
-        XCTAssertEqual(sheet.confirmTitle(for: try XCTUnwrap(sheet.options.first)), "Zet terug naar Lower")
+        XCTAssertEqual(sheet.confirmTitle(for: try XCTUnwrap(sheet.options.first)), "Reset to Lower")
     }
 
     func testGoingBackToStandardRemovesTheChangeItself() throws {
@@ -146,7 +146,7 @@ final class DayPlanTests: XCTestCase {
     func testALoggedDateIsLockedAndPointsAtItsSession() {
         let sheet = make(9, sessions: [session(on: 9, dayID: "legs", label: "Legs")], now: 10)
         XCTAssertTrue(sheet.isLocked)
-        XCTAssertEqual(sheet.state, "Legs · gelogd · 54 min")
+        XCTAssertEqual(sheet.state, "Legs · logged · 54 min")
         XCTAssertEqual(sheet.session?.id, "s-9")
         XCTAssertTrue(sheet.options.isEmpty, "nothing to assign")
     }
@@ -191,9 +191,9 @@ final class DayPlanTests: XCTestCase {
         XCTAssertEqual(weeks.count, 4)
         XCTAssertEqual(weeks.map { $0.days.first?.dayNumber }, [31, 7, 14, 21])
         XCTAssertEqual(weeks.filter(\.isCurrent).count, 1)
-        XCTAssertEqual(weeks[1].label, "Week 2 · deze week")
-        XCTAssertEqual(weeks[0].label, "Week 1 · 31 aug")
-        XCTAssertEqual(weeks[3].label, "Week 4 · 21 sep")
+        XCTAssertEqual(weeks[1].label, "Week 2 · this week")
+        XCTAssertEqual(weeks[0].label, "Week 1 · 31 Aug")
+        XCTAssertEqual(weeks[3].label, "Week 4 · 21 Sep")
     }
 
     func testAWeekIsNumberedTheSameFromEveryDayInsideIt() {

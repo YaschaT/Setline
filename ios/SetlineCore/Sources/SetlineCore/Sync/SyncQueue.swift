@@ -20,7 +20,7 @@ public enum SyncQueue {
 
     public static func rows(
         from changes: [StateChange],
-        display: NumberDisplay = .dutch,
+        display: NumberDisplay = .english,
         calendar: Calendar = .current
     ) -> [Row] {
         var rows: [Row] = []
@@ -51,59 +51,59 @@ public enum SyncQueue {
                 // is already in the account, and what is queued is the change
                 // to it.
                 let sets = corrections.count == 1 ? "1 set" : "\(corrections.count) sets"
-                rows.append(Row(title: "Correctie", detail: "\(sets) in een eerdere sessie"))
+                rows.append(Row(title: "Correction", detail: "\(sets) in an earlier session"))
 
             case .removeSession:
-                rows.append(Row(title: "Sessie verwijderd", detail: "Logboek"))
+                rows.append(Row(title: "Session deleted", detail: "Log"))
 
             case .removeSessionSets(_, let removals):
                 let sets = removals.count == 1 ? "1 set" : "\(removals.count) sets"
-                rows.append(Row(title: "Correctie", detail: "\(sets) verwijderd uit een eerdere sessie"))
+                rows.append(Row(title: "Correction", detail: "\(sets) removed from an earlier session"))
 
             case .setScheduleDay, .removeScheduleOverride:
                 weekDates += 1
                 let row = Row(
-                    title: "Weekplanning",
-                    detail: weekDates == 1 ? "1 dag gewijzigd" : "\(weekDates) dagen gewijzigd"
+                    title: "Week plan",
+                    detail: weekDates == 1 ? "1 day changed" : "\(weekDates) days changed"
                 )
                 if let index = weekRow { rows[index] = row } else { weekRow = rows.count; rows.append(row) }
 
             case .upsertNutritionEntry(let json):
                 let name = json["name"]?.stringValue ?? "Maaltijd"
                 let kcal = json["calories"]?.decimalValue.map { display.kcal($0) } ?? ""
-                rows.append(Row(title: name, detail: kcal.isEmpty ? "Voeding" : "Voeding · \(kcal)"))
+                rows.append(Row(title: name, detail: kcal.isEmpty ? "Nutrition" : "Nutrition · \(kcal)"))
 
             case .removeNutritionEntry:
-                rows.append(Row(title: "Maaltijd verwijderd", detail: "Voeding"))
+                rows.append(Row(title: "Meal deleted", detail: "Nutrition"))
 
             case .upsertMetric(let json):
                 let weight = json["weight"]?.decimalValue.map { display.kg($0) } ?? ""
-                rows.append(Row(title: "Weging", detail: weight.isEmpty ? "Lichaam" : "Lichaam · \(weight)"))
+                rows.append(Row(title: "Weigh-in", detail: weight.isEmpty ? "Body" : "Body · \(weight)"))
 
             case .setTarget:
-                if !rows.contains(where: { $0.title == "Dagdoelen" }) {
-                    rows.append(Row(title: "Dagdoelen", detail: "Gewijzigd"))
+                if !rows.contains(where: { $0.title == "Daily targets" }) {
+                    rows.append(Row(title: "Daily targets", detail: "Changed"))
                 }
 
             case .setProgram:
-                rows.append(Row(title: "Programma", detail: "Gewijzigd"))
+                rows.append(Row(title: "Program", detail: "Changed"))
 
             case .setExperience, .setEquipment:
                 if !rows.contains(where: { $0.title == "Intake" }) {
-                    rows.append(Row(title: "Intake", detail: "Je antwoorden"))
+                    rows.append(Row(title: "Intake", detail: "Your answers"))
                 }
 
             case .setDeload:
-                rows.append(Row(title: "Lichtere week", detail: "Voorstel toegepast"))
+                rows.append(Row(title: "Lighter week", detail: "Suggestion applied"))
 
             case .addPainFlag, .removePainFlag:
-                if !rows.contains(where: { $0.title == "Ik voel iets" }) {
-                    rows.append(Row(title: "Ik voel iets", detail: "Wat je invulde"))
+                if !rows.contains(where: { $0.title == "Something hurts" }) {
+                    rows.append(Row(title: "Something hurts", detail: "What you filled in"))
                 }
 
             case .addProgramReplacement, .removeProgramReplacement, .addCustomExercise:
                 if !rows.contains(where: { $0.title == "Oefeningen" }) {
-                    rows.append(Row(title: "Oefeningen", detail: "Vervangen of toegevoegd"))
+                    rows.append(Row(title: "Exercises", detail: "Replaced or added"))
                 }
 
             // A paused workout, a hidden ramp and a starred exercise are

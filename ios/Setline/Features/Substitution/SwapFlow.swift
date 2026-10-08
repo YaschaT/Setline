@@ -130,7 +130,7 @@ struct SwapSheet: View {
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if step == .painQuestions {
-                Button { step = .painOptions(painRegion, painTiming) } label: { Text("Verder") }
+                Button { step = .painOptions(painRegion, painTiming) } label: { Text("Continue") }
                     .buttonStyle(SLPrimaryButtonStyle())
                     .padding(.horizontal, SL.Space.gutterSession)
                     .padding(.top, SL.Space.s3)
@@ -197,7 +197,7 @@ struct SwapSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             // 15R: the name at 34 with the way out on its first line.
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                Text("\(exercise.name) wisselen")
+                Text("Swap \(exercise.name)")
                     .slDisplay()
                     .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                     .foregroundStyle(SL.Ink.primary)
@@ -205,7 +205,7 @@ struct SwapSheet: View {
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: SL.Space.s2)
                 Button(action: onClose) {
-                    Text("Sluiten")
+                    Text("Close")
                         .slBody()
                         .foregroundStyle(SL.Ink.secondary)
                         .fixedSize()
@@ -214,7 +214,7 @@ struct SwapSheet: View {
                 .buttonStyle(.plain)
             }
 
-            Text("Behoud sets, reps en RIR — reset het gewicht.")
+            Text("Keep sets, reps and RIR — reset the weight.")
                 .slMeta()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                 .foregroundStyle(SL.Ink.secondary)
@@ -227,7 +227,7 @@ struct SwapSheet: View {
             painRows
 
             if hasLoggedSets {
-                Text("Wat je al logde voor \(exercise.name.lowercased()) blijft bewaard onder die oefening.")
+                Text("What you already logged for \(exercise.name.lowercased()) stays under that exercise.")
                     .slMeta()
                     .foregroundStyle(SL.Ink.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -235,7 +235,7 @@ struct SwapSheet: View {
             }
 
             if let origin {
-                Text("Nu een wissel van \(origin.name.lowercased()).")
+                Text("Currently swapped from \(origin.name.lowercased()).")
                     .slMeta()
                     .foregroundStyle(SL.Ink.tertiary)
                     .padding(.top, 6)
@@ -248,7 +248,7 @@ struct SwapSheet: View {
             }
 
             if !hasOpenSets {
-                Text("Alle sets van \(exercise.name.lowercased()) zijn gelogd. Een wissel geldt alleen voor sets die nog open staan.")
+                Text("All sets of \(exercise.name.lowercased()) are logged. A swap only applies to sets still open.")
                     .slBody()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -284,10 +284,10 @@ struct SwapSheet: View {
     /// when on, the dashed "not on" chip when off. 15R draws the busy bench as
     /// the reason for the sheet; this is how the list learns it.
     private var occupiedToggle: some View {
-        SLChip(title: "Toestel of rek is bezet", look: occupied ? .selected : .off) {
+        SLChip(title: "Machine or rack is taken", look: occupied ? .selected : .off) {
             occupied.toggle()
         }
-        .accessibilityHint("Laat oefeningen op hetzelfde toestel weg")
+        .accessibilityHint("Leaves out exercises on the same machine")
     }
 
     /// Every active region, each with its own `Verwijder`, and each claiming
@@ -315,14 +315,14 @@ struct SwapSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: SL.Space.s2)
             Button { Task { await app.forgetPain(region: region) } } label: {
-                Text("Verwijder")
+                Text("Remove")
                     .slMeta(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.tertiary)
                     .fixedSize()
                     .slHitTarget()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Verwijder \(region.label.lowercased())")
+            .accessibilityLabel("Remove \(region.label.lowercased())")
         }
         .frame(minHeight: SL.Space.hitMin)
     }
@@ -331,9 +331,9 @@ struct SwapSheet: View {
     /// list; otherwise the region is noted and nothing is claimed.
     private func painLine(_ region: PainRegion, changesList: Bool) -> String {
         if changesList, let name = region.sentenceName {
-            return "Rekening gehouden met je \(name)."
+            return "Your \(name) is taken into account."
         }
-        return "\(region.label) · Genoteerd. Dit verandert deze lijst niet."
+        return "\(region.label) · Noted. This doesn't change this list."
     }
 
     /// 15R: "Doe hack squat nu" over "Kom terug voor bankdrukken." Radius 16,
@@ -345,12 +345,12 @@ struct SwapSheet: View {
                 SLGlyph(name: .swapVert, size: 20)
                     .foregroundStyle(SL.Ink.secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Doe \(plan.candidate.name.lowercased()) nu")
+                    Text("Do \(plan.candidate.name.lowercased()) now")
                         .slLead()
                         .foregroundStyle(SL.Ink.primary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Kom terug voor \(plan.current.name.lowercased()).")
+                    Text("Come back for \(plan.current.name.lowercased()).")
                         .slMeta()
                         .foregroundStyle(SL.Ink.secondary)
                         .multilineTextAlignment(.leading)
@@ -365,7 +365,7 @@ struct SwapSheet: View {
             .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Doe \(plan.candidate.name) nu, kom terug voor \(plan.current.name)")
+        .accessibilityLabel("Do \(plan.candidate.name) now, come back for \(plan.current.name)")
         .accessibilityHint(plan.detail)
     }
 
@@ -432,16 +432,16 @@ struct SwapSheet: View {
         )
         return VStack(alignment: .leading, spacing: 0) {
             Text(isCustom
-                 ? "Geen alternatieven voor een eigen oefening."
-                 : "Geen alternatief dat deze oefening echt vervangt.")
+                 ? "No alternatives for a custom exercise."
+                 : "No alternative that truly replaces this exercise.")
                 .slLead()
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Text(isCustom
-                 ? "SETLINE heeft over deze oefening geen gegevens om mee te vergelijken."
+                 ? "SETLINE has no data on this exercise to compare with."
                  : painEmptied
-                    ? "Alles wat dezelfde beweging traint, belast ook wat je aangaf. Bekijk de andere opties of kies je eigen oefening."
-                    : "Wat overblijft traint iets anders dan \(exercise.name.lowercased()). We stellen het liever niet voor dan dat we iets zwaks aanraden.")
+                    ? "Everything that trains the same movement also loads what you reported. Look at the other options or pick your own exercise."
+                    : "What's left trains something other than \(exercise.name.lowercased()). We'd rather suggest nothing than something weak.")
                 .slMeta()
                 .foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -459,18 +459,18 @@ struct SwapSheet: View {
             if hasOpenSets {
                 toolLayout {
                     toolButton("Bladeren", glyph: .search) { step = .browse }
-                    toolButton("Eigen oefening") { step = .custom }
+                    toolButton("Your own exercise") { step = .custom }
                 }
             }
 
             // Below the hairline on purpose. A permanent program change must
             // never share a surface or a shape with the temporary swap above.
             SLHairline().padding(.top, SL.Space.s4).padding(.bottom, SL.Space.s1)
-            footerLink("Vervang in schema", detail: "Wijzigt je plan, niet alleen vandaag") {
+            footerLink("Replace in plan", detail: "Changes your plan, not just today") {
                 step = .replacePick
             }
             SLHairline().padding(.vertical, SL.Space.s1)
-            footerLink("Ik voel iets", detail: "Pijn of ongemak bij deze beweging") {
+            footerLink("Something hurts", detail: "Pain or discomfort with this movement") {
                 painRegion = nil
                 painTiming = nil
                 signals = []
@@ -557,16 +557,16 @@ struct SwapSheet: View {
         let options = app.browsableAlternatives(for: exercise.id, occupied: occupied, excluding: sessionExerciseIDs)
         return VStack(alignment: .leading, spacing: 0) {
             backLink { step = .alternatives }
-            Text("Andere opties")
+            Text("Other options")
                 .slTitle().foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s3)
-            Text("Ruimer dan de aanbevelingen. Onderaan staan oefeningen die dezelfde spier trainen maar de opzet van de training veranderen.")
+            Text("Broader than the recommendations. At the bottom are exercises that train the same muscle but change how the workout is set up.")
                 .slMeta().foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
 
             if options.isEmpty {
-                Text("Ook hier vinden we niets dat past. Kies je eigen oefening.")
+                Text("Nothing fits here either. Pick your own exercise.")
                     .slBody().foregroundStyle(SL.Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, SL.Space.s5)
@@ -576,7 +576,7 @@ struct SwapSheet: View {
                 alternativesList(options).padding(.top, SL.Space.s4)
             }
 
-            secondaryLink("Eigen oefening") { step = .custom }
+            secondaryLink("Your own exercise") { step = .custom }
                 .padding(.top, SL.Space.s3)
         }
     }
@@ -584,7 +584,7 @@ struct SwapSheet: View {
     /// `Terug` as every artboard sets it: 15/500 `text2`, no chevron.
     private func backLink(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text("Terug")
+            Text("Back")
                 .slBody(SL.Weight.medium)
                 .foregroundStyle(SL.Ink.secondary)
                 .frame(minHeight: SL.Space.hitMin)
@@ -615,15 +615,15 @@ struct SwapSheet: View {
                 nameFocused = false
                 step = .alternatives
             }
-            Text("Eigen oefening")
+            Text("Your own exercise")
                 .slTitle().foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s3)
-            Text("Een naam is genoeg. De rest vraagt SETLINE met een kalibratieset.")
+            Text("A name is enough. SETLINE asks for the rest with a calibration set.")
                 .slMeta().foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
 
-            TextField("", text: $customName, prompt: Text("Naam van de oefening").foregroundStyle(SL.Ink.tertiary))
+            TextField("", text: $customName, prompt: Text("Exercise name").foregroundStyle(SL.Ink.tertiary))
                 .textInputAutocapitalization(.sentences)
                 .autocorrectionDisabled()
                 .focused($nameFocused)
@@ -639,18 +639,18 @@ struct SwapSheet: View {
                 .padding(.top, SL.Space.s4)
 
             Button(action: addCustomExercise) {
-                Text("Toevoegen en kalibreren")
+                Text("Add and calibrate")
             }
             .buttonStyle(SLPrimaryButtonStyle())
             .disabled(trimmedCustomName.isEmpty)
             .padding(.top, SL.Space.s4)
 
-            SLEyebrow(text: "Materiaal · optioneel").padding(.top, SL.Space.s6).padding(.bottom, SL.Space.s2)
+            SLEyebrow(text: "Equipment · optional").padding(.top, SL.Space.s6).padding(.bottom, SL.Space.s2)
             equipmentChips
 
             // The component sheet's chip rather than a system switch: on is
             // selected, off is the dashed "not on" chip.
-            SLChip(title: "Samengestelde oefening", look: customIsCompound ? .selected : .off) {
+            SLChip(title: "Compound exercise", look: customIsCompound ? .selected : .off) {
                 customIsCompound.toggle()
             }
             .padding(.top, SL.Space.s4)
@@ -693,10 +693,10 @@ struct SwapSheet: View {
     private var replacePickStep: some View {
         VStack(alignment: .leading, spacing: 0) {
             backLink { step = .alternatives }
-            Text("Vervang in schema")
+            Text("Replace in plan")
                 .slTitle().foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s3)
-            Text("Dit verandert je schema, niet alleen vandaag. Kies wat \(exercise.name.lowercased()) vervangt.")
+            Text("This changes your plan, not just today. Pick what replaces \(exercise.name.lowercased()).")
                 .slMeta().foregroundStyle(SL.Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
@@ -724,7 +724,7 @@ struct SwapSheet: View {
                     .buttonStyle(.plain)
                 }
                 if alternatives.isEmpty {
-                    Text("Geen alternatief om vast in te plannen.")
+                    Text("No alternative to put in your plan.")
                         .slBody().foregroundStyle(SL.Ink.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -740,13 +740,13 @@ struct SwapSheet: View {
     private func scopeStep(substituteID: String) -> some View {
         let substitute = app.exercise(substituteID)
         return VStack(alignment: .leading, spacing: 0) {
-            Text("Vervang door \(substitute.name.lowercased())")
+            Text("Replace with \(substitute.name.lowercased())")
                 .slDisplay()
                 .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
                 .accessibilityAddTraits(.isHeader)
-            Text("Kies waarvoor dit geldt. Je historiek van \(exercise.name.lowercased()) blijft bewaard.")
+            Text("Choose where this applies. Your history for \(exercise.name.lowercased()) is kept.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -774,7 +774,7 @@ struct SwapSheet: View {
             .padding(.top, SL.Space.s5)
 
             Button { step = .alternatives } label: {
-                Text("Annuleer")
+                Text("Cancel")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
@@ -821,14 +821,14 @@ struct SwapSheet: View {
     private func scopeDetail(_ option: ReplacementScope) -> String {
         switch option {
         case .thisDay:
-            return "\(dayLabel), vanaf vandaag"
+            return "\(dayLabel), from today"
         case .thisPlan:
             let days = app.plan
                 .filter { $0.exercises.contains { $0.exerciseID == exercise.id } }
                 .map(\.short)
-            return "\(Self.dutchList(days.isEmpty ? [dayLabel] : days)), tot je het plan wijzigt"
+            return "\(Self.dutchList(days.isEmpty ? [dayLabel] : days)), until you change the plan"
         case .always:
-            return "Overal waar \(exercise.name.lowercased()) staat, ook in toekomstige plannen"
+            return "Everywhere \(exercise.name.lowercased()) appears, including future plans"
         }
     }
 
@@ -836,7 +836,7 @@ struct SwapSheet: View {
     static func dutchList(_ items: [String]) -> String {
         guard let last = items.last else { return "" }
         guard items.count > 1 else { return last }
-        return items.dropLast().joined(separator: ", ") + " en " + last
+        return items.dropLast().joined(separator: ", ") + " and " + last
     }
 
     // MARK: - 31a / 31b / 31c
@@ -845,7 +845,7 @@ struct SwapSheet: View {
     private func painHeader(back: @escaping () -> Void, skip: (() -> Void)? = nil) -> some View {
         HStack {
             Button(action: back) {
-                Text("Terug").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary)
+                Text("Back").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary)
                     .frame(minHeight: SL.Space.hitMin)
                     .contentShape(Rectangle())
             }
@@ -853,7 +853,7 @@ struct SwapSheet: View {
             Spacer(minLength: SL.Space.s4)
             if let skip {
                 Button(action: skip) {
-                    Text("Overslaan").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary)
+                    Text("Skip").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.secondary)
                         .frame(minHeight: SL.Space.hitMin)
                         .contentShape(Rectangle())
                 }
@@ -870,14 +870,14 @@ struct SwapSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             painHeader(back: { step = .alternatives }, skip: { step = .painOptions(nil, nil) })
 
-            Text("Waar voel je het?")
+            Text("Where do you feel it?")
                 .slDisplay()
                 .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s5)
                 .accessibilityAddTraits(.isHeader)
-            Text("Beide vragen zijn optioneel. SETLINE stelt geen diagnose en houdt niets bij dat je niet zelf invult.")
+            Text("Both questions are optional. SETLINE doesn't diagnose and keeps nothing you don't fill in yourself.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -893,7 +893,7 @@ struct SwapSheet: View {
             }
             .padding(.top, SL.Space.s5)
 
-            Text("Wanneer?")
+            Text("When?")
                 .slTitle()
                 .foregroundStyle(SL.Ink.primary)
                 .padding(.top, SL.Space.s8)
@@ -967,7 +967,7 @@ struct SwapSheet: View {
                 .padding(.top, SL.Space.s4)
                 .accessibilityAddTraits(.isHeader)
 
-            Text("Vier manieren om verder te trainen. Kies wat vandaag past.")
+            Text("Four ways to keep training. Pick what suits today.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -975,11 +975,11 @@ struct SwapSheet: View {
                 .padding(.top, SL.Space.s2)
 
             VStack(spacing: SL.Space.s2) {
-                painOption("Beperk de beweging tot waar het pijnvrij is", "Zelfde gewicht, kortere baan. Wordt gelogd als partiële reps.") {
+                painOption("Limit the movement to where it's pain-free", "Same weight, shorter range. Logged as partial reps.") {
                     record(region, timing)
                     onOutcome(.limitRange)
                 }
-                painOption("Minder gewicht, zelfde reps", "Je kiest zelf hoeveel minder. Geen verhoging deze sessie.") {
+                painOption("Less weight, same reps", "You choose how much less. No increase this session.") {
                     record(region, timing)
                     onOutcome(.reduceLoad)
                 }
@@ -988,15 +988,15 @@ struct SwapSheet: View {
                 // more stable variants (TRAINING_LOGIC §14.2). Otherwise it says
                 // the list stays as it was.
                 painOption(
-                    "Vervang deze oefening",
+                    "Replace this exercise",
                     narrows
-                        ? "Terug naar de wisselsheet, met stabielere varianten bovenaan."
-                        : "Terug naar de wisselsheet. Deze lijst verandert er niet door."
+                        ? "Back to the swap sheet, with more stable variants at the top."
+                        : "Back to the swap sheet. This list doesn't change because of it."
                 ) {
                     record(region, timing)
                     step = .alternatives
                 }
-                painOption("Sla deze oefening over", "De rest van de sessie blijft staan.") {
+                painOption("Skip this exercise", "The rest of the session stays.") {
                     record(region, timing)
                     onOutcome(.skipExercise)
                 }
@@ -1015,7 +1015,7 @@ struct SwapSheet: View {
         case let (region?, timing?): return "\(region.label), \(timing.label.lowercased())"
         case let (region?, nil): return region.label
         case let (nil, timing?): return timing.label
-        case (nil, nil): return "Verder trainen"
+        case (nil, nil): return "Keep training"
         }
     }
 
@@ -1023,8 +1023,8 @@ struct SwapSheet: View {
     /// advice.
     private var guideline: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLEyebrow(text: "ALGEMENE RICHTLIJN")
-            Text("Lichte pijn tijdens de oefening hoeft niet te betekenen dat je stopt, zolang ze de volgende ochtend weggezakt is en van week tot week niet toeneemt. Twijfel je, of wordt het erger? Laat het nakijken.")
+            SLEyebrow(text: "GENERAL GUIDELINE")
+            Text("Mild pain during an exercise doesn't have to mean you stop, as long as it has faded by the next morning and doesn't increase week to week. In doubt, or getting worse? Have it checked.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1043,8 +1043,8 @@ struct SwapSheet: View {
     private var escalation: some View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
             VStack(alignment: .leading, spacing: 0) {
-                SLEyebrow(text: "GEEN VRAAG, EEN KEUZE")
-                Text("Klopt een van deze?")
+                SLEyebrow(text: "NOT A QUESTION, A CHOICE")
+                Text("Does one of these apply?")
                     .slLead()
                     .foregroundStyle(SL.Ink.primary)
                     .padding(.top, 10)
@@ -1075,14 +1075,14 @@ struct SwapSheet: View {
 
             if signals.contains(where: { $0 != Self.noneOfThese }) {
                 VStack(alignment: .leading, spacing: 0) {
-                    SLEyebrow(text: "ALLEEN NA EEN AANGEVINKT SIGNAAL")
-                    Text("Laat dit nakijken door een arts of kinesist.")
+                    SLEyebrow(text: "ONLY AFTER A CHECKED SIGNAL")
+                    Text("Have this checked by a doctor or physiotherapist.")
                         .slLead()
                         .slLineHeight(1.4, size: SL.TypeSize.lead)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
                         .padding(.top, 10)
-                    Text("De vier trainingsopties blijven staan. SETLINE beslist niets voor je en noemt geen aandoening.")
+                    Text("The four training options stay. SETLINE decides nothing for you and names no condition.")
                         .slBody()
                         .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1098,11 +1098,11 @@ struct SwapSheet: View {
         }
     }
 
-    private static let noneOfThese = "Geen daarvan"
+    private static let noneOfThese = "None of these"
 
     private static let escalationSignals = [
-        "Scherp of plots", "Tintelingen", "Krachtverlies", "Zwelling",
-        "Al meer dan 2 weken", noneOfThese,
+        "Sharp or sudden", "Tingling", "Loss of strength", "Swelling",
+        "For more than 2 weeks", noneOfThese,
     ]
 
     /// 31b's option card: radius 20, raised2, the .16 edge; 17pt title over a

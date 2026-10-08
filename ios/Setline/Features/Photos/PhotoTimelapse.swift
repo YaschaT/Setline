@@ -69,7 +69,7 @@ struct PhotoTimelapse: View {
     private var header: some View {
         HStack(alignment: .top, spacing: SL.Space.s3) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Tijdlijn")
+                Text("Timeline")
                     .slTitle()
                     .foregroundStyle(SL.Ink.primary)
                     .accessibilityAddTraits(.isHeader)
@@ -88,18 +88,18 @@ struct PhotoTimelapse: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Sluiten")
+            .accessibilityLabel("Close")
         }
     }
 
     /// "12 opnames over 14 weken"
     private var summary: String {
-        let count = frames.count == 1 ? "1 opname" : "\(frames.count) opnames"
+        let count = frames.count == 1 ? "1 photo" : "\(frames.count) photos"
         guard let last = frames.last else { return count }
         switch last.since {
-        case .sameDay: return "\(count) op één dag"
-        case .days(let days): return "\(count) over \(days == 1 ? "1 dag" : "\(days) dagen")"
-        case .weeks(let weeks): return "\(count) over \(weeks == 1 ? "1 week" : "\(weeks) weken")"
+        case .sameDay: return "\(count) on one day"
+        case .days(let days): return "\(count) over \(days == 1 ? "1 day" : "\(days) days")"
+        case .weeks(let weeks): return "\(count) over \(weeks == 1 ? "1 week" : "\(weeks) weeks")"
         }
     }
 
@@ -115,16 +115,16 @@ struct PhotoTimelapse: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Periode")
+        .accessibilityLabel("Period")
     }
 
     private func name(_ period: CheckInGallery.Period) -> String {
         switch period {
-        case .all: return "Alles"
-        case .year: return "1 jaar"
-        case .halfYear: return "6 maanden"
-        case .quarter: return "3 maanden"
-        case .month: return "1 maand"
+        case .all: return "All"
+        case .year: return "1 year"
+        case .halfYear: return "6 months"
+        case .quarter: return "3 months"
+        case .month: return "1 month"
         }
     }
 
@@ -147,7 +147,7 @@ struct PhotoTimelapse: View {
             .aspectRatio(3.0 / 4.0, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
             .accessibilityElement()
-            .accessibilityLabel(frame.map { "Opname \(spoken($0))" } ?? "Geen opname")
+            .accessibilityLabel(frame.map { "Photo \(spoken($0))" } ?? "No photo")
     }
 
     /// The date large, and under it how long after the first picture it was
@@ -183,15 +183,15 @@ struct PhotoTimelapse: View {
     private func detail(_ frame: CheckInGallery.Frame) -> String {
         let when: String
         switch frame.since {
-        case .sameDay: when = frame.shown.checkIn.id == frames.first?.shown.checkIn.id ? "start" : "zelfde dag"
-        case .days(let days): when = days == 1 ? "na 1 dag" : "na \(days) dagen"
-        case .weeks(let weeks): when = weeks == 1 ? "na 1 week" : "na \(weeks) weken"
+        case .sameDay: when = frame.shown.checkIn.id == frames.first?.shown.checkIn.id ? "start" : "same day"
+        case .days(let days): when = days == 1 ? "after 1 day" : "after \(days) days"
+        case .weeks(let weeks): when = weeks == 1 ? "after 1 week" : "after \(weeks) weeks"
         }
         return [when, frame.shown.weightKg.map(display.kg)].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func spoken(_ frame: CheckInGallery.Frame) -> String {
-        "\(index + 1) van \(frames.count), \(date(frame.shown.date)), \(detail(frame))"
+        "\(index + 1) of \(frames.count), \(date(frame.shown.date)), \(detail(frame))"
     }
 
     // MARK: - Where it is, and how fast
@@ -210,7 +210,7 @@ struct PhotoTimelapse: View {
                 step: 1
             )
             .tint(SL.Signal.action)
-            .accessibilityLabel("Opname")
+            .accessibilityLabel("Photo")
             .accessibilityValue(frame.map(spoken) ?? "")
 
             HStack {
@@ -244,19 +244,19 @@ struct PhotoTimelapse: View {
             }
             .buttonStyle(.plain)
             .slFocusRing(Circle())
-            .accessibilityLabel(playing ? "Pauzeer" : "Afspelen")
+            .accessibilityLabel(playing ? "Pause" : "Play")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Snelheid")
+                Text("Speed")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                 HStack(spacing: SL.Space.s2) {
-                    Text("Traag").slMeta().foregroundStyle(SL.Ink.secondary)
+                    Text("Slow").slMeta().foregroundStyle(SL.Ink.secondary)
                     Slider(value: $speed, in: 0...1)
                         .tint(SL.Signal.action)
-                        .accessibilityLabel("Snelheid")
-                        .accessibilityValue(String(format: "%.1f seconden per opname", interval).replacingOccurrences(of: ".", with: ","))
-                    Text("Snel").slMeta().foregroundStyle(SL.Ink.secondary)
+                        .accessibilityLabel("Speed")
+                        .accessibilityValue(String(format: "%.1f seconds per photo", interval))
+                    Text("Fast").slMeta().foregroundStyle(SL.Ink.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

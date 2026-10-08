@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>nl</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Setline</string>
 	<key>CFBundleExecutable</key>
@@ -22,18 +22,22 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>UILaunchScreen</key>
-	<dict/>
-	<!-- Archivo, the redesign's typeface (SIL Open Font License). -->
-	<!-- The rest countdown in the Dynamic Island and on the Lock Screen. -->
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>SETLINE_WEB_URL</key>
+	<string>$(SETLINE_WEB_URL)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Archivo-Variable.ttf</string>
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>
@@ -49,15 +53,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<!-- Dark only. There is no light appearance in this design. -->
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
-	<!-- Supplied by Setline.xcconfig; the app degrades honestly when empty. -->
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
-	<key>SETLINE_WEB_URL</key>
-	<string>$(SETLINE_WEB_URL)</string>
 </dict>
 </plist>

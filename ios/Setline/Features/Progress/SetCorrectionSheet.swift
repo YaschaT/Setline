@@ -89,7 +89,7 @@ struct SetCorrectionSheet: View {
                 if let paused = pausedReps { pausedRow(paused).padding(.bottom, SL.Space.s4) }
                 if partialReps != nil { partialRow.padding(.bottom, SL.Space.s4) }
 
-                Button { onApply(corrected) } label: { Text("Klaar") }
+                Button { onApply(corrected) } label: { Text("Done") }
                     .buttonStyle(SLPrimaryButtonStyle())
                     .disabled(!isLogged)
 
@@ -98,7 +98,7 @@ struct SetCorrectionSheet: View {
                     // It leaves the session, and the words under the button
                     // say that this one action reaches further than the other.
                     Button(action: onDelete) {
-                        Text("Verwijder deze set")
+                        Text("Remove this set")
                             .slBody(SL.Weight.medium)
                             .foregroundStyle(SL.Signal.loss)
                             .frame(maxWidth: .infinity)
@@ -110,8 +110,8 @@ struct SetCorrectionSheet: View {
                 }
 
                 Text(onDelete == nil
-                     ? "Alleen deze set verandert."
-                     : "Alleen deze set verandert. Verwijderen haalt hem uit de sessie.")
+                     ? "Only this set changes."
+                     : "Only this set changes. Removing takes it out of the session.")
                     .slMeta()
                     .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                     .fixedSize(horizontal: false, vertical: true)
@@ -169,7 +169,7 @@ struct SetCorrectionSheet: View {
     @ViewBuilder
     private var steppers: some View {
         SLStepper(
-            label: "Gewicht",
+            label: "Weight",
             display: display.number(weight),
             onDecrement: { weight = max(increment, weight - increment) },
             onIncrement: { weight += increment }
@@ -187,7 +187,7 @@ struct SetCorrectionSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 SLEyebrow(text: "Reps in reserve")
                 Spacer()
-                Text(rir == nil ? "niet gelogd" : "tik opnieuw om te wissen")
+                Text(rir == nil ? "not logged" : "tap again to clear")
                     .slMeta()
                     .foregroundStyle(SL.Ink.tertiary)
                     .lineLimit(1).minimumScaleFactor(0.8)
@@ -213,7 +213,7 @@ struct SetCorrectionSheet: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(value == 4 ? "RIR vier of meer" : "RIR \(value)")
+                    .accessibilityLabel(value == 4 ? "RIR four or more" : "RIR \(value)")
                     .accessibilityAddTraits(rir == value ? [.isSelected, .isButton] : .isButton)
                 }
             }
@@ -222,10 +222,10 @@ struct SetCorrectionSheet: View {
 
     private var tools: some View {
         HStack(spacing: 6) {
-            chip("Pauze-reps", isOn: pausedReps != nil) {
+            chip("Paused reps", isOn: pausedReps != nil) {
                 pausedReps = pausedReps == nil ? max(1, reps) : nil
             }
-            chip("Partieel", isOn: partialReps != nil) {
+            chip("Partial", isOn: partialReps != nil) {
                 partialReps = partialReps == nil ? 1 : nil
             }
         }
@@ -236,9 +236,9 @@ struct SetCorrectionSheet: View {
     private func pausedRow(_ count: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SLEyebrow(text: "Pauze-reps")
+                SLEyebrow(text: "Paused reps")
                 Spacer()
-                Text(count >= reps ? "elke rep gepauzeerd" : "van \(reps) reps")
+                Text(count >= reps ? "every rep paused" : "of \(reps) reps")
                     .slMeta()
                     .slNumerals()
                     .foregroundStyle(SL.Ink.tertiary)
@@ -246,7 +246,7 @@ struct SetCorrectionSheet: View {
             }
             .padding(.bottom, SL.Space.s2)
             SLStepper(
-                label: "Gepauzeerd",
+                label: "Paused",
                 display: "\(min(count, max(1, reps)))",
                 onDecrement: { pausedReps = max(1, min(count, reps) - 1) },
                 onIncrement: { pausedReps = min(max(1, reps), count + 1) }
@@ -257,9 +257,9 @@ struct SetCorrectionSheet: View {
     private var partialRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SLEyebrow(text: "Partiële reps")
+                SLEyebrow(text: "Partial reps")
                 Spacer()
-                Text("tellen niet mee in je progressie")
+                Text("don't count toward your progress")
                     .slMeta()
                     .foregroundStyle(SL.Ink.tertiary)
                     .lineLimit(1).minimumScaleFactor(0.8)
@@ -285,7 +285,7 @@ struct SetCorrectionSheet: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(value == 4 ? "Vier of meer" : "\(value)") partiële reps")
+                    .accessibilityLabel("\(value == 4 ? "Four or more" : "\(value)") partial reps")
                     .accessibilityAddTraits(partialReps == value ? [.isSelected, .isButton] : .isButton)
                 }
             }

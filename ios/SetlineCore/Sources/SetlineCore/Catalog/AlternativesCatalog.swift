@@ -9,7 +9,7 @@ import Foundation
 
 public struct ExerciseAlternative: Codable, Hashable, Sendable {
     public let name: String
-    /// One- or two-word honest fit label ("Sterke match", "Stabieler").
+    /// One- or two-word honest fit label ("Strong match", "More stable").
     public let fit: String
     public let why: String
 
@@ -24,160 +24,160 @@ public enum AlternativesCatalog {
 
     public static let byExercise: [String: [ExerciseAlternative]] = [
         "flat-bench": [
-            ExerciseAlternative(name: "Dumbbell bench press", fit: "Zelfde rol", why: "Horizontale press met grote ROM; behoud sets, reps en RIR maar reset het gewicht."),
-            ExerciseAlternative(name: "Converging chest press", fit: "Stabieler", why: "Zelfde borst- en tricepsdoel met minder stabiliteitsvraag. Handig als alle benches bezet zijn."),
+            ExerciseAlternative(name: "Dumbbell bench press", fit: "Same role", why: "Horizontal press with a big ROM; keep sets, reps and RIR but reset the weight."),
+            ExerciseAlternative(name: "Converging chest press", fit: "More stable", why: "Same chest and triceps target with less stability demand. Handy when every bench is taken."),
         ],
         "upper-paused-bench": [
-            ExerciseAlternative(name: "Flat bench press", fit: "Zonder pauze", why: "Behoud dezelfde press en belasting, maar laat 1–2 reps extra in reserve omdat dit je tweede benchmoment is."),
-            ExerciseAlternative(name: "Dumbbell bench press", fit: "Minder specifiek", why: "Goede horizontale press wanneer de bench bezet is; behoud 3 sets en werk in 6–10 reps."),
+            ExerciseAlternative(name: "Flat bench press", fit: "No pause", why: "Keep the same press and load, but leave 1–2 extra reps in reserve because this is your second bench day."),
+            ExerciseAlternative(name: "Dumbbell bench press", fit: "Less specific", why: "Good horizontal press when the bench is taken; keep 3 sets and work in 6–10 reps."),
         ],
         "incline-bench": [
-            ExerciseAlternative(name: "Incline dumbbell press", fit: "Zelfde patroon", why: "Schuine press met vrije armpositie en diepe, controleerbare borststretch."),
-            ExerciseAlternative(name: "Incline chest-pressmachine", fit: "Zelfde rol", why: "Meer stabiliteit; daardoor kun je dicht bij falen trainen zonder spotter."),
+            ExerciseAlternative(name: "Incline dumbbell press", fit: "Same pattern", why: "Incline press with free arm position and a deep, controllable chest stretch."),
+            ExerciseAlternative(name: "Incline chest press machine", fit: "Same role", why: "More stability, so you can train close to failure without a spotter."),
         ],
         "incline-machine": [
-            ExerciseAlternative(name: "Incline dumbbell press", fit: "Sterke match", why: "Behoudt de schuine press en bovenborstfocus; start conservatief met het gewicht."),
-            ExerciseAlternative(name: "Low-to-high cable press", fit: "Apparaatvrij", why: "Vergelijkbare pressrichting en constante kabelspanning, met lagere absolute belasting."),
+            ExerciseAlternative(name: "Incline dumbbell press", fit: "Strong match", why: "Keeps the incline press and upper-chest focus; start conservatively with the weight."),
+            ExerciseAlternative(name: "Low-to-high cable press", fit: "No machine needed", why: "Similar press direction and constant cable tension, with a lower absolute load."),
         ],
         "pec-fly": [
-            ExerciseAlternative(name: "Cable fly", fit: "Zelfde isolatie", why: "Horizontale adductie met instelbare lijn; behoud de 10–15 rep-range."),
-            ExerciseAlternative(name: "Dumbbell fly", fit: "Redelijke match", why: "Vergelijkbaar doel, maar minder spanning bovenaan. Gebruik licht gewicht en gecontroleerde ROM."),
+            ExerciseAlternative(name: "Cable fly", fit: "Same isolation", why: "Horizontal adduction with an adjustable line; keep the 10–15 rep range."),
+            ExerciseAlternative(name: "Dumbbell fly", fit: "Fair match", why: "Similar target, but less tension at the top. Use a light weight and a controlled ROM."),
         ],
         "upper-fly": [
-            ExerciseAlternative(name: "Pec-deck", fit: "Sterke match", why: "Stabiele borstisolatie; makkelijk progressief te loggen en dicht bij falen te trainen."),
-            ExerciseAlternative(name: "Cable fly", fit: "1-op-1", why: "Behoud dezelfde lijn, rep-range en volledige pijnvrije ROM."),
+            ExerciseAlternative(name: "Pec-deck", fit: "Strong match", why: "Stable chest isolation; easy to progress and to train close to failure."),
+            ExerciseAlternative(name: "Cable fly", fit: "1-to-1", why: "Keep the same line, rep range and full pain-free ROM."),
         ],
         "push-shoulder": [
-            ExerciseAlternative(name: "Seated dumbbell press", fit: "Zelfde patroon", why: "Verticale press met vrije armpositie; verlaag het startgewicht en behoud RIR 1–2."),
-            ExerciseAlternative(name: "Smith shoulder press", fit: "Stabiele match", why: "Verticale press met minder stabiliteitsvraag en voorspelbare progressie."),
+            ExerciseAlternative(name: "Seated dumbbell press", fit: "Same pattern", why: "Vertical press with free arm position; lower the starting weight and keep RIR 1–2."),
+            ExerciseAlternative(name: "Smith shoulder press", fit: "Stable match", why: "Vertical press with less stability demand and predictable progress."),
         ],
         "upper-shoulder": [
-            ExerciseAlternative(name: "Seated dumbbell press", fit: "Zelfde patroon", why: "Verticale press en vergelijkbare doelspieren; reset de belasting."),
-            ExerciseAlternative(name: "Smith shoulder press", fit: "Stabiele match", why: "Handig om veilig dicht bij falen te trainen met dezelfde rep-range."),
+            ExerciseAlternative(name: "Seated dumbbell press", fit: "Same pattern", why: "Vertical press and similar target muscles; reset the load."),
+            ExerciseAlternative(name: "Smith shoulder press", fit: "Stable match", why: "Handy for training safely close to failure in the same rep range."),
         ],
         "push-lateral": [
-            ExerciseAlternative(name: "Machine lateral raise", fit: "Sterke match", why: "Zelfde schouderabductie met extra stabiliteit; behoud 12–20 reps."),
-            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Praktische swap", why: "Zelfde doelspier, maar een andere weerstandscurve. Gebruik strikte techniek."),
+            ExerciseAlternative(name: "Machine lateral raise", fit: "Strong match", why: "Same shoulder abduction with extra stability; keep 12–20 reps."),
+            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Practical swap", why: "Same target muscle, but a different resistance curve. Use strict technique."),
         ],
         "legs-lateral": [
-            ExerciseAlternative(name: "Machine lateral raise", fit: "Sterke match", why: "Zelfde schouderabductie met minder coördinatievraag."),
-            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Praktische swap", why: "Behoud hoge reps en stop zodra je moet zwaaien."),
+            ExerciseAlternative(name: "Machine lateral raise", fit: "Strong match", why: "Same shoulder abduction with less coordination demand."),
+            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Practical swap", why: "Keep the reps high and stop as soon as you have to swing."),
         ],
         "upper-lateral": [
-            ExerciseAlternative(name: "Machine lateral raise", fit: "Sterke match", why: "Zelfde doel en eenvoudige progressie in de 12–20 rep-range."),
-            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Praktische swap", why: "Zelfde doelspier; vergelijk het dumbbellgewicht niet met de kabelbelasting."),
+            ExerciseAlternative(name: "Machine lateral raise", fit: "Strong match", why: "Same target and simple progress in the 12–20 rep range."),
+            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Practical swap", why: "Same target muscle; don't compare the dumbbell weight with the cable load."),
         ],
         "science-lateral": [
-            ExerciseAlternative(name: "Machine lateral raise", fit: "Sterke match", why: "Stabiel alternatief dat je dicht bij falen kunt uitvoeren."),
-            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Praktische swap", why: "Zelfde doelspier met een andere weerstandscurve; behoud strikte reps."),
+            ExerciseAlternative(name: "Machine lateral raise", fit: "Strong match", why: "A stable alternative you can take close to failure."),
+            ExerciseAlternative(name: "Dumbbell lateral raise", fit: "Practical swap", why: "Same target muscle with a different resistance curve; keep the reps strict."),
         ],
         "overhead-triceps": [
-            ExerciseAlternative(name: "Overhead dumbbell extension", fit: "Zelfde armpositie", why: "Behoudt schouderflexie en tricepstraining op lange spierlengte."),
-            ExerciseAlternative(name: "EZ-bar skull crusher", fit: "Sterke match", why: "Vergelijkbare elleboogextensie; kies een pijnvrije hoek en gecontroleerde excentrische fase."),
+            ExerciseAlternative(name: "Overhead dumbbell extension", fit: "Same arm position", why: "Keeps shoulder flexion and triceps work at a long muscle length."),
+            ExerciseAlternative(name: "EZ-bar skull crusher", fit: "Strong match", why: "Similar elbow extension; pick a pain-free angle and a controlled lowering phase."),
         ],
         "pressdown": [
-            ExerciseAlternative(name: "Single-arm cable pressdown", fit: "1-op-1", why: "Zelfde elleboogextensie en rep-range, met vrije polspositie."),
-            ExerciseAlternative(name: "Machine dip", fit: "Compound swap", why: "Meer borst- en schouderbijdrage; gebruik hem alleen als je een compound wilt."),
+            ExerciseAlternative(name: "Single-arm cable pressdown", fit: "1-to-1", why: "Same elbow extension and rep range, with a free wrist position."),
+            ExerciseAlternative(name: "Machine dip", fit: "Compound swap", why: "More chest and shoulder involvement; only use it if you want a compound."),
         ],
         "upper-pressdown": [
-            ExerciseAlternative(name: "Single-arm cable pressdown", fit: "1-op-1", why: "Zelfde doel met vrije polspositie en afzonderlijke armen."),
-            ExerciseAlternative(name: "Cross-body cable extension", fit: "Sterke match", why: "Zelfde elleboogfunctie; makkelijk pijnvrij af te stellen."),
+            ExerciseAlternative(name: "Single-arm cable pressdown", fit: "1-to-1", why: "Same target with a free wrist position and one arm at a time."),
+            ExerciseAlternative(name: "Cross-body cable extension", fit: "Strong match", why: "Same elbow function; easy to set up pain-free."),
         ],
         "pull-up": [
-            ExerciseAlternative(name: "Neutral-grip lat pulldown", fit: "Zelfde verticale pull", why: "Vergelijkbare lat- en armfunctie, maar makkelijker exact te doseren."),
-            ExerciseAlternative(name: "Assisted pull-up", fit: "1-op-1 patroon", why: "Behoudt de pull-upbeweging wanneer bodyweight of extra gewicht niet past."),
+            ExerciseAlternative(name: "Neutral-grip lat pulldown", fit: "Same vertical pull", why: "Similar lat and arm function, but easier to load precisely."),
+            ExerciseAlternative(name: "Assisted pull-up", fit: "1-to-1 pattern", why: "Keeps the pull-up movement when bodyweight or added weight doesn't fit."),
         ],
         "lat-pulldown": [
-            ExerciseAlternative(name: "Neutral-grip pull-up", fit: "Zelfde verticale pull", why: "Behoudt de richting en grote ROM; log de extra belasting apart."),
-            ExerciseAlternative(name: "Single-arm cable pulldown", fit: "Unilaterale match", why: "Zelfde schouderextensie met meer vrijheid voor elleboogbaan en stretch."),
+            ExerciseAlternative(name: "Neutral-grip pull-up", fit: "Same vertical pull", why: "Keeps the direction and big ROM; log the added load separately."),
+            ExerciseAlternative(name: "Single-arm cable pulldown", fit: "Unilateral match", why: "Same shoulder extension with more freedom for elbow path and stretch."),
         ],
         "kneeling-lat": [
-            ExerciseAlternative(name: "Single-arm seated pulldown", fit: "1-op-1", why: "Zelfde unilaterale latfunctie met extra rompstabiliteit."),
-            ExerciseAlternative(name: "Neutral-grip pulldown", fit: "Sterke match", why: "Bilaterale verticale pull die eenvoudiger te laden is."),
+            ExerciseAlternative(name: "Single-arm seated pulldown", fit: "1-to-1", why: "Same one-sided lat function with extra trunk stability."),
+            ExerciseAlternative(name: "Neutral-grip pulldown", fit: "Strong match", why: "Two-armed vertical pull that is easier to load."),
         ],
         "neutral-row": [
-            ExerciseAlternative(name: "Neutral cable row", fit: "Zelfde trekbaan", why: "Horizontale pull met vergelijkbare elleboogbaan; houd je romp stabiel."),
-            ExerciseAlternative(name: "Chest-supported dumbbell row", fit: "Sterke match", why: "Zelfde rugdoel zonder onderrug als limiterende factor."),
+            ExerciseAlternative(name: "Neutral cable row", fit: "Same pulling path", why: "Horizontal pull with a similar elbow path; keep your torso stable."),
+            ExerciseAlternative(name: "Chest-supported dumbbell row", fit: "Strong match", why: "Same back target without your lower back as the limiting factor."),
         ],
         "wide-row": [
-            ExerciseAlternative(name: "Wide cable row", fit: "Zelfde trekbaan", why: "Elleboog naar buiten voor bovenrug en rear delts; behoud borstpositie."),
-            ExerciseAlternative(name: "Chest-supported rear-delt row", fit: "Sterke match", why: "Vergelijkbare bovenrugfocus met dumbbells en een vaste bank."),
+            ExerciseAlternative(name: "Wide cable row", fit: "Same pulling path", why: "Elbows out for upper back and rear delts; keep your chest position."),
+            ExerciseAlternative(name: "Chest-supported rear-delt row", fit: "Strong match", why: "Similar upper-back focus with dumbbells and a fixed bench."),
         ],
         "upper-wide-row": [
-            ExerciseAlternative(name: "Wide cable row", fit: "Zelfde trekbaan", why: "Behoudt de horizontale pull en bovenrugfocus."),
-            ExerciseAlternative(name: "Chest-supported dumbbell row", fit: "Sterke match", why: "Stabiele horizontale pull zonder extra belasting voor je onderrug."),
+            ExerciseAlternative(name: "Wide cable row", fit: "Same pulling path", why: "Keeps the horizontal pull and upper-back focus."),
+            ExerciseAlternative(name: "Chest-supported dumbbell row", fit: "Strong match", why: "Stable horizontal pull without extra load on your lower back."),
         ],
         "reverse-pec": [
-            ExerciseAlternative(name: "Cable rear-delt fly", fit: "Zelfde isolatie", why: "Zelfde doelspier en controleerbare lijn; behoud 12–20 reps."),
-            ExerciseAlternative(name: "Chest-supported rear-delt row", fit: "Meer compound", why: "Vergelijkbaar rear-deltdoel met extra bovenrugbijdrage."),
+            ExerciseAlternative(name: "Cable rear-delt fly", fit: "Same isolation", why: "Same target muscle and a controllable line; keep 12–20 reps."),
+            ExerciseAlternative(name: "Chest-supported rear-delt row", fit: "More compound", why: "Similar rear-delt target with more upper-back involvement."),
         ],
         "rear-delt": [
-            ExerciseAlternative(name: "Reverse pec deck", fit: "Sterke match", why: "Stabiele rear-deltisolatie die eenvoudig progressief te laden is."),
-            ExerciseAlternative(name: "Cable rear-delt fly", fit: "Zelfde isolatie", why: "Vrije kabelrichting en constante spanning; behoud hoge reps."),
+            ExerciseAlternative(name: "Reverse pec deck", fit: "Strong match", why: "Stable rear-delt isolation that is easy to progress."),
+            ExerciseAlternative(name: "Cable rear-delt fly", fit: "Same isolation", why: "Free cable direction and constant tension; keep the reps high."),
         ],
         "strict-curl": [
-            ExerciseAlternative(name: "Bayesian cable curl", fit: "Zelfde armdoel", why: "Bicepstraining met spanning in een verlengde positie; reset het gewicht."),
-            ExerciseAlternative(name: "Incline dumbbell curl", fit: "Sterke match", why: "Vrije dumbbellvariant met weinig ruimte voor momentum."),
+            ExerciseAlternative(name: "Bayesian cable curl", fit: "Same arm target", why: "Biceps work with tension in a lengthened position; reset the weight."),
+            ExerciseAlternative(name: "Incline dumbbell curl", fit: "Strong match", why: "Free dumbbell variant with little room for momentum."),
         ],
         "science-preacher": [
-            ExerciseAlternative(name: "Machine preacher curl", fit: "1-op-1", why: "Zelfde gestabiliseerde bovenarm en eenvoudige progressie."),
-            ExerciseAlternative(name: "Spider curl", fit: "Sterke match", why: "Beperkt momentum, maar heeft een andere weerstandscurve."),
+            ExerciseAlternative(name: "Machine preacher curl", fit: "1-to-1", why: "Same stabilised upper arm and simple progress."),
+            ExerciseAlternative(name: "Spider curl", fit: "Strong match", why: "Limits momentum, but has a different resistance curve."),
         ],
         "hammer-curl": [
-            ExerciseAlternative(name: "Rope hammer curl", fit: "1-op-1 greep", why: "Neutrale greep en dezelfde armflexoren met constante kabelspanning."),
-            ExerciseAlternative(name: "Cross-body hammer curl", fit: "Sterke match", why: "Zelfde neutrale greep, één arm tegelijk en weinig setup."),
+            ExerciseAlternative(name: "Rope hammer curl", fit: "1-to-1 grip", why: "Neutral grip and the same arm flexors with constant cable tension."),
+            ExerciseAlternative(name: "Cross-body hammer curl", fit: "Strong match", why: "Same neutral grip, one arm at a time and little setup."),
         ],
         "cable-curl": [
-            ExerciseAlternative(name: "Machine preacher curl", fit: "Stabiele match", why: "Zelfde bicepsdoel en eenvoudig dicht bij falen te trainen."),
-            ExerciseAlternative(name: "Incline dumbbell curl", fit: "Vrije variant", why: "Behoudt een lange spierlengte, maar reset de belasting."),
+            ExerciseAlternative(name: "Machine preacher curl", fit: "Stable match", why: "Same biceps target and easy to train close to failure."),
+            ExerciseAlternative(name: "Incline dumbbell curl", fit: "Free-weight variant", why: "Keeps a long muscle length, but resets the load."),
         ],
         "hack-squat": [
-            ExerciseAlternative(name: "Leg press", fit: "Zelfde kniefocus", why: "Stabiele quad-dominante compound; match diepte en RIR, niet het absolute gewicht."),
-            ExerciseAlternative(name: "Heel-elevated Smith squat", fit: "Sterke match", why: "Grote knieflexie en vaste baan; kies een pijnvrije stance."),
+            ExerciseAlternative(name: "Leg press", fit: "Same knee focus", why: "Stable quad-dominant compound; match depth and RIR, not the absolute weight."),
+            ExerciseAlternative(name: "Heel-elevated Smith squat", fit: "Strong match", why: "Deep knee flexion and a fixed path; pick a pain-free stance."),
         ],
         "bulgarian": [
-            ExerciseAlternative(name: "Reverse lunge", fit: "Unilaterale match", why: "Zelfde benen één voor één, vaak iets eenvoudiger te balanceren."),
-            ExerciseAlternative(name: "Single-leg press", fit: "Stabieler", why: "Behoudt unilaterale belasting met minder stabiliteitsvraag."),
+            ExerciseAlternative(name: "Reverse lunge", fit: "Unilateral match", why: "Same legs one at a time, often a little easier to balance."),
+            ExerciseAlternative(name: "Single-leg press", fit: "More stable", why: "Keeps one-sided loading with less stability demand."),
         ],
         "seated-curl": [
-            ExerciseAlternative(name: "Single-leg seated curl", fit: "1-op-1", why: "Zelfde heuphoek en kniebuiging, met afzonderlijke benen."),
-            ExerciseAlternative(name: "Lying leg curl", fit: "Zelfde functie", why: "Kniebuiging blijft gelijk, maar de hamstrings starten minder verlengd."),
+            ExerciseAlternative(name: "Single-leg seated curl", fit: "1-to-1", why: "Same hip angle and knee bend, one leg at a time."),
+            ExerciseAlternative(name: "Lying leg curl", fit: "Same function", why: "The knee bend stays the same, but the hamstrings start less stretched."),
         ],
         "lying-curl": [
-            ExerciseAlternative(name: "Seated leg curl", fit: "Sterke hypertrofieswap", why: "De heupbuiging traint hamstrings langer; een studie vond meer groei dan prone curls."),
-            ExerciseAlternative(name: "Nordic hamstring curl", fit: "Zwaardere swap", why: "Kniebuiging met sterke excentrische belasting; gebruik assistentie om de rep-range haalbaar te maken."),
+            ExerciseAlternative(name: "Seated leg curl", fit: "Strong hypertrophy swap", why: "The hip flexion trains the hamstrings longer; one study found more growth than with lying curls."),
+            ExerciseAlternative(name: "Nordic hamstring curl", fit: "Harder swap", why: "Knee bend with heavy lowering load; use assistance to make the rep range achievable."),
         ],
         "leg-extension": [
-            ExerciseAlternative(name: "Sissy squat machine", fit: "Quad-isolatie", why: "Veel knieflexie met weinig heupbijdrage; alleen in pijnvrije ROM."),
-            ExerciseAlternative(name: "Reverse Nordic", fit: "Bodyweight swap", why: "Quad-dominant alternatief; schaal de ROM en gebruik controle."),
+            ExerciseAlternative(name: "Sissy squat machine", fit: "Quad isolation", why: "Lots of knee flexion with little hip involvement; only in a pain-free ROM."),
+            ExerciseAlternative(name: "Reverse Nordic", fit: "Bodyweight swap", why: "Quad-dominant alternative; scale the ROM and stay in control."),
         ],
         "rdl": [
-            ExerciseAlternative(name: "Dumbbell Romanian deadlift", fit: "1-op-1 patroon", why: "Dezelfde hip hinge en hamstringstretch. Behoud sets/reps/RIR, maar reset het gewicht."),
-            ExerciseAlternative(name: "Assisted Nordic hamstring curl", fit: "Zelfde doel, ander patroon", why: "Een RCT uit 2025 vond vergelijkbare hamstringarchitectuur en -groei als bij eccentrische RDL-training; hij vervangt niet de glute- en hingeprikkel."),
+            ExerciseAlternative(name: "Dumbbell Romanian deadlift", fit: "1-to-1 pattern", why: "Same hip hinge and hamstring stretch. Keep sets/reps/RIR, but reset the weight."),
+            ExerciseAlternative(name: "Assisted Nordic hamstring curl", fit: "Same goal, different pattern", why: "A 2025 RCT found similar hamstring architecture and growth as eccentric RDL training; it doesn't replace the glute and hinge stimulus."),
         ],
         "leg-press": [
-            ExerciseAlternative(name: "Hack squat", fit: "Zelfde kniefocus", why: "Stabiele compound met grote knieflexie; vergelijk inspanning en ROM, niet kilo’s."),
-            ExerciseAlternative(name: "Heel-elevated Smith squat", fit: "Sterke match", why: "Quad-dominante squat met vaste baan en voorspelbare progressie."),
+            ExerciseAlternative(name: "Hack squat", fit: "Same knee focus", why: "Stable compound with deep knee flexion; compare effort and ROM, not kilos."),
+            ExerciseAlternative(name: "Heel-elevated Smith squat", fit: "Strong match", why: "Quad-dominant squat with a fixed path and predictable progress."),
         ],
         "hip-thrust": [
-            ExerciseAlternative(name: "Smith glute bridge", fit: "Zelfde verkorte positie", why: "Horizontale heupextensie met stabiele lock-out en minder setup."),
-            ExerciseAlternative(name: "45° hip extension", fit: "Zelfde heupfunctie", why: "Train glutes en hamstrings via heupextensie; rond niet door je onderrug om de rep af te maken."),
+            ExerciseAlternative(name: "Smith glute bridge", fit: "Same shortened position", why: "Horizontal hip extension with a stable lockout and less setup."),
+            ExerciseAlternative(name: "45° hip extension", fit: "Same hip function", why: "Train glutes and hamstrings through hip extension; don't round your lower back to finish the rep."),
         ],
         "standing-calf": [
-            ExerciseAlternative(name: "Leg-press calf raise", fit: "Gestrekte-knie match", why: "Zelfde gastrocnemiusbias en makkelijke progressie met volledige stretch."),
-            ExerciseAlternative(name: "Single-leg standing calf raise", fit: "Unilaterale match", why: "Zelfde kniestand met minder totaalgewicht nodig."),
+            ExerciseAlternative(name: "Leg-press calf raise", fit: "Straight-knee match", why: "Same gastrocnemius bias and easy progress with a full stretch."),
+            ExerciseAlternative(name: "Single-leg standing calf raise", fit: "Unilateral match", why: "Same knee position with less total weight needed."),
         ],
         "seated-calf": [
-            ExerciseAlternative(name: "Bent-knee calf raise op leg press", fit: "Soleusmatch", why: "Gebogen knie behoudt de soleusfocus; train door volledige ROM."),
-            ExerciseAlternative(name: "Dumbbell seated calf raise", fit: "Praktische swap", why: "Zelfde kniestand wanneer de machine bezet is; voeg gewicht stabiel toe."),
+            ExerciseAlternative(name: "Bent-knee calf raise on leg press", fit: "Soleus match", why: "A bent knee keeps the soleus focus; train through the full ROM."),
+            ExerciseAlternative(name: "Dumbbell seated calf raise", fit: "Practical swap", why: "Same knee position when the machine is taken; add weight in a stable way."),
         ],
         "cable-crunch": [
-            ExerciseAlternative(name: "Machine crunch", fit: "Zelfde rompflexie", why: "Stabiel alternatief dat eenvoudig progressief te laden is."),
-            ExerciseAlternative(name: "Weighted decline crunch", fit: "Vrije variant", why: "Zelfde dynamische buikfunctie; houd de belasting tegen je borst."),
+            ExerciseAlternative(name: "Machine crunch", fit: "Same trunk flexion", why: "A stable alternative that is easy to progress."),
+            ExerciseAlternative(name: "Weighted decline crunch", fit: "Free-weight variant", why: "Same dynamic ab function; hold the load against your chest."),
         ],
         "hanging-raise": [
-            ExerciseAlternative(name: "Captain's-chair knee raise", fit: "Stabieler", why: "Zelfde bekkenkanteling met minder grip als limiterende factor."),
-            ExerciseAlternative(name: "Reverse crunch", fit: "Vloervariant", why: "Behoud de bekkenbeweging en voeg pas reps toe zonder zwaai."),
+            ExerciseAlternative(name: "Captain's-chair knee raise", fit: "More stable", why: "Same pelvic tilt with grip less of a limiting factor."),
+            ExerciseAlternative(name: "Reverse crunch", fit: "Floor variant", why: "Keep the pelvic movement and only add reps without swinging."),
         ],
     ]
 

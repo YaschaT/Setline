@@ -115,7 +115,7 @@ final class AgendaTests: XCTestCase {
         XCTAssertEqual(try day(moved, 7).content, .rest, "the date it left")
         let thursday = try day(moved, 10)
         XCTAssertEqual(thursday.plannedDay?.id, "push")
-        XCTAssertEqual(thursday.movedFrom, "maandag", "and it says where it came from")
+        XCTAssertEqual(thursday.movedFrom, "Monday", "and it says where it came from")
         XCTAssertTrue(thursday.isMoved)
     }
 
@@ -194,8 +194,8 @@ final class AgendaTests: XCTestCase {
         let days = week(on: date(9))
         XCTAssertEqual(days.count, 7)
         XCTAssertEqual(days.map(\.dayNumber), [7, 8, 9, 10, 11, 12, 13])
-        XCTAssertEqual(days.first?.weekday, "ma")
-        XCTAssertEqual(days.last?.weekday, "zo")
+        XCTAssertEqual(days.first?.weekday, "Mo")
+        XCTAssertEqual(days.last?.weekday, "Su")
         XCTAssertEqual(days.filter(\.isToday).count, 1, "exactly one today")
     }
 
@@ -204,7 +204,7 @@ final class AgendaTests: XCTestCase {
         let days = week(on: date(30), now: date(30))
         XCTAssertEqual(days.count, 7)
         XCTAssertEqual(days.map(\.dayNumber), [28, 29, 30, 1, 2, 3, 4])
-        XCTAssertEqual(WeekPlan.range(days.map(\.date), calendar: calendar), "28 sep–4 okt")
+        XCTAssertEqual(WeekPlan.range(days.map(\.date), calendar: calendar), "28 Sep–4 Oct")
     }
 
     func testASessionOnASundayBelongsToThatWeekNotTheNext() throws {
@@ -250,13 +250,13 @@ final class AgendaTests: XCTestCase {
     // MARK: - What a week says about itself
 
     func testTheWeekSummaryNamesTodayOrCountsWhatWasLogged() {
-        XCTAssertEqual(Agenda.summary(of: week(on: monday), now: monday, calendar: calendar), "vandaag maandag 7 sep")
+        XCTAssertEqual(Agenda.summary(of: week(on: monday), now: monday, calendar: calendar), "today, Monday 7 Sep")
 
         let previous = week(on: date(4), sessions: [session(on: 2), session(on: 4)])
-        XCTAssertEqual(Agenda.summary(of: previous, now: monday, calendar: calendar), "2 sessies gelogd")
+        XCTAssertEqual(Agenda.summary(of: previous, now: monday, calendar: calendar), "2 sessions logged")
 
         let next = week(on: date(14), now: monday)
-        XCTAssertEqual(Agenda.summary(of: next, now: monday, calendar: calendar), "geen sessies gelogd")
+        XCTAssertEqual(Agenda.summary(of: next, now: monday, calendar: calendar), "no sessions logged")
     }
 
     // MARK: - Missed days, for the alert center

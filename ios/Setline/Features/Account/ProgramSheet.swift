@@ -23,13 +23,13 @@ struct ProgramSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Welke planvorm?")
+                    Text("Which plan shape?")
                         .slDisplay()
                         .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
-                    Text("Je eigen plan blijft bewaard. Elk programma houdt zijn eigen week.")
+                    Text("Your own plan is kept. Each program keeps its own week.")
                         .slBody()
                         .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
@@ -58,7 +58,7 @@ struct ProgramSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(SL.Surface.ground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            Button { save() } label: { Text("Bewaar") }
+            Button { save() } label: { Text("Save") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .disabled(selection.id == current.id)
                 .padding(.horizontal, SL.Space.gutterSession)
@@ -72,7 +72,7 @@ struct ProgramSheet: View {
     private var header: some View {
         HStack {
             Button { onClose() } label: {
-                Text("Terug")
+                Text("Back")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .slHitTarget()
@@ -129,8 +129,8 @@ struct ProgramSheet: View {
     /// What the choice produces, stated before it is made.
     private var consequence: String {
         selection.id == current.id
-            ? "Je traint nu volgens \(current.name)."
-            : "Je week wordt opgebouwd uit \(selection.name). Je gelogde sessies en je eigen plan blijven staan."
+            ? "You're training on \(current.name) now."
+            : "Your week is built from \(selection.name). Your logged sessions and your own plan stay."
     }
 
     private func save() {

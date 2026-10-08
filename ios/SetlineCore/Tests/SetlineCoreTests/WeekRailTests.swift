@@ -98,10 +98,10 @@ final class WeekRailTests: XCTestCase {
         let next = try XCTUnwrap(next(after: 10))
         XCTAssertEqual(next.dayNumber, 11)
         XCTAssertEqual(next.plannedDay?.id, "lower")
-        XCTAssertEqual(Agenda.restLine(next: next, now: date(10), calendar: calendar), "Volgende training morgen")
+        XCTAssertEqual(Agenda.restLine(next: next, now: date(10), calendar: calendar), "Next training tomorrow")
         XCTAssertEqual(
             Agenda.sessionLine(next),
-            "vr 11 sep · ±\(WeekPlan.minutes(of: workout("lower"))) min"
+            "Fr 11 Sep · ±\(WeekPlan.minutes(of: workout("lower"))) min"
         )
     }
 
@@ -109,13 +109,13 @@ final class WeekRailTests: XCTestCase {
 
     func testTheWordForWhenFollowsTheCalendar() {
         let monday = date(7)
-        XCTAssertEqual(Agenda.when(date(7, hour: 20), from: monday, calendar: calendar), "vandaag")
-        XCTAssertEqual(Agenda.when(date(8), from: monday, calendar: calendar), "morgen")
-        XCTAssertEqual(Agenda.when(date(9), from: monday, calendar: calendar), "overmorgen")
-        XCTAssertEqual(Agenda.when(date(11), from: monday, calendar: calendar), "vrijdag", "later this week")
-        XCTAssertEqual(Agenda.when(date(13), from: monday, calendar: calendar), "zondag")
-        XCTAssertEqual(Agenda.when(date(15), from: monday, calendar: calendar), "dinsdag 15 sep", "past this week")
-        XCTAssertEqual(Agenda.when(date(5, month: 10), from: monday, calendar: calendar), "maandag 5 okt")
+        XCTAssertEqual(Agenda.when(date(7, hour: 20), from: monday, calendar: calendar), "today")
+        XCTAssertEqual(Agenda.when(date(8), from: monday, calendar: calendar), "tomorrow")
+        XCTAssertEqual(Agenda.when(date(9), from: monday, calendar: calendar), "the day after tomorrow")
+        XCTAssertEqual(Agenda.when(date(11), from: monday, calendar: calendar), "Friday", "later this week")
+        XCTAssertEqual(Agenda.when(date(13), from: monday, calendar: calendar), "Sunday")
+        XCTAssertEqual(Agenda.when(date(15), from: monday, calendar: calendar), "Tuesday 15 Sep", "past this week")
+        XCTAssertEqual(Agenda.when(date(5, month: 10), from: monday, calendar: calendar), "Monday 5 Oct")
     }
 
     func testASessionLaterThisWeekIsNamedByItsWeekday() throws {
@@ -124,7 +124,7 @@ final class WeekRailTests: XCTestCase {
         let overrides = ["2026-09-08": "rest", "2026-09-09": "rest", "2026-09-10": "rest"]
         let next = try XCTUnwrap(self.next(after: 7, overrides: overrides))
         XCTAssertEqual(next.dayNumber, 11)
-        XCTAssertEqual(Agenda.restLine(next: next, now: date(7), calendar: calendar), "Volgende training vrijdag")
+        XCTAssertEqual(Agenda.restLine(next: next, now: date(7), calendar: calendar), "Next training Friday")
     }
 
     func testASessionBeyondThisWeekCarriesItsDate() throws {
@@ -134,13 +134,13 @@ final class WeekRailTests: XCTestCase {
         XCTAssertEqual(next.plannedDay?.id, "push")
         XCTAssertEqual(
             Agenda.restLine(next: next, now: date(11), calendar: calendar),
-            "Volgende training maandag 14 sep"
+            "Next training Monday 14 Sep"
         )
     }
 
     func testNothingPlannedSaysSoInsteadOfInventingASession() {
         XCTAssertNil(next(after: 10, plan: []))
-        XCTAssertEqual(Agenda.restLine(next: nil, now: date(10), calendar: calendar), "Geen training gepland")
+        XCTAssertEqual(Agenda.restLine(next: nil, now: date(10), calendar: calendar), "No training planned")
     }
 
     // MARK: - Week boundary
@@ -148,10 +148,10 @@ final class WeekRailTests: XCTestCase {
     func testSundaysNextSessionIsMondayOfTheNextWeek() throws {
         let next = try XCTUnwrap(self.next(after: 13))
         XCTAssertEqual(next.dayNumber, 14)
-        XCTAssertEqual(Agenda.restLine(next: next, now: date(13), calendar: calendar), "Volgende training morgen")
+        XCTAssertEqual(Agenda.restLine(next: next, now: date(13), calendar: calendar), "Next training tomorrow")
         XCTAssertEqual(
             Agenda.sessionLine(next),
-            "ma 14 sep · ±\(WeekPlan.minutes(of: workout("push"))) min"
+            "Mo 14 Sep · ±\(WeekPlan.minutes(of: workout("push"))) min"
         )
     }
 
@@ -160,7 +160,7 @@ final class WeekRailTests: XCTestCase {
         let next = try XCTUnwrap(self.next(after: 30))
         XCTAssertEqual(calendar.component(.month, from: next.date), 10)
         XCTAssertEqual(next.dayNumber, 2)
-        XCTAssertEqual(Agenda.sessionLine(next)?.hasPrefix("vr 2 okt"), true)
+        XCTAssertEqual(Agenda.sessionLine(next)?.hasPrefix("Fr 2 Oct"), true)
     }
 
     // MARK: - Schedule overrides
@@ -172,8 +172,8 @@ final class WeekRailTests: XCTestCase {
         XCTAssertEqual(next.dayNumber, 13)
         XCTAssertEqual(next.plannedDay?.id, "lower")
         XCTAssertEqual(next.mark, .moved)
-        XCTAssertEqual(next.movedFrom, "vrijdag")
-        XCTAssertEqual(Agenda.restLine(next: next, now: date(10), calendar: calendar), "Volgende training zondag")
+        XCTAssertEqual(next.movedFrom, "Friday")
+        XCTAssertEqual(Agenda.restLine(next: next, now: date(10), calendar: calendar), "Next training Sunday")
     }
 
     // MARK: - A lighter week
@@ -185,14 +185,14 @@ final class WeekRailTests: XCTestCase {
 
         XCTAssertEqual(WeekPlan.sets(of: try XCTUnwrap(next.plannedDay)), SessionPrescription.setCount(of: workout("lower"), deload: deload))
         XCTAssertLessThan(WeekPlan.minutes(of: effective), WeekPlan.minutes(of: workout("lower")))
-        XCTAssertEqual(Agenda.sessionLine(next), "vr 11 sep · ±\(WeekPlan.minutes(of: effective)) min")
+        XCTAssertEqual(Agenda.sessionLine(next), "Fr 11 Sep · ±\(WeekPlan.minutes(of: effective)) min")
     }
 
     func testTheLighterWeekDoesNotReachASessionPastItsWindow() throws {
         // A deload from Monday 7 ends before Monday 14.
         let deload = Deload(startedAt: date(7))
         let next = try XCTUnwrap(self.next(after: 13, deload: deload))
-        XCTAssertEqual(Agenda.sessionLine(next), "ma 14 sep · ±\(WeekPlan.minutes(of: workout("push"))) min")
+        XCTAssertEqual(Agenda.sessionLine(next), "Mo 14 Sep · ±\(WeekPlan.minutes(of: workout("push"))) min")
     }
 
     // MARK: - What "next" steps over
@@ -208,7 +208,7 @@ final class WeekRailTests: XCTestCase {
         // stepped over: the next session still to come is today's.
         let fromLastWeek = try XCTUnwrap(self.next(after: 3, now: date(7)))
         XCTAssertEqual(fromLastWeek.dayNumber, 7)
-        XCTAssertEqual(Agenda.when(fromLastWeek.date, from: date(7), calendar: calendar), "vandaag")
+        XCTAssertEqual(Agenda.when(fromLastWeek.date, from: date(7), calendar: calendar), "today")
     }
 
     // MARK: - Reading never writes

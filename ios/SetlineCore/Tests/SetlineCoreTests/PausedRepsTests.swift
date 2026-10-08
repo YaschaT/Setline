@@ -227,8 +227,8 @@ final class PausedRepsTests: XCTestCase {
         XCTAssertEqual(found.count, 2, "touch-and-go and paused are two series of one lift")
         XCTAssertEqual(found.first?.sessions, 2)
         XCTAssertFalse(found.first?.modifiers.pauseEnabled == true, "the one the account has most of leads")
-        XCTAssertEqual(found.first?.label, "zonder pauze")
-        XCTAssertEqual(found.last?.label, "gepauzeerd · 2 s")
+        XCTAssertEqual(found.first?.label, "no pause")
+        XCTAssertEqual(found.last?.label, "paused · 2 s")
 
         // And the leading series is the one a screen reading it would show.
         let progress = StrengthProgress.make(

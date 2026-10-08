@@ -227,7 +227,7 @@ final class SetRemovalTests: XCTestCase {
                 SetRemoval(exerciseID: "flat-bench", setIndex: 0),
             ])),
         ])
-        XCTAssertEqual(rows.first?.title, "Correctie")
-        XCTAssertEqual(rows.first?.detail, "1 set verwijderd uit een eerdere sessie")
+        XCTAssertEqual(rows.first?.title, "Correction")
+        XCTAssertEqual(rows.first?.detail, "1 set removed from an earlier session")
     }
 }

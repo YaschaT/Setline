@@ -41,7 +41,7 @@ public enum RecordsEngine {
     public static func record(
         for sets: [LoggedSet],
         history: ExerciseHistory,
-        formatter: NumberDisplay = .dutch
+        formatter: NumberDisplay = .english
     ) -> ExerciseRecord? {
         let current = sets.filter(\.countsTowardProgression)
         guard !current.isEmpty else { return nil }
@@ -49,8 +49,8 @@ public enum RecordsEngine {
         guard history.hasReference else {
             return ExerciseRecord(
                 type: .sessionBest,
-                headline: "Referentie opbouwen · sessie \(history.referenceSessionNumber) van \(ExerciseHistory.sessionsBeforeReference)",
-                detail: "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen.",
+                headline: "Building a reference · session \(history.referenceSessionNumber) of \(ExerciseHistory.sessionsBeforeReference)",
+                detail: "After three comparable sessions, SETLINE can show reliable progression suggestions and records.",
                 buildsReference: true
             )
         }
@@ -65,9 +65,9 @@ public enum RecordsEngine {
                let set = current.first(where: { ($0.weightKg ?? 0) == heaviestNow }) {
                 return ExerciseRecord(
                     type: .load,
-                    headline: "Zwaarste ooit · \(formatter.kg(heaviestNow)) × \(set.reps)",
+                    headline: "Heaviest ever · \(formatter.kg(heaviestNow)) × \(set.reps)",
                     detail: previousBest(at: heaviestBefore, in: history.appearances, formatter: formatter)
-                        ?? "Eerste keer op dit gewicht"
+                        ?? "First time at this weight"
                 )
             }
         }
@@ -86,8 +86,8 @@ public enum RecordsEngine {
             if bestNow.value > bestBefore + epsilon {
                 return ExerciseRecord(
                     type: .estimatedStrength,
-                    headline: "Geschatte kracht · \(formatter.kg(Estimates.round(bestNow.value, toIncrement: 0.5)))",
-                    detail: "Geschat uit \(bestNow.set.reps) reps op \(formatter.kg(bestNow.set.weightKg ?? 0)). Niet gemeten."
+                    headline: "Estimated strength · \(formatter.kg(Estimates.round(bestNow.value, toIncrement: 0.5)))",
+                    detail: "Estimated from \(bestNow.set.reps) reps at \(formatter.kg(bestNow.set.weightKg ?? 0)). Not measured."
                 )
             }
         }
@@ -99,8 +99,8 @@ public enum RecordsEngine {
             if now > before {
                 return ExerciseRecord(
                     type: .sessionBest,
-                    headline: "Sterker dan vorige sessie",
-                    detail: "Meer totaal volume bij gelijke RIR"
+                    headline: "Stronger than last session",
+                    detail: "More total volume at the same RIR"
                 )
             }
         }
@@ -126,8 +126,8 @@ public enum RecordsEngine {
         guard let best else { return nil }
         return ExerciseRecord(
             type: .rep,
-            headline: "\(formatter.signedReps(best.reps - best.previous)) op \(formatter.kg(best.load))",
-            detail: "\(best.reps) reps, vorige keer \(best.previous)"
+            headline: "\(formatter.signedReps(best.reps - best.previous)) at \(formatter.kg(best.load))",
+            detail: "\(best.reps) reps, last time \(best.previous)"
         )
     }
 
@@ -145,7 +145,7 @@ public enum RecordsEngine {
         guard let best = candidates.max(by: { lhs, rhs in
             lhs.set.reps != rhs.set.reps ? lhs.set.reps < rhs.set.reps : lhs.date > rhs.date
         }) else { return nil }
-        return "Vorige beste \(formatter.kg(best.set.weightKg ?? 0)) × \(best.set.reps) op \(formatter.shortDate(best.date))"
+        return "Previous best \(formatter.kg(best.set.weightKg ?? 0)) × \(best.set.reps) on \(formatter.shortDate(best.date))"
     }
 
     /// Σ load × reps over the working sets.

@@ -147,7 +147,7 @@ public enum WeekPlan {
 
     private static func formatted(_ date: Date, _ format: String) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = format
         return formatter.string(from: date).replacingOccurrences(of: ".", with: "")
     }

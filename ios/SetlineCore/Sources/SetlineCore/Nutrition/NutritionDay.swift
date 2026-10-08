@@ -141,8 +141,20 @@ public enum Meal: String, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
 
-    /// How a sentence names it: "Toevoegen aan avondeten".
-    public var spoken: String { rawValue.lowercased() }
+    /// The stored value stays the web app's Dutch; this is what the screen
+    /// calls it.
+    public var label: String {
+        switch self {
+        case .ontbijt: return "Breakfast"
+        case .lunch: return "Lunch"
+        case .preWorkout: return "Pre-workout"
+        case .avondeten: return "Dinner"
+        case .snack: return "Snack"
+        }
+    }
+
+    /// How a sentence names it: "Add to dinner".
+    public var spoken: String { label.lowercased() }
 
     /// What is most likely being logged at this hour — the meal picker opens
     /// there, and is one tap from anything else. The hours are the web app's
@@ -173,7 +185,7 @@ public struct MealSection: Identifiable, Equatable, Sendable {
 
     /// Ontbijt, lunch, avondeten, snacks — four, always, in this order.
     public static let headings: [(Meal, String)] = [
-        (.ontbijt, "Ontbijt"), (.lunch, "Lunch"), (.avondeten, "Avondeten"), (.snack, "Snacks"),
+        (.ontbijt, "Breakfast"), (.lunch, "Lunch"), (.avondeten, "Dinner"), (.snack, "Snacks"),
     ]
 
     /// What a heading is called: "Snacks" gathers more than one meal, so it is
@@ -286,9 +298,9 @@ public enum Macro: String, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .protein: return "Proteïne"
-        case .carbs: return "Koolhydraten"
-        case .fat: return "Vet"
+        case .protein: return "Protein"
+        case .carbs: return "Carbs"
+        case .fat: return "Fat"
         }
     }
 

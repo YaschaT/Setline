@@ -65,7 +65,7 @@ public enum Schedule {
 
     public static func weekdayLabel(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "EEEEEE"
         return formatter.string(from: date).replacingOccurrences(of: ".", with: "")
     }

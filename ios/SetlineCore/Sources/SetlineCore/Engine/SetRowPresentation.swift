@@ -68,7 +68,7 @@ public enum SetRowWeightKind: Hashable, Sendable {
     case value
     /// "— kg": nothing entered and nothing proposed, as on 28's first row.
     case missing
-    /// "volgt uit set 1": the row waits on the calibration set (artboard 28).
+    /// "follows from set 1": the row waits on the calibration set (artboard 28).
     case awaitingCalibration
 }
 
@@ -141,7 +141,7 @@ public enum SetRowPresenter {
         activeIndex: Int?,
         mode: SetGridMode = .history,
         targetReps: [Int] = [],
-        formatter: NumberDisplay = .dutch
+        formatter: NumberDisplay = .english
     ) -> [SetRowPresentation] {
         var rows: [SetRowPresentation] = []
 
@@ -235,7 +235,7 @@ public enum SetRowPresenter {
                         repsIsTarget = true
                     }
                 } else if !set.isLogged {
-                    weightLabel = "volgt uit set 1"
+                    weightLabel = "follows from set 1"
                     weightKind = .awaitingCalibration
                     resolvedDelta = .none
                     if targetReps.indices.contains(offset) {
@@ -286,7 +286,7 @@ public enum SetRowPresenter {
     /// The ramp's rows, for the section above the working-set grid.
     public static func warmupRows(
         _ warmups: [WarmupSet],
-        formatter: NumberDisplay = .dutch
+        formatter: NumberDisplay = .english
     ) -> [SetRowPresentation] {
         warmups.enumerated().map { offset, warmup in
             SetRowPresentation(
@@ -309,7 +309,7 @@ public enum SetRowPresenter {
         exercise: Exercise,
         history: ExerciseHistory,
         proposedTargets: [Int]? = nil,
-        formatter: NumberDisplay = .dutch
+        formatter: NumberDisplay = .english
     ) -> String? {
         // Judged on the prescribed sets only. A set added during the session
         // neither holds the advice back until it is logged, nor changes it.
@@ -324,15 +324,15 @@ public enum SetRowPresenter {
 
         if hitTop {
             let step = ProgressionEngine.increment(for: exercise, currentLoad: load, role: planned.role)
-            return "Alle reps gehaald. Volgende keer \(formatter.kg(load + step))."
+            return "All reps done. Next time \(formatter.kg(load + step))."
         }
         // Doing what SETLINE proposed is never a miss. After a load increase
         // the proposal aims at the bottom of each range, and reaching it is
         // exactly the plan: same weight next time, working toward the top.
         if let proposed = proposedTargets, proposed.count >= tops.count,
            tops.indices.allSatisfy({ (slot($0)?.reps ?? 0) >= proposed[$0] }) {
-            return "Op doel. Volgende keer \(formatter.kg(load)), mik op \(ProgressionEngine.repsLabel(tops))."
+            return "On target. Next time \(formatter.kg(load)), aim for \(ProgressionEngine.repsLabel(tops))."
         }
-        return "Niet alle reps gehaald. Volgende keer hetzelfde gewicht."
+        return "Not all reps done. Same weight next time."
     }
 }

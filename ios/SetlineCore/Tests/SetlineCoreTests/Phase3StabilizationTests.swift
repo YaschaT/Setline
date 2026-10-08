@@ -239,7 +239,7 @@ final class PerSetTargetTests: XCTestCase {
         let proposal = ProgressionEngine.proposal(planned: mixed, exercise: bench, history: readyHistory)
         XCTAssertEqual(proposal.tone, .ready)
         XCTAssertEqual(proposal.setTargets, [5, 6, 6], "set 1's 5 must not leak into the 6–8 sets")
-        XCTAssertTrue(proposal.body.contains("mik op 5 · 6 · 6"), proposal.body)
+        XCTAssertTrue(proposal.body.contains("aim for 5 · 6 · 6"), proposal.body)
     }
 
     func testUniformRangesStillReadAsOneNumber() {
@@ -258,7 +258,7 @@ final class PerSetTargetTests: XCTestCase {
         let advice = SetRowPresenter.adviceLine(
             sets: logged, planned: mixed, exercise: bench, history: readyHistory, proposedTargets: targets
         )
-        XCTAssertEqual(advice, "Op doel. Volgende keer 102,5 kg, mik op 6 · 8 · 8.")
+        XCTAssertEqual(advice, "On target. Next time 102.5 kg, aim for 6 · 8 · 8.")
     }
 
     func testMissingAProposedTargetIsStillAMiss() {
@@ -267,7 +267,7 @@ final class PerSetTargetTests: XCTestCase {
             SetRowPresenter.adviceLine(
                 sets: logged, planned: mixed, exercise: bench, history: readyHistory, proposedTargets: [5, 6, 6]
             ),
-            "Niet alle reps gehaald. Volgende keer hetzelfde gewicht."
+            "Not all reps done. Same weight next time."
         )
     }
 
@@ -276,7 +276,7 @@ final class PerSetTargetTests: XCTestCase {
         let advice = SetRowPresenter.adviceLine(
             sets: logged, planned: mixed, exercise: bench, history: readyHistory, proposedTargets: [5, 6, 6]
         )
-        XCTAssertEqual(advice?.hasPrefix("Alle reps gehaald."), true)
+        XCTAssertEqual(advice?.hasPrefix("All reps done."), true)
     }
 }
 
@@ -330,7 +330,7 @@ final class SwapContextTests: XCTestCase {
 
     func testOtherHasNoSentenceForm() {
         XCTAssertNil(PainRegion.other.sentenceName, "'met je ergens anders' must be unwritable")
-        XCTAssertEqual(PainRegion.shoulder.sentenceName, "schouder")
+        XCTAssertEqual(PainRegion.shoulder.sentenceName, "shoulder")
     }
 
     func testExercisesAlreadyInTodaysSessionAreNeverSubstitutes() {

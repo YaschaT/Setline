@@ -35,7 +35,7 @@ struct SLUndoToast: View {
                 .buttonStyle(.plain)
             } else {
                 Button(action: onDismiss) {
-                    Text("Sluiten")
+                    Text("Close")
                         .font(.sl(SL.TypeSize.body, SL.Weight.regular))
                         .foregroundStyle(SL.Ink.secondary)
                         .fixedSize()

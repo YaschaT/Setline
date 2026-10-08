@@ -49,18 +49,18 @@ struct WeighInSheet: View {
         var input = value
         var rounded = Decimal()
         NSDecimalRound(&rounded, &input, 1, .plain)
-        return "\(rounded)".replacingOccurrences(of: ".", with: ",")
+        return "\(rounded)"
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            SLEyebrow(text: "Gewicht")
+            SLEyebrow(text: "Weight")
                 .padding(.top, SL.Space.s5)
 
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                TextField("", text: $text, prompt: Text("0,0").foregroundStyle(SL.Ink.tertiary))
+                TextField("", text: $text, prompt: Text("0.0").foregroundStyle(SL.Ink.tertiary))
                     .keyboardType(.decimalPad)
                     .focused($focused)
                     .onChange(of: text) { _, new in
@@ -71,7 +71,7 @@ struct WeighInSheet: View {
                     .slNumerals()
                     .foregroundStyle(SL.Ink.primary)
                     .tint(SL.Signal.action)
-                    .accessibilityLabel("Gewicht in kilogram")
+                    .accessibilityLabel("Weight in kilograms")
                 Text("kg").slLead().foregroundStyle(SL.Ink.tertiary)
             }
             .padding(.top, 6)
@@ -88,7 +88,7 @@ struct WeighInSheet: View {
             Spacer(minLength: SL.Space.s5)
 
             Button { if let weight { onSave(weight) } } label: {
-                Text(existing == nil ? "Bewaar weging" : "Weging bijwerken")
+                Text(existing == nil ? "Save weigh-in" : "Update weigh-in")
             }
             .buttonStyle(SLPrimaryButtonStyle())
             .disabled(weight == nil)
@@ -106,12 +106,12 @@ struct WeighInSheet: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(existing == nil ? "Weeg jezelf" : "Weging wijzigen")
+            Text(existing == nil ? "Weigh in" : "Edit weigh-in")
                 .slTitle()
                 .foregroundStyle(SL.Ink.primary)
             Spacer(minLength: SL.Space.s3)
             Button(action: onClose) {
-                Text("Sluiten")
+                Text("Close")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .slHitTarget()
@@ -125,7 +125,7 @@ struct WeighInSheet: View {
     private var footnote: String {
         let day = "\(WeekPlan.fullWeekday(date)) \(app.display.shortDate(date))"
         return existing == nil
-            ? "Wordt bewaard op \(day). Eén weging per dag."
-            : "Vervangt je weging van \(day). Eerdere wegingen blijven staan."
+            ? "Saved on \(day). One weigh-in per day."
+            : "Replaces your weigh-in of \(day). Earlier weigh-ins stay."
     }
 }

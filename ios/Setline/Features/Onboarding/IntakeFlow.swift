@@ -40,10 +40,10 @@ struct IntakeFlow: View {
     private var daysStep: some View {
         IntakeStep(
             step: 1, total: 4,
-            title: "Hoeveel dagen per week?",
-            subtitle: "Dit bepaalt de vorm van je week. Later te wijzigen.",
+            title: "How many days a week?",
+            subtitle: "This sets the shape of your week. You can change it later.",
             consequence: daysConsequence,
-            commit: "Verder",
+            commit: "Continue",
             onSkip: { finish() },
             onCommit: { step = 2 }
         ) {
@@ -54,7 +54,7 @@ struct IntakeFlow: View {
                     }
                 }
 
-                SLEyebrow(text: "WELKE DAGEN")
+                SLEyebrow(text: "WHICH DAYS")
                     .padding(.top, SL.Space.s8)
                     .padding(.bottom, SL.Space.s3)
 
@@ -90,7 +90,7 @@ struct IntakeFlow: View {
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(count) dagen per week")
+        .accessibilityLabel("\(count) days a week")
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
     }
 
@@ -127,14 +127,14 @@ struct IntakeFlow: View {
 
     private var daysConsequence: String {
         let chosen = weekdays.sorted().map { Self.weekdayNames[$0] }
-        guard !chosen.isEmpty else { return "Kies minstens één dag, of sla over en houd je huidige week." }
-        let days = "\(Self.spelled(chosen.count)) \(chosen.count == 1 ? "dag" : "dagen"): \(chosen.joined(separator: " · "))."
+        guard !chosen.isEmpty else { return "Pick at least one day, or skip and keep your current week." }
+        let days = "\(Self.spelled(chosen.count)) \(chosen.count == 1 ? "day" : "days"): \(chosen.joined(separator: " · "))."
         // 03 closes on what a session costs: the plan's own estimate,
         // averaged over its training days.
         let minutes = app.plan.map { WeekPlan.minutes(of: $0) }
         guard !minutes.isEmpty else { return days }
         let average = Int((Double(minutes.reduce(0, +)) / Double(minutes.count)).rounded())
-        return "\(days) Gemiddeld ±\(average) min per sessie."
+        return "\(days) About \(average) min per session."
     }
 
     /// Keeps the two answers honest about each other: picking a number fills
@@ -150,10 +150,10 @@ struct IntakeFlow: View {
     private var experienceStep: some View {
         IntakeStep(
             step: 2, total: 4,
-            title: "Hoe lang til je al?",
-            subtitle: "Bepaalt de startprogressie, niet je programma.",
+            title: "How long have you been lifting?",
+            subtitle: "Sets how fast you progress at the start, not your program.",
             consequence: experience.consequence,
-            commit: "Verder",
+            commit: "Continue",
             onSkip: { finish() },
             onCommit: { step = 3 }
         ) {
@@ -175,10 +175,10 @@ struct IntakeFlow: View {
     private var programStep: some View {
         IntakeStep(
             step: 3, total: 4,
-            title: "Welke planvorm?",
-            subtitle: "Alles blijft aanpasbaar in Account.",
-            consequence: "\(chosenProgram.shape). Elke week dezelfde vorm.",
-            commit: "Verder",
+            title: "Which plan shape?",
+            subtitle: "You can change everything in Account.",
+            consequence: "\(chosenProgram.shape). The same shape every week.",
+            commit: "Continue",
             onSkip: { finish() },
             onCommit: { step = 4 }
         ) {
@@ -200,16 +200,16 @@ struct IntakeFlow: View {
     private var platesStep: some View {
         IntakeStep(
             step: 4, total: 4,
-            title: "Welke schijven heb je?",
-            subtitle: "Hiermee rekent de schijvencalculator. Kilogram, uit je regio — wijzig het in Account als dat niet klopt.",
+            title: "Which plates do you have?",
+            subtitle: "The plate calculator uses these. Kilograms, based on your region — change it in Account if that's wrong.",
             subtitleMeasure: 32,
             consequence: "",
-            commit: "Klaar",
+            commit: "Done",
             onSkip: { finish() },
             onCommit: { finish() }
         ) {
             VStack(alignment: .leading, spacing: 0) {
-                SLEyebrow(text: "SCHIJVEN IN JE GYM · KG")
+                SLEyebrow(text: "PLATES IN YOUR GYM · KG")
                     .padding(.bottom, SL.Space.s3)
 
                 SLFlow(spacing: 6) {
@@ -228,7 +228,7 @@ struct IntakeFlow: View {
                         .slNumerals()
                         .foregroundStyle(SL.Ink.primary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Stang \(NumberDisplay.dutch.kg(PlateMath.defaultBar)) · gebruikt door de schijvencalculator")
+                    Text("Bar \(NumberDisplay.english.kg(PlateMath.defaultBar)) · used by the plate calculator")
                         .slMeta()
                         .foregroundStyle(SL.Ink.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -243,18 +243,18 @@ struct IntakeFlow: View {
     /// the dashed "off" chip — the shared component, not a local copy.
     private func plateChip(_ plate: Decimal) -> some View {
         let selected = plates.contains(plate)
-        return SLChip(title: NumberDisplay.dutch.number(plate), look: selected ? .selected : .off, horizontalPadding: 18) {
+        return SLChip(title: NumberDisplay.english.number(plate), look: selected ? .selected : .off, horizontalPadding: 18) {
             if selected { plates.remove(plate) } else { plates.insert(plate) }
         }
-        .accessibilityLabel("\(NumberDisplay.dutch.kg(plate)) schijf")
+        .accessibilityLabel("\(NumberDisplay.english.kg(plate)) plate")
     }
 
     private var platesHeadline: String {
         let inventory = PlateInventory(plates: Array(plates), barKg: PlateMath.defaultBar)
         guard let jump = inventory.smallestJump else {
-            return "Zonder schijven rekent de calculator niets uit. Kies er minstens één."
+            return "Without plates the calculator can't work anything out. Pick at least one."
         }
-        return "Kleinste sprong · \(NumberDisplay.dutch.kg(jump))"
+        return "Smallest jump · \(NumberDisplay.english.kg(jump))"
     }
 
     // MARK: Leaving
@@ -310,12 +310,12 @@ struct IntakeFlow: View {
         return draft.changes(programKey: app.programKey, now: now)
     }
 
-    private static let weekdayNames = ["ma", "di", "wo", "do", "vr", "za", "zo"]
+    private static let weekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     private static let fullWeekdayNames = [
-        "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag",
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
     ]
 
     private static func spelled(_ count: Int) -> String {
-        ["Nul", "Eén", "Twee", "Drie", "Vier", "Vijf", "Zes", "Zeven"][min(count, 7)]
+        ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven"][min(count, 7)]
     }
 }

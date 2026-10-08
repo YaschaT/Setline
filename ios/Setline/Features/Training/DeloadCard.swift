@@ -1,7 +1,7 @@
 import SwiftUI
 import SetlineCore
 
-/// Redesign 1a · "Herstel" — the one place the app asks something.
+/// Redesign 1a · "Recovery" — the one place the app asks something.
 ///
 /// The design fills this card from sleep, readiness and HRV. SETLINE reads
 /// none of those: its recovery proposal comes from the sets that were logged
@@ -31,7 +31,7 @@ struct DeloadCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
             HStack(alignment: .center, spacing: SL.Space.s3) {
-                Text("Voorstel voor de komende \(proposal.days) dagen")
+                Text("Suggestion for the next \(proposal.days) days")
                     .slMeta()
                     .slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
@@ -41,7 +41,7 @@ struct DeloadCard: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(proposal.days) dagen lichter")
+                Text("\(proposal.days) lighter days")
                     .slTitle()
                     .slNumerals()
                     .slLineHeight(1.3, size: SL.TypeSize.title)
@@ -67,9 +67,9 @@ struct DeloadCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
             case .applied:
-                outcome("Overgenomen: \(proposal.days) dagen lichter, tot en met \(lastDay).")
+                outcome("Accepted: \(proposal.days) lighter days, up to and including \(lastDay).")
             case .ignored:
-                outcome("Genegeerd. Je plan blijft zoals gepland.")
+                outcome("Ignored. Your plan stays as planned.")
             }
         }
         .padding(SL.Space.s4)
@@ -102,9 +102,9 @@ struct DeloadCard: View {
 
     private var statusLabel: String {
         switch status {
-        case .open: return "Niet toegepast"
-        case .applied: return "✓ Toegepast"
-        case .ignored: return "Genegeerd"
+        case .open: return "Not applied"
+        case .applied: return "✓ Applied"
+        case .ignored: return "Ignored"
         }
     }
 
@@ -139,18 +139,18 @@ struct DeloadCard: View {
 
     private var lead: String {
         if reading.signals.contains(.performanceRegression) {
-            return "Je reps zakken op hetzelfde gewicht."
+            return "Your reps are dropping at the same weight."
         }
         if reading.signals.contains(.effortDrift) {
-            return "Zelfde werk kost je meer."
+            return "The same work costs you more."
         }
-        return "Je maakt je sessies niet meer af."
+        return "You're not finishing your sessions anymore."
     }
 
     private var actions: some View {
         HStack(alignment: .top, spacing: SL.Space.s2) {
             Button(action: onApply) {
-                Text("Overnemen")
+                Text("Accept")
                     .slBody(SL.Weight.semibold)
                     .foregroundStyle(SL.Signal.recovery)
                     .frame(maxWidth: .infinity)
@@ -168,10 +168,10 @@ struct DeloadCard: View {
             }
             .buttonStyle(.plain)
             .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
-            .accessibilityHint("Maakt de komende \(proposal.days) dagen lichter")
+            .accessibilityHint("Makes the next \(proposal.days) days lighter")
 
             Button(action: onDismiss) {
-                Text("Negeren")
+                Text("Ignore")
                     .slBody()
                     .foregroundStyle(SL.Ink.primary)
                     .frame(maxWidth: .infinity)
@@ -185,7 +185,7 @@ struct DeloadCard: View {
             }
             .buttonStyle(.plain)
             .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
-            .accessibilityHint("Laat je plan zoals het is")
+            .accessibilityHint("Leaves your plan as it is")
         }
     }
 
@@ -203,7 +203,7 @@ struct DeloadCard: View {
         let calendar = Calendar.current
         let last = calendar.date(byAdding: .day, value: max(0, proposal.days - 1), to: proposal.startedAt) ?? proposal.startedAt
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "EEEEEE d MMM"
         return formatter.string(from: last).replacingOccurrences(of: ".", with: "")
     }

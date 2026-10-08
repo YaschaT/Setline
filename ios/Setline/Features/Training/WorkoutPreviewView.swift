@@ -1,7 +1,7 @@
 import SwiftUI
 import SetlineCore
 
-/// Redesign 1a · "Voorbeeld · start nog niet".
+/// Redesign 1a · "Preview · nothing starts yet".
 ///
 /// What a date holds, read from the programme and the schedule: four numbers
 /// about the session, then its exercises in order. Opening it writes nothing
@@ -9,7 +9,7 @@ import SetlineCore
 ///
 /// A day that has gone by offers writing it down afterwards instead; a day
 /// still to come offers nothing but a look. Every unlogged day can be given
-/// another session from here ("Wijzig deze dag").
+/// another session from here ("Change this day").
 struct WorkoutPreviewView: View {
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -48,10 +48,10 @@ struct WorkoutPreviewView: View {
     }
 
     private var subtitle: String {
-        if day.isToday { return "Voorbeeld · start nog niet" }
+        if day.isToday { return "Preview · nothing starts yet" }
         let date = "\(WeekPlan.fullWeekday(day.date)) \(app.display.shortDate(day.date))"
-        if case .missed = day.content { return "Niet gelogd · \(date)" }
-        return "Voorbeeld · \(date)"
+        if case .missed = day.content { return "Not logged · \(date)" }
+        return "Preview · \(date)"
     }
 
     // MARK: - Four numbers
@@ -60,13 +60,13 @@ struct WorkoutPreviewView: View {
         let volume = plannedVolume
         var items: [(value: String, label: String)] = [
             ("~\(WeekPlan.minutes(of: workout))", "min"),
-            ("\(workout.exercises.count)", workout.exercises.count == 1 ? "oefening" : "oefeningen"),
+            ("\(workout.exercises.count)", workout.exercises.count == 1 ? "exercise" : "exercises"),
             ("\(WeekPlan.sets(of: workout))", "sets"),
         ]
         // Tonnage needs weights to reckon with; a first session has none, and
         // the column is left out rather than filled with a guess.
         if volume > 0 {
-            items.append((app.display.number(tonnes(volume)), "ton gepland"))
+            items.append((app.display.number(tonnes(volume)), "tonnes planned"))
         }
         // Four across, until the text is too large for four: then two rows
         // of two, and every label whole.
@@ -181,10 +181,10 @@ struct WorkoutPreviewView: View {
         let line = "\(planned.targetSets) × \(reps)"
         let (weight, previous) = target(for: planned)
         if let weight, let previous, weight != previous {
-            return "\(line) · doel \(app.display.kg(weight))"
+            return "\(line) · target \(app.display.kg(weight))"
         }
         if let previous {
-            return "\(line) · vorige \(app.display.kg(previous))"
+            return "\(line) · last \(app.display.kg(previous))"
         }
         if let note = planned.authoredNote?.load, !note.isEmpty {
             return "\(line) · \(note)"
@@ -201,16 +201,16 @@ struct WorkoutPreviewView: View {
     private var footnote: String {
         var lines: [String] = []
         if let movedFrom = day.movedFrom {
-            lines.append("Verplaatst van \(movedFrom).")
+            lines.append("Moved from \(movedFrom).")
         }
         if case .missed = day.content {
-            lines.append("Geen sets opgeslagen. SETLINE haalt niets in en verschuift niets — je plan voor volgende week blijft staan.")
+            lines.append("No sets saved. SETLINE doesn't catch up or shift anything — your plan for next week stays.")
         } else if day.isToday {
-            lines.append("Gewichten komen uit je vorige sessie. Alles is tijdens de sessie aanpasbaar.")
+            lines.append("Weights come from your last session. Everything can be changed during the session.")
         } else if let reference = lastSession {
-            lines.append("Verwachte gewichten, gerekend uit je sessie van \(app.display.shortDate(reference.date)). Starten kan op de dag zelf.")
+            lines.append("Expected weights, worked out from your session on \(app.display.shortDate(reference.date)). You can start on the day itself.")
         } else {
-            lines.append("Starten kan op de dag zelf.")
+            lines.append("You can start on the day itself.")
         }
         return lines.joined(separator: " ")
     }
@@ -229,16 +229,16 @@ struct WorkoutPreviewView: View {
                 .buttonStyle(SLPrimaryButtonStyle())
             }
             if let onLogPast {
-                Button(action: onLogPast) { Text("Achteraf loggen") }
+                Button(action: onLogPast) { Text("Log afterwards") }
                     .buttonStyle(SLOutlineButtonStyle())
-                    .accessibilityHint("Schrijft \(workout.short) op, op \(Agenda.when(day.date))")
+                    .accessibilityHint("Logs \(workout.short) for \(Agenda.when(day.date))")
                     .padding(.bottom, SL.Space.s1)
             }
-            Button(action: onChangeDay) { Text("Wijzig deze dag") }
+            Button(action: onChangeDay) { Text("Change this day") }
                 .buttonStyle(SLOutlineButtonStyle())
                 .padding(.top, onStart == nil ? 0 : SL.Space.s1)
-                .accessibilityHint("Zet een andere sessie of rust op deze datum")
-            Button(action: onClose) { Text("Terug naar overzicht") }
+                .accessibilityHint("Puts another session or rest on this date")
+            Button(action: onClose) { Text("Back to overview") }
                 .buttonStyle(SLQuietButtonStyle())
         }
     }

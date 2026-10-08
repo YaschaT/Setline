@@ -108,8 +108,8 @@ final class FatigueTests: XCTestCase {
         XCTAssertEqual(deload.sets(from: 5), 3)
         XCTAssertEqual(deload.sets(from: 4), 2)
         XCTAssertEqual(deload.sets(from: 1), 1, "never to zero")
-        XCTAssertEqual(deload.detail, "Zelfde oefeningen, 40% minder sets, RIR +2. Gewicht blijft.")
-        XCTAssertEqual(deload.headline, "Voorstel: 5 dagen lichter")
+        XCTAssertEqual(deload.detail, "Same exercises, 40% fewer sets, RIR +2. Weight stays.")
+        XCTAssertEqual(deload.headline, "Suggestion: 5 lighter days")
     }
 
     func testTheLighterWeekEndsOnItsOwn() {

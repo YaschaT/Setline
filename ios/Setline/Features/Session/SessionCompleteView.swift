@@ -24,16 +24,16 @@ struct SessionCompleteView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Button(action: onBack) {
-                        Text("Terug")
+                        Text("Back")
                             .slBody(SL.Weight.medium)
                             .foregroundStyle(SL.Ink.secondary)
                             .frame(minHeight: SL.Space.hitMin)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Terug naar sessie")
+                    .accessibilityLabel("Back to session")
 
-                    SLEyebrow(text: "Afgerond · \(runner.completedSetCount)/\(runner.plannedSetCount) sets")
+                    SLEyebrow(text: "Done · \(runner.completedSetCount)/\(runner.plannedSetCount) sets")
                         .padding(.top, SL.Space.s5)
 
                     // The date is the session's own, and a workout written
@@ -62,7 +62,7 @@ struct SessionCompleteView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Button(action: onSave) { Text("Sessie opslaan") }
+            Button(action: onSave) { Text("Save session") }
                 .buttonStyle(SLPrimaryButtonStyle())
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s3)

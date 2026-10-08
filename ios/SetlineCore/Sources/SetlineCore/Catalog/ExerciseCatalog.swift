@@ -85,7 +85,7 @@ public enum GeneratedExerciseCatalog {
         ),
         "kneeling-lat": Exercise(
             id: "kneeling-lat",
-            name: "Eén-knie lat pulldown",
+            name: "Single-knee lat pulldown",
             equipment: .cable,
             isCompound: false,
             unilateral: true
@@ -141,7 +141,7 @@ public enum GeneratedExerciseCatalog {
         ),
         "pec-fly": Exercise(
             id: "pec-fly",
-            name: "Pec-flymachine",
+            name: "Pec fly machine",
             equipment: .machineSelectorised,
             isCompound: false,
             unilateral: false
@@ -232,7 +232,7 @@ public enum GeneratedExerciseCatalog {
         ),
         "strict-curl": Exercise(
             id: "strict-curl",
-            name: "Strikte dumbbellcurl",
+            name: "Strict dumbbell curl",
             equipment: .dumbbell,
             isCompound: false,
             unilateral: false

@@ -84,7 +84,7 @@ final class AppState {
     private(set) var experience: Experience?
     private(set) var deload: Deload?
 
-    let display = NumberDisplay.dutch
+    let display = NumberDisplay.english
     private let client: SupabaseClient
     private let foodSearch = FoodSearchService()
     private var store: LocalStore?
@@ -171,12 +171,12 @@ final class AppState {
 
     func sendPasswordReset(email: String) async {
         guard !email.isEmpty else {
-            authError = "Vul eerst je e-mailadres in."
+            authError = "Enter your email address first."
             return
         }
         do {
             try await client.sendPasswordReset(email: email)
-            authError = "We stuurden een herstelmail naar \(email)."
+            authError = "We sent a reset email to \(email)."
         } catch {
             authError = error.localizedDescription
         }
@@ -569,16 +569,16 @@ final class AppState {
     /// "vandaag" / "van gisteren" / "van vrijdag" / "van 3 sep".
     func pausedWhenLabel(for snapshot: ActiveSessionSnapshot) -> String {
         let calendar = Calendar.current
-        if calendar.isDateInToday(snapshot.startedAt) { return "vandaag" }
-        if calendar.isDateInYesterday(snapshot.startedAt) { return "van gisteren" }
+        if calendar.isDateInToday(snapshot.startedAt) { return "today" }
+        if calendar.isDateInYesterday(snapshot.startedAt) { return "from yesterday" }
         let days = calendar.dateComponents([.day], from: snapshot.startedAt, to: Date()).day ?? 0
         if days < 7 {
             let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "nl_BE")
+            formatter.locale = Locale(identifier: "en_US")
             formatter.dateFormat = "EEEE"
-            return "van \(formatter.string(from: snapshot.startedAt))"
+            return "from \(formatter.string(from: snapshot.startedAt))"
         }
-        return "van \(display.shortDate(snapshot.startedAt))"
+        return "from \(display.shortDate(snapshot.startedAt))"
     }
 
     /// Writes a finished session, locally first.
@@ -890,7 +890,7 @@ final class AppState {
             guard let last = history.mostRecent else { return total }
             return total + RecordsEngine.volumeLoad(last.sets)
         }
-        if target > 0 { parts.append("doel \(display.volumeKg(target))") }
+        if target > 0 { parts.append("target \(display.volumeKg(target))") }
 
         if let last = sessions.first(where: { $0.dayID == day.id && $0.kind == .workout }) {
             parts.append("laatst \(display.shortDate(last.date))")

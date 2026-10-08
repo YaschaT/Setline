@@ -67,12 +67,12 @@ struct NutritionHomeView: View {
         ScrollView {
             // 24 between sections, 8 from a section's head to its card.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                SLScreenTitle(title: "Voeding", subtitle: SLDateText.long(now))
+                SLScreenTitle(title: "Nutrition", subtitle: SLDateText.long(now))
                 hero
                 macros
                 if let shortfall = ProteinShortfall.make(entries: app.nutritionEntries, targets: app.targets, today: now) {
-                    SLAttentionCard(title: "Aandacht") {
-                        Text("\(shortfall.days) dagen op rij onder je eiwitdoel. Gemiddeld \(shortfall.averageGrams) g tekort.".slUnbroken)
+                    SLAttentionCard(title: "Heads up") {
+                        Text("\(shortfall.days) days in a row under your protein target. \(shortfall.averageGrams) g short on average.".slUnbroken)
                             .slBody()
                             .slNumerals()
                             .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
@@ -159,7 +159,7 @@ struct NutritionHomeView: View {
 
     private var hero: some View {
         let isOver = over > 0
-        let label = !day.hasTarget ? "Gegeten vandaag" : isOver ? "Boven je doel" : "Nog te eten"
+        let label = !day.hasTarget ? "Eaten today" : isOver ? "Over your target" : "Left to eat"
         let value = !day.hasTarget ? day.calories : isOver ? over : day.remaining
         return VStack(alignment: .leading, spacing: SL.Space.s4) {
             HStack(alignment: .center, spacing: SL.Space.s3) {
@@ -189,7 +189,7 @@ struct NutritionHomeView: View {
 
             if day.hasTarget {
                 SLBar(fraction: day.consumed, height: 8, fill: isOver ? SL.Signal.attention : SL.Signal.action)
-                    .accessibilityLabel("\(Int((day.consumed * 100).rounded())) procent van je caloriedoel gegeten")
+                    .accessibilityLabel("\(Int((day.consumed * 100).rounded())) percent of your calorie target eaten")
             }
 
             // One line for what the big number is counted from: eaten against
@@ -197,10 +197,10 @@ struct NutritionHomeView: View {
             Button { sheet = .targets } label: {
                 HStack(spacing: SL.Space.s1) {
                     if day.hasTarget {
-                        Text("\(app.display.whole(Decimal(day.calories))) van \(app.display.whole(Decimal(day.targets?.calories ?? 0))) kcal gegeten")
+                        Text("\(app.display.whole(Decimal(day.calories))) of \(app.display.whole(Decimal(day.targets?.calories ?? 0))) kcal eaten")
                             .foregroundStyle(SL.Ink.secondary)
                     } else {
-                        Text("Stel een dagdoel in")
+                        Text("Set a daily target")
                             .foregroundStyle(SL.Signal.action)
                     }
                     SLGlyph(name: .chevronRight, size: 14)
@@ -212,7 +212,7 @@ struct NutritionHomeView: View {
                 .slHitTarget()
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opent je dagdoelen")
+            .accessibilityHint("Opens your daily targets")
 
             Button {
                 // The clock is read again as the sheet opens: a screen left
@@ -224,11 +224,11 @@ struct NutritionHomeView: View {
             } label: {
                 HStack(spacing: 10) {
                     SLGlyph(name: .plus, size: 16)
-                    Text("Maaltijd loggen")
+                    Text("Log a meal")
                 }
             }
             .buttonStyle(SLPrimaryButtonStyle())
-            .accessibilityHint("Opent op \(likely.spoken)")
+            .accessibilityHint("Opens on \(likely.spoken)")
         }
         .padding(SL.Space.s4)
         .slBorderBox()
@@ -247,7 +247,7 @@ struct NutritionHomeView: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s4))
             : AnyLayout(HStackLayout(alignment: .top, spacing: SL.Space.s4))
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Macro’s")
+            SLSectionHead(title: "Macros")
             layout {
                 ForEach(Array(Macro.allCases.enumerated()), id: \.element) { index, macro in
                     macroColumn(macro, level: index)
@@ -263,7 +263,7 @@ struct NutritionHomeView: View {
         let total = day.total(of: macro)
         let target = day.target(for: macro)
         let isOver = target > 0 && total > target
-        let name = macro == .protein ? "Eiwit" : macro.label
+        let name = macro.label
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             Text(name)
                 .slBody()
@@ -291,8 +291,8 @@ struct NutritionHomeView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             target > 0
-                ? "\(name), \(app.display.whole(Decimal(total))) van \(app.display.whole(Decimal(target))) gram"
-                : "\(name), \(app.display.whole(Decimal(total))) gram"
+                ? "\(name), \(app.display.whole(Decimal(total))) of \(app.display.whole(Decimal(target))) grams"
+                : "\(name), \(app.display.whole(Decimal(total))) grams"
         )
     }
 
@@ -301,17 +301,17 @@ struct NutritionHomeView: View {
     private var eatenSection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLSectionHead(
-                title: "Vandaag gegeten",
+                title: "Eaten today",
                 meta: "\(eaten.count) \(eaten.count == 1 ? "item" : "items")"
             )
             VStack(spacing: 0) {
                 if eaten.isEmpty {
                     // Said plainly rather than shown as a row of zeroes.
                     VStack(alignment: .leading, spacing: SL.Space.s1) {
-                        Text("Nog niets gelogd")
+                        Text("Nothing logged yet")
                             .slLead()
                             .foregroundStyle(SL.Ink.primary)
-                        Text("Wat je logt, telt meteen mee.")
+                        Text("What you log counts right away.")
                             .slBody()
                             .slLineHeight(1.45, size: SL.TypeSize.body)
                             .fixedSize(horizontal: false, vertical: true)
@@ -338,7 +338,7 @@ struct NutritionHomeView: View {
 
         return ZStack(alignment: .trailing) {
             Button { delete(entry) } label: {
-                Text("Verwijder")
+                Text("Delete")
                     .slBody(SL.Weight.semibold)
                     .foregroundStyle(SL.Signal.loss)
                     .padding(.horizontal, SL.Space.s4)
@@ -405,12 +405,12 @@ struct NutritionHomeView: View {
         .onChange(of: sheet?.id) { _, _ in swiped = nil }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken(entry, in: section))
-        .accessibilityHint("Dubbeltik om hoeveelheid, maaltijd of verwijderen te openen")
+        .accessibilityHint("Double-tap to change the amount, meal or delete")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { sheet = .edit(entry) }
         // A swipe is not reachable with VoiceOver, so the same delete is an
         // action on the row.
-        .accessibilityAction(named: "Verwijderen") { delete(entry) }
+        .accessibilityAction(named: "Delete") { delete(entry) }
     }
 
     private static let swipeReveal: CGFloat = 112
@@ -421,7 +421,7 @@ struct NutritionHomeView: View {
     /// "12:45" — the hour it was logged, as the clock had it.
     private static func clock(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
@@ -431,7 +431,7 @@ struct NutritionHomeView: View {
         [
             section.title,
             entry.portion,
-            "\(app.display.whole(Decimal(entry.protein))) g eiwit",
+            "\(app.display.whole(Decimal(entry.protein))) g protein",
         ]
         .compactMap { $0 }
         .joined(separator: " · ")
@@ -439,12 +439,12 @@ struct NutritionHomeView: View {
 
     private func spoken(_ entry: NutritionEntry, in section: MealSection) -> String {
         [
-            entry.loggedAt.map { "gelogd om \(Self.clock($0))" },
+            entry.loggedAt.map { "logged at \(Self.clock($0))" },
             section.title,
             entry.name,
             entry.portion,
             app.display.kcal(Decimal(entry.calories)),
-            "\(app.display.whole(Decimal(entry.protein))) gram eiwit",
+            "\(app.display.whole(Decimal(entry.protein))) grams of protein",
         ]
         .compactMap { $0 }
         .joined(separator: ", ")
@@ -457,7 +457,7 @@ struct NutritionHomeView: View {
     /// id, merged field by field at the far end.
     private func add(_ entry: NutritionEntry) {
         Task { await app.log(food: entry) }
-        show("\(entry.name) toegevoegd aan \(mealName(entry).lowercased())") {
+        show("\(entry.name) added to \(mealName(entry).lowercased())") {
             Task { await app.removeFood(id: entry.id) }
         }
     }
@@ -473,13 +473,13 @@ struct NutritionHomeView: View {
     private func delete(_ entry: NutritionEntry) {
         swiped = nil
         Task { await app.removeFood(id: entry.id) }
-        show("\(entry.name) verwijderd") {
+        show("\(entry.name) deleted") {
             Task { await app.log(food: entry) }
         }
     }
 
     private func mealName(_ entry: NutritionEntry) -> String {
-        Meal(rawValue: entry.meal)?.rawValue ?? "Snacks"
+        Meal(rawValue: entry.meal)?.label ?? "Snacks"
     }
 
     private func show(_ message: String, undo: (() -> Void)?) {

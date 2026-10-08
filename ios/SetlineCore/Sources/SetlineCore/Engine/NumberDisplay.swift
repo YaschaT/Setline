@@ -10,7 +10,7 @@ public struct NumberDisplay: Sendable {
 
     public init(locale: Locale) { self.locale = locale }
 
-    public static let dutch = NumberDisplay(locale: Locale(identifier: "nl_BE"))
+    public static let english = NumberDisplay(locale: Locale(identifier: "en_US"))
 
     private func decimal(_ value: Decimal, maxFractionDigits: Int = 2) -> String {
         let formatter = NumberFormatter()

@@ -117,7 +117,7 @@ struct DayPlanSheet: View {
 
     private var locked: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Een gelogde dag wijzig je niet. De datum hoort bij wat je deed.")
+            Text("A logged day can't be changed. The date belongs to what you did.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -128,11 +128,11 @@ struct DayPlanSheet: View {
             Spacer(minLength: SL.Space.s3)
 
             if let session = plan.session {
-                Button { onOpenSession(session) } label: { Text("Bekijk sessie") }
+                Button { onOpenSession(session) } label: { Text("View session") }
                     .buttonStyle(SLOutlineButtonStyle())
             }
             Button(action: onClose) {
-                Text("Sluiten")
+                Text("Close")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
@@ -151,7 +151,7 @@ struct DayPlanSheet: View {
             // likeliest reason to open a changed day.
             if plan.isOverridden, let standard = plan.options.first(where: { $0.kind == .standard }) {
                 row(standard).padding(.top, 18)
-                eyebrow("OF KIES EEN ANDERE").padding(.top, 18)
+                eyebrow("OR PICK ANOTHER").padding(.top, 18)
             } else {
                 eyebrow(sessionsTitle).padding(.top, 22)
             }
@@ -170,8 +170,8 @@ struct DayPlanSheet: View {
 
     private var sessionsTitle: String {
         let names = app.plan.map(\.short)
-        guard !names.isEmpty else { return "SESSIE UIT JE PLAN" }
-        return "SESSIE UIT \(names.prefix(3).joined(separator: " / ").uppercased())"
+        guard !names.isEmpty else { return "SESSION FROM YOUR PLAN" }
+        return "SESSION FROM \(names.prefix(3).joined(separator: " / ").uppercased())"
     }
 
     private func isSession(_ option: DayPlan.Option) -> Bool {

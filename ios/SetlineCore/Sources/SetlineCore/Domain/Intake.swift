@@ -9,26 +9,26 @@ public enum Experience: String, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .session: return "Minder dan een jaar"
-        case .week: return "1 tot 4 jaar"
-        case .block: return "Meer dan 4 jaar"
+        case .session: return "Less than a year"
+        case .week: return "1 to 4 years"
+        case .block: return "More than 4 years"
         }
     }
 
     public var detail: String {
         switch self {
-        case .session: return "Progressie per sessie"
-        case .week: return "Progressie per week"
-        case .block: return "Progressie per blok, RPE-invoer aan"
+        case .session: return "Progress per session"
+        case .week: return "Progress per week"
+        case .block: return "Progress per block, RPE input on"
         }
     }
 
     /// The consequence line: what this answer produces, said before it is made.
     public var consequence: String {
         switch self {
-        case .session: return "Progressie per sessie: alle reps gehaald betekent de volgende sessie zwaarder."
-        case .week: return "Progressie per week: alle reps gehaald betekent volgende week zwaarder."
-        case .block: return "Progressie per blok: je houdt een gewicht aan en RPE bepaalt wanneer het omhoog gaat."
+        case .session: return "Progress per session: all reps done means heavier next session."
+        case .week: return "Progress per week: all reps done means heavier next week."
+        case .block: return "Progress per block: you stay at a weight and RPE decides when it goes up."
         }
     }
 }

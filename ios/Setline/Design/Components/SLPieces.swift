@@ -51,7 +51,7 @@ extension SLScreenTitle where Trailing == EmptyView {
 enum SLDateText {
     static func long(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "nl_BE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "EEEE d MMMM"
         let text = formatter.string(from: date)
         return text.prefix(1).uppercased() + text.dropFirst()
@@ -175,13 +175,13 @@ struct SLDoneMark: View {
     }
 }
 
-/// "Vandaag", as the design badges it: lime on the ground, 12/600, tracked.
+/// "Today", as the design badges it: lime on the ground, 12/600, tracked.
 struct SLTodayBadge: View {
     /// 28 on the day card, 24 inside a list row.
     var height: CGFloat = 28
 
     var body: some View {
-        Text("VANDAAG")
+        Text("TODAY")
             .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
             .tracking(SL.TypeSize.micro * 0.06)
             .foregroundStyle(SL.Signal.action)
@@ -189,7 +189,7 @@ struct SLTodayBadge: View {
             .frame(minHeight: height)
             .background(Capsule().fill(SL.Surface.ground))
             .fixedSize()
-            .accessibilityLabel("Vandaag")
+            .accessibilityLabel("Today")
     }
 }
 
@@ -283,7 +283,7 @@ extension String {
         return replacingOccurrences(of: " · ", with: "\(nbsp)· ")
             .replacingOccurrences(of: " × ", with: "\(nbsp)×\(nbsp)")
             .replacingOccurrences(
-                of: #"(\d) (kg|g|kcal|min|sets|set|reps|rep|weken|week|dagen|ton)\b"#,
+                of: #"(\d) (kg|g|kcal|min|sets|set|reps|rep|weeks|week|days|day|tonnes|ton)\b"#,
                 with: "$1\(nbsp)$2",
                 options: .regularExpression
             )

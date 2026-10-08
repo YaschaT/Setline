@@ -54,10 +54,10 @@ struct PhotosHomeView: View {
         ScrollView {
             // 24 between sections, 8 from a section's head to its card.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                SLScreenTitle(title: "Foto's", subtitle: count) { addPill }
+                SLScreenTitle(title: "Photos", subtitle: count) { addPill }
 
                 if let failure {
-                    SLAttentionCard(title: "Niet gelukt") {
+                    SLAttentionCard(title: "Didn't work") {
                         Text(failure)
                             .slBody()
                             .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
@@ -73,7 +73,7 @@ struct PhotosHomeView: View {
                     allSection
                 }
 
-                Text("Foto's blijven op dit toestel. Nooit gedeeld, nooit geanalyseerd.")
+                Text("Photos stay on this phone. Never shared, never analysed.")
                     .slMeta()
                     .slLineHeight(1.5, size: SL.TypeSize.meta)
                     .fixedSize(horizontal: false, vertical: true)
@@ -102,17 +102,17 @@ struct PhotosHomeView: View {
             Task { await add(item) }
         }
         .confirmationDialog(
-            "Opname verwijderen?",
+            "Delete this photo?",
             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Verwijder", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 if let checkIn = removing { Task { await remove(checkIn) } }
                 removing = nil
             }
-            Button("Annuleer", role: .cancel) { removing = nil }
+            Button("Cancel", role: .cancel) { removing = nil }
         } message: {
-            Text("De foto wordt van dit toestel verwijderd.")
+            Text("The photo is deleted from this phone.")
         }
         .onChange(of: removing?.id) { _, open in
             if open == nil { heldTile = false }
@@ -160,7 +160,7 @@ struct PhotosHomeView: View {
     }
 
     private var count: String {
-        gallery.all.count == 1 ? "1 opname" : "\(gallery.all.count) opnames"
+        gallery.all.count == 1 ? "1 photo" : "\(gallery.all.count) photos"
     }
 
     /// The one commit on this screen: lime, a pill, beside the title.
@@ -168,7 +168,7 @@ struct PhotosHomeView: View {
         PhotosPicker(selection: $picking, matching: .images, photoLibrary: .shared()) {
             HStack(spacing: SL.Space.s2) {
                 SLGlyph(name: .camera, size: 20)
-                Text("Nieuwe opname").slBody(SL.Weight.semibold)
+                Text("New photo").slBody(SL.Weight.semibold)
             }
             .foregroundStyle(SL.Signal.onAction)
             .lineLimit(1)
@@ -178,7 +178,7 @@ struct PhotosHomeView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Kiest een foto uit je bibliotheek en bewaart hem op dit toestel")
+        .accessibilityHint("Picks a photo from your library and keeps it on this phone")
     }
 
     // MARK: - The two pictures
@@ -193,22 +193,22 @@ struct PhotosHomeView: View {
                     BeforeAfterSlider(
                         before: app.photos?.url(for: comparison.before.checkIn),
                         after: app.photos?.url(for: comparison.after.checkIn),
-                        beforeTag: "voor · \(label(comparison.before.date))",
-                        afterTag: "nu · \(label(comparison.after.date))"
+                        beforeTag: "before · \(label(comparison.before.date))",
+                        afterTag: "now · \(label(comparison.after.date))"
                     )
                     HStack(alignment: .top, spacing: SL.Space.s2) {
-                        caption(comparison.before, tag: "voor", alignment: .leading)
-                        caption(comparison.after, tag: "nu", alignment: .trailing)
+                        caption(comparison.before, tag: "before", alignment: .leading)
+                        caption(comparison.after, tag: "now", alignment: .trailing)
                     }
                 } else {
                     HStack(alignment: .top, spacing: SL.Space.s2) {
-                        slot(comparison.before, tag: "voor")
-                        slot(comparison.after, tag: "nu")
+                        slot(comparison.before, tag: "before")
+                        slot(comparison.after, tag: "now")
                     }
                 }
             } else if let only = gallery.first {
                 HStack(alignment: .top, spacing: SL.Space.s2) {
-                    slot(only, tag: "voor")
+                    slot(only, tag: "before")
                     // The first picture keeps the shape of the pair it will be
                     // half of, rather than sprawling across the row on its own.
                     Color.clear.frame(maxWidth: .infinity)
@@ -225,26 +225,26 @@ struct PhotosHomeView: View {
                             Image(systemName: "play.fill")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(SL.Signal.action)
-                            Text("Afspelen")
+                            Text("Play")
                         }
                     }
                     .buttonStyle(SLOutlineButtonStyle())
-                    .accessibilityHint("Toont al je opnames na elkaar, van de eerste tot de laatste")
+                    .accessibilityHint("Shows all your photos in a row, from the first to the latest")
 
                     if gallery.all.count > 2 {
                         Button { choosing = true } label: {
                             HStack(spacing: 6) {
-                                Text("Andere datums")
+                                Text("Other dates")
                                 SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
                             }
                         }
                         .buttonStyle(SLOutlineButtonStyle())
-                        .accessibilityLabel("Andere datums kiezen")
+                        .accessibilityLabel("Choose other dates")
                     }
                 }
                 .padding(.top, SL.Space.s2)
             } else {
-                Text("Vanaf twee opnames staat de vergelijking hier.")
+                Text("From two photos on, the comparison appears here.")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                     .padding(.horizontal, SL.Space.s1)
@@ -266,10 +266,10 @@ struct PhotosHomeView: View {
 
     @ViewBuilder
     private var modeChips: some View {
-        SLChip(title: "Over elkaar", look: compareMode == .overlay ? .selected : .unselected) {
+        SLChip(title: "Overlay", look: compareMode == .overlay ? .selected : .unselected) {
             compareMode = .overlay
         }
-        SLChip(title: "Naast elkaar", look: compareMode == .sideBySide ? .selected : .unselected) {
+        SLChip(title: "Side by side", look: compareMode == .sideBySide ? .selected : .unselected) {
             compareMode = .sideBySide
         }
     }
@@ -287,7 +287,7 @@ struct PhotosHomeView: View {
                     .slBody(SL.Weight.semibold)
                     .slNumerals()
                     .foregroundStyle(SL.Ink.primary)
-                Text(shown.weightKg.map(app.display.kg) ?? "geen weging")
+                Text(shown.weightKg.map(app.display.kg) ?? "no weigh-in")
                     .slMeta()
                     .slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
@@ -299,8 +299,8 @@ struct PhotosHomeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Opname \(tag), \(caption(shown))")
-        .accessibilityHint("Dubbeltik om de foto te openen")
+        .accessibilityLabel("Photo \(tag), \(caption(shown))")
+        .accessibilityHint("Double-tap to open the photo")
     }
 
     /// "14 weken verschil · −2,6 kg" — never more time than the two dates
@@ -310,9 +310,9 @@ struct PhotosHomeView: View {
     private func between(_ comparison: CheckInGallery.Comparison) -> String {
         let span: String
         switch comparison.span {
-        case .sameDay: return "zelfde dag"
-        case .days(let days): span = days == 1 ? "1 dag verschil" : "\(days) dagen verschil"
-        case .weeks(let weeks): span = weeks == 1 ? "1 week verschil" : "\(weeks) weken verschil"
+        case .sameDay: return "same day"
+        case .days(let days): span = days == 1 ? "1 day apart" : "\(days) days apart"
+        case .weeks(let weeks): span = weeks == 1 ? "1 week apart" : "\(weeks) weeks apart"
         }
         guard let change = comparison.change else { return span }
         return "\(span) · \(change == 0 ? "0" : app.display.signedDelta(change)) kg"
@@ -329,7 +329,7 @@ struct PhotosHomeView: View {
                         .slBody(SL.Weight.semibold)
                         .slNumerals()
                         .foregroundStyle(SL.Ink.primary)
-                    Text(shown.weightKg.map(app.display.kg) ?? "geen weging")
+                    Text(shown.weightKg.map(app.display.kg) ?? "no weigh-in")
                         .slMeta()
                         .slNumerals()
                         .foregroundStyle(SL.Ink.secondary)
@@ -341,8 +341,8 @@ struct PhotosHomeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Opname \(tag), \(caption(shown))")
-        .accessibilityHint("Dubbeltik om de foto te openen")
+        .accessibilityLabel("Photo \(tag), \(caption(shown))")
+        .accessibilityHint("Double-tap to open the photo")
         .accessibilityActions { Button("Verwijderen") { removing = shown.checkIn } }
     }
 
@@ -368,7 +368,7 @@ struct PhotosHomeView: View {
 
     private var allSection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Alle opnames", meta: "\(gallery.all.count)")
+            SLSectionHead(title: "All photos", meta: "\(gallery.all.count)")
             LazyVGrid(
                 columns: Array(
                     repeating: GridItem(.flexible(), spacing: SL.Space.s2, alignment: .top),
@@ -401,8 +401,8 @@ struct PhotosHomeView: View {
                         removing = shown.checkIn
                     })
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Opname \(caption(shown))")
-                    .accessibilityHint("Dubbeltik om de foto te openen")
+                    .accessibilityLabel("Photo \(caption(shown))")
+                    .accessibilityHint("Double-tap to open the photo")
                     .accessibilityActions { Button("Verwijderen") { removing = shown.checkIn } }
                 }
             }
@@ -410,20 +410,20 @@ struct PhotosHomeView: View {
     }
 
     /// Before anything is kept: the two frames a comparison will fill, so the
-    /// screen shows what it is for instead of explaining it. "Nieuwe opname"
+    /// screen shows what it is for instead of explaining it. "New photo"
     /// above is the way in; this card does not repeat it.
     private var empty: some View {
         VStack(spacing: SL.Space.s4) {
             HStack(spacing: SL.Space.s3) {
-                emptyFrame("Eerste")
+                emptyFrame("First")
                 emptyFrame("Later")
             }
             .accessibilityHidden(true)
             VStack(spacing: SL.Space.s1) {
-                Text("Nog geen opnames")
+                Text("No photos yet")
                     .slLead()
                     .foregroundStyle(SL.Ink.primary)
-                Text("Zelfde pose, licht en afstand: zo zie je wat de weegschaal niet vertelt.")
+                Text("Same pose, light and distance: that's how you see what the scale doesn't tell you.")
                     .slBody()
                     .slLineHeight(1.45, size: SL.TypeSize.body)
                     .fixedSize(horizontal: false, vertical: true)
@@ -474,14 +474,14 @@ struct PhotosHomeView: View {
         guard let photos = app.photos else { return }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else {
-                failure = "Die foto kon niet worden gelezen. Probeer een andere."
+                failure = "That photo couldn't be read. Try another one."
                 return
             }
             // Dated by when it was taken, which is what it is compared by;
             // only a picture that says nothing is dated today.
             checkIns = try await photos.add(data, on: PhotoDate.taken(in: data) ?? Date())
         } catch {
-            failure = "De foto kon niet worden bewaard. Er is mogelijk geen ruimte vrij op je toestel."
+            failure = "The photo couldn't be saved. Your phone may be out of space."
         }
     }
 
@@ -491,7 +491,7 @@ struct PhotosHomeView: View {
             checkIns = try await photos.remove(checkIn)
             chosen.removeAll { $0 == checkIn.id }
         } catch {
-            failure = "De opname kon niet worden verwijderd."
+            failure = "The photo couldn't be deleted."
         }
     }
 }
@@ -527,7 +527,7 @@ private struct PhotoViewer: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Sluiten")
+                .accessibilityLabel("Close")
             }
 
             Group {
@@ -536,7 +536,7 @@ private struct PhotoViewer: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
-                        .accessibilityLabel("Foto van \(caption)")
+                        .accessibilityLabel("Photo from \(caption)")
                 } else {
                     RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                         .fill(SL.Surface.raised2)
@@ -553,11 +553,11 @@ private struct PhotoViewer: View {
         .padding(.top, SL.Space.s3)
         .padding(.bottom, SL.Space.s3)
         .background(SL.Surface.ground.ignoresSafeArea())
-        .confirmationDialog("Opname verwijderen?", isPresented: $confirms, titleVisibility: .visible) {
-            Button("Verwijder", role: .destructive, action: onRemove)
-            Button("Annuleer", role: .cancel) {}
+        .confirmationDialog("Delete this photo?", isPresented: $confirms, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onRemove)
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("De foto wordt van dit toestel verwijderd.")
+            Text("The photo is deleted from this phone.")
         }
         .slRespondsToTextSize()
     }
@@ -565,7 +565,7 @@ private struct PhotoViewer: View {
 
 // MARK: - Choosing the two to compare
 
-/// "Andere datums kiezen": any two pictures, side by side. The earlier one is
+/// "Choose other dates": any two pictures, side by side. The earlier one is
 /// the `voor` whichever was tapped first, so there is no wrong order to pick
 /// them in.
 private struct ComparePicker<Picture: View>: View {
@@ -600,8 +600,8 @@ private struct ComparePicker<Picture: View>: View {
 
     var body: some View {
         SLSheet(
-            title: "Vergelijking kiezen",
-            subtitle: picked.count == 2 ? "2 opnames gekozen" : "Kies twee opnames · \(picked.count) gekozen",
+            title: "Choose comparison",
+            subtitle: picked.count == 2 ? "2 photos chosen" : "Pick two photos · \(picked.count) chosen",
             onClose: onClose
         ) {
             VStack(alignment: .leading, spacing: SL.Space.s4) {
@@ -619,12 +619,12 @@ private struct ComparePicker<Picture: View>: View {
                 }
 
                 VStack(spacing: SL.Space.s1) {
-                    Button { onDone(picked) } label: { Text("Vergelijk deze twee") }
+                    Button { onDone(picked) } label: { Text("Compare these two") }
                         .buttonStyle(SLPrimaryButtonStyle())
                         .disabled(picked.count != 2)
-                    Button(action: onReset) { Text("Eerste en laatste opname") }
+                    Button(action: onReset) { Text("First and latest photo") }
                         .buttonStyle(SLQuietButtonStyle())
-                        .accessibilityHint("Zet de vergelijking terug op je eerste en je laatste opname")
+                        .accessibilityHint("Resets the comparison to your first and latest photo")
                 }
             }
         }
@@ -634,8 +634,8 @@ private struct ComparePicker<Picture: View>: View {
     private func role(_ shown: CheckInGallery.Shown) -> String? {
         guard picked.contains(shown.checkIn.id) else { return nil }
         let dates = all.filter { picked.contains($0.checkIn.id) }.map(\.date).sorted()
-        guard picked.count == 2, let first = dates.first else { return "gekozen" }
-        return shown.date == first ? "voor" : "nu"
+        guard picked.count == 2, let first = dates.first else { return "chosen" }
+        return shown.date == first ? "before" : "now"
     }
 
     private func tile(_ shown: CheckInGallery.Shown) -> some View {
@@ -680,7 +680,7 @@ private struct ComparePicker<Picture: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Opname \(label(shown.date))\(tag.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("Photo \(label(shown.date))\(tag.map { ", \($0)" } ?? "")")
         .accessibilityAddTraits(tag == nil ? .isButton : [.isSelected, .isButton])
     }
 }

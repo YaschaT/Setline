@@ -35,13 +35,13 @@ final class CalibrationTests: XCTestCase {
         XCTAssertTrue(prompt.headline.contains("8 reps"))
         XCTAssertTrue(prompt.headline.contains("2 in reserve"))
         XCTAssertFalse(prompt.headline.contains("kg"), "It must not suggest a weight")
-        XCTAssertEqual(prompt.contextLabel, "Geen historiek")
+        XCTAssertEqual(prompt.contextLabel, "No history")
     }
 
     func testASwappedInExerciseSaysWhatItIsDifferentFrom() {
         let prompt = Calibration.prompt(for: bench, substitutedFrom: "squat")
-        XCTAssertTrue(prompt.body.contains("een andere oefening dan squat"), prompt.body)
-        XCTAssertTrue(Calibration.prompt(for: bench).body.contains("nog niets om mee te vergelijken"))
+        XCTAssertTrue(prompt.body.contains("a different exercise from squat"), prompt.body)
+        XCTAssertTrue(Calibration.prompt(for: bench).body.contains("nothing to compare with yet"))
     }
 
     func testRemainingSetsPrefillFromTheCalibrationSet() {
@@ -73,7 +73,7 @@ final class CalibrationTests: XCTestCase {
 
         let record = RecordsEngine.record(for: calibration, history: empty)
         XCTAssertEqual(record?.type, .sessionBest)
-        XCTAssertTrue(record?.headline.hasPrefix("Referentie opbouwen") == true)
+        XCTAssertTrue(record?.headline.hasPrefix("Building a reference") == true)
         XCTAssertEqual(record?.buildsReference, true)
         XCTAssertLessThan(record?.rank ?? 0, RecordType.sessionBest.rawValue, "A reference being built ranks below every record")
 
@@ -97,7 +97,7 @@ final class CalibrationTests: XCTestCase {
             sets: sets, reference: nil, history: empty, activeIndex: 0, mode: .calibrationPending
         )
         XCTAssertEqual(pending[0].delta, .calibration)
-        XCTAssertEqual(pending[1].weightLabel, "volgt uit set 1")
+        XCTAssertEqual(pending[1].weightLabel, "follows from set 1")
         XCTAssertEqual(pending[1].weightKind, .awaitingCalibration)
         XCTAssertEqual(pending[0].weightKind, .missing)
 
@@ -128,7 +128,7 @@ final class CalibrationTests: XCTestCase {
 
 final class ReferenceGateCopyTests: XCTestCase {
 
-    private let gate = "Na drie vergelijkbare sessies kan SETLINE betrouwbare progressievoorstellen en records tonen."
+    private let gate = "After three comparable sessions, SETLINE can show reliable progression suggestions and records."
 
     func testTheProposalAndTheRecordSayTheSameThing() {
         let history = ExerciseHistory(exerciseID: "flat-bench", modifiers: .none, appearances: [])
@@ -138,7 +138,7 @@ final class ReferenceGateCopyTests: XCTestCase {
             planned: planned, exercise: ExerciseCatalog.exercise("flat-bench")!, history: history
         )
         XCTAssertEqual(proposal.body, gate)
-        XCTAssertEqual(proposal.headline, "Referentie opbouwen · sessie 1 van 3")
+        XCTAssertEqual(proposal.headline, "Building a reference · session 1 of 3")
 
         let record = RecordsEngine.record(for: [LoggedSet(index: 0, weightKg: 100, reps: 6)], history: history)
         XCTAssertEqual(record?.detail, gate)

@@ -22,12 +22,12 @@ struct OneRepMaxSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             grip
 
-            Text("Geschat 1RM")
+            Text("Estimated 1RM")
                 .font(.sl(28, SL.Weight.semibold))
                 .foregroundStyle(SL.Ink.primary)
                 .accessibilityAddTraits(.isHeader)
 
-            Text("Wat je naar schatting één keer zou kunnen tillen. Je hoeft het nooit te proberen: SETLINE rekent het uit je zwaarste set van elke sessie.")
+            Text("What you could probably lift once. You never have to try it: SETLINE works it out from your heaviest set of each session.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
                 .fixedSize(horizontal: false, vertical: true)
@@ -54,7 +54,7 @@ struct OneRepMaxSheet: View {
             Spacer(minLength: SL.Space.s2)
 
             Button(action: onClose) {
-                Text("Begrepen")
+                Text("Got it")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
@@ -91,16 +91,16 @@ struct OneRepMaxSheet: View {
         var lines: [(String, String)] = []
         if let source = progress.source {
             lines.append((
-                "Beste set · \(app.display.shortDate(source.date))",
+                "Best set · \(app.display.shortDate(source.date))",
                 "\(app.display.kg(source.weightKg)) × \(source.reps)"
             ))
         }
         if let estimate = progress.estimate {
-            lines.append(("Geschat 1RM nu", app.display.kg(Estimates.round(estimate, toIncrement: 0.5))))
+            lines.append(("Estimated 1RM now", app.display.kg(Estimates.round(estimate, toIncrement: 0.5))))
         }
         if let change = progress.change {
             lines.append((
-                "Geschat op \(app.display.shortDate(change.since))",
+                "Estimated on \(app.display.shortDate(change.since))",
                 app.display.kg(Estimates.round(change.baseline, toIncrement: 0.5))
             ))
         }
@@ -109,10 +109,10 @@ struct OneRepMaxSheet: View {
 
     private var note: String? {
         guard progress.change != nil, let shown = progress.shownChange() else {
-            return "Zodra je deze oefening opnieuw logt, staat hier ook waar je vandaan komt."
+            return "Once you log this exercise again, this also shows where you started from."
         }
         let delta = app.display.signedDelta(shown)
-        return "\(delta) kg is dus het verschil tussen twee schattingen, niet tussen twee keer tillen. Meer reps op hetzelfde gewicht telt ook mee."
+        return "So \(delta) kg is the difference between two estimates, not between two lifts. More reps at the same weight count too."
     }
 
     private func row(_ label: String, _ value: String) -> some View {

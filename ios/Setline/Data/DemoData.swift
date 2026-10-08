@@ -186,19 +186,19 @@ enum DemoData {
             let minute: Int
         }
         let food: [DemoFood] = [
-            .init(day: 0, meal: "Ontbijt", name: "Havermout", calories: 375, protein: 15, carbs: 60, fat: 12, amount: 100, unit: "g", hour: 7, minute: 40),
-            .init(day: 0, meal: "Ontbijt", name: "Magere kwark", calories: 145, protein: 26, carbs: 10, fat: 1, amount: 250, unit: "g", hour: 7, minute: 40),
-            .init(day: 0, meal: "Lunch", name: "Volkoren boterham", calories: 170, protein: 9, carbs: 30, fat: 4, amount: 2, unit: "sneden", hour: 12, minute: 55),
-            .init(day: 0, meal: "Lunch", name: "Kaas", calories: 100, protein: 9, carbs: 1, fat: 12, amount: 30, unit: "g", hour: 12, minute: 55),
+            .init(day: 0, meal: "Ontbijt", name: "Oatmeal", calories: 375, protein: 15, carbs: 60, fat: 12, amount: 100, unit: "g", hour: 7, minute: 40),
+            .init(day: 0, meal: "Ontbijt", name: "Low-fat quark", calories: 145, protein: 26, carbs: 10, fat: 1, amount: 250, unit: "g", hour: 7, minute: 40),
+            .init(day: 0, meal: "Lunch", name: "Wholegrain sandwich", calories: 170, protein: 9, carbs: 30, fat: 4, amount: 2, unit: "sneden", hour: 12, minute: 55),
+            .init(day: 0, meal: "Lunch", name: "Cheese", calories: 100, protein: 9, carbs: 1, fat: 12, amount: 30, unit: "g", hour: 12, minute: 55),
             .init(day: 0, meal: "Snack", name: "Whey", calories: 120, protein: 26, carbs: 3, fat: 2, amount: 30, unit: "g", hour: 16, minute: 20),
-            .init(day: 0, meal: "Snack", name: "Banaan", calories: 190, protein: 3, carbs: 27, fat: 1, amount: 1, unit: "stuk", hour: 16, minute: 20),
+            .init(day: 0, meal: "Snack", name: "Banana", calories: 190, protein: 3, carbs: 27, fat: 1, amount: 1, unit: "stuk", hour: 16, minute: 20),
 
-            .init(day: 3, meal: "Avondeten", name: "Kipfilet", calories: 290, protein: 62, carbs: 0, fat: 6, amount: 180, unit: "g", hour: 19, minute: 10),
-            .init(day: 3, meal: "Avondeten", name: "Rijst, gekookt", calories: 390, protein: 8, carbs: 86, fat: 1, amount: 250, unit: "g", hour: 19, minute: 10),
-            .init(day: 2, meal: "Avondeten", name: "Kipfilet", calories: 290, protein: 62, carbs: 0, fat: 6, amount: 180, unit: "g", hour: 19, minute: 25),
+            .init(day: 3, meal: "Avondeten", name: "Chicken breast", calories: 290, protein: 62, carbs: 0, fat: 6, amount: 180, unit: "g", hour: 19, minute: 10),
+            .init(day: 3, meal: "Avondeten", name: "Rice, cooked", calories: 390, protein: 8, carbs: 86, fat: 1, amount: 250, unit: "g", hour: 19, minute: 10),
+            .init(day: 2, meal: "Avondeten", name: "Chicken breast", calories: 290, protein: 62, carbs: 0, fat: 6, amount: 180, unit: "g", hour: 19, minute: 25),
             .init(day: 2, meal: "Avondeten", name: "Broccoli", calories: 60, protein: 5, carbs: 7, fat: 1, amount: 200, unit: "g", hour: 19, minute: 25),
-            .init(day: 2, meal: "Ontbijt", name: "Magere kwark", calories: 145, protein: 26, carbs: 10, fat: 1, amount: 250, unit: "g", hour: 7, minute: 55),
-            .init(day: 1, meal: "Avondeten", name: "Rijst, gekookt", calories: 390, protein: 8, carbs: 86, fat: 1, amount: 250, unit: "g", hour: 19, minute: 0),
+            .init(day: 2, meal: "Ontbijt", name: "Low-fat quark", calories: 145, protein: 26, carbs: 10, fat: 1, amount: 250, unit: "g", hour: 7, minute: 55),
+            .init(day: 1, meal: "Avondeten", name: "Rice, cooked", calories: 390, protein: 8, carbs: 86, fat: 1, amount: 250, unit: "g", hour: 19, minute: 0),
             .init(day: 1, meal: "Snack", name: "Whey", calories: 120, protein: 26, carbs: 3, fat: 2, amount: 30, unit: "g", hour: 16, minute: 45),
         ]
         // `-SetlineEmptyDay` keeps the history and leaves today blank, which is

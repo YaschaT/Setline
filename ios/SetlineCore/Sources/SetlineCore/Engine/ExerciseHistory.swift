@@ -86,11 +86,11 @@ public struct ExerciseHistory: Sendable {
             if modifiers.pauseEnabled {
                 let seconds = modifiers.pauseSeconds ?? 2
                 let whole = seconds == seconds.rounded() ? String(Int(seconds)) : String(format: "%.1f", seconds)
-                parts.append("gepauzeerd · \(whole) s")
+                parts.append("paused · \(whole) s")
             } else {
-                parts.append("zonder pauze")
+                parts.append("no pause")
             }
-            if modifiers.restrictedROM { parts.append("beperkte ROM") }
+            if modifiers.restrictedROM { parts.append("partial ROM") }
             return parts.joined(separator: " · ")
         }
     }

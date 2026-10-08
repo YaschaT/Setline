@@ -7,7 +7,7 @@ import SwiftUI
 /// SETLINE Loader v2 (SETLINE Redesign): the mark builds itself — three reps
 /// drop in, the bar slides through them, the whole mark lifts once — then the
 /// wordmark rises and the mark keeps doing small reps, counted by three ticks
-/// beside "Opwarmen…", until the training is there. The timings, curves and
+/// beside "Warming up…", until the training is there. The timings, curves and
 /// geometry are the design file's, in its 880 × 780 viewBox.
 ///
 /// It shows only after a moment, so a quick launch never flashes it, and the
@@ -35,7 +35,7 @@ struct LoadingView: View {
         .background(SL.Surface.ground)
         .ignoresSafeArea()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Je training wordt geladen.")
+        .accessibilityLabel("Loading your training.")
         .slRespondsToTextSize()
         .task {
             try? await Task.sleep(for: .milliseconds(300))
@@ -384,7 +384,7 @@ private struct LoaderStage: View {
                         .transformEffect(Self.skew)
                 }
             }
-            Text("Opwarmen…")
+            Text("Warming up…")
                 .font(.sl(SL.TypeSize.body, SL.Weight.regular))
                 .foregroundStyle(SL.Ink.secondary)
         }

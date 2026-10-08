@@ -23,13 +23,13 @@ struct RestNotificationSheet: View {
             // has to be cut to fit the sheet.
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Rusttimer op de achtergrond")
+                    Text("Rest timer in the background")
                         .slDisplay()
                         .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
-                    Text("Je rust duurt \(restLabel). Met een melding hoef je de app niet open te houden en hoor je wanneer je weer moet.")
+                    Text("Your rest lasts \(restLabel). With a notification you don't need to keep the app open, and you'll hear when it's time to go again.")
                         .slBody()
                         .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
@@ -43,12 +43,12 @@ struct RestNotificationSheet: View {
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            Button { onAllow() } label: { Text("Meldingen toestaan") }
+            Button { onAllow() } label: { Text("Allow notifications") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .padding(.top, SL.Space.s5)
 
             Button { onDecline() } label: {
-                Text("Niet nu")
+                Text("Not now")
                     .slLead(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(maxWidth: .infinity)
@@ -73,7 +73,7 @@ struct RestNotificationSheet: View {
                 Circle()
                     .fill(SL.Ink.tertiary)
                     .frame(width: 8, height: 8)
-                Text("Alleen timers. Geen herinneringen, geen tips.")
+                Text("Only timers. No reminders, no tips.")
                     .slBody()
                     .foregroundStyle(SL.Ink.secondary)
             }

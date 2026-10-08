@@ -71,7 +71,7 @@ public enum WarmupPlanner {
     }
 
     /// "Reeks gerekend uit de topset van 105 kg."
-    public static func footnote(topSetKg: Decimal, formatter: NumberDisplay = .dutch) -> String {
-        "Reeks gerekend uit de topset van \(formatter.kg(topSetKg)). Opwarmsets krijgen geen statusstip en geen rusttimer."
+    public static func footnote(topSetKg: Decimal, formatter: NumberDisplay = .english) -> String {
+        "Worked out from the top set of \(formatter.kg(topSetKg)). Warm-up sets get no status dot and no rest timer."
     }
 }

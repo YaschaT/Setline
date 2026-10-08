@@ -31,17 +31,17 @@ public enum ReplacementScope: String, Codable, Sendable, CaseIterable {
 
     public var label: String {
         switch self {
-        case .thisDay: return "Alleen deze dag"
-        case .thisPlan: return "Dit schema"
-        case .always: return "Alle keren"
+        case .thisDay: return "This day only"
+        case .thisPlan: return "This plan"
+        case .always: return "Every time"
         }
     }
 
     public var detail: String {
         switch self {
-        case .thisDay: return "Alleen op deze trainingsdag."
-        case .thisPlan: return "Overal in dit schema."
-        case .always: return "Ook in schema's waar je later naar wisselt."
+        case .thisDay: return "Only on this training day."
+        case .thisPlan: return "Everywhere in this plan."
+        case .always: return "Also in plans you switch to later."
         }
     }
 }

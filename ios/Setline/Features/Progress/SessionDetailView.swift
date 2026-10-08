@@ -72,7 +72,7 @@ struct SessionDetailView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             summary(session)
                             exercises(session)
-                            Text("Opgeslagen zoals je hem deed. Wijzigingen in je plan raken deze sessie niet.")
+                            Text("Saved as you did it. Changes to your plan don't affect this session.")
                                 .slMeta()
                                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -86,7 +86,7 @@ struct SessionDetailView: View {
                                 Button { confirmsDelete = true } label: {
                                     HStack(spacing: SL.Space.s2) {
                                         Image(systemName: "trash")
-                                        Text("Verwijder deze sessie")
+                                        Text("Delete this session")
                                     }
                                     .font(.sl(SL.TypeSize.body, SL.Weight.medium))
                                     .foregroundStyle(SL.Signal.loss)
@@ -105,7 +105,7 @@ struct SessionDetailView: View {
                     // The session is no longer in the account — deleted on the
                     // web while this screen was open. Saying so beats an empty
                     // screen that looks broken.
-                    Text("Deze sessie staat niet meer in je account.")
+                    Text("This session is no longer in your account.")
                         .slBody()
                         .foregroundStyle(SL.Ink.secondary)
                         .padding(.horizontal, SL.Space.gutterSession)
@@ -118,20 +118,20 @@ struct SessionDetailView: View {
         // An alert rather than a dialog, because both answers have to be
         // visible: one of them removes a workout from the account.
         .alert(
-            "Dit is de laatste set van deze sessie.",
+            "This is the last set of this session.",
             isPresented: Binding(get: { confirmsLastSet != nil }, set: { if !$0 { confirmsLastSet = nil } })
         ) {
-            Button("Behoud", role: .cancel) { confirmsLastSet = nil }
-            Button("Verwijder de sessie", role: .destructive) {
+            Button("Keep", role: .cancel) { confirmsLastSet = nil }
+            Button("Delete the session", role: .destructive) {
                 if let target = confirmsLastSet { remove(target) }
                 confirmsLastSet = nil
             }
         } message: {
-            Text("Zonder sets blijft er geen sessie over. Hij verdwijnt uit je logboek zodra je bewaart.")
+            Text("Without sets there's no session left. It disappears from your log when you save.")
         }
-        .alert("Deze sessie verwijderen?", isPresented: $confirmsDelete) {
-            Button("Annuleer", role: .cancel) {}
-            Button("Verwijder", role: .destructive) {
+        .alert("Delete this session?", isPresented: $confirmsDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
                 guard let id = session?.id else { return }
                 Task {
                     await app.removeSession(id: id)
@@ -139,17 +139,17 @@ struct SessionDetailView: View {
                 }
             }
         } message: {
-            Text("Alle sets van deze dag verdwijnen uit je logboek en je progressie, ook op het web.")
+            Text("All sets of this day disappear from your log and your progress, on the web too.")
         }
         .confirmationDialog(
-            "Correcties niet bewaren?",
+            "Discard corrections?",
             isPresented: $confirmsDiscard,
             titleVisibility: .visible
         ) {
-            Button("Verwerp", role: .destructive) { stopEditing() }
-            Button("Annuleer", role: .cancel) {}
+            Button("Discard", role: .destructive) { stopEditing() }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("De sessie blijft zoals hij was.")
+            Text("The session stays as it was.")
         }
         .slRespondsToTextSize()
     }
@@ -161,7 +161,7 @@ struct SessionDetailView: View {
             Button {
                 if hasChanges { confirmsDiscard = true } else if editing { stopEditing() } else { onClose() }
             } label: {
-                Text(editing ? "Annuleer" : "Terug")
+                Text(editing ? "Cancel" : "Back")
                     .slBody(SL.Weight.medium)
                     .foregroundStyle(SL.Ink.secondary)
                     .slHitTarget()
@@ -172,7 +172,7 @@ struct SessionDetailView: View {
 
             if session != nil {
                 Button { editing ? save() : startEditing() } label: {
-                    Text(editing ? "Bewaar" : "Wijzig")
+                    Text(editing ? "Save" : "Edit")
                         .slBody(SL.Weight.medium)
                         .foregroundStyle(saveTone)
                         .slHitTarget()
@@ -180,8 +180,8 @@ struct SessionDetailView: View {
                 .buttonStyle(.plain)
                 .disabled(editing && (!hasChanges || isSaving))
                 .accessibilityHint(editing
-                    ? "Bewaart je correcties in deze sessie"
-                    : "Maakt de sets van deze sessie aanpasbaar")
+                    ? "Saves your corrections in this session"
+                    : "Makes the sets of this session editable")
             }
         }
         .padding(.horizontal, SL.Space.gutterSession)
@@ -200,7 +200,7 @@ struct SessionDetailView: View {
         return VStack(alignment: .leading, spacing: 0) {
             // 35: the date names the screen, the duration travels with the
             // session's own name.
-            SLEyebrow(text: "Logboek · \(WeekPlan.fullWeekday(session.date)) \(app.display.shortDate(session.date))")
+            SLEyebrow(text: "Log · \(WeekPlan.fullWeekday(session.date)) \(app.display.shortDate(session.date))")
 
             Text(titleLine(session))
                 .slTitle()
@@ -249,9 +249,9 @@ struct SessionDetailView: View {
     /// not — the same rule Historiek's rows follow.
     private func completionLabel(_ session: TrainingSession) -> String {
         if let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
-            return "\(completed) van \(planned) sets"
+            return "\(completed) of \(planned) sets"
         }
-        return "\(session.completion)% afgerond"
+        return "\(session.completion)% done"
     }
 
     private func titleLine(_ session: TrainingSession) -> String {
@@ -265,7 +265,7 @@ struct SessionDetailView: View {
     private func againstLine(_ session: TrainingSession) -> String {
         var parts: [String] = []
         if let previous = previousSession(session) {
-            parts.append("Tegenover \(app.display.shortDate(previous.date))")
+            parts.append("Against \(app.display.shortDate(previous.date))")
         }
         parts.append(completionLabel(session))
         return parts.joined(separator: " · ")
@@ -291,7 +291,7 @@ struct SessionDetailView: View {
             if case .correctSessionSets(let id, _) = change.kind { return id == sessionID }
             return false
         }
-        return waiting ? "Correctie wacht op sync." : nil
+        return waiting ? "Correction waiting to sync." : nil
     }
 
     // MARK: - What was logged
@@ -320,7 +320,7 @@ struct SessionDetailView: View {
         return VStack(alignment: .leading, spacing: 0) {
             SLEyebrow(text: result.name)
             if let stoodInFor = result.sets.compactMap(\.substitutedFrom).first {
-                Text("stond in voor \(app.exercise(stoodInFor).name.lowercased())")
+                Text("stood in for \(app.exercise(stoodInFor).name.lowercased())")
                     .slMeta()
                     .foregroundStyle(SL.Ink.tertiary)
                     .padding(.top, 2)
@@ -372,7 +372,7 @@ struct SessionDetailView: View {
             .buttonStyle(.plain)
             .padding(.top, 6)
             .accessibilityLabel(label(set, number: number, isRecord: isRecord))
-            .accessibilityHint("Dubbeltik om deze set te corrigeren")
+            .accessibilityHint("Double-tap to correct this set")
         } else {
             content
                 .frame(minHeight: SL.Space.hitMin, alignment: .leading)
@@ -423,15 +423,15 @@ struct SessionDetailView: View {
             // One mark, never two: the whole set paused, or the reps of it
             // that were. A count is inside the reps, so it never reads "+".
             if let paused = set.pausedReps, paused > 0 {
-                Text("\(paused) pauze-reps")
+                Text("\(paused) paused reps")
                     .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
                     .slNumerals()
                     .foregroundStyle(SL.Signal.attention)
             } else if set.modifiers.pauseEnabled {
-                Text("pauze").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Signal.attention)
+                Text("pause").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Signal.attention)
             }
             if let partial = set.partialReps, partial > 0 {
-                Text("partieel +\(partial)")
+                Text("partial +\(partial)")
                     .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
                     .slNumerals()
                     .foregroundStyle(SL.Signal.attention)
@@ -440,23 +440,23 @@ struct SessionDetailView: View {
                 Text("extra").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Ink.tertiary)
             }
             if set.isWarmup {
-                Text("opwarming").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Ink.tertiary)
+                Text("warm-up").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Ink.tertiary)
             }
         }
     }
 
     private func label(_ set: LoggedSet, number: Int, isRecord: Bool) -> String {
         var parts = ["Set \(number)", app.display.kg(set.weightKg ?? 0), "\(set.reps) reps"]
-        if isRecord { parts.append("persoonlijk record") }
+        if isRecord { parts.append("personal record") }
         if let rir = set.rirReported { parts.append("RIR \(rir)") }
         if let paused = set.pausedReps, paused > 0 {
-            parts.append("waarvan \(paused) met pauze")
+            parts.append("of which \(paused) paused")
         } else if set.modifiers.pauseEnabled {
-            parts.append("met pauze")
+            parts.append("paused")
         }
-        if let partial = set.partialReps, partial > 0 { parts.append("\(partial) partiële reps") }
+        if let partial = set.partialReps, partial > 0 { parts.append("\(partial) partial reps") }
         if set.origin == .sessionAdded { parts.append("extra set") }
-        if set.isWarmup { parts.append("opwarming") }
+        if set.isWarmup { parts.append("warm-up") }
         return parts.joined(separator: ", ")
     }
 

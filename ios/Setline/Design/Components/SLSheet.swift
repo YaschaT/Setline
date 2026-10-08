@@ -66,7 +66,7 @@ struct SLSheet<Content: View>: View {
             }
             .buttonStyle(.plain)
             .slFocusRing(Circle())
-            .accessibilityLabel("Sluiten")
+            .accessibilityLabel("Close")
         }
         .padding(.horizontal, SL.Space.gutterSession)
         .padding(.top, SL.Space.s4)

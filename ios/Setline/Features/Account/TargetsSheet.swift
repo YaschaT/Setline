@@ -21,10 +21,10 @@ struct TargetsSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Dagdoelen").slTitle().foregroundStyle(SL.Ink.primary)
+                Text("Daily targets").slTitle().foregroundStyle(SL.Ink.primary)
                 Spacer()
                 Button { onClose() } label: {
-                    Text("Sluiten")
+                    Text("Close")
                         .slBody(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.secondary)
                         .slHitTarget()
@@ -36,19 +36,19 @@ struct TargetsSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Voeding rekent hiermee. De web-app leest dezelfde doelen.")
+                    Text("Nutrition uses these. The web app reads the same targets.")
                         .slMeta()
                         .foregroundStyle(SL.Ink.tertiary)
                         .padding(.bottom, SL.Space.s4)
 
                     VStack(spacing: 0) {
-                        field("Calorieën", text: $calories, macro: .calories, unit: "kcal")
+                        field("Calories", text: $calories, macro: .calories, unit: "kcal")
                         SLHairline().padding(.horizontal, 14)
-                        field("Proteïne", text: $protein, macro: .protein, unit: "g")
+                        field("Protein", text: $protein, macro: .protein, unit: "g")
                         SLHairline().padding(.horizontal, 14)
-                        field("Koolhydraten", text: $carbs, macro: .carbs, unit: "g")
+                        field("Carbs", text: $carbs, macro: .carbs, unit: "g")
                         SLHairline().padding(.horizontal, 14)
-                        field("Vet", text: $fat, macro: .fat, unit: "g")
+                        field("Fat", text: $fat, macro: .fat, unit: "g")
                     }
                     .padding(6)
                     .slBorderBox()
@@ -72,7 +72,7 @@ struct TargetsSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(SL.Surface.raised.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            Button { save() } label: { Text("Bewaar") }
+            Button { save() } label: { Text("Save") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .disabled(changes.isEmpty)
                 .padding(.horizontal, SL.Space.gutterSession)

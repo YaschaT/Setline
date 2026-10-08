@@ -527,7 +527,7 @@ extension Agenda {
     public static func weekLabel(containing date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         guard let monday = Schedule.mondayFirstWeek(containing: date, calendar: calendar).first,
               let thisMonday = Schedule.mondayFirstWeek(containing: now, calendar: calendar).first
-        else { return "Deze week" }
+        else { return "This week" }
         let days = calendar.dateComponents(
             [.day],
             from: calendar.startOfDay(for: thisMonday),
@@ -535,11 +535,11 @@ extension Agenda {
         ).day ?? 0
         let offset = Int((Double(days) / 7).rounded())
         switch offset {
-        case 0: return "Deze week"
-        case -1: return "Vorige week"
-        case 1: return "Volgende week"
-        case ..<0: return "\(-offset) weken geleden"
-        default: return "Over \(offset) weken"
+        case 0: return "This week"
+        case -1: return "Last week"
+        case 1: return "Next week"
+        case ..<0: return "\(-offset) weeks ago"
+        default: return "In \(offset) weeks"
         }
     }
 }

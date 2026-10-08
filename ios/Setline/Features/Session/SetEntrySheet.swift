@@ -41,7 +41,7 @@ struct SetEntrySheet: View {
     @State private var openingHeight: CGFloat?
     @FocusState private var keypadFocused: Bool
 
-    private let display = NumberDisplay.dutch
+    private let display = NumberDisplay.english
 
     init(
         slot: SessionRunner.ExerciseSlot,
@@ -111,9 +111,9 @@ struct SetEntrySheet: View {
     /// 11R while the reserve is still empty; 12R once it is set, which is when
     /// it is worth saying where asking on every set is switched on.
     private var footnote: String {
-        guard asksForRIR else { return "Gewicht en reps zijn een volledige set." }
-        if pointsToAccount { return "Per set vragen zet je aan in Account." }
-        return "Gewicht en reps zijn een volledige set. RIR mag leeg blijven."
+        guard asksForRIR else { return "Weight and reps make a complete set." }
+        if pointsToAccount { return "Turn on asking for every set in Account." }
+        return "Weight and reps make a complete set. RIR can stay empty."
     }
 
     /// 12R: once RIR is set on the one set that asks, the footnote says where
@@ -255,9 +255,9 @@ struct SetEntrySheet: View {
                 onClose: { showsPlates = false }
             )
         }
-        .alert("Set \(setIndex + 1) verwijderen?", isPresented: $confirmsRemoval) {
-            Button("Annuleer", role: .cancel) {}
-            Button("Verwijder", role: .destructive) { onRemove?() }
+        .alert("Remove set \(setIndex + 1)?", isPresented: $confirmsRemoval) {
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) { onRemove?() }
         } message: {
             Text(removalMessage)
         }
@@ -268,7 +268,7 @@ struct SetEntrySheet: View {
     @ViewBuilder
     private var steppers: some View {
         SLStepper(
-            label: "Gewicht",
+            label: "Weight",
             display: display.number(weight),
             onTapValue: { showsPlates = true },
             onDecrement: { weight = max(0, weight - increment) },
@@ -294,7 +294,7 @@ struct SetEntrySheet: View {
                     partialReps: partialReps
                 ))
             } label: {
-                Text(isCorrection ? "Set \(setIndex + 1) bijwerken" : "Set opslaan")
+                Text(isCorrection ? "Update set \(setIndex + 1)" : "Save set")
             }
             .buttonStyle(SLPrimaryButtonStyle())
             .disabled(weight <= 0 || reps <= 0)
@@ -310,7 +310,7 @@ struct SetEntrySheet: View {
 
             if canRemove {
                 Button(action: requestRemoval) {
-                    Text("Verwijder set \(setIndex + 1)")
+                    Text("Remove set \(setIndex + 1)")
                         .slBody(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.secondary)
                         .frame(maxWidth: .infinity)
@@ -319,7 +319,7 @@ struct SetEntrySheet: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, SL.Space.s2)
-                .accessibilityHint("Alleen uit deze sessie. Je schema verandert niet.")
+                .accessibilityHint("Only from this session. Your plan doesn't change.")
             }
         }
     }
@@ -336,9 +336,9 @@ struct SetEntrySheet: View {
     /// What a confirmed removal takes out, in the set's logged numbers.
     private var removalMessage: String {
         guard slot.sets.indices.contains(setIndex), let weight = slot.sets[setIndex].weightKg else {
-            return "Deze set verdwijnt uit deze sessie. Je schema verandert niet."
+            return "This set disappears from this session. Your plan doesn't change."
         }
-        return "\(display.kg(weight)) × \(slot.sets[setIndex].reps) verdwijnt uit deze sessie. Je schema verandert niet."
+        return "\(display.kg(weight)) × \(slot.sets[setIndex].reps) disappears from this session. Your plan doesn't change."
     }
 
     private var grabber: some View {
@@ -353,19 +353,19 @@ struct SetEntrySheet: View {
     }
 
     private var setLabel: String {
-        if isCalibration { return "Set 1 · kalibratie" }
+        if isCalibration { return "Set 1 · calibration" }
         if isAddedSet { return "Set \(setIndex + 1) · extra" }
         // Once a set is added, the last prescribed set is no longer the last.
         let last = setIndex == slot.sets.count - 1
-        return last ? "Set \(setIndex + 1) · laatste set" : "Set \(setIndex + 1)"
+        return last ? "Set \(setIndex + 1) · last set" : "Set \(setIndex + 1)"
     }
 
     private var referenceLabel: String? {
-        if isCalibration { return "mik op \(Calibration.targetReps) · RIR \(Calibration.targetRIR)" }
+        if isCalibration { return "aim for \(Calibration.targetReps) · RIR \(Calibration.targetRIR)" }
         guard let reference = slot.history.mostRecent?.sets.first(where: { $0.index == setIndex }),
               let weight = reference.weightKg
         else { return nil }
-        return "vorige \(display.setReference(weightKg: weight, reps: reference.reps))"
+        return "last \(display.setReference(weightKg: weight, reps: reference.reps))"
     }
 
     private var rirRow: some View {
@@ -373,7 +373,7 @@ struct SetEntrySheet: View {
             HStack(alignment: .firstTextBaseline) {
                 SLEyebrow(text: "Reps in reserve")
                 Spacer()
-                Text(rir.map(rirCaption) ?? "optioneel")
+                Text(rir.map(rirCaption) ?? "optional")
                     .slMeta()
                     .foregroundStyle(SL.Ink.tertiary)
             }
@@ -403,7 +403,7 @@ struct SetEntrySheet: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("RIR \(value == 4 ? "4 of meer" : "\(value)")")
+                    .accessibilityLabel("RIR \(value == 4 ? "4 or more" : "\(value)")")
                     .accessibilityAddTraits(rir == value ? [.isSelected, .isButton] : .isButton)
                 }
             }
@@ -412,11 +412,11 @@ struct SetEntrySheet: View {
 
     private func rirCaption(_ value: Int) -> String {
         switch value {
-        case 0: return "0 · niets meer over"
-        case 1: return "1 · nog één in de tank"
-        case 2: return "2 · nog twee in de tank"
-        case 3: return "3 · ruim voor falen"
-        default: return "4+ · ver van falen"
+        case 0: return "0 · nothing left"
+        case 1: return "1 · one more in the tank"
+        case 2: return "2 · two more in the tank"
+        case 3: return "3 · well short of failure"
+        default: return "4+ · far from failure"
         }
     }
 
@@ -425,18 +425,18 @@ struct SetEntrySheet: View {
     /// `Partieel`. At accessibility sizes they take two rows so every label
     /// stays whole.
     private var chips: some View {
-        let toetsenblok = chip("Toetsenblok", isOn: showsKeypad) {
+        let toetsenblok = chip("Keypad", isOn: showsKeypad) {
             showsKeypad.toggle()
             keypadText = weight > 0 ? display.number(weight) : ""
             keypadFocused = showsKeypad
         }
-        let mislukt = chip("Mislukt", isOn: failed) { failed.toggle() }
+        let mislukt = chip("Failed", isOn: failed) { failed.toggle() }
         // On, it opens at every rep — the whole-set pause the chip used to
         // be — and the row below narrows it to the reps that were paused.
-        let pauze = chip("Pauze-reps", isOn: pausedReps != nil) {
+        let pauze = chip("Paused reps", isOn: pausedReps != nil) {
             pausedReps = pausedReps == nil ? max(1, reps) : nil
         }
-        let partieel = chip("Partieel", isOn: partialReps != nil) {
+        let partieel = chip("Partial", isOn: partialReps != nil) {
             partialReps = partialReps == nil ? 1 : nil
         }
         return Group {
@@ -457,9 +457,9 @@ struct SetEntrySheet: View {
     private func pausedRow(_ count: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SLEyebrow(text: "Pauze-reps")
+                SLEyebrow(text: "Paused reps")
                 Spacer()
-                Text(count >= reps ? "elke rep gepauzeerd" : "van \(reps) reps")
+                Text(count >= reps ? "every rep paused" : "of \(reps) reps")
                     .slMeta()
                     .slNumerals()
                     .foregroundStyle(SL.Ink.tertiary)
@@ -467,7 +467,7 @@ struct SetEntrySheet: View {
             }
             .padding(.bottom, SL.Space.s2)
             SLStepper(
-                label: "Gepauzeerd",
+                label: "Paused",
                 display: "\(min(count, max(1, reps)))",
                 onDecrement: { pausedReps = max(1, min(count, reps) - 1) },
                 onIncrement: { pausedReps = min(max(1, reps), count + 1) }
@@ -480,9 +480,9 @@ struct SetEntrySheet: View {
     private var partialRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SLEyebrow(text: "Partiële reps")
+                SLEyebrow(text: "Partial reps")
                 Spacer()
-                Text("tellen niet mee in je progressie")
+                Text("don't count toward your progress")
                     .slMeta()
                     .foregroundStyle(SL.Ink.tertiary)
                     .lineLimit(1).minimumScaleFactor(0.8)
@@ -508,7 +508,7 @@ struct SetEntrySheet: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(value == 4 ? "Vier of meer" : "\(value)") partiële reps")
+                    .accessibilityLabel("\(value == 4 ? "Four or more" : "\(value)") partial reps")
                     .accessibilityAddTraits(partialReps == value ? [.isSelected, .isButton] : .isButton)
                 }
             }
@@ -545,7 +545,7 @@ struct SetEntrySheet: View {
     /// One tap away, for the rare jump. Never the default input.
     private var keypad: some View {
         HStack(spacing: SL.Space.s3) {
-            SLEyebrow(text: "Gewicht")
+            SLEyebrow(text: "Weight")
             TextField("", text: $keypadText)
                 .keyboardType(.decimalPad)
                 .font(.sl(16, SL.Weight.semibold))
