@@ -719,83 +719,19 @@ struct SessionView: View {
 
     // MARK: - The sets
 
-    /// The previous session in the card's head, then one row per set.
+    /// One row per set — each carries its own "last" value, so the card
+    /// needs no summary head. Adding a set lives in the input card's ⋯ menu.
     private var setsCard: some View {
         let slotIndex = runner.currentIndex
         let rows = runner.rows(for: slotIndex)
         return VStack(spacing: 0) {
-            cardHead
-            ForEach(rows, id: \.index) { row in
+            ForEach(Array(rows.enumerated()), id: \.element.index) { position, row in
                 setRow(row, slotIndex: slotIndex)
-                    .overlay(alignment: .top) { SLHairline() }
+                    .overlay(alignment: .top) { if position > 0 { SLHairline() } }
             }
-            Button { addSet() } label: {
-                HStack(spacing: 6) {
-                    SLGlyph(name: .plus, size: 14)
-                    Text("Add set").slBody()
-                }
-                .foregroundStyle(SL.Ink.secondary)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: SL.Space.hitMin)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(SLRowButtonStyle())
-            .overlay(alignment: .top) { SLHairline() }
-            .accessibilityLabel("Add a set to \(runner.current.exercise.name)")
-            .accessibilityHint("Just for this session. Your plan doesn't change.")
         }
         .slBorderBox()
         .slListCard()
-    }
-
-    /// "Vorige sessie · 2 sep" and what was lifted then — or, where there is
-    /// no then, what the sets are compared against instead.
-    private var cardHead: some View {
-        let slot = runner.current
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s1))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
-        return layout {
-            if let previous = runner.previousSummary(for: slot) {
-                Text("Last session · \(app.display.shortDate(previous.date))")
-                    .slMeta().slNumerals()
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize()
-                Spacer(minLength: 0)
-                ((previous.weight.map {
-                    Text($0 + " ").font(.sl(SL.TypeSize.lead, SL.Weight.semibold)).foregroundStyle(SL.Ink.primary)
-                } ?? Text(""))
-                    + Text(previous.detail)
-                        .font(.sl(SL.TypeSize.lead, previous.weight == nil ? SL.Weight.semibold : SL.Weight.regular))
-                        .foregroundStyle(previous.weight == nil ? SL.Ink.primary : SL.Ink.meta))
-                    .slNumerals()
-                    .multilineTextAlignment(.trailing)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if let summary = runner.calibrationSummary(slotIndex: runner.currentIndex) {
-                Text("Calibrated at")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize()
-                Spacer(minLength: 0)
-                Text(summary)
-                    .slLead().slNumerals()
-                    .foregroundStyle(SL.Ink.primary)
-                    .multilineTextAlignment(.trailing)
-            } else {
-                Text("Last session")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize()
-                Spacer(minLength: 0)
-                Text("no history")
-                    .slBody()
-                    .foregroundStyle(SL.Ink.secondary)
-            }
-        }
-        .padding(.horizontal, SL.Space.s4)
-        .padding(.vertical, SL.Space.s3)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
     }
 
     private func setRow(_ row: SetRowPresentation, slotIndex: Int) -> some View {
@@ -971,13 +907,8 @@ struct SessionView: View {
                 .transition(.opacity)
             }
 
-            if runner.hasProgress {
-                Button {
-                    if runner.isComplete { showsComplete = true } else { confirmsEarlyFinish = true }
-                } label: { Text("Finish training") }
-                    .buttonStyle(SLOutlineButtonStyle())
-                    .padding(.top, SL.Space.s1)
-            }
+            // Finishing early is the top bar's Finish; a second button here
+            // said the same thing twice.
         }
         .padding(.top, SL.Space.s2)
     }
@@ -1040,8 +971,9 @@ struct SessionView: View {
                 SLUndoToast(message: toast.message, onUndo: toast.undo, onDismiss: { self.toast = nil })
                     .transition(.opacity)
             }
-            // A finished session has no rest left to take.
-            if let timer = runner.restTimer, !runner.isComplete {
+            // A finished session has no rest left to take; while a set is up
+            // next, the rest lives in the input card's own head.
+            if let timer = runner.restTimer, !runner.isComplete, runner.nextIndex(in: runner.current) == nil {
                 SLRestPill(
                     title: runner.restTitle,
                     remaining: timer.remaining(at: runner.now),
@@ -1075,7 +1007,11 @@ struct SessionView: View {
                 || (set.weightKg ?? 0) <= 0
                 || typeSize.isAccessibilitySize
             VStack(spacing: SL.Space.s2) {
-                inputHead(setIndex: next, set: set, compact: needsSheet)
+                if let timer = runner.restTimer, timer.remaining(at: runner.now) > 0 {
+                    restHead(timer)
+                } else {
+                    inputHead(setIndex: next, set: set, compact: needsSheet)
+                }
                 if needsSheet {
                     // No weight to step from — a calibration set, or a swap
                     // that starts empty — or text too large for the card: the
@@ -1150,26 +1086,93 @@ struct SessionView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
 
-            if !compact {
-                // Everything a set rarely needs — failed, paused, partial,
-                // RIR off-schedule, a typed weight — behind one quiet button.
-                Button {
-                    entryOpensOnKeypad = false
-                    runner.editing = (runner.currentIndex, setIndex)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SL.Ink.secondary)
-                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
-                        .background(Circle().fill(SL.Surface.raised2))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .slFocusRing(Circle())
-                .accessibilityLabel("More options for this set")
-                .accessibilityHint("Failed, paused or partial reps, RIR, or type a weight")
-            }
+            if !compact { moreMenu(setIndex: setIndex) }
         }
+    }
+
+    /// Everything a set rarely needs, as one native menu: the list says what
+    /// each thing is, so nothing has to be guessed from a button's name.
+    private func moreMenu(setIndex: Int) -> some View {
+        Menu {
+            Button("Add a set", systemImage: "plus") { addSet() }
+            Button("Type the weight", systemImage: "keyboard") {
+                entryOpensOnKeypad = true
+                runner.editing = (runner.currentIndex, setIndex)
+            }
+            Button("Failed, paused or partial…", systemImage: "slider.horizontal.3") {
+                entryOpensOnKeypad = false
+                runner.editing = (runner.currentIndex, setIndex)
+            }
+            if showsPlatesButton {
+                Button("Plate calculator", systemImage: "circle.grid.2x1") { showsPlates = true }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                .background(Circle().fill(SL.Surface.raised2))
+                .contentShape(Circle())
+        }
+        .accessibilityLabel("More options for this set")
+    }
+
+    /// While resting, the card's head is the rest: a small ring that empties,
+    /// the time left, and the two things you might do about it. No separate
+    /// panel, no colour shouting — the next set's numbers stay right below.
+    private func restHead(_ timer: RestTimerState) -> some View {
+        let remaining = timer.remaining(at: runner.now)
+        let total = max(timer.targetSeconds + timer.adjustmentSeconds, remaining, 1)
+        let fraction = Double(remaining) / Double(total)
+        return HStack(alignment: .center, spacing: SL.Space.s3) {
+            ZStack {
+                Circle().stroke(SL.Surface.hairlineStrong, lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(SL.Signal.recovery, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 30, height: 30)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(SLRestPill.clockLabel(remaining))
+                    .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(SL.Ink.primary)
+                Text("Rest · then set \((runner.nextIndex(in: runner.current) ?? 0) + 1)")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Rest, \(remaining / 60) minutes \(remaining % 60) seconds left")
+
+            Button { runner.adjustRest(by: Int(SL.Metric.restAdjustStep)) } label: {
+                Text("+30s")
+                    .slMeta(SL.Weight.semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(SL.Ink.primary)
+                    .padding(.horizontal, SL.Space.s3)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .background(Capsule().fill(SL.Surface.raised2))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Rest 30 seconds longer")
+
+            Button { runner.endRest() } label: {
+                Text("Skip")
+                    .slMeta(SL.Weight.semibold)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .padding(.horizontal, SL.Space.s2)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Skip rest")
+        }
+        .transition(.opacity)
     }
 
     /// Where the numbers in the card came from, in the design's own words.
