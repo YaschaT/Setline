@@ -6,6 +6,11 @@ struct RootView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var modelContext
     @State private var tab: SLTab = .training
+    /// The launch intro has played to its end.
+    @State private var launchIntroDone = false
+    /// The first load after launch is over; later loads (after a sign-in)
+    /// get the ordinary loading screen.
+    @State private var launchLoadDone = false
     @State private var running: RunningSession?
     /// Which way the reader came in from the cold open, and therefore which
     /// side of the one identity screen opens.
@@ -49,7 +54,12 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if app.isLoading {
+            if !launchIntroDone || (app.isLoading && !launchLoadDone) {
+                // The cold launch: the intro plays once, whole, even when the
+                // account is read in a fraction of a second.
+                LoadingView(speed: 1.6, delay: .zero, onIntroFinished: { launchIntroDone = true })
+                    .transition(.opacity)
+            } else if app.isLoading {
                 LoadingView()
                     .transition(.opacity)
             } else if app.isSignedIn, app.isNewAccount || showsOnboarding {
@@ -70,6 +80,10 @@ struct RootView: View {
         }
         // Whatever loading led to fades in where the loading screen stood.
         .animation(.easeInOut(duration: 0.25), value: app.isLoading)
+        .animation(.easeInOut(duration: 0.3), value: launchIntroDone)
+        .onChange(of: app.isLoading, initial: true) { _, loading in
+            if !loading { launchLoadDone = true }
+        }
         .preferredColorScheme(.dark)
         .tint(SL.Signal.action)
         .task {

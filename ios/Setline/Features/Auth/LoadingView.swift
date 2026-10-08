@@ -17,6 +17,20 @@ struct LoadingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var start: Date?
 
+    /// How fast the intro plays. The cold launch plays it at 1.6×, so the
+    /// whole mark-and-wordmark moment lasts about two seconds.
+    var speed: Double = 1
+    /// How long to wait before showing anything: a moment after sign-in, so a
+    /// quick load never flashes it; nothing at a cold launch, which is the
+    /// one place the intro is meant to be seen.
+    var delay: Duration = .milliseconds(300)
+    /// Called once the wordmark has landed (or at once-ish with Reduce
+    /// Motion), so the launch can hold the intro until it is complete.
+    var onIntroFinished: (() -> Void)? = nil
+
+    /// When, in design seconds, the wordmark, its line and the caption are in.
+    private static let introLength: Double = 3.4
+
     var body: some View {
         Group {
             if let start {
@@ -24,7 +38,7 @@ struct LoadingView: View {
                     LoaderStage(frame: LoaderFrame(t: LoaderFrame.settled, idle: false))
                 } else {
                     TimelineView(.animation) { context in
-                        LoaderStage(frame: LoaderFrame(t: context.date.timeIntervalSince(start), idle: true))
+                        LoaderStage(frame: LoaderFrame(t: context.date.timeIntervalSince(start) * speed, idle: true))
                     }
                 }
             } else {
@@ -38,8 +52,12 @@ struct LoadingView: View {
         .accessibilityLabel("Loading your training.")
         .slRespondsToTextSize()
         .task {
-            try? await Task.sleep(for: .milliseconds(300))
+            if delay > .zero { try? await Task.sleep(for: delay) }
             start = Date()
+            guard let onIntroFinished else { return }
+            let seconds = reduceMotion ? 0.8 : Self.introLength / speed
+            try? await Task.sleep(for: .seconds(seconds))
+            onIntroFinished()
         }
     }
 }
