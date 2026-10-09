@@ -492,7 +492,9 @@ struct TrainingHomeView: View {
                         if streak.thisWeekMet { SLGlyph(name: .check, size: 12) }
                         Text(nudge).slMeta(SL.Weight.semibold).slNumerals()
                     }
-                    .foregroundStyle(lit || streak.thisWeekMet ? SL.Signal.action : SL.Ink.secondary)
+                    // Lime is for what is earned: "Week secured", not the
+                    // count still to go.
+                    .foregroundStyle(streak.thisWeekMet ? SL.Signal.action : SL.Ink.secondary)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 2)

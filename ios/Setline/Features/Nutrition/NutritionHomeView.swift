@@ -20,6 +20,8 @@ struct NutritionHomeView: View {
     /// The protein goal's moment has played for this date.
     @AppStorage("setline.nutrition.proteinCelebrated") private var proteinCelebrated = ""
     @State private var proteinPops = 0
+    /// The quick add just tapped, shown as added for a moment.
+    @State private var addedIdea: String?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -221,7 +223,7 @@ struct NutritionHomeView: View {
                             .font(.slCapped(64, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
                             .tracking(-2)
                             .monospacedDigit()
-                            .foregroundStyle(isOver ? SL.Signal.attention : SL.Signal.action)
+                            .foregroundStyle(isOver ? SL.Signal.attention : SL.Ink.primary)
                             .contentTransition(.numericText(value: value))
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
@@ -234,7 +236,7 @@ struct NutritionHomeView: View {
                                 if proteinMet { SLGlyph(name: .check, size: 12) }
                                 Text(nudge).slMeta(SL.Weight.semibold).slNumerals()
                             }
-                            .foregroundStyle(day.hasTarget && !isOver ? SL.Signal.action : SL.Ink.secondary)
+                            .foregroundStyle(proteinMet ? SL.Signal.action : SL.Ink.secondary)
                         }
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 2)
@@ -476,44 +478,71 @@ struct NutritionHomeView: View {
         }
     }
 
+    /// A quick add as the app's own card: the protein it brings is the
+    /// number, the food a small round photo — graded down so a white plate
+    /// and a dark one sit alike on the ground — and the add a quiet round
+    /// button. One lime action per screen stays the card above's.
     private func ideaCard(_ idea: FoodIdea) -> some View {
-        Button {
+        let justAdded = addedIdea == idea.id
+        return Button {
             let moment = Date()
             now = moment
             add(idea.entry(id: "food-\(Int(moment.timeIntervalSince1970 * 1000))", date: moment, meal: Meal.likely(at: moment)))
+            addedIdea = idea.id
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.4))
+                if addedIdea == idea.id { withAnimation(.easeOut(duration: 0.2)) { addedIdea = nil } }
+            }
         } label: {
-            VStack(alignment: .leading, spacing: SL.Space.s2) {
-                SLFoodPhoto(source: .asset(idea.imageName), cornerRadius: SL.Radius.md)
-                    .frame(width: 136, height: 96)
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(SL.Signal.onAction)
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(SL.Signal.action))
-                            .padding(6)
-                    }
+            VStack(alignment: .leading, spacing: SL.Space.s3) {
+                HStack(alignment: .top) {
+                    SLFoodPhoto(source: .asset(idea.imageName), cornerRadius: 24)
+                        .saturation(0.7)
+                        .overlay(Circle().fill(SL.Surface.ground.opacity(0.32)))
+                        .frame(width: 48, height: 48)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1.5))
+                    Spacer(minLength: 0)
+                    SLGlyph(name: justAdded ? .check : .plus, size: 14, fixed: true)
+                        .foregroundStyle(justAdded ? SL.Signal.onAction : SL.Signal.action)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(justAdded ? SL.Signal.action : SL.Surface.raised2))
+                        .overlay(Circle().strokeBorder(justAdded ? Color.clear : SL.Surface.hairlineStrong, lineWidth: 1))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(app.display.whole(Decimal(idea.protein)))
+                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("g protein")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .monospacedDigit()
                 VStack(alignment: .leading, spacing: 2) {
                     Text(idea.name)
                         .slBody(SL.Weight.semibold)
                         .foregroundStyle(SL.Ink.primary)
                         .lineLimit(1)
-                    Text("\(idea.portion) · \(app.display.whole(Decimal(idea.protein))) g protein")
+                    Text("\(idea.portion) · \(app.display.kcal(Decimal(idea.calories)))")
                         .slMeta()
                         .monospacedDigit()
                         .foregroundStyle(SL.Ink.secondary)
                         .lineLimit(1)
-                    Text(app.display.kcal(Decimal(idea.calories)))
-                        .slMeta()
-                        .monospacedDigit()
-                        .foregroundStyle(SL.Ink.tertiary)
                 }
-                .padding(.horizontal, 2)
             }
-            .frame(width: 136, alignment: .leading)
+            .padding(SL.Space.s4)
+            .frame(width: 156, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised))
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                    .strokeBorder(justAdded ? SL.Signal.action.opacity(0.5) : SL.Surface.hairline, lineWidth: SL.Metric.border)
+            )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SLPressStyle())
+        .sensoryFeedback(.success, trigger: justAdded) { _, now in now }
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: justAdded)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(idea.name), \(idea.portion), \(app.display.whole(Decimal(idea.protein))) grams of protein, \(app.display.kcal(Decimal(idea.calories)))")
         .accessibilityHint("Adds it to \(likely.spoken)")

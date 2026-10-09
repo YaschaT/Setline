@@ -258,7 +258,7 @@ struct PhotosHomeView: View {
                     Text(nudge)
                         .slMeta(SL.Weight.semibold)
                         .slNumerals()
-                        .foregroundStyle(isDue && !empty ? SL.Signal.attention : empty ? SL.Ink.secondary : SL.Signal.action)
+                        .foregroundStyle(isDue && !empty ? SL.Signal.attention : SL.Ink.secondary)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 2)
