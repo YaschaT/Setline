@@ -15,6 +15,11 @@ import SetlineCore
 /// (`AppState.photos`).
 struct PhotosHomeView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The avatar's way to Account, as on Training.
+    var onAccount: () -> Void = {}
+    /// The due mark breathes, like today's on Training.
+    @State private var breathes = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var checkIns: [CheckIn] = []
@@ -54,7 +59,9 @@ struct PhotosHomeView: View {
         ScrollView {
             // 24 between sections, 8 from a section's head to its card.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                SLScreenTitle(title: "Photos", subtitle: count) { addPill }
+                header
+                hero
+                    .padding(.top, SL.Space.s5)
 
                 if let failure {
                     SLAttentionCard(title: "Didn't work") {
@@ -66,21 +73,13 @@ struct PhotosHomeView: View {
                     }
                 }
 
-                if gallery.all.isEmpty {
-                    empty
-                } else {
+                if gallery.all.count > 1 {
                     comparisonSection
+                }
+                if !gallery.all.isEmpty {
                     allSection
                 }
 
-                Text("Photos stay on this phone. Never shared, never analysed.")
-                    .slMeta()
-                    .slLineHeight(1.5, size: SL.TypeSize.meta)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .padding(.horizontal, SL.Space.s1)
-                    // A footnote to the card above it, not a section.
-                    .padding(.top, -SL.Space.s3)
             }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s5)
@@ -159,33 +158,247 @@ struct PhotosHomeView: View {
         .slRespondsToTextSize()
     }
 
-    private var count: String {
-        gallery.all.count == 1 ? "1 photo" : "\(gallery.all.count) photos"
+    // MARK: - The head
+
+    /// Training's head: the avatar to Account, the tab and how many photos,
+    /// and one round button — the timelapse, once there is something to play.
+    private var header: some View {
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            Button(action: onAccount) {
+                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 40)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.92))
+            .accessibilityLabel("Account")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Photos")
+                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.primary)
+                    .accessibilityAddTraits(.isHeader)
+                Text(gallery.all.count == 1 ? "1 photo" : "\(gallery.all.count) photos")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if gallery.all.count > 1 {
+                Button { playingTimeline = true } label: {
+                    SLGlyph(name: .play, size: 16, fixed: true)
+                        .foregroundStyle(SL.Ink.primary)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(SL.Surface.raised))
+                        .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
+                .accessibilityLabel("Play timelapse")
+            }
+        }
     }
 
-    /// The one commit on this screen: lime, a pill, beside the title.
-    private var addPill: some View {
-        PhotosPicker(selection: $picking, matching: .images, photoLibrary: .shared()) {
-            HStack(spacing: SL.Space.s2) {
-                SLGlyph(name: .camera, size: 20)
-                Text("New photo").slBody(SL.Weight.semibold)
-            }
-            .foregroundStyle(SL.Signal.onAction)
-            .lineLimit(1)
-            .padding(.horizontal, SL.Space.s4)
-            .frame(minHeight: SL.Space.hitMin)
-            .background(Capsule().fill(SL.Signal.action))
-            .contentShape(Capsule())
+    // MARK: - The rhythm
+
+    /// A photo every two weeks: often enough to see a change, rare enough
+    /// that a week's water and light do not drown it.
+    private static let rhythmDays = 14
+
+    private var daysSinceLatest: Int? {
+        gallery.all.last.map { Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: $0.date), to: Calendar.current.startOfDay(for: Date())).day ?? 0 }
+    }
+
+    private var isDue: Bool { daysSinceLatest.map { $0 >= Self.rhythmDays } ?? true }
+
+    /// Weeks from the first photo to the latest — the progress on record.
+    private var weeksTracked: Int {
+        guard let first = gallery.all.first, let last = gallery.all.last else { return 0 }
+        return (Calendar.current.dateComponents([.day], from: first.date, to: last.date).day ?? 0) / 7
+    }
+
+    /// Photos taken on rhythm in a row, newest back: each no more than the
+    /// rhythm and a few days' grace after the one before.
+    private var onRhythm: Int {
+        let dates = gallery.all.map(\.date)
+        guard !dates.isEmpty else { return 0 }
+        var count = 1
+        for i in stride(from: dates.count - 1, to: 0, by: -1) {
+            let gap = Calendar.current.dateComponents([.day], from: dates[i - 1], to: dates[i]).day ?? 0
+            guard gap <= Self.rhythmDays + 4 else { break }
+            count += 1
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Picks a photo from your library and keeps it on this phone")
+        if let since = daysSinceLatest, since > Self.rhythmDays + 4 { return 0 }
+        return count
+    }
+
+    /// Training's card, read for photos: the weeks on record as the number,
+    /// the latest photos as its marks with the next one waiting, and the
+    /// one action.
+    private var hero: some View {
+        let nudge: String = {
+            guard let since = daysSinceLatest else { return "Your first photo starts the record" }
+            if isDue { return since == Self.rhythmDays ? "Photo due today" : "Photo due — \(since - Self.rhythmDays) days late" }
+            let left = Self.rhythmDays - since
+            return left == 1 ? "Next photo tomorrow" : "Next photo in \(left) days"
+        }()
+        let empty = gallery.all.isEmpty
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .bottom, spacing: SL.Space.s3) {
+                Text("\(weeksTracked)")
+                    .font(.slCapped(96, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
+                    .tracking(-5)
+                    .monospacedDigit()
+                    .foregroundStyle(empty ? SL.Ink.primary : SL.Signal.action)
+                    .lineLimit(1)
+                    .padding(.vertical, -13)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(weeksTracked == 1 ? "week on record" : "weeks on record")
+                        .slLead(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text(nudge)
+                        .slMeta(SL.Weight.semibold)
+                        .slNumerals()
+                        .foregroundStyle(isDue && !empty ? SL.Signal.attention : empty ? SL.Ink.secondary : SL.Signal.action)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 2)
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+
+            photoMarks.padding(.top, SL.Space.s5)
+
+            Rectangle()
+                .fill(SL.Surface.hairline)
+                .frame(height: SL.Metric.border)
+                .padding(.horizontal, -SL.Space.s5)
+                .padding(.vertical, SL.Space.s5)
+
+            if onRhythm > 1 {
+                HStack(spacing: SL.Space.s2) {
+                    SLGlyph(name: .flame, size: 16).foregroundStyle(SL.Signal.action)
+                    Text("\(onRhythm) photos on rhythm")
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("· every 2 weeks")
+                        .slBody()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .padding(.bottom, SL.Space.s4)
+            } else {
+                Text("Same pose, light and distance every two weeks. That's how you see what the scale doesn't.")
+                    .slBody()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, SL.Space.s4)
+            }
+
+            PhotosPicker(selection: $picking, matching: .images, photoLibrary: .shared()) {
+                HStack(spacing: 10) {
+                    SLGlyph(name: .camera, size: 18)
+                    Text(empty ? "Take your first photo" : isDue ? "Take this check-in" : "Add a photo")
+                }
+            }
+            .buttonStyle(SLPrimaryButtonStyle())
+            .accessibilityHint("Picks a photo from your library and keeps it on this phone")
+
+            Text("Photos stay on this phone. Never shared, never analysed.")
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .padding(.top, SL.Space.s3)
+        }
+        .padding(SL.Space.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            ZStack {
+                SL.Surface.raised
+                RadialGradient(colors: [SL.Signal.action.opacity(empty ? 0.05 : 0.1), .clear],
+                               center: .topTrailing, startRadius: 0, endRadius: 280)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(SL.Surface.hairlineStrong.opacity(0.6), lineWidth: SL.Metric.border)
+        )
+        .onAppear {
+            guard !reduceMotion, !breathes else { return }
+            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(0.8)) { breathes = true }
+        }
+    }
+
+    /// The latest photos as Training's week marks: each one a small round
+    /// picture with its date, then the next check-in waiting — ringed and
+    /// breathing when due, dashed while not.
+    private var photoMarks: some View {
+        let recent = Array(gallery.all.suffix(5))
+        let nextDate = gallery.all.last.flatMap { Calendar.current.date(byAdding: .day, value: Self.rhythmDays, to: $0.date) }
+        return HStack(spacing: 0) {
+            ForEach(Array(recent.enumerated()), id: \.element.checkIn.id) { index, shown in
+                Button { viewing = Viewed(id: shown.checkIn.id) } label: {
+                    VStack(spacing: 6) {
+                        picture(shown.checkIn)
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(index == recent.count - 1 ? SL.Signal.action : SL.Surface.hairlineStrong, lineWidth: index == recent.count - 1 ? 2 : 1))
+                        Text(label(shown.date))
+                            .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                            .monospacedDigit()
+                            .foregroundStyle(SL.Ink.secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.85, bounces: true))
+                .accessibilityLabel("Photo \(caption(shown))")
+                .accessibilityHint("Opens the photo")
+            }
+            PhotosPicker(selection: $picking, matching: .images, photoLibrary: .shared()) {
+                VStack(spacing: 6) {
+                    Group {
+                        if isDue || recent.isEmpty {
+                            Circle().strokeBorder(SL.Signal.action, lineWidth: 2)
+                                .background(Circle().fill(SL.Signal.action.opacity(0.12)).padding(-4))
+                                .overlay(SLGlyph(name: .plus, size: 14).foregroundStyle(SL.Signal.action))
+                                .background(
+                                    Circle()
+                                        .strokeBorder(SL.Signal.action.opacity(breathes ? 0 : 0.5), lineWidth: 1.5)
+                                        .scaleEffect(breathes ? 1.6 : 1)
+                                )
+                        } else {
+                            Circle().strokeBorder(SL.Surface.mute, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                                .overlay(SLGlyph(name: .plus, size: 12).foregroundStyle(SL.Surface.mute))
+                        }
+                    }
+                    .frame(width: 40, height: 40)
+                    Text(isDue || recent.isEmpty ? "Now" : nextDate.map { label($0) } ?? "Next")
+                        .font(.sl(SL.TypeSize.micro, isDue ? SL.Weight.bold : SL.Weight.regular))
+                        .monospacedDigit()
+                        .foregroundStyle(isDue ? SL.Ink.primary : SL.Ink.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.85, bounces: true))
+            .accessibilityLabel(isDue ? "Add this check-in's photo" : "Add a photo")
+            if recent.count < 4 {
+                ForEach(0..<(4 - recent.count), id: \.self) { _ in
+                    Color.clear.frame(maxWidth: .infinity, minHeight: 1)
+                }
+            }
+        }
+        .padding(.horizontal, -SL.Space.s1)
     }
 
     // MARK: - The two pictures
 
     private var comparisonSection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Vergelijking", meta: comparison.map(between))
+            SLSectionHead(title: "Compare", meta: comparison.map(between))
 
             if let comparison {
                 modeChoice
@@ -222,8 +435,7 @@ struct PhotosHomeView: View {
                 layout {
                     Button { playingTimeline = true } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 13, weight: .semibold))
+                            SLGlyph(name: .play, size: 14)
                                 .foregroundStyle(SL.Signal.action)
                             Text("Play")
                         }
@@ -261,7 +473,7 @@ struct PhotosHomeView: View {
             VStack(alignment: .leading, spacing: SL.Space.s2) { modeChips }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Weergave")
+        .accessibilityLabel("View")
     }
 
     @ViewBuilder
@@ -407,52 +619,6 @@ struct PhotosHomeView: View {
                 }
             }
         }
-    }
-
-    /// Before anything is kept: the two frames a comparison will fill, so the
-    /// screen shows what it is for instead of explaining it. "New photo"
-    /// above is the way in; this card does not repeat it.
-    private var empty: some View {
-        VStack(spacing: SL.Space.s4) {
-            HStack(spacing: SL.Space.s3) {
-                emptyFrame("First")
-                emptyFrame("Later")
-            }
-            .accessibilityHidden(true)
-            VStack(spacing: SL.Space.s1) {
-                Text("No photos yet")
-                    .slLead()
-                    .foregroundStyle(SL.Ink.primary)
-                Text("Same pose, light and distance: that's how you see what the scale doesn't tell you.")
-                    .slBody()
-                    .slLineHeight(1.45, size: SL.TypeSize.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .accessibilityElement(children: .combine)
-        }
-        .padding(SL.Space.s5)
-        .frame(maxWidth: .infinity)
-        .slBorderBox()
-        .slListCard()
-    }
-
-    private func emptyFrame(_ label: String) -> some View {
-        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-            .strokeBorder(SL.Surface.mute, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-            .aspectRatio(3 / 4, contentMode: .fit)
-            .frame(maxWidth: 120)
-            .overlay {
-                VStack(spacing: SL.Space.s2) {
-                    Image(systemName: "figure.stand")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(SL.Surface.mute)
-                    Text(label)
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.tertiary)
-                }
-            }
     }
 
     /// "6 sep"

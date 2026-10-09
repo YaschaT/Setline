@@ -156,7 +156,7 @@ struct RootView: View {
                 case .friends:
                     FriendsView(onAccount: { showsAccount = true })
                 case .fotos:
-                    PhotosHomeView()
+                    PhotosHomeView(onAccount: { showsAccount = true })
                 }
             }
             // The bar, then the 4 the design leaves under it.
