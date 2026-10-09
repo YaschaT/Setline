@@ -38,6 +38,10 @@ struct TrainingHomeView: View {
     @State private var rolledWeeks: Int?
     @State private var popsToday = false
     @State private var celebrates = 0
+    /// The week's marks have popped in; until then they wait small.
+    @State private var dotsIn = TrainingIntro.played
+    /// Today's ring breathes, so the eye lands on the next step.
+    @State private var breathes = false
     /// The date key of the last week-secured moment played, so it plays once.
     @AppStorage("setline.training.celebratedWeek") private var celebratedWeek = ""
     /// The date column of `Rest van de week`, growing with the text.
@@ -395,7 +399,10 @@ struct TrainingHomeView: View {
         )
         .shadow(color: secured ? SL.Signal.action.opacity(0.14) : .clear, radius: 24)
         .accessibilityElement(children: .contain)
-        .onAppear { celebrateIfSecured(today, streak) }
+        .onAppear {
+            celebrateIfSecured(today, streak)
+            playIntro(streak)
+        }
     }
 
     private func heroBackground(lit: Bool, streak: TrainingStreak) -> some View {
@@ -447,8 +454,8 @@ struct TrainingHomeView: View {
         return Button { sheet = .streak } label: {
             HStack(alignment: .bottom, spacing: SL.Space.s3) {
                 Text("\(shown)")
-                    .font(.slScore(108, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
-                    .tracking(-2)
+                    .font(.slCapped(96, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
+                    .tracking(-5)
                     .monospacedDigit()
                     .foregroundStyle(lit ? SL.Signal.action : SL.Ink.primary)
                     .contentTransition(.numericText(value: Double(shown)))
@@ -492,13 +499,17 @@ struct TrainingHomeView: View {
     /// days mint, days still to come dashed. A tap opens that day.
     private var weekDots: some View {
         HStack(spacing: 0) {
-            ForEach(days(containing: Date())) { day in
+            ForEach(Array(days(containing: Date()).enumerated()), id: \.element.id) { index, day in
                 Button { open(day) } label: {
                     VStack(spacing: 6) {
                         Text(String(day.weekday.prefix(1)))
                             .font(.sl(SL.TypeSize.micro, day.isToday ? SL.Weight.bold : SL.Weight.regular))
                             .foregroundStyle(day.isToday ? SL.Ink.primary : SL.Ink.secondary)
                         dayMark(day)
+                            // Seven coins dropping in, left to right.
+                            .scaleEffect(dotsIn ? 1 : 0.3)
+                            .opacity(dotsIn ? 1 : 0)
+                            .animation(.spring(response: 0.38, dampingFraction: 0.55).delay(0.12 + Double(index) * 0.045), value: dotsIn)
                     }
                     .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin)
                     .contentShape(Rectangle())
@@ -524,6 +535,12 @@ struct TrainingHomeView: View {
             Circle().strokeBorder(SL.Signal.action, lineWidth: 2)
                 .background(Circle().fill(SL.Signal.action.opacity(0.12)).padding(-4))
                 .overlay(Circle().fill(SL.Signal.action).frame(width: 8, height: 8))
+                // A ring that leaves it and fades: the next step, waiting.
+                .background(
+                    Circle()
+                        .strokeBorder(SL.Signal.action.opacity(breathes ? 0 : 0.5), lineWidth: 1.5)
+                        .scaleEffect(breathes ? 1.7 : 1)
+                )
                 .frame(width: size, height: size)
         } else if day.isRest {
             Circle().strokeBorder(SL.Signal.recovery.opacity(0.25), lineWidth: 1.5)
@@ -657,7 +674,7 @@ struct TrainingHomeView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.value)
-                            .font(.slScore(28))
+                            .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
                             .slNumerals()
                             .foregroundStyle(SL.Ink.primary)
                             .lineLimit(1)
@@ -701,6 +718,32 @@ struct TrainingHomeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(SLPressStyle())
+        }
+    }
+
+    // MARK: - Small motion
+
+    /// Once per launch: the streak counts up to itself and the week's marks
+    /// pop in. Every visit after that, the breathing today ring is the only
+    /// motion — so the screen moves when it has something to say.
+    private func playIntro(_ streak: TrainingStreak) {
+        guard !reduceMotion else {
+            dotsIn = true
+            return
+        }
+        if !breathes {
+            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(0.8)) { breathes = true }
+        }
+        guard !TrainingIntro.played else { return }
+        TrainingIntro.played = true
+        dotsIn = true
+        guard streak.weeks > 1, rolledWeeks == nil else { return }
+        var jump = Transaction()
+        jump.disablesAnimations = true
+        withTransaction(jump) { rolledWeeks = 0 }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            withAnimation(.snappy(duration: 0.7)) { rolledWeeks = nil }
         }
     }
 
@@ -1118,4 +1161,10 @@ struct TrainingHomeView: View {
                 .padding(.horizontal, SL.Space.s1)
         }
     }
+}
+
+/// What has played once since launch, so a tab switch does not replay it.
+@MainActor
+enum TrainingIntro {
+    static var played = false
 }

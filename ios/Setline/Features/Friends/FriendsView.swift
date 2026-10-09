@@ -283,7 +283,7 @@ struct PostCard: View {
                     ForEach(Array(post.medals.prefix(3).enumerated()), id: \.offset) { _, medal in
                         HStack(spacing: SL.Space.s2) {
                             if let place = LiftMedal.Place(rawValue: medal.place) {
-                                SLMedal(place: place, size: 24)
+                                SLMedal(place: place, size: 24, shines: place == .gold)
                                 Text(medal.name)
                                     .slBody(SL.Weight.medium)
                                     .foregroundStyle(SL.Ink.primary)
@@ -358,7 +358,7 @@ struct PostCard: View {
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(value)
-                .font(.slScore(24))
+                .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
                 .slNumerals()
                 .foregroundStyle(SL.Ink.primary)
                 .lineLimit(1)

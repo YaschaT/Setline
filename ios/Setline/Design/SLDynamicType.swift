@@ -27,21 +27,6 @@ extension Font {
         SLTypeface.font(size: size, weight: weight)
     }
 
-    /// The score: Archivo's narrow cut for the numbers a lifter reads first —
-    /// the streak, a workout's stats, a change, a week's tonnes. Narrow and
-    /// tall, like a scoreboard, so a number reads as the result it is; text
-    /// beside it stays at normal width. Scales with the reader's text size,
-    /// up to `maxScale`, so a big number never bursts its row.
-    static func slScore(
-        _ size: CGFloat,
-        _ weight: Font.Weight = .bold,
-        maxScale: CGFloat = 1.5,
-        relativeTo style: UIFont.TextStyle = .body
-    ) -> Font {
-        let scaled = UIFontMetrics(forTextStyle: style).scaledValue(for: size)
-        return SLTypeface.font(size: min(scaled, size * maxScale), weight: weight, width: SL.scoreWidth)
-    }
-
     /// The same scaling, with a ceiling.
     ///
     /// For chrome that must stay inside a fixed column — the set grid's

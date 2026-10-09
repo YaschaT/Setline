@@ -87,10 +87,6 @@ enum SL {
     // MARK: Type
     // Archivo (bundled; see `SLTypeface`). Numerals ALWAYS .monospacedDigit().
     // UI minimum is 12pt; 11pt is reserved for tab labels only.
-    /// The `wdth` the score numbers are cut at: narrow, short of the axis's
-    /// most condensed (62), where the 4 and the 1 start to look alike.
-    static let scoreWidth = 72
-
     enum TypeSize {
         static let displayXL: CGFloat = 44   // 01 headline, 09 session name
         static let displayL:  CGFloat = 40   // 02a leading element

@@ -176,7 +176,7 @@ struct ProgressHomeView: View {
             if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
                 Text(bodyProgress.latest.map { app.display.kg($0.weightKg) } ?? "—")
-                    .font(.slScore(24))
+                    .slLead(SL.Weight.semibold)
                     .slNumerals()
                     .foregroundStyle(SL.Ink.primary)
             }
@@ -330,7 +330,7 @@ struct ProgressHomeView: View {
                     if let changeText {
                         // A gain or loss is the row's news; "Steady" is not.
                         Text(changeText)
-                            .font(change == 0 ? .sl(SL.TypeSize.body, SL.Weight.medium) : .slScore(28))
+                            .font(.sl(change == 0 ? SL.TypeSize.body : SL.TypeSize.title, change == 0 ? SL.Weight.medium : SL.Weight.semibold))
                             .slNumerals()
                             .foregroundStyle(ink)
                     } else {
@@ -429,7 +429,7 @@ struct ProgressHomeView: View {
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s5) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(tonnes(current.volumeKg))
-                        .font(.slScore(28))
+                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
                         .slNumerals()
                         .foregroundStyle(SL.Ink.primary)
                     Text("this week").slMeta().foregroundStyle(SL.Ink.secondary)
@@ -437,7 +437,7 @@ struct ProgressHomeView: View {
                 if let previous {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tonnes(previous.volumeKg))
-                            .font(.slScore(28, SL.Weight.medium))
+                            .font(.sl(SL.TypeSize.title, SL.Weight.regular))
                             .slNumerals()
                             .foregroundStyle(SL.Ink.secondary)
                         Text("last week").slMeta().foregroundStyle(SL.Ink.secondary)
@@ -550,12 +550,16 @@ struct VolumeBars: View {
     let weeks: [ProgressOverview.WeekVolume]
     let spoken: String
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The bars rise from the baseline one after another as the card appears.
+    @State private var grown = false
+
     var body: some View {
         let highest = max(weeks.map { double($0.volumeKg) }.max() ?? 0, 1)
         VStack(spacing: SL.Space.s2) {
             GeometryReader { proxy in
                 HStack(alignment: .bottom, spacing: 6) {
-                    ForEach(weeks) { week in
+                    ForEach(Array(weeks.enumerated()), id: \.element.id) { index, week in
                         UnevenRoundedRectangle(
                             topLeadingRadius: SL.Radius.sm,
                             topTrailingRadius: SL.Radius.sm,
@@ -565,9 +569,12 @@ struct VolumeBars: View {
                         // A week without a workout keeps a sliver, so the row
                         // of weeks stays readable as a row.
                         .frame(height: max(2, proxy.size.height * double(week.volumeKg) / highest))
+                        .scaleEffect(y: grown || reduceMotion ? 1 : 0.02, anchor: .bottom)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.1 + Double(index) * 0.05), value: grown)
                         .frame(maxWidth: .infinity)
                     }
                 }
+                .onAppear { grown = true }
                 .frame(maxHeight: .infinity, alignment: .bottom)
             }
             .frame(height: 88)

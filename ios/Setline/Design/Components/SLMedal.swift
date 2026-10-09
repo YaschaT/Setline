@@ -7,6 +7,11 @@ import SetlineCore
 struct SLMedal: View {
     let place: LiftMedal.Place
     var size: CGFloat = 36
+    /// A light passes once across the disc as it appears — kept for gold.
+    var shines = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweep: CGFloat = -1
 
     static func metal(_ place: LiftMedal.Place) -> (face: Color, edge: Color) {
         switch place {
@@ -31,11 +36,26 @@ struct SLMedal: View {
                 Text("\(place.rawValue)")
                     .font(.slFixed(size * 0.36, SL.Weight.bold))
                     .foregroundStyle(metal.edge)
+                if shines {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.55))
+                        .frame(width: size * 0.18)
+                        .rotationEffect(.degrees(25))
+                        .offset(x: sweep * size)
+                        .blendMode(.plusLighter)
+                        .mask(Circle().padding(size * 0.07))
+                        .allowsHitTesting(false)
+                }
             }
             .frame(width: size * 0.82, height: size * 0.82)
             .offset(y: size * 0.24)
         }
         .frame(width: size, height: size * 1.06, alignment: .top)
+        .onAppear {
+            guard shines, !reduceMotion else { return }
+            sweep = -1
+            withAnimation(.easeInOut(duration: 0.7).delay(0.35)) { sweep = 1 }
+        }
         .accessibilityElement()
         .accessibilityLabel(place.title)
     }
@@ -61,7 +81,7 @@ struct SLMedalRow: View {
 
     var body: some View {
         HStack(spacing: SL.Space.s3) {
-            SLMedal(place: medal.place, size: 34)
+            SLMedal(place: medal.place, size: 34, shines: medal.place == .gold)
             VStack(alignment: .leading, spacing: 2) {
                 Text(medal.name)
                     .slBody(SL.Weight.semibold)
