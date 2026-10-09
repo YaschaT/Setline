@@ -31,9 +31,6 @@ struct ProgressHomeView: View {
     /// The exercise Kracht opens on, when a best-set row led there.
     @State private var openingExercise: String?
     @State private var weighing = false
-    @State private var explainingDays = false
-    /// Whether the weight card shows its chart; remembered across launches.
-    @AppStorage("setline.progress.weightChart") private var showsWeightChart = false
 
     @State private var bodyProgress = BodyProgress.empty
     @State private var trend: [ProgressOverview.WeightPoint] = []
@@ -122,12 +119,6 @@ struct ProgressHomeView: View {
         segment = target
     }
 
-    private func chevroned(_ title: String) -> some View {
-        HStack(spacing: 6) {
-            Text(title)
-            SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
-        }
-    }
 
     // MARK: - Body weight
 
@@ -135,43 +126,19 @@ struct ProgressHomeView: View {
     /// not the screen's subject. The number and its movement on one line —
     /// tapping them opens every weigh-in — and the chart behind a toggle.
     private var weightSection: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s3) {
+        VStack(alignment: .leading, spacing: SL.Space.s1) {
             Button { open(.lichaam) } label: { weightHead }
                 .buttonStyle(.plain)
                 .disabled(bodyProgress.entries.isEmpty)
-                .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opens all your weigh-ins")
+                .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opens all your weigh-ins and the trend")
 
-            if trend.count > 1, showsWeightChart {
-                WeightTrendChart(points: trend)
-                    .transition(.opacity)
-            } else if trend.count <= 1 {
-                Text(trend.isEmpty
-                     ? "Weigh yourself in the morning, before eating."
-                     : "One more weigh-in and your trend shows here.")
+            // What the number did, in words, beside the one action.
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+                Text(movementLine)
                     .slMeta()
+                    .slNumerals()
+                    .foregroundStyle(movement?.moved == true ? SL.Signal.recovery : SL.Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(SL.Ink.secondary)
-            }
-
-            // The card's two actions: the chart, and weighing in. Weighing
-            // lives here, beside the number it changes, so the screen's head
-            // belongs to training.
-            HStack(spacing: SL.Space.s3) {
-                if trend.count > 1 {
-                    Button {
-                        withAnimation(.easeInOut(duration: SL.Motion.base)) { showsWeightChart.toggle() }
-                    } label: {
-                        HStack(spacing: SL.Space.s1) {
-                            Text(showsWeightChart ? "Hide trend" : "Show trend")
-                            SLGlyph(name: .chevronDown, size: 13)
-                                .rotationEffect(.degrees(showsWeightChart ? 180 : 0))
-                        }
-                        .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
-                        .foregroundStyle(SL.Ink.secondary)
-                        .slHitTarget()
-                    }
-                    .buttonStyle(.plain)
-                }
                 Spacer(minLength: 0)
                 weighButton
             }
@@ -182,6 +149,14 @@ struct ProgressHomeView: View {
         .slBorderBox()
         .frame(maxWidth: .infinity, alignment: .leading)
         .slListCard()
+    }
+
+    /// "+1.1 kg in 14 days", or how to start.
+    private var movementLine: String {
+        if let movement { return "\(movement.value) \(movement.label)" }
+        return bodyProgress.entries.isEmpty
+            ? "Weigh yourself in the morning, before eating."
+            : "One more weigh-in and your trend starts."
     }
 
     /// A weigh-in is a status, not a training win: the number stays in ink and
@@ -200,12 +175,6 @@ struct ProgressHomeView: View {
             .foregroundStyle(SL.Ink.primary)
             if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                if let movement {
-                    Text(movement.value)
-                        .slMeta()
-                        .slNumerals()
-                        .foregroundStyle(movement.moved ? SL.Signal.recovery : SL.Ink.secondary)
-                }
                 Text(bodyProgress.latest.map { app.display.kg($0.weightKg) } ?? "—")
                     .slLead(SL.Weight.semibold)
                     .slNumerals()
@@ -227,33 +196,7 @@ struct ProgressHomeView: View {
     /// per session as a small line.
     private var daySection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            HStack(spacing: SL.Space.s1) {
-                Text("Per training day")
-                    .slLead()
-                    .foregroundStyle(SL.Ink.primary)
-                    .accessibilityAddTraits(.isHeader)
-                Button { explainingDays = true } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 15))
-                        .foregroundStyle(SL.Ink.secondary)
-                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.vertical, -12)
-                .accessibilityLabel("How is this measured?")
-                Spacer(minLength: SL.Space.s2)
-                // Said once for every row: what the percentages are.
-                Text("estimated strength")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-            }
-            .padding(.horizontal, SL.Space.s1)
-            .alert("Strength per training day", isPresented: $explainingDays) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("For each exercise, your best set of the last 8 weeks as an estimated max, against your best before that — or your first session if the exercise is new. The percentage is the average over that day's exercises; the line is your best so far, session by session.")
-            }
+            SLSectionHead(title: "Strength", meta: "per training day")
             VStack(spacing: 0) {
                 if days.isEmpty {
                     VStack(alignment: .leading, spacing: SL.Space.s1) {
@@ -274,7 +217,7 @@ struct ProgressHomeView: View {
                             if openDays.contains(day.dayID) {
                                 ForEach(day.lifts) { lift in
                                     liftRow(lift)
-                                        .overlay(alignment: .top) { SLHairline().padding(.leading, 68) }
+                                        .overlay(alignment: .top) { SLHairline().padding(.leading, SL.Space.s4) }
                                 }
                                 .transition(.opacity)
                             }
@@ -282,13 +225,24 @@ struct ProgressHomeView: View {
                         .overlay(alignment: .top) { if index > 0 { SLHairline() } }
                     }
                 }
+                // Every exercise, as the card's quiet last row.
+                Button { open(.kracht) } label: {
+                    HStack {
+                        Text("All exercises").slBody()
+                        Spacer()
+                        SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
+                    }
+                    .foregroundStyle(SL.Ink.secondary)
+                    .padding(.horizontal, SL.Space.s4)
+                    .frame(minHeight: 52)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SLRowButtonStyle())
+                .overlay(alignment: .top) { SLHairline() }
+                .accessibilityHint("Opens strength per exercise")
             }
             .slBorderBox()
             .slListCard()
-
-            Button { open(.kracht) } label: { chevroned("Strength per exercise") }
-                .buttonStyle(SLOutlineButtonStyle())
-                .padding(.top, SL.Space.s1)
         }
     }
 
@@ -329,7 +283,7 @@ struct ProgressHomeView: View {
                 }
                 SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
             }
-            .padding(.leading, 68)
+            .padding(.leading, SL.Space.s6)
             .padding(.trailing, SL.Space.s4)
             .padding(.vertical, SL.Space.s3)
             .frame(minHeight: 56)
@@ -350,11 +304,8 @@ struct ProgressHomeView: View {
             guard let change else { return SL.Ink.secondary }
             return change > 0 ? SL.Signal.action : change < 0 ? SL.Signal.loss : SL.Ink.secondary
         }()
-        let changeText = change.map { $0 == 0 ? "0 %" : "\(app.display.signedDelta($0)) %" }
+        let changeText = change.map { $0 == 0 ? "Steady" : "\(app.display.signedDelta($0)) %" }
         let sessions = day.sessions == 1 ? "1 session" : "\(day.sessions) sessions"
-        let detail = [sessions, day.leader.map { "\($0.name) +\(app.display.number($0.deltaKg)) kg" }]
-            .compactMap { $0 }
-            .joined(separator: " · ")
         let isOpen = openDays.contains(day.dayID)
         return Button {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: SL.Motion.base)) {
@@ -362,40 +313,30 @@ struct ProgressHomeView: View {
             }
         } label: {
             HStack(alignment: .center, spacing: SL.Space.s3) {
-                SLGlyph(name: .category(for: day.label), size: 20)
-                    .foregroundStyle(SL.Ink.primary)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(SL.Surface.raised2))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(day.label)
                         .slLead()
                         .foregroundStyle(SL.Ink.primary)
-                    Text(detail)
+                    Text(sessions)
                         .slMeta()
                         .slNumerals()
                         .foregroundStyle(SL.Ink.secondary)
-                        .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 // The line is the day's best so far, so it climbs to the
                 // number above it and never contradicts it. Neutral: the
                 // number carries the colour.
-                VStack(alignment: .trailing, spacing: SL.Space.s1) {
+                Group {
                     if let changeText {
+                        // A gain or loss is the row's news; "Steady" is not.
                         Text(changeText)
-                            .slLead(SL.Weight.semibold)
+                            .font(.sl(change == 0 ? SL.TypeSize.body : SL.TypeSize.title, change == 0 ? SL.Weight.medium : SL.Weight.semibold))
                             .slNumerals()
                             .foregroundStyle(ink)
                     } else {
                         Text("Too early")
                             .slMeta()
                             .foregroundStyle(SL.Ink.secondary)
-                    }
-                    if day.strength.count > 1 {
-                        Sparkline(values: day.strength)
-                            .stroke(SL.Ink.tertiary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-                            .frame(width: 48, height: 14)
                     }
                 }
                 .fixedSize()
@@ -447,7 +388,7 @@ struct ProgressHomeView: View {
         if let last = trend.last,
            let earlier = trend.last(where: { $0.date <= last.date.addingTimeInterval(-14 * 86_400) }) {
             let change = Estimates.round(last.average - earlier.average, toIncrement: 0.1)
-            return (signed(change), "14-day avg.", change != 0)
+            return (signed(change), "in 14 days", change != 0)
         }
         if let change = bodyProgress.change {
             return (signed(change.value), change.weeks == 1 ? "in 1 week" : "in \(change.weeks) weeks", change.value != 0)
@@ -465,8 +406,8 @@ struct ProgressHomeView: View {
     private var volumeSection: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLSectionHead(
-                title: "Volume per week",
-                meta: volume.first.map { first in "ton · w\(first.number)–w\(volume.last?.number ?? first.number)" }
+                title: "Volume",
+                meta: "tonnes per week"
             )
             VolumeBars(weeks: volume, spoken: volumeSpoken)
                 .padding(SL.Space.s4)
@@ -564,149 +505,7 @@ struct ProgressHomeView: View {
 
 // MARK: - Charts
 
-/// A series as a small line across its frame, lowest at the bottom: the shape
-/// of the numbers, not the numbers.
-private struct Sparkline: Shape {
-    let values: [Decimal]
 
-    func path(in rect: CGRect) -> Path {
-        let numbers = values.map { NSDecimalNumber(decimal: $0).doubleValue }
-        guard numbers.count > 1, let low = numbers.min(), let high = numbers.max() else { return Path() }
-        let span = high - low
-        return Path { path in
-            for (index, value) in numbers.enumerated() {
-                let x = rect.minX + rect.width * Double(index) / Double(numbers.count - 1)
-                let y = rect.maxY - (span > 0 ? (value - low) / span : 0.5) * rect.height
-                if index == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
-            }
-        }
-    }
-}
-
-/// Body weight as the redesign draws it: every weigh-in in grey, the trailing
-/// average in lime with its latest point marked, two hairlines behind them,
-/// the months underneath and a legend that names both lines.
-///
-/// Drawn rather than charted: two lines on a fixed 96pt plot, stretched to the
-/// card's width, with no axis to read.
-struct WeightTrendChart: View {
-    let points: [ProgressOverview.WeightPoint]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
-            GeometryReader { proxy in
-                let plot = plot(in: proxy.size)
-                ZStack {
-                    Path { path in
-                        for fraction in [0.37, 0.69] {
-                            let y = proxy.size.height * fraction
-                            path.move(to: CGPoint(x: 0, y: y))
-                            path.addLine(to: CGPoint(x: proxy.size.width, y: y))
-                        }
-                    }
-                    .stroke(SL.Surface.hairline, lineWidth: 1)
-
-                    line(plot.daily)
-                        .stroke(SL.Ink.primary.opacity(0.35), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
-                    line(plot.average)
-                        .stroke(SL.Signal.action, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    if let end = plot.average.last {
-                        Circle()
-                            .fill(SL.Signal.action)
-                            .frame(width: 8, height: 8)
-                            .position(end)
-                    }
-                }
-            }
-            .frame(height: 96)
-            .accessibilityElement()
-            .accessibilityLabel("Your weight over \(points.count) weigh-ins, with the 14-day average")
-
-            if months.count > 1 {
-                HStack(spacing: 0) {
-                    ForEach(Array(months.enumerated()), id: \.offset) { index, month in
-                        Text(month)
-                            .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                            .foregroundStyle(SL.Ink.secondary)
-                        if index < months.count - 1 { Spacer(minLength: SL.Space.s1) }
-                    }
-                }
-                .accessibilityHidden(true)
-            }
-
-            SLFlow(spacing: SL.Space.s4, lineSpacing: SL.Space.s1) {
-                legend("daily value", color: SL.Ink.primary.opacity(0.35), height: 2)
-                legend("14-day average", color: SL.Signal.action, height: 3)
-            }
-            .accessibilityHidden(true)
-        }
-    }
-
-    private func legend(_ text: String, color: Color, height: CGFloat) -> some View {
-        HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-                .fill(color)
-                .frame(width: 14, height: height)
-            Text(text).slMeta().foregroundStyle(SL.Ink.meta)
-        }
-    }
-
-    private func line(_ points: [CGPoint]) -> Path {
-        Path { path in
-            guard let first = points.first else { return }
-            path.move(to: first)
-            for point in points.dropFirst() { path.addLine(to: point) }
-        }
-    }
-
-    /// Both series on one scale: time left to right, weight bottom to top.
-    /// 1d draws the lines in a band from 28 % to 70 % of the plot's height —
-    /// around the two hairlines, not past them — so a change of a kilo reads
-    /// as a slope rather than a cliff.
-    private func plot(in size: CGSize) -> (daily: [CGPoint], average: [CGPoint]) {
-        guard let first = points.first?.date, let last = points.last?.date else { return ([], []) }
-        let span = max(last.timeIntervalSince(first), 1)
-        let values = points.flatMap { [double($0.weightKg), double($0.average)] }
-        let low = values.min() ?? 0
-        let range = max((values.max() ?? 1) - low, 0.1)
-        let (top, bottom) = (size.height * 0.28, size.height * 0.70)
-
-        func place(_ date: Date, _ value: Decimal) -> CGPoint {
-            CGPoint(
-                x: 2 + (size.width - 4) * date.timeIntervalSince(first) / span,
-                y: top + (bottom - top) * (1 - (double(value) - low) / range)
-            )
-        }
-        return (
-            points.map { place($0.date, $0.weightKg) },
-            points.map { place($0.date, $0.average) }
-        )
-    }
-
-    private func double(_ value: Decimal) -> Double {
-        (value as NSDecimalNumber).doubleValue
-    }
-
-    /// "jun", "jul", "aug", "sep" — each month the series touches.
-    private var months: [String] {
-        guard let first = points.first?.date, let last = points.last?.date else { return [] }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "MMM"
-
-        var labels: [String] = []
-        var cursor = calendar.date(from: calendar.dateComponents([.year, .month], from: first)) ?? first
-        while cursor <= last, labels.count < 12 {
-            labels.append(formatter.string(from: cursor).replacingOccurrences(of: ".", with: ""))
-            guard let next = calendar.date(byAdding: .month, value: 1, to: cursor) else { break }
-            cursor = next
-        }
-        return labels
-    }
-}
 
 /// Tonnage per week as bars, this week in full lime.
 struct VolumeBars: View {
