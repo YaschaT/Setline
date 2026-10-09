@@ -42,12 +42,14 @@ struct NutritionHomeView: View {
         case add(Meal)
         case edit(NutritionEntry)
         case targets
+        case recipe(Recipe)
 
         var id: String {
             switch self {
             case .add(let meal): return "add-\(meal.rawValue)"
             case .edit(let entry): return "edit-\(entry.id)"
             case .targets: return "targets"
+            case .recipe(let recipe): return "recipe-\(recipe.id)"
             }
         }
     }
@@ -80,6 +82,7 @@ struct NutritionHomeView: View {
                 hero
                     .padding(.top, SL.Space.s5)
                 ideasSection
+                RecipesSection(display: app.display, initial: likely) { sheet = .recipe($0) }
                 eatenSection
             }
             .padding(.horizontal, SL.Space.gutterSession)
@@ -130,6 +133,14 @@ struct NutritionHomeView: View {
                         delete(removed)
                     }
                 )
+            case .recipe(let recipe):
+                RecipeSheet(recipe: recipe, display: app.display, onLog: { meal in
+                    sheet = nil
+                    let moment = Date()
+                    now = moment
+                    add(recipe.entry(id: "food-\(Int(moment.timeIntervalSince1970 * 1000))", date: moment, meal: meal))
+                }, onClose: { sheet = nil })
+                .presentationDragIndicator(.visible)
             case .targets:
                 TargetsSheet(targets: app.targets) { changes in
                     sheet = nil

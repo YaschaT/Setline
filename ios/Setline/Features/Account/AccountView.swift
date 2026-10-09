@@ -450,6 +450,18 @@ struct AccountView: View {
                         .listRowBackground(SL.Surface.raised)
                     }
                 }
+                Section("Recipes") {
+                    ForEach(Recipes.photoCredits, id: \.name) { item in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name).slBody()
+                            Text(item.credit).slMeta().foregroundStyle(SL.Ink.secondary)
+                        }
+                        .listRowBackground(SL.Surface.raised)
+                    }
+                    Text("Other recipes use the photo of their main ingredient, credited above.")
+                        .slMeta().foregroundStyle(SL.Ink.secondary)
+                        .listRowBackground(SL.Surface.raised)
+                }
                 Section("Search results") {
                     Text("Product photos and data from Open Food Facts, under the Open Database Licence.")
                         .slMeta().foregroundStyle(SL.Ink.secondary)
