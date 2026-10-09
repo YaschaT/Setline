@@ -196,6 +196,15 @@ actor SupabaseClient: TokenRefresher {
         return try await send(request, signedIn: true)
     }
 
+    /// Supabase Storage, with the account's token: uploads, downloads and
+    /// deletes in the private post-media bucket.
+    func storage(_ path: String, method: String = "GET", body: Data? = nil, contentType: String? = nil, session token: Session) async throws -> Data {
+        var request = try makeRequest(path: "/storage/v1/" + path, method: method, accessToken: token.accessToken)
+        if let contentType { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
+        request.httpBody = body
+        return try await send(request, signedIn: true)
+    }
+
     /// A filter value safe inside a query string: versions carry `+` and `:`.
     static func queryValue(_ value: String) -> String {
         var allowed = CharacterSet.alphanumerics

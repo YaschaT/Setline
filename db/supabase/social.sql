@@ -154,6 +154,27 @@ create table if not exists public.posts (
 
 create index if not exists posts_feed_idx on public.posts (workout_date desc);
 
+-- Where the workout happened — only when the lifter chose to say, per post.
+-- A gym is a public place and keeps its coordinates; outdoors is stored
+-- rounded to about a kilometre; a home workout never carries coordinates.
+alter table public.posts add column if not exists place_kind text;
+alter table public.posts add column if not exists place_name text;
+alter table public.posts add column if not exists place_lat double precision;
+alter table public.posts add column if not exists place_lon double precision;
+alter table public.posts drop constraint if exists posts_place_kind_check;
+alter table public.posts add constraint posts_place_kind_check
+  check (place_kind is null or place_kind in ('gym', 'home', 'outdoors'));
+alter table public.posts drop constraint if exists posts_place_name_check;
+alter table public.posts add constraint posts_place_name_check
+  check (place_name is null or char_length(place_name) between 1 and 80);
+alter table public.posts drop constraint if exists posts_place_coordinates_check;
+alter table public.posts add constraint posts_place_coordinates_check
+  check (
+    (place_lat is null) = (place_lon is null)
+    and (place_kind is distinct from 'home' or place_lat is null)
+    and (place_lat is null or (place_lat between -90 and 90 and place_lon between -180 and 180))
+  );
+
 alter table public.posts enable row level security;
 
 drop policy if exists "see own and friends posts" on public.posts;
@@ -223,3 +244,184 @@ drop policy if exists "file a report" on public.reports;
 create policy "file a report" on public.reports
   for insert to authenticated with check (auth.uid() = reporter_id);
 -- No select policy: reports are read in the dashboard only.
+
+-- ================================================================== posts v2
+-- SOCIAL_FEATURES.md: a post is an explicit choice, with a visibility, an
+-- optional title, notes, photos, music and hidden stats. Safe to re-run.
+
+alter table public.posts add column if not exists visibility text not null default 'friends';
+alter table public.posts drop constraint if exists posts_visibility_check;
+-- Public comes later (phase 2); the check widens then.
+alter table public.posts add constraint posts_visibility_check
+  check (visibility in ('private', 'friends'));
+alter table public.posts add column if not exists custom_title text;
+alter table public.posts drop constraint if exists posts_custom_title_check;
+alter table public.posts add constraint posts_custom_title_check
+  check (custom_title is null or char_length(custom_title) between 1 and 60);
+alter table public.posts add column if not exists notes text;
+alter table public.posts drop constraint if exists posts_notes_check;
+alter table public.posts add constraint posts_notes_check
+  check (notes is null or char_length(notes) between 1 and 2000);
+alter table public.posts add column if not exists hidden_stats text[] not null default '{}';
+alter table public.posts drop constraint if exists posts_hidden_stats_check;
+alter table public.posts add constraint posts_hidden_stats_check
+  check (hidden_stats <@ array['duration', 'volume', 'weights']::text[]);
+alter table public.posts add column if not exists edited_at timestamptz;
+
+-- The one visibility rule. Friendship is checked when the post is READ, so a
+-- friend added later sees earlier Friends posts and an unfriended person
+-- loses them at once; Private posts are never anyone else's.
+create or replace function public.can_see_post(p uuid, viewer uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.posts
+    where id = p
+      and (user_id = viewer or (visibility = 'friends' and public.are_friends(viewer, user_id)))
+  );
+$$;
+
+drop policy if exists "see own and friends posts" on public.posts;
+create policy "see own and friends posts" on public.posts
+  for select to authenticated using (
+    auth.uid() = user_id
+    or (visibility = 'friends' and public.are_friends(auth.uid(), user_id))
+  );
+
+drop policy if exists "give kudos" on public.kudos;
+create policy "give kudos" on public.kudos
+  for insert to authenticated with check (
+    auth.uid() = user_id
+    and public.can_see_post(post_id, auth.uid())
+    and not exists (select 1 from public.posts p where p.id = post_id and p.user_id = auth.uid())
+  );
+
+-- ------------------------------------------------------------------ photos
+
+create table if not exists public.post_media (
+  id         uuid primary key default gen_random_uuid(),
+  post_id    uuid not null references public.posts (id) on delete cascade,
+  user_id    uuid not null references public.profiles (user_id) on delete cascade,
+  -- <user_id>/<post_id>/<uuid>.jpg in the private post-media bucket.
+  path       text not null unique check (char_length(path) between 1 and 200),
+  width      integer check (width is null or width > 0),
+  height     integer check (height is null or height > 0),
+  position   smallint not null default 0 check (position between 0 and 3),
+  created_at timestamptz not null default now()
+);
+
+alter table public.post_media enable row level security;
+
+drop policy if exists "see media on visible posts" on public.post_media;
+create policy "see media on visible posts" on public.post_media
+  for select to authenticated using (public.can_see_post(post_id, auth.uid()));
+
+drop policy if exists "add media to own posts" on public.post_media;
+create policy "add media to own posts" on public.post_media
+  for insert to authenticated with check (
+    auth.uid() = user_id
+    and exists (select 1 from public.posts p where p.id = post_id and p.user_id = auth.uid())
+    and split_part(path, '/', 1) = auth.uid()::text
+  );
+
+drop policy if exists "remove own media" on public.post_media;
+create policy "remove own media" on public.post_media
+  for delete to authenticated using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------ music
+
+create table if not exists public.post_tracks (
+  id         uuid primary key default gen_random_uuid(),
+  post_id    uuid not null references public.posts (id) on delete cascade,
+  user_id    uuid not null references public.profiles (user_id) on delete cascade,
+  position   smallint not null default 0 check (position between 0 and 5),
+  kind       text not null default 'song' check (kind in ('song', 'playlist')),
+  title      text not null check (char_length(title) between 1 and 120),
+  artist     text check (artist is null or char_length(artist) <= 120),
+  url        text check (url is null or (char_length(url) <= 500 and url ~ '^https://')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.post_tracks enable row level security;
+
+drop policy if exists "see tracks on visible posts" on public.post_tracks;
+create policy "see tracks on visible posts" on public.post_tracks
+  for select to authenticated using (public.can_see_post(post_id, auth.uid()));
+
+drop policy if exists "add tracks to own posts" on public.post_tracks;
+create policy "add tracks to own posts" on public.post_tracks
+  for insert to authenticated with check (
+    auth.uid() = user_id
+    and exists (select 1 from public.posts p where p.id = post_id and p.user_id = auth.uid())
+  );
+
+drop policy if exists "remove own tracks" on public.post_tracks;
+create policy "remove own tracks" on public.post_tracks
+  for delete to authenticated using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------ comments
+
+create table if not exists public.comments (
+  id         uuid primary key default gen_random_uuid(),
+  post_id    uuid not null references public.posts (id) on delete cascade,
+  user_id    uuid not null references public.profiles (user_id) on delete cascade,
+  body       text not null check (char_length(btrim(body)) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists comments_post_idx on public.comments (post_id, created_at);
+
+alter table public.comments enable row level security;
+
+drop policy if exists "see comments on visible posts" on public.comments;
+create policy "see comments on visible posts" on public.comments
+  for select to authenticated using (public.can_see_post(post_id, auth.uid()));
+
+-- Whoever can see a post can comment on it: its owner and, for a Friends
+-- post, the owner's friends.
+drop policy if exists "comment on visible posts" on public.comments;
+create policy "comment on visible posts" on public.comments
+  for insert to authenticated with check (
+    auth.uid() = user_id and public.can_see_post(post_id, auth.uid())
+  );
+
+-- Your own comment, or any comment on your own post.
+drop policy if exists "remove comments" on public.comments;
+create policy "remove comments" on public.comments
+  for delete to authenticated using (
+    auth.uid() = user_id
+    or exists (select 1 from public.posts p where p.id = post_id and p.user_id = auth.uid())
+  );
+
+alter table public.reports add column if not exists comment_id uuid references public.comments (id) on delete set null;
+
+-- ------------------------------------------------------------------ photo storage
+
+-- Private bucket: files are read only by those who can see their post.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('post-media', 'post-media', false, 5242880, array['image/jpeg'])
+on conflict (id) do update set public = false, file_size_limit = 5242880, allowed_mime_types = array['image/jpeg'];
+
+drop policy if exists "post media upload own folder" on storage.objects;
+create policy "post media upload own folder" on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'post-media' and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "post media read when post visible" on storage.objects;
+create policy "post media read when post visible" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'post-media'
+    and (
+      (storage.foldername(name))[1] = auth.uid()::text
+      or exists (
+        select 1 from public.post_media m
+        where m.path = storage.objects.name and public.can_see_post(m.post_id, auth.uid())
+      )
+    )
+  );
+
+drop policy if exists "post media delete own" on storage.objects;
+create policy "post media delete own" on storage.objects
+  for delete to authenticated using (
+    bucket_id = 'post-media' and (storage.foldername(name))[1] = auth.uid()::text
+  );

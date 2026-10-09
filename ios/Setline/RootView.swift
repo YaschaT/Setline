@@ -21,7 +21,8 @@ struct RootView: View {
     /// Friends, the feed and kudos, for whoever is signed in.
     @State private var social = SocialStore()
     /// Saved workouts go to friends unless switched off on the finish screen.
-    @AppStorage("setline.social.shareWorkouts") private var sharesWorkouts = true
+    /// A saved workout being turned into a post.
+    @State private var composing: TrainingSession?
 
     private enum Entry { case beginning, returning }
 
@@ -187,9 +188,16 @@ struct RootView: View {
                 app: app,
                 resuming: session.snapshot,
                 loggingFor: session.loggingFor,
-                onFinish: { finished in
+                onFinish: { finished, createPost in
                     running = nil
-                    Task { await save(finished) }
+                    Task {
+                        await app.save(session: finished)
+                        // The composer opens once the session cover is gone.
+                        if createPost {
+                            try? await Task.sleep(for: .milliseconds(450))
+                            composing = finished
+                        }
+                    }
                 },
                 onPause: { snapshot in
                     running = nil
@@ -198,6 +206,9 @@ struct RootView: View {
                 // Opened and left with nothing done: there is nothing to park.
                 onClose: { running = nil }
             )
+        }
+        .fullScreenCover(item: $composing) { session in
+            PostComposerView(mode: .create(session), onClose: { composing = nil })
         }
     }
 
@@ -208,16 +219,4 @@ struct RootView: View {
         app.plan.first { $0.id == day.id } ?? day
     }
 
-    /// One workout per date: re-opening a day already logged reuses that
-    /// session's id, so saving updates it in place. A second session would
-    /// double-count every set in the history, the trend and the record checks.
-    private func save(_ session: TrainingSession) async {
-        await app.save(session: session)
-        guard sharesWorkouts else { return }
-        await social.publish(
-            session,
-            medals: Medals.medals(for: session, in: app.sessions),
-            streakWeeks: app.streak.weeks
-        )
-    }
 }

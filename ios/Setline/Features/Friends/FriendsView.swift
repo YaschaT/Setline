@@ -32,8 +32,9 @@ struct FriendsView: View {
                     ProfileSetupCard()
                 case .ready:
                     if !social.incoming.isEmpty { requestsBanner }
+                    if social.friends.isEmpty { onlyYouCard }
                     if social.feed.isEmpty {
-                        emptyFeed
+                        if social.friends.isEmpty { firstPostHint } else { emptyFeed }
                     } else {
                         ForEach(social.feed) { post in
                             PostCard(post: post)
@@ -110,6 +111,43 @@ struct FriendsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SLPressStyle(scale: 0.98))
+    }
+
+    /// No friends yet: Friends posts are visible to you alone, and the way
+    /// out of that is one tap.
+    private var onlyYouCard: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            HStack(alignment: .top, spacing: SL.Space.s3) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(SL.Signal.recovery)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(SL.Signal.recoveryTint))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Only you can see this — for now")
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("Friends you add later see your Friends posts, old ones too. Private posts stay private.")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button { showsPeople = true } label: { Text("Invite a gym friend") }
+                .buttonStyle(SLPrimaryButtonStyle())
+        }
+        .padding(SL.Space.s4)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
+    }
+
+    private var firstPostHint: some View {
+        Text("Finish a workout and tap Create post to share it here.")
+            .slBody()
+            .foregroundStyle(SL.Ink.secondary)
+            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(.center)
+            .padding(.vertical, SL.Space.s6)
     }
 
     private var emptyFeed: some View {
@@ -246,10 +284,17 @@ private struct ProfileSetupCard: View {
 struct PostCard: View {
     @Environment(AppState.self) private var app
     @Environment(SocialStore.self) private var social
+    @Environment(\.dynamicTypeSize) private var typeSize
     let post: FeedPost
+    /// The full post: all notes, every medal and song, and no way further.
+    var isDetail = false
 
     @State private var confirmsBlock = false
     @State private var reporting = false
+    @State private var confirmsDelete = false
+    @State private var editing = false
+    @State private var opened = false
+    @State private var profile: ProfileTarget?
     @State private var bursts = 0
 
     private var isMine: Bool { post.user_id == social.myID }
@@ -257,48 +302,82 @@ struct PostCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: SL.Space.s3) {
-                avatar
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(isMine ? "You" : (post.author?.display_name ?? "A friend"))
-                        .slBody(SL.Weight.semibold)
-                        .foregroundStyle(SL.Ink.primary)
-                    Text(Self.when(post.date))
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
+                Button { profile = ProfileTarget(id: post.user_id) } label: {
+                    HStack(spacing: SL.Space.s3) {
+                        avatar
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(isMine ? "You" : (post.author?.display_name ?? "A friend"))
+                                .slBody(SL.Weight.semibold)
+                                .foregroundStyle(SL.Ink.primary)
+                            Text(Self.when(post.date))
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens their profile")
                 Spacer()
+                if isMine { VisibilityBadge(visibility: post.postVisibility) }
                 menu
             }
 
-            Text(post.title)
-                .font(.sl(SL.TypeSize.display, SL.Weight.bold))
-                .tracking(-0.02 * SL.TypeSize.display)
-                .foregroundStyle(SL.Ink.primary)
-                .padding(.top, SL.Space.s4)
+            Group {
+                if isDetail {
+                    titleBlock
+                } else {
+                    Button { opened = true } label: { titleBlock.contentShape(Rectangle()) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens the post and its comments")
+                }
+            }
+            .padding(.top, SL.Space.s4)
 
-            stats.padding(.top, SL.Space.s3)
+            if !post.photos.isEmpty {
+                PostPhotos(photos: post.photos, carousel: isDetail)
+                    .padding(.top, SL.Space.s4)
+            }
+
+            stats.padding(.top, SL.Space.s4)
+
+            if let place = post.place {
+                PostPlaceView(place: place).padding(.top, SL.Space.s4)
+            }
 
             if !post.medals.isEmpty {
                 VStack(alignment: .leading, spacing: SL.Space.s2) {
-                    ForEach(Array(post.medals.prefix(3).enumerated()), id: \.offset) { _, medal in
-                        HStack(spacing: SL.Space.s2) {
+                    ForEach(Array(post.medals.prefix(isDetail ? 20 : 3).enumerated()), id: \.offset) { _, medal in
+                        HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: SL.Space.s2) {
                             if let place = LiftMedal.Place(rawValue: medal.place) {
                                 SLMedal(place: place, size: 24, shines: place == .gold)
-                                Text(medal.name)
-                                    .slBody(SL.Weight.medium)
-                                    .foregroundStyle(SL.Ink.primary)
-                                    .lineLimit(1)
-                                Text("\(place.title) · \(app.display.kg(Decimal(medal.weight_kg))) × \(medal.reps)")
-                                    .slMeta()
-                                    .slNumerals()
-                                    .foregroundStyle(SL.Ink.secondary)
-                                    .lineLimit(1)
+                                // Side by side while they fit; at the largest
+                                // sizes the detail goes under the lift.
+                                let layout = typeSize.isAccessibilitySize
+                                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                                    : AnyLayout(HStackLayout(spacing: SL.Space.s2))
+                                layout {
+                                    Text(medal.name)
+                                        .slBody(SL.Weight.medium)
+                                        .foregroundStyle(SL.Ink.primary)
+                                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                    Text(post.hides(.weights) ? place.title : "\(place.title) · \(app.display.kg(Decimal(medal.weight_kg))) × \(medal.reps)")
+                                        .slMeta()
+                                        .slNumerals()
+                                        .foregroundStyle(SL.Ink.secondary)
+                                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                }
                             }
                         }
                         .accessibilityElement(children: .combine)
                     }
                 }
                 .padding(.top, SL.Space.s4)
+            }
+
+            if !post.tracks.isEmpty {
+                PostMusic(tracks: post.tracks, full: isDetail)
+                    .padding(.top, SL.Space.s4)
             }
 
             Rectangle().fill(SL.Surface.hairline).frame(height: SL.Metric.border)
@@ -320,8 +399,44 @@ struct PostCard: View {
                 Button(reason) { Task { try? await social.report(post: post, reason: reason) } }
             }
         } message: {
-            Text("Setline reviews every report.")
+            Text("Setline reviews every report within 24 hours.")
         }
+        .alert("Delete this post?", isPresented: $confirmsDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { Task { try? await social.delete(post) } }
+        } message: {
+            Text("Its photos, comments and kudos are removed for everyone. Your workout stays in your log.")
+        }
+        .fullScreenCover(isPresented: $editing) {
+            PostComposerView(mode: .edit(post), onClose: { editing = false })
+        }
+        .fullScreenCover(isPresented: $opened) {
+            PostDetailView(postID: post.id, onClose: { opened = false })
+        }
+        .fullScreenCover(item: $profile) { target in
+            FriendProfileView(userID: target.id, onClose: { profile = nil })
+        }
+    }
+
+    /// The title and notes: a way into the post on the feed, plain text in it.
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            Text(post.displayTitle)
+                .font(.sl(SL.TypeSize.display, SL.Weight.bold))
+                .tracking(-0.02 * SL.TypeSize.display)
+                .foregroundStyle(SL.Ink.primary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            if let notes = post.notes, !notes.isEmpty {
+                Text(notes)
+                    .slBody()
+                    .foregroundStyle(SL.Ink.primary.opacity(0.82))
+                    .lineLimit(isDetail ? nil : 3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var avatar: some View {
@@ -346,9 +461,14 @@ struct PostCard: View {
     }
 
     private var stats: some View {
-        HStack(alignment: .top, spacing: 0) {
-            stat(app.display.volumeKg(Decimal(post.volume_kg)), "volume")
-            if let seconds = post.duration_seconds, seconds > 0 {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
+        return layout {
+            if !post.hides(.volume) {
+                stat(app.display.volumeKg(Decimal(post.volume_kg)), "volume")
+            }
+            if !post.hides(.duration), let seconds = post.duration_seconds, seconds >= 60 {
                 stat(app.display.minutes(seconds), "time")
             }
             stat("\(post.set_count)", "sets")
@@ -371,7 +491,8 @@ struct PostCard: View {
 
     private var kudosRow: some View {
         let given = social.hasKudos(post)
-        return HStack(spacing: SL.Space.s3) {
+        return VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: SL.Space.s3) {
             if !isMine {
                 Button {
                     if !given { bursts += 1 }
@@ -385,7 +506,7 @@ struct PostCard: View {
                                 SpringKeyframe(1.35, duration: 0.14)
                                 SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
                             }
-                        Text(given ? "Kudos given" : "Give kudos").slBody(SL.Weight.semibold)
+                        Text(given ? "Kudos given" : "Give kudos").slBody(SL.Weight.semibold).lineLimit(1).fixedSize()
                     }
                     .foregroundStyle(given ? SL.Signal.onAction : SL.Ink.primary)
                     .padding(.horizontal, SL.Space.s3)
@@ -398,11 +519,39 @@ struct PostCard: View {
                 .sensoryFeedback(.impact(weight: .medium), trigger: bursts)
                 .accessibilityLabel(given ? "Take back kudos" : "Give kudos")
             }
+            if !isDetail {
+                Button { opened = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.left")
+                            .font(.system(size: 15, weight: .semibold))
+                        if post.commentCount > 0 { Text("\(post.commentCount)").slBody(SL.Weight.semibold).slNumerals() }
+                    }
+                    .foregroundStyle(SL.Ink.primary)
+                    .padding(.horizontal, SL.Space.s3)
+                    .frame(minHeight: 36)
+                    .background(Capsule().fill(SL.Surface.raised2))
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.9))
+                .accessibilityLabel(post.commentCount == 1 ? "1 comment" : "\(post.commentCount) comments")
+            }
+            if !typeSize.isAccessibilitySize {
+                Text(kudosLine)
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        // At the largest sizes the line goes under the buttons, whole.
+        if typeSize.isAccessibilitySize && !kudosLine.isEmpty {
             Text(kudosLine)
                 .slMeta()
                 .foregroundStyle(SL.Ink.secondary)
-                .lineLimit(1)
-            Spacer(minLength: 0)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, SL.Space.s1)
+        }
         }
     }
 
@@ -422,7 +571,8 @@ struct PostCard: View {
     private var menu: some View {
         Menu {
             if isMine {
-                Button("Delete post", role: .destructive) { Task { try? await social.delete(post) } }
+                Button("Edit post", systemImage: "pencil") { editing = true }
+                Button("Delete post", systemImage: "trash", role: .destructive) { confirmsDelete = true }
             } else {
                 Button("Report post") { reporting = true }
                 Button("Remove friend") { Task { try? await social.remove(post.user_id) } }

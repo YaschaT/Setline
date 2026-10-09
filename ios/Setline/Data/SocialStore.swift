@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import SetlineCore
 
 // MARK: - What the social tables hold
@@ -38,6 +39,66 @@ struct Kudos: Codable, Hashable, Sendable {
     var giver: SocialProfile?
 }
 
+/// Who can see a post. Public comes later (SOCIAL_FEATURES.md, phase 2).
+enum PostVisibility: String, Codable, CaseIterable, Sendable {
+    case `private`, friends
+
+    var label: String { self == .private ? "Only you" : "Friends" }
+
+    private static let defaultKey = "setline.social.defaultVisibility"
+
+    /// The choice in Account › Privacy; Friends unless changed.
+    static var defaultForNewPosts: PostVisibility {
+        get { UserDefaults.standard.string(forKey: defaultKey).flatMap(PostVisibility.init(rawValue:)) ?? .friends }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: defaultKey) }
+    }
+}
+
+/// A number a lifter can keep off a post.
+enum HiddenStat: String, Codable, CaseIterable, Sendable {
+    case duration, volume, weights
+
+    var label: String {
+        switch self {
+        case .duration: return "Duration"
+        case .volume: return "Volume"
+        case .weights: return "Weights on medals"
+        }
+    }
+}
+
+struct PostMedia: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    let path: String
+    var width: Int?
+    var height: Int?
+    var position: Int
+}
+
+struct PostTrack: Codable, Hashable, Identifiable, Sendable {
+    var id: String
+    var kind: String
+    var title: String
+    var artist: String?
+    var url: String?
+    var position: Int
+
+    var isPlaylist: Bool { kind == "playlist" }
+}
+
+struct CommentCount: Codable, Hashable, Sendable { let count: Int }
+
+struct PostComment: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    let post_id: String
+    let user_id: String
+    let body: String
+    let created_at: String
+    var author: SocialProfile?
+
+    var date: Date { SocialStore.parseDate(created_at) ?? Date() }
+}
+
 /// A workout as a friend sees it: a summary, never the log itself.
 struct FeedPost: Codable, Hashable, Identifiable, Sendable {
     let id: String
@@ -52,11 +113,81 @@ struct FeedPost: Codable, Hashable, Identifiable, Sendable {
     let streak_weeks: Int
     var author: SocialProfile?
     var kudos: [Kudos]
+    var place_kind: String? = nil
+    var place_name: String? = nil
+    var place_lat: Double? = nil
+    var place_lon: Double? = nil
+    var visibility: String? = nil
+    var custom_title: String? = nil
+    var notes: String? = nil
+    var hidden_stats: [String]? = nil
+    var post_media: [PostMedia]? = nil
+    var post_tracks: [PostTrack]? = nil
+    var comments: [CommentCount]? = nil
+
+    /// Where it happened, when the lifter said.
+    var place: WorkoutPlace? {
+        guard let kind = place_kind.flatMap(WorkoutPlace.Kind.init(rawValue:)) else { return nil }
+        return WorkoutPlace(kind: kind, name: place_name ?? kind.label, latitude: place_lat, longitude: place_lon)
+    }
 
     var date: Date { SocialStore.parseDate(workout_date) ?? Date() }
+
+    /// The lifter's own title, else the day's name.
+    var displayTitle: String { custom_title?.isEmpty == false ? custom_title! : title }
+    var postVisibility: PostVisibility { visibility.flatMap(PostVisibility.init(rawValue:)) ?? .friends }
+    func hides(_ stat: HiddenStat) -> Bool { hidden_stats?.contains(stat.rawValue) == true }
+    var photos: [PostMedia] { (post_media ?? []).sorted { $0.position < $1.position } }
+    var tracks: [PostTrack] { (post_tracks ?? []).sorted { $0.position < $1.position } }
+    var commentCount: Int { comments?.first?.count ?? 0 }
 }
 
-/// What a post is written as.
+/// What the composer edits before anything is written.
+struct PostDraft {
+    var title = ""
+    var notes = ""
+    var visibility = PostVisibility.defaultForNewPosts
+    var hidden: Set<HiddenStat> = []
+    var place: WorkoutPlace?
+    var tracks: [DraftTrack] = []
+    var photos: [DraftPhoto] = []
+
+    static let maxPhotos = 4
+    static let maxSongs = 5
+
+    init() {}
+
+    /// The draft for editing a post that exists.
+    init(post: FeedPost) {
+        title = post.custom_title ?? ""
+        notes = post.notes ?? ""
+        visibility = post.postVisibility
+        hidden = Set((post.hidden_stats ?? []).compactMap(HiddenStat.init(rawValue:)))
+        place = post.place
+        tracks = post.tracks.map { DraftTrack(kind: $0.kind, title: $0.title, artist: $0.artist, url: $0.url) }
+        photos = post.photos.map { DraftPhoto(existing: $0) }
+    }
+}
+
+struct DraftTrack: Identifiable, Hashable {
+    var id = UUID()
+    var kind = "song"
+    var title: String
+    var artist: String?
+    var url: String?
+}
+
+/// A photo on a draft: one already on the post, or a new one, already
+/// resized and re-encoded on this phone (no location or camera data).
+struct DraftPhoto: Identifiable {
+    let id = UUID()
+    var existing: PostMedia?
+    var jpeg: Data?
+    var width: Int?
+    var height: Int?
+}
+
+/// What a post row is written as.
 private struct PostWrite: Encodable {
     let user_id: String
     let session_id: String
@@ -67,6 +198,124 @@ private struct PostWrite: Encodable {
     let set_count: Int
     let medals: [PostMedal]
     let streak_weeks: Int
+    let draft: PostDraftFields
+
+    private enum CodingKeys: String, CodingKey {
+        case user_id, session_id, workout_date, title, volume_kg, duration_seconds, set_count, medals, streak_weeks
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(user_id, forKey: .user_id)
+        try c.encode(session_id, forKey: .session_id)
+        try c.encode(workout_date, forKey: .workout_date)
+        try c.encode(title, forKey: .title)
+        try c.encode(volume_kg, forKey: .volume_kg)
+        try c.encode(duration_seconds, forKey: .duration_seconds)
+        try c.encode(set_count, forKey: .set_count)
+        try c.encode(medals, forKey: .medals)
+        try c.encode(streak_weeks, forKey: .streak_weeks)
+        try draft.encode(to: encoder)
+    }
+}
+
+/// The parts of a post the lifter writes, always sent whole — nulls
+/// included — so clearing a title, a note or a place clears it on the post.
+private struct PostDraftFields: Encodable {
+    let visibility: PostVisibility
+    let customTitle: String?
+    let notes: String?
+    let hidden: [String]
+    let place: WorkoutPlace?
+    var editedAt: String?
+
+    init(_ draft: PostDraft, editedAt: String? = nil) {
+        visibility = draft.visibility
+        let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        customTitle = title.isEmpty ? nil : String(title.prefix(60))
+        let notes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.notes = notes.isEmpty ? nil : String(notes.prefix(2000))
+        hidden = draft.hidden.map(\.rawValue).sorted()
+        place = draft.place
+        self.editedAt = editedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case visibility, custom_title, notes, hidden_stats, place_kind, place_name, place_lat, place_lon, edited_at
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(visibility.rawValue, forKey: .visibility)
+        try c.encode(customTitle, forKey: .custom_title)
+        try c.encode(notes, forKey: .notes)
+        try c.encode(hidden, forKey: .hidden_stats)
+        let shared = place?.shared
+        try c.encode(shared?.kind.rawValue, forKey: .place_kind)
+        try c.encode(shared?.name, forKey: .place_name)
+        try c.encode(shared?.latitude, forKey: .place_lat)
+        try c.encode(shared?.longitude, forKey: .place_lon)
+        if let editedAt { try c.encode(editedAt, forKey: .edited_at) }
+    }
+}
+
+/// Where a workout happened, as a post may carry it.
+struct WorkoutPlace: Codable, Hashable, Sendable {
+    enum Kind: String, Codable, Sendable {
+        case gym, home, outdoors
+
+        var label: String {
+            switch self {
+            case .gym: return "Gym"
+            case .home: return "Home workout"
+            case .outdoors: return "Outdoors"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .gym: return "dumbbell.fill"
+            case .home: return "house.fill"
+            case .outdoors: return "tree.fill"
+            }
+        }
+    }
+
+    let kind: Kind
+    let name: String
+    let latitude: Double?
+    let longitude: Double?
+
+    /// What leaves the phone: a home never has coordinates, outdoors is
+    /// rounded to about a kilometre, a gym — a public place — keeps its own.
+    var shared: WorkoutPlace {
+        switch kind {
+        case .home:
+            return WorkoutPlace(kind: .home, name: Kind.home.label, latitude: nil, longitude: nil)
+        case .outdoors:
+            func round2(_ value: Double?) -> Double? { value.map { ($0 * 100).rounded() / 100 } }
+            return WorkoutPlace(kind: .outdoors, name: String(name.prefix(80)), latitude: round2(latitude), longitude: round2(longitude))
+        case .gym:
+            return WorkoutPlace(kind: .gym, name: String(name.prefix(80)), latitude: latitude, longitude: longitude)
+        }
+    }
+
+    var hasMap: Bool { kind != .home && latitude != nil && longitude != nil }
+
+    // MARK: Remembered gym
+
+    private static let lastGymKey = "setline.social.lastGym"
+
+    /// The gym picked last, offered as one tap next time. Kept on this phone.
+    static var lastGym: WorkoutPlace? {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: lastGymKey) else { return nil }
+            return try? JSONDecoder().decode(WorkoutPlace.self, from: data)
+        }
+        set {
+            UserDefaults.standard.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: lastGymKey)
+        }
+    }
 }
 
 // MARK: - The store
@@ -149,7 +398,7 @@ final class SocialStore {
     private static let friendshipsQuery =
         "friendships?select=*,requester:profiles!friendships_requester_id_fkey(\(profileFields)),addressee:profiles!friendships_addressee_id_fkey(\(profileFields))"
     private static let feedQuery =
-        "posts?select=*,author:profiles(\(profileFields)),kudos(user_id,giver:profiles(\(profileFields)))&order=workout_date.desc&limit=50"
+        "posts?select=*,author:profiles(\(profileFields)),kudos(user_id,giver:profiles(\(profileFields))),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&order=workout_date.desc&limit=50"
 
     /// A missing table reads as "not set up"; anything else as a failure in
     /// words.
@@ -281,11 +530,10 @@ final class SocialStore {
 
     // MARK: Posting
 
-    /// Writes a saved workout as a post — or updates the one already there —
-    /// when the account has a profile. Quiet when it has none or the tables
-    /// are not set up: posting is never what stands between a lifter and a
-    /// saved session.
-    func publish(_ session: TrainingSession, medals: [LiftMedal], streakWeeks: Int) async {
+    /// Turns a saved workout into a post — the lifter's explicit choice;
+    /// saving a workout never posts it. Posting the same workout again
+    /// updates the one post.
+    func createPost(from session: TrainingSession, medals: [LiftMedal], streakWeeks: Int, draft: PostDraft) async throws {
         guard session.kind == .workout else { return }
         let write = PostWrite(
             user_id: myID,
@@ -298,38 +546,241 @@ final class SocialStore {
             medals: medals.map {
                 PostMedal(place: $0.place.rawValue, name: $0.name, weight_kg: NSDecimalNumber(decimal: $0.weightKg).doubleValue, reps: $0.reps)
             },
-            streak_weeks: streakWeeks
+            streak_weeks: streakWeeks,
+            draft: PostDraftFields(draft)
         )
         if isDemo {
             guard let me else { return }
-            feed.removeAll { $0.session_id == session.id && $0.user_id == myID }
-            feed.insert(FeedPost(id: UUID().uuidString, user_id: myID, session_id: write.session_id, workout_date: write.workout_date,
-                                 title: write.title, volume_kg: write.volume_kg, duration_seconds: write.duration_seconds,
-                                 set_count: write.set_count, medals: write.medals, streak_weeks: write.streak_weeks,
-                                 author: me, kudos: []), at: 0)
+            let id = feed.first { $0.session_id == session.id && $0.user_id == myID }?.id ?? UUID().uuidString
+            feed.removeAll { $0.id == id }
+            var post = FeedPost(id: id, user_id: myID, session_id: write.session_id, workout_date: write.workout_date,
+                                title: write.title, volume_kg: write.volume_kg, duration_seconds: write.duration_seconds,
+                                set_count: write.set_count, medals: write.medals, streak_weeks: write.streak_weeks,
+                                author: me, kudos: [])
+            demoApply(draft, to: &post)
+            feed.insert(post, at: 0)
             return
         }
-        guard me != nil || phase == .loading else { return }
-        do {
-            _ = try await send(
-                "posts?on_conflict=user_id,session_id",
-                method: "POST",
-                body: try JSONEncoder().encode(write),
-                prefer: "resolution=merge-duplicates"
-            )
-            await load()
-        } catch {
-            // A post that did not go out is not worth an alert after a workout.
+        let data = try await send(
+            "posts?on_conflict=user_id,session_id&select=id",
+            method: "POST",
+            body: try JSONEncoder().encode(write),
+            prefer: "resolution=merge-duplicates,return=representation"
+        )
+        struct Row: Decodable { let id: String }
+        guard let postID = try JSONDecoder().decode([Row].self, from: data).first?.id else { return }
+        try await syncAttachments(of: postID, existing: nil, draft: draft)
+        await load()
+    }
+
+    /// Saves an edited post: its words, visibility, place, music and
+    /// photos. Changes apply on the next read, for everyone.
+    func update(_ post: FeedPost, draft: PostDraft) async throws {
+        if isDemo {
+            guard let index = feed.firstIndex(where: { $0.id == post.id }) else { return }
+            demoApply(draft, to: &feed[index])
+            return
+        }
+        let fields = PostDraftFields(draft, editedAt: Self.isoString(Date()))
+        _ = try await send("posts?id=eq.\(post.id)", method: "PATCH", body: try JSONEncoder().encode(fields))
+        try await syncAttachments(of: post.id, existing: post, draft: draft)
+        await load()
+    }
+
+    /// Music is rewritten whole; photos keep what stayed, lose what was
+    /// taken off (files included) and upload what is new.
+    private func syncAttachments(of postID: String, existing: FeedPost?, draft: PostDraft) async throws {
+        _ = try await send("post_tracks?post_id=eq.\(postID)", method: "DELETE")
+        if !draft.tracks.isEmpty {
+            let rows: [[String: Any]] = draft.tracks.prefix(PostDraft.maxSongs + 1).enumerated().map { index, track in
+                var row: [String: Any] = ["post_id": postID, "user_id": myID, "position": index, "kind": track.kind, "title": String(track.title.prefix(120))]
+                if let artist = track.artist, !artist.isEmpty { row["artist"] = String(artist.prefix(120)) }
+                if let url = track.url, url.hasPrefix("https://") { row["url"] = String(url.prefix(500)) }
+                return row
+            }
+            _ = try await send("post_tracks", method: "POST", body: try JSONSerialization.data(withJSONObject: rows))
+        }
+
+        let kept = Set(draft.photos.compactMap(\.existing?.id))
+        let removed = (existing?.photos ?? []).filter { !kept.contains($0.id) }
+        if !removed.isEmpty {
+            try await removeFiles(removed.map(\.path))
+            _ = try await send("post_media?id=in.(\(removed.map(\.id).joined(separator: ",")))", method: "DELETE")
+        }
+        for (position, photo) in draft.photos.prefix(PostDraft.maxPhotos).enumerated() {
+            if let media = photo.existing {
+                if media.position != position {
+                    let body = try JSONSerialization.data(withJSONObject: ["position": position])
+                    _ = try await send("post_media?id=eq.\(media.id)", method: "PATCH", body: body)
+                }
+                continue
+            }
+            guard let jpeg = photo.jpeg else { continue }
+            let path = "\(myID)/\(postID)/\(UUID().uuidString.lowercased()).jpg"
+            _ = try await storage("object/post-media/\(path)", method: "POST", body: jpeg, contentType: "image/jpeg")
+            var row: [String: Any] = ["post_id": postID, "user_id": myID, "path": path, "position": position]
+            if let width = photo.width { row["width"] = width }
+            if let height = photo.height { row["height"] = height }
+            _ = try await send("post_media", method: "POST", body: try JSONSerialization.data(withJSONObject: row))
         }
     }
 
+    /// Deletes a post with its photos — files first, so none is left behind
+    /// — and with it its comments, kudos and music.
     func delete(_ post: FeedPost) async throws {
         feed.removeAll { $0.id == post.id }
-        guard !isDemo else { return }
+        if isDemo {
+            post.photos.forEach { demoMedia[$0.path] = nil }
+            demoComments[post.id] = nil
+            return
+        }
+        try await removeFiles(post.photos.map(\.path))
         _ = try await send("posts?id=eq.\(post.id)", method: "DELETE")
     }
 
+    /// Account › Privacy: every post this account wrote, photos included.
+    /// The workouts themselves stay in the log.
+    func deleteAllMyPosts() async throws {
+        let mine = myID
+        if isDemo {
+            feed.filter { $0.user_id == mine }.flatMap(\.photos).forEach { demoMedia[$0.path] = nil }
+            feed.removeAll { $0.user_id == mine }
+            return
+        }
+        struct PathRow: Decodable { let path: String }
+        let rows: [PathRow] = try await get("post_media?select=path&user_id=eq.\(mine)")
+        try await removeFiles(rows.map(\.path))
+        _ = try await send("posts?user_id=eq.\(mine)", method: "DELETE")
+        await load()
+    }
+
+    var myPostCount: Int { feed.filter { $0.user_id == myID }.count }
+
+    private func removeFiles(_ paths: [String]) async throws {
+        guard !paths.isEmpty else { return }
+        let body = try JSONSerialization.data(withJSONObject: ["prefixes": paths])
+        _ = try await storage("object/post-media", method: "DELETE", body: body, contentType: "application/json")
+    }
+
+    // MARK: Photos
+
+    private let images = NSCache<NSString, UIImage>()
+
+    /// A post photo, read with the account's token: the bucket is private
+    /// and only those who can see the post may read it.
+    func image(_ path: String) async -> UIImage? {
+        if let cached = images.object(forKey: path as NSString) { return cached }
+        let data: Data?
+        if isDemo {
+            data = demoMedia[path]
+        } else {
+            data = try? await storage("object/authenticated/post-media/\(path)")
+        }
+        guard let data, let image = UIImage(data: data) else { return nil }
+        images.setObject(image, forKey: path as NSString)
+        return image
+    }
+
+    /// Resized to 2048 px on the long side and written fresh as JPEG, which
+    /// drops the camera's location and other metadata before upload.
+    nonisolated static func preparePhoto(_ data: Data) -> DraftPhoto? {
+        guard let source = UIImage(data: data) else { return nil }
+        let longest = max(source.size.width, source.size.height)
+        let scale = min(1, 2048 / max(longest, 1))
+        let size = CGSize(width: (source.size.width * scale).rounded(), height: (source.size.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            source.draw(in: CGRect(origin: .zero, size: size))
+        }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { return nil }
+        return DraftPhoto(existing: nil, jpeg: jpeg, width: Int(size.width), height: Int(size.height))
+    }
+
+    // MARK: Comments
+
+    func comments(for post: FeedPost) async throws -> [PostComment] {
+        if isDemo { return demoComments[post.id] ?? [] }
+        return try await get("comments?select=id,post_id,user_id,body,created_at,author:profiles(\(Self.profileFields))&post_id=eq.\(post.id)&order=created_at.asc")
+    }
+
+    func addComment(_ text: String, to post: FeedPost) async throws {
+        let body = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+        guard !body.isEmpty else { return }
+        if isDemo {
+            let comment = PostComment(id: UUID().uuidString, post_id: post.id, user_id: myID, body: body, created_at: Self.isoString(Date()), author: me)
+            demoComments[post.id, default: []].append(comment)
+            bumpCommentCount(post.id, by: 1)
+            return
+        }
+        let row = try JSONSerialization.data(withJSONObject: ["post_id": post.id, "user_id": myID, "body": body])
+        _ = try await send("comments", method: "POST", body: row)
+        bumpCommentCount(post.id, by: 1)
+    }
+
+    /// Your own comment, or any comment on your own post.
+    func deleteComment(_ comment: PostComment) async throws {
+        if isDemo {
+            demoComments[comment.post_id]?.removeAll { $0.id == comment.id }
+            bumpCommentCount(comment.post_id, by: -1)
+            return
+        }
+        _ = try await send("comments?id=eq.\(comment.id)", method: "DELETE")
+        bumpCommentCount(comment.post_id, by: -1)
+    }
+
+    func report(comment: PostComment, reason: String) async throws {
+        if isDemo { return }
+        let body = try JSONSerialization.data(withJSONObject: [
+            "reporter_id": myID, "post_id": comment.post_id, "comment_id": comment.id,
+            "reported_id": comment.user_id, "reason": reason,
+        ])
+        _ = try await send("reports", method: "POST", body: body)
+    }
+
+    private func bumpCommentCount(_ postID: String, by step: Int) {
+        guard let index = feed.firstIndex(where: { $0.id == postID }) else { return }
+        feed[index].comments = [CommentCount(count: max(0, feed[index].commentCount + step))]
+    }
+
+    // MARK: Demo posts
+
+    private var demoMedia: [String: Data] = [:]
+    private var demoComments: [String: [PostComment]] = [:]
+
+    private func demoApply(_ draft: PostDraft, to post: inout FeedPost) {
+        let fields = PostDraftFields(draft)
+        post.visibility = fields.visibility.rawValue
+        post.custom_title = fields.customTitle
+        post.notes = fields.notes
+        post.hidden_stats = fields.hidden
+        let shared = draft.place?.shared
+        post.place_kind = shared?.kind.rawValue
+        post.place_name = shared?.name
+        post.place_lat = shared?.latitude
+        post.place_lon = shared?.longitude
+        post.post_tracks = draft.tracks.enumerated().map { index, track in
+            PostTrack(id: track.id.uuidString, kind: track.kind, title: track.title, artist: track.artist, url: track.url, position: index)
+        }
+        let postID = post.id
+        post.post_media = draft.photos.prefix(PostDraft.maxPhotos).enumerated().compactMap { index, photo in
+            if var media = photo.existing { media.position = index; return media }
+            guard let jpeg = photo.jpeg else { return nil }
+            let path = "demo/\(postID)/\(photo.id.uuidString).jpg"
+            demoMedia[path] = jpeg
+            return PostMedia(id: photo.id.uuidString, path: path, width: photo.width, height: photo.height, position: index)
+        }
+    }
+
     // MARK: Plumbing
+
+    private func storage(_ path: String, method: String = "GET", body: Data? = nil, contentType: String? = nil) async throws -> Data {
+        guard let app else { throw SupabaseClient.Failure.network }
+        return try await app.social { client, session in
+            try await client.storage(path, method: method, body: body, contentType: contentType, session: session)
+        }
+    }
+
 
     private func get<T: Decodable & Sendable>(_ path: String) async throws -> T {
         let data = try await send(path)
@@ -367,8 +818,11 @@ final class SocialStore {
             phase = .needsProfile
             return
         }
-        if friendships.isEmpty { friendships = demo.friendships(me: me!) }
-        if feed.isEmpty { feed = demo.feed(me: me!) }
+        // `-SetlineSocialNoFriends`: the account that has just started, with
+        // only its own posts.
+        let alone = ProcessInfo.processInfo.arguments.contains("-SetlineSocialNoFriends")
+        if friendships.isEmpty, !alone { friendships = demo.friendships(me: me!) }
+        if feed.isEmpty { feed = demo.feed(me: me!).filter { !alone || $0.user_id == myID } }
         phase = .ready
     }
 }
@@ -399,16 +853,19 @@ private struct DemoSocial {
                      medals: [PostMedal(place: 1, name: "Back squat", weight_kg: 140, reps: 5),
                               PostMedal(place: 3, name: "Romanian deadlift", weight_kg: 110, reps: 8)],
                      streak_weeks: 7, author: sam,
-                     kudos: [Kudos(user_id: cleo.user_id, giver: cleo)]),
+                     kudos: [Kudos(user_id: cleo.user_id, giver: cleo)],
+                     place_kind: "gym", place_name: "Basic-Fit Antwerpen Meir", place_lat: 51.2181, place_lon: 4.4086),
             FeedPost(id: "p2", user_id: me.user_id, session_id: "x2", workout_date: at(20), title: "Push", volume_kg: 7_200,
                      duration_seconds: 3_060, set_count: 19,
                      medals: [PostMedal(place: 1, name: "Flat bench press", weight_kg: 102.5, reps: 8)],
                      streak_weeks: 4, author: me,
-                     kudos: [Kudos(user_id: sam.user_id, giver: sam), Kudos(user_id: cleo.user_id, giver: cleo)]),
+                     kudos: [Kudos(user_id: sam.user_id, giver: sam), Kudos(user_id: cleo.user_id, giver: cleo)],
+                     place_kind: "gym", place_name: "Jims Antwerpen Centraal", place_lat: 51.2155, place_lon: 4.4211),
             FeedPost(id: "p3", user_id: cleo.user_id, session_id: "x3", workout_date: at(27), title: "Upper", volume_kg: 6_340,
                      duration_seconds: 3_480, set_count: 18,
                      medals: [PostMedal(place: 2, name: "Pull-up", weight_kg: 10, reps: 8)],
-                     streak_weeks: 12, author: cleo, kudos: []),
+                     streak_weeks: 12, author: cleo, kudos: [],
+                     place_kind: "home", place_name: "Home workout"),
         ]
     }
 }

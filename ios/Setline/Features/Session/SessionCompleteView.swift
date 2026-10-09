@@ -15,7 +15,9 @@ struct SessionCompleteView: View {
     /// Back to the session without saving — a mis-tap on `Sessie afronden`,
     /// or one set to fix, must not force a save.
     let onBack: () -> Void
-    let onSave: () -> Void
+    /// Saves the workout; `true` then opens the post composer. Saving never
+    /// posts on its own.
+    let onSave: (_ createPost: Bool) -> Void
 
     @State private var celebration: Celebration?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,7 +25,6 @@ struct SessionCompleteView: View {
     @State private var tallyFilled = false
     @State private var tallyJumps = 0
     @Environment(SocialStore.self) private var social
-    @AppStorage("setline.social.shareWorkouts") private var sharesWorkouts = true
 
     /// Milestones this workout reaches, worked out before it is saved.
     private var newMilestones: [Milestone] {
@@ -128,23 +129,18 @@ struct SessionCompleteView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: SL.Space.s2) {
-                // Only once there is someone to share with: a profile made in
-                // Friends.
+                // Only once there is a profile to post from (made in Friends).
                 if social.me != nil {
-                    Toggle(isOn: $sharesWorkouts) {
+                    Button { onSave(true) } label: {
                         HStack(spacing: SL.Space.s2) {
                             SLGlyph(name: .people, size: 18)
-                                .foregroundStyle(SL.Ink.secondary)
-                            Text("Share with friends")
-                                .slBody(SL.Weight.medium)
-                                .foregroundStyle(SL.Ink.primary)
+                            Text("Create post")
                         }
                     }
-                    .tint(SL.Signal.action)
-                    .padding(.horizontal, SL.Space.s1)
-                    .accessibilityHint("Friends see this workout's name, numbers and medals. Never the sets.")
+                    .buttonStyle(SLOutlineButtonStyle())
+                    .accessibilityHint("Saves the session, then lets you share it with friends")
                 }
-                Button(action: onSave) { Text("Save session") }
+                Button { onSave(false) } label: { Text("Save session") }
                     .buttonStyle(SLPrimaryButtonStyle())
             }
             .padding(.horizontal, SL.Space.gutterSession)

@@ -34,6 +34,11 @@ struct AccountView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var photoFailed = false
     @State private var showsCredits = false
+    @Environment(SocialStore.self) private var social
+    @State private var defaultVisibility = PostVisibility.defaultForNewPosts
+    @State private var choosingVisibility = false
+    @State private var confirmsDeleteAll = false
+    @State private var deleteAllFailed = false
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -59,6 +64,11 @@ struct AccountView: View {
                     syncBlock
                     section("Plan")
                     planRows
+                    // Only once there is a social profile to post from.
+                    if social.me != nil {
+                        section("Privacy")
+                        privacyRows
+                    }
                     section("Data")
                     exportRow
                     row("Photo credits") { showsCredits = true }
@@ -334,6 +344,60 @@ struct AccountView: View {
             .padding(.vertical, SL.Space.s3)
             .overlay(alignment: .bottom) { SLHairline() }
             .onChange(of: rirEverySet) { _, value in RIRPreference.everySet = value }
+        }
+    }
+
+    // MARK: - Privacy
+
+    private var privacyRows: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            row("New posts are seen by", value: defaultVisibility.label, detail: "You can change it on every post") {
+                choosingVisibility = true
+            }
+            HStack(alignment: .top, spacing: SL.Space.s3) {
+                Image(systemName: "mappin.and.ellipse")
+                    .foregroundStyle(SL.Signal.recovery)
+                Text("Location is never shared unless you add a place to a post. Photo location data is always removed.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.meta)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, SL.Space.s3)
+            .overlay(alignment: .bottom) { SLHairline() }
+            Button { confirmsDeleteAll = true } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delete all my posts").slBody().foregroundStyle(SL.Signal.loss)
+                        Text("Your workouts stay in your log").slMeta().foregroundStyle(SL.Ink.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, SL.Space.s3)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .overlay(alignment: .bottom) { SLHairline() }
+            .disabled(social.myPostCount == 0)
+            .opacity(social.myPostCount == 0 ? 0.5 : 1)
+        }
+        .sheet(isPresented: $choosingVisibility) {
+            VisibilitySheet(selection: $defaultVisibility, friendCount: social.friends.count, onClose: { choosingVisibility = false })
+        }
+        .onChange(of: defaultVisibility) { _, value in PostVisibility.defaultForNewPosts = value }
+        .alert(social.myPostCount == 1 ? "Delete your post?" : "Delete all \(social.myPostCount) posts?", isPresented: $confirmsDeleteAll) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete all", role: .destructive) {
+                Task {
+                    do { try await social.deleteAllMyPosts() } catch { deleteAllFailed = true }
+                }
+            }
+        } message: {
+            Text("Their photos, comments and kudos are removed for everyone, right away. Your workouts, records and streak stay in your log.")
+        }
+        .alert("Couldn't delete your posts", isPresented: $deleteAllFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Check your connection and try again.")
         }
     }
 

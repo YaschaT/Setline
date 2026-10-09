@@ -54,7 +54,7 @@ struct SessionView: View {
         let undo: (() -> Void)?
     }
 
-    let onFinish: (TrainingSession) -> Void
+    let onFinish: (TrainingSession, _ createPost: Bool) -> Void
     let onPause: (ActiveSessionSnapshot) -> Void
     /// Leaves a session nothing was done in, without parking it.
     let onClose: () -> Void
@@ -67,7 +67,7 @@ struct SessionView: View {
         app: AppState,
         resuming snapshot: ActiveSessionSnapshot?,
         loggingFor date: Date? = nil,
-        onFinish: @escaping (TrainingSession) -> Void,
+        onFinish: @escaping (TrainingSession, _ createPost: Bool) -> Void,
         onPause: @escaping (ActiveSessionSnapshot) -> Void,
         onClose: @escaping () -> Void
     ) {
@@ -215,14 +215,14 @@ struct SessionView: View {
                 runner: runner,
                 previous: app.sessions.first { $0.dayID == runner.day.id && $0.kind == .workout },
                 onBack: { showsComplete = false },
-                onSave: {
+                onSave: { createPost in
                     runner.stopRestSignals()
                     let existing = app.sessions.first {
                         $0.dayID == runner.day.id
                             && Calendar.current.isDate($0.date, inSameDayAs: runner.startedAt)
                             && $0.kind == .workout
                     }
-                    onFinish(runner.finishedSession(existing: existing))
+                    onFinish(runner.finishedSession(existing: existing), createPost)
                 }
             )
         }
