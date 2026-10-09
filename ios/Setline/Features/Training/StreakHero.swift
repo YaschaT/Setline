@@ -125,7 +125,7 @@ struct NextBadgeCard: View {
                         SLGlyph(name: .chevronRight, size: 12)
                     }
                     .foregroundStyle(SL.Ink.secondary)
-                    .frame(minHeight: 32)
+                    .frame(minHeight: SL.Space.hitMin)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(SLPressStyle())

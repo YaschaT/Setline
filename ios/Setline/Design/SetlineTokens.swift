@@ -42,7 +42,9 @@ enum SL {
         static let selection      = Color.white.opacity(0.28)  // selected rows in the older sheets
 
         /// The grey the design draws empty rings, week dots and bar stubs in.
-        static let mute = Color(hex: 0x3A4643)
+        /// 3.4:1 on a card: these marks carry meaning (a day still to come,
+        /// one missed), so they meet the 3:1 floor for graphics.
+        static let mute = Color(hex: 0x5E6B67)
 
         /// Only translucent surface in the app: the floating rest timer.
         static let floatFill = Color(hex: 0x0D1210).opacity(0.82)

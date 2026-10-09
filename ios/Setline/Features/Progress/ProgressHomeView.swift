@@ -407,13 +407,51 @@ struct ProgressHomeView: View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLSectionHead(
                 title: "Volume",
-                meta: "tonnes per week"
+                meta: "per week"
             )
-            VolumeBars(weeks: volume, spoken: volumeSpoken)
+            VStack(alignment: .leading, spacing: SL.Space.s4) {
+                volumeHeadline
+                VolumeBars(weeks: volume, spoken: volumeSpoken)
+            }
                 .padding(SL.Space.s4)
                 .slBorderBox()
                 .slListCard()
         }
+    }
+
+    /// The chart's numbers, said once above it: this week so far, and the
+    /// last full week to hold it against. Bars without a value say only
+    /// "more" or "less".
+    @ViewBuilder
+    private var volumeHeadline: some View {
+        if let current = volume.last {
+            let previous = volume.dropLast().last
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s5) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(tonnes(current.volumeKg))
+                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("this week").slMeta().foregroundStyle(SL.Ink.secondary)
+                }
+                if let previous {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(tonnes(previous.volumeKg))
+                            .font(.sl(SL.TypeSize.title, SL.Weight.regular))
+                            .slNumerals()
+                            .foregroundStyle(SL.Ink.secondary)
+                        Text("last week").slMeta().foregroundStyle(SL.Ink.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// "9.4 t"
+    private func tonnes(_ kg: Decimal) -> String {
+        "\(app.display.number(Estimates.round(kg / 1000, toIncrement: 0.1))) t"
     }
 
     /// "week 35: 4,2 ton, week 36: 0 ton, …"
