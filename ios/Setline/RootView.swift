@@ -16,6 +16,10 @@ struct RootView: View {
     /// side of the one identity screen opens.
     @State private var entry: Entry?
     @State private var onboarded = false
+    /// Friends, the feed and kudos, for whoever is signed in.
+    @State private var social = SocialStore()
+    /// Saved workouts go to friends unless switched off on the finish screen.
+    @AppStorage("setline.social.shareWorkouts") private var sharesWorkouts = true
 
     private enum Entry { case beginning, returning }
 
@@ -89,7 +93,9 @@ struct RootView: View {
         }
         .preferredColorScheme(.dark)
         .tint(SL.Signal.action)
+        .environment(social)
         .task {
+            social.attach(app)
             // The local store has to be attached before the first read, or
             // restore falls back to a fresh state and a paused session looks
             // like it was never saved.
@@ -145,6 +151,8 @@ struct RootView: View {
                     NutritionHomeView()
                 case .progressie:
                     ProgressHomeView()
+                case .friends:
+                    FriendsView()
                 case .fotos:
                     PhotosHomeView()
                 case .account:
@@ -198,5 +206,11 @@ struct RootView: View {
     /// double-count every set in the history, the trend and the record checks.
     private func save(_ session: TrainingSession) async {
         await app.save(session: session)
+        guard sharesWorkouts else { return }
+        await social.publish(
+            session,
+            medals: Medals.medals(for: session, in: app.sessions),
+            streakWeeks: app.streak.weeks
+        )
     }
 }

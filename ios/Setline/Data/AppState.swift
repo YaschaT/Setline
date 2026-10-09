@@ -252,6 +252,19 @@ final class AppState {
         Task { await opened.migrateUnownedPhotos() }
     }
 
+    // MARK: - Social
+
+    /// The signed-in account's id, for the social tables.
+    var userID: String? { session?.userID }
+
+    /// Runs a social request through this sign-in's token coordinator, so an
+    /// expiring token is refreshed on the way like every sync request.
+    func social<Value: Sendable>(_ request: @Sendable @escaping (SupabaseClient, AuthSession) async throws -> Value) async throws -> Value {
+        guard let auth else { throw SupabaseClient.Failure.message("Sign in to see your friends.") }
+        let client = self.client
+        return try await auth.perform { session in try await request(client, session) }
+    }
+
     // MARK: - Name and picture
 
     /// What the greeting calls you: the first word of the name you gave.

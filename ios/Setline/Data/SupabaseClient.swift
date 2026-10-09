@@ -185,6 +185,17 @@ actor SupabaseClient: TokenRefresher {
         }
     }
 
+    // MARK: - Social
+
+    /// One PostgREST call for the social tables, as the signed-in account.
+    /// Row-level security on the server decides what it may read or write.
+    func rest(_ path: String, method: String = "GET", body: Data? = nil, prefer: String? = nil, session token: Session) async throws -> Data {
+        var request = try makeRequest(path: "/rest/v1/" + path, method: method, accessToken: token.accessToken)
+        if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
+        request.httpBody = body
+        return try await send(request, signedIn: true)
+    }
+
     /// A filter value safe inside a query string: versions carry `+` and `:`.
     static func queryValue(_ value: String) -> String {
         var allowed = CharacterSet.alphanumerics

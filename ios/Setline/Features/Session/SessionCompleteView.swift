@@ -18,6 +18,8 @@ struct SessionCompleteView: View {
     let onSave: () -> Void
 
     @State private var celebration: Celebration?
+    @Environment(SocialStore.self) private var social
+    @AppStorage("setline.social.shareWorkouts") private var sharesWorkouts = true
 
     /// Milestones this workout reaches, worked out before it is saved.
     private var newMilestones: [Milestone] {
@@ -121,8 +123,27 @@ struct SessionCompleteView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Button(action: onSave) { Text("Save session") }
-                .buttonStyle(SLPrimaryButtonStyle())
+            VStack(spacing: SL.Space.s2) {
+                // Only once there is someone to share with: a profile made in
+                // Friends.
+                if social.me != nil {
+                    Toggle(isOn: $sharesWorkouts) {
+                        HStack(spacing: SL.Space.s2) {
+                            Image(systemName: "person.2")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(SL.Ink.secondary)
+                            Text("Share with friends")
+                                .slBody(SL.Weight.medium)
+                                .foregroundStyle(SL.Ink.primary)
+                        }
+                    }
+                    .tint(SL.Signal.action)
+                    .padding(.horizontal, SL.Space.s1)
+                    .accessibilityHint("Friends see this workout's name, numbers and medals. Never the sets.")
+                }
+                Button(action: onSave) { Text("Save session") }
+                    .buttonStyle(SLPrimaryButtonStyle())
+            }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s3)
             .padding(.bottom, SL.Space.s3)

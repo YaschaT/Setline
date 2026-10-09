@@ -4,7 +4,7 @@ import SwiftUI
 /// put `Loggen` here and reached Account from an avatar; on iOS Account stays
 /// a tab and logging starts from Training.
 enum SLTab: String, CaseIterable, Identifiable {
-    case training, voeding, progressie, fotos, account
+    case training, voeding, progressie, friends, fotos, account
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum SLTab: String, CaseIterable, Identifiable {
         case .training: return "Training"
         case .voeding: return "Nutrition"
         case .progressie: return "Progress"
+        case .friends: return "Friends"
         case .fotos: return "Photos"
         case .account: return "Account"
         }
@@ -26,6 +27,7 @@ enum SLTab: String, CaseIterable, Identifiable {
         case .training: return "TabTraining"
         case .voeding: return "TabVoeding"
         case .progressie: return "TabProgressie"
+        case .friends: return "person.2"
         case .fotos: return "TabFotos"
         case .account: return "TabAccount"
         }
@@ -59,9 +61,18 @@ struct SLTabBar: View {
                         // Deliberately unscaled, like the 11pt label beneath
                         // it: letting the bar follow Dynamic Type burst it open
                         // and struck the labels through at accessibility sizes.
-                        Image(tab.artwork)
-                            .renderingMode(.template)
-                            .resizable()
+                        Group {
+                            // Friends has no drawn glyph; the system's two
+                            // people, at the same optical size, stand in.
+                            if tab == .friends {
+                                Image(systemName: tab.artwork)
+                                    .font(.system(size: 17, weight: .regular))
+                            } else {
+                                Image(tab.artwork)
+                                    .renderingMode(.template)
+                                    .resizable()
+                            }
+                        }
                             .frame(width: 22, height: 22)
                             .foregroundStyle(isActive ? SL.Signal.action : SL.Ink.secondary)
                             .accessibilityHidden(true)
