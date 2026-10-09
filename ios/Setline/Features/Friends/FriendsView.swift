@@ -7,6 +7,8 @@ import SetlineCore
 struct FriendsView: View {
     @Environment(AppState.self) private var app
     @Environment(SocialStore.self) private var social
+    /// The avatar's way to Account, as on Training.
+    let onAccount: () -> Void
     @State private var showsPeople = false
 
     var body: some View {
@@ -52,7 +54,13 @@ struct FriendsView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            Button(action: onAccount) {
+                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 40)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.92))
+            .accessibilityLabel("Account")
             VStack(alignment: .leading, spacing: 2) {
                 Text("Friends")
                     .font(.sl(SL.TypeSize.display, SL.Weight.bold))

@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// The five places the bar leads to — SETLINE Main's own five. The redesign
-/// put `Loggen` here and reached Account from an avatar; on iOS Account stays
-/// a tab and logging starts from Training.
+/// The five places the bar leads to. Account is not one of them: it is
+/// reached from the avatar, as the redesign has it, because it is opened
+/// rarely and a sixth tab left the labels 1 pt from their pill on a 375 pt
+/// phone.
 enum SLTab: String, CaseIterable, Identifiable {
-    case training, voeding, progressie, friends, fotos, account
+    case training, voeding, progressie, friends, fotos
 
     var id: String { rawValue }
 
@@ -15,7 +16,6 @@ enum SLTab: String, CaseIterable, Identifiable {
         case .progressie: return "Progress"
         case .friends: return "Friends"
         case .fotos: return "Photos"
-        case .account: return "Account"
         }
     }
 
@@ -29,7 +29,6 @@ enum SLTab: String, CaseIterable, Identifiable {
         case .progressie: return "TabProgressie"
         case .friends: return "person.2"
         case .fotos: return "TabFotos"
-        case .account: return "TabAccount"
         }
     }
 }

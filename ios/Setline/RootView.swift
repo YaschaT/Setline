@@ -16,6 +16,8 @@ struct RootView: View {
     /// side of the one identity screen opens.
     @State private var entry: Entry?
     @State private var onboarded = false
+    /// Account, opened from the avatar.
+    @State private var showsAccount = false
     /// Friends, the feed and kudos, for whoever is signed in.
     @State private var social = SocialStore()
     /// Saved workouts go to friends unless switched off on the finish screen.
@@ -109,7 +111,7 @@ struct RootView: View {
                let requested = SLTab(rawValue: arguments[flag + 1]) {
                 tab = requested
             }
-            if arguments.contains("-SetlineAccount") { tab = .account }
+            if arguments.contains("-SetlineAccount") { showsAccount = true }
             if ProcessInfo.processInfo.arguments.contains("-SetlineOpenSession") {
                 if let paused = app.resumableSession, let day = app.day(for: paused) {
                     running = RunningSession(day: day, snapshot: paused)
@@ -145,18 +147,16 @@ struct RootView: View {
                         onLogPast: { day, date in
                             running = RunningSession(day: programmed(day), snapshot: nil, loggingFor: date)
                         },
-                        onAccount: { tab = .account }
+                        onAccount: { showsAccount = true }
                     )
                 case .voeding:
                     NutritionHomeView()
                 case .progressie:
                     ProgressHomeView()
                 case .friends:
-                    FriendsView()
+                    FriendsView(onAccount: { showsAccount = true })
                 case .fotos:
                     PhotosHomeView()
-                case .account:
-                    AccountView()
                 }
             }
             // The bar, then the 4 the design leaves under it.
@@ -171,6 +171,11 @@ struct RootView: View {
                 .padding(.bottom, lift)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .sheet(isPresented: $showsAccount) {
+            AccountView(onClose: { showsAccount = false })
+                .background(SL.Surface.ground.ignoresSafeArea())
+                .presentationDragIndicator(.visible)
         }
         // The session is a full-screen presentation over the tab shell, so
         // the tab bar is gone the moment it starts: mid-set there is one task.

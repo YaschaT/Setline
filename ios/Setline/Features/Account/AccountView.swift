@@ -18,6 +18,8 @@ import SetlineCore
 /// name and picture Training greets you with, kept on this phone only.
 struct AccountView: View {
     @Environment(AppState.self) private var app
+    /// Account opens as a sheet from the avatar; this closes it.
+    var onClose: (() -> Void)? = nil
     @State private var exports: [URL] = []
     @State private var confirmSignOut = false
     @State private var reauthenticating = false
@@ -41,7 +43,14 @@ struct AccountView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // The same head, at the same place, as every other tab.
-                SLScreenTitle(title: "Account")
+                SLScreenTitle(title: "Account") {
+                    if let onClose {
+                        Button("Done", action: onClose)
+                            .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                            .foregroundStyle(SL.Signal.action)
+                            .slHitTarget()
+                    }
+                }
                     .padding(.horizontal, SL.Space.gutterSession)
                     .padding(.top, SL.Space.s5)
 
