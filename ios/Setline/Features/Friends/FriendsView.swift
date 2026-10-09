@@ -75,17 +75,11 @@ struct FriendsView: View {
             Spacer()
             if social.phase == .ready {
                 Button { showsPeople = true } label: {
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 16, weight: .medium))
+                    SLGlyph(name: .personAdd, size: 18, fixed: true)
                         .foregroundStyle(SL.Ink.primary)
                         .frame(width: 38, height: 38)
                         .background(Circle().fill(SL.Surface.raised))
                         .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
-                        .overlay(alignment: .topTrailing) {
-                            if !social.incoming.isEmpty {
-                                Circle().fill(SL.Signal.attention).frame(width: 10, height: 10).offset(x: 1, y: -1)
-                            }
-                        }
                         .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
                         .contentShape(Circle())
                 }
@@ -98,8 +92,7 @@ struct FriendsView: View {
     private var requestsBanner: some View {
         Button { showsPeople = true } label: {
             HStack(spacing: SL.Space.s3) {
-                Image(systemName: "person.2")
-                    .font(.system(size: 15, weight: .semibold))
+                SLGlyph(name: .people, size: 18, fixed: true)
                     .foregroundStyle(SL.Signal.onAction)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(SL.Signal.attention))
@@ -121,8 +114,7 @@ struct FriendsView: View {
 
     private var emptyFeed: some View {
         VStack(spacing: SL.Space.s3) {
-            Image(systemName: "person.2")
-                .font(.system(size: 36, weight: .light))
+            SLGlyph(name: .people, size: 36, fixed: true)
                 .foregroundStyle(SL.Ink.tertiary)
             Text("No workouts from friends yet")
                 .slLead(SL.Weight.semibold)
@@ -366,7 +358,7 @@ struct PostCard: View {
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(value)
-                .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+                .font(.slScore(24))
                 .slNumerals()
                 .foregroundStyle(SL.Ink.primary)
                 .lineLimit(1)
@@ -386,9 +378,13 @@ struct PostCard: View {
                     Task { await social.toggleKudos(post) }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: given ? "hands.clap.fill" : "hands.clap")
-                            .font(.system(size: 16, weight: .semibold))
-                            .symbolEffect(.bounce, value: bursts)
+                        SLGlyph(name: given ? .kudosFill : .kudos, size: 18, fixed: true)
+                            .keyframeAnimator(initialValue: 1.0, trigger: bursts) { glyph, scale in
+                                glyph.scaleEffect(scale).rotationEffect(.degrees((scale - 1) * -60))
+                            } keyframes: { _ in
+                                SpringKeyframe(1.35, duration: 0.14)
+                                SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
+                            }
                         Text(given ? "Kudos given" : "Give kudos").slBody(SL.Weight.semibold)
                     }
                     .foregroundStyle(given ? SL.Signal.onAction : SL.Ink.primary)
@@ -433,8 +429,7 @@ struct PostCard: View {
                 Button("Block", role: .destructive) { confirmsBlock = true }
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
+            SLGlyph(name: .more, size: 20, fixed: true)
                 .foregroundStyle(SL.Ink.secondary)
                 .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
                 .contentShape(Rectangle())
@@ -480,8 +475,11 @@ private struct PeopleSheet: View {
                             }
                             Spacer()
                             ShareLink(item: "Train with me on Setline. Add me: @\(me.username)") {
-                                Label("Invite", systemImage: "square.and.arrow.up")
-                                    .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                                HStack(spacing: 6) {
+                                    SLGlyph(name: .share, size: 16)
+                                    Text("Invite")
+                                }
+                                .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
                             }
                         }
                     }

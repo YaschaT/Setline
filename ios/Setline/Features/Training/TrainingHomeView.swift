@@ -303,8 +303,7 @@ struct TrainingHomeView: View {
     private var alertsBell: some View {
         let count = app.missedDays.count
         return Button { sheet = .alerts } label: {
-            Image(systemName: "bell")
-                .font(.system(size: 15, weight: .medium))
+            SLGlyph(name: .bell, size: 18, fixed: true)
                 .foregroundStyle(SL.Ink.primary)
                 .frame(width: 38, height: 38)
                 .background(Circle().fill(SL.Surface.raised))
@@ -425,8 +424,7 @@ struct TrainingHomeView: View {
         Menu {
             Button("End session", role: .destructive) { confirmsEnd = true }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 16, weight: .semibold))
+            SLGlyph(name: .more, size: 20, fixed: true)
                 .foregroundStyle(SL.Ink.secondary)
                 .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
                 .contentShape(Rectangle())
@@ -449,8 +447,8 @@ struct TrainingHomeView: View {
         return Button { sheet = .streak } label: {
             HStack(alignment: .bottom, spacing: SL.Space.s3) {
                 Text("\(shown)")
-                    .font(.slCapped(96, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
-                    .tracking(-5)
+                    .font(.slScore(108, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
+                    .tracking(-2)
                     .monospacedDigit()
                     .foregroundStyle(lit ? SL.Signal.action : SL.Ink.primary)
                     .contentTransition(.numericText(value: Double(shown)))
@@ -659,7 +657,7 @@ struct TrainingHomeView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.value)
-                            .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                            .font(.slScore(28))
                             .slNumerals()
                             .foregroundStyle(SL.Ink.primary)
                             .lineLimit(1)

@@ -11,8 +11,7 @@ struct SLStreakChip: View {
         let lit = streak.weeks > 0
         Button(action: action) {
             HStack(spacing: 4) {
-                Image(systemName: lit ? "flame.fill" : "flame")
-                    .font(.system(size: 15, weight: .semibold))
+                SLGlyph(name: lit ? .flameFill : .flame, size: 17, fixed: true)
                 Text("\(streak.weeks)")
                     .font(.slFixed(SL.TypeSize.body, SL.Weight.semibold))
                     .monospacedDigit()
@@ -69,8 +68,7 @@ struct StreakSheet: View {
                     .slHitTarget()
             }
 
-            Image(systemName: streak.weeks > 0 ? "flame.fill" : "flame")
-                .font(.system(size: 56, weight: .semibold))
+            SLGlyph(name: streak.weeks > 0 ? .flameFill : .flame, size: 60, fixed: true)
                 .foregroundStyle(streak.weeks > 0 ? SL.Signal.action : SL.Ink.tertiary)
                 .accessibilityHidden(true)
 

@@ -24,8 +24,7 @@ struct ReadyLiftsCard: View {
                 withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85)) { expanded.toggle() }
             } label: {
                 HStack(spacing: SL.Space.s3) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 14, weight: .semibold))
+                    SLGlyph(name: .trendUp, size: 16, fixed: true)
                         .foregroundStyle(SL.Signal.action)
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(SL.Signal.action.opacity(0.12)))
@@ -69,8 +68,7 @@ struct ReadyLiftsCard: View {
                                     .slMeta()
                                     .slNumerals()
                                     .foregroundStyle(SL.Ink.tertiary)
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 10, weight: .semibold))
+                                SLGlyph(name: .arrowRight, size: 12, fixed: true)
                                     .foregroundStyle(SL.Ink.tertiary)
                             }
                             Text(display.kg(lift.toKg))

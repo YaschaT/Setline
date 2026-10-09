@@ -42,9 +42,10 @@ struct AlertCenterSheet: View {
 
             if missed.isEmpty {
                 VStack(spacing: SL.Space.s3) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.system(size: 40, weight: .light))
+                    SLGlyph(name: .check, size: 22, fixed: true)
                         .foregroundStyle(SL.Ink.tertiary)
+                        .frame(width: 48, height: 48)
+                        .overlay(Circle().strokeBorder(SL.Ink.tertiary, lineWidth: 1.7))
                         .accessibilityHidden(true)
                     Text("Every planned workout of the last two weeks is in your log.")
                         .slBody()

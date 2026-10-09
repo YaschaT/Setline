@@ -167,11 +167,13 @@ struct RootView: View {
                 Color.clear.frame(height: 0).background(SL.Surface.ground)
             }
 
-            SLTabBar(selection: $tab)
+            SLTabBar(selection: $tab, badges: [.friends: social.incoming.count])
                 .padding(.bottom, lift)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Requests are known before Friends is opened, so its badge can say so.
+        .task(id: app.userID) { await social.load() }
         .sheet(isPresented: $showsAccount) {
             AccountView(onClose: { showsAccount = false })
                 .background(SL.Surface.ground.ignoresSafeArea())

@@ -129,8 +129,7 @@ struct SessionCompleteView: View {
                 if social.me != nil {
                     Toggle(isOn: $sharesWorkouts) {
                         HStack(spacing: SL.Space.s2) {
-                            Image(systemName: "person.2")
-                                .font(.system(size: 14, weight: .semibold))
+                            SLGlyph(name: .people, size: 18)
                                 .foregroundStyle(SL.Ink.secondary)
                             Text("Share with friends")
                                 .slBody(SL.Weight.medium)
@@ -185,8 +184,7 @@ struct SessionCompleteView: View {
         let streak = app.streak(adding: runner.startedAt, day: runner.day)
         let completes = streak.thisWeekDone == streak.thisWeekGoal
         return HStack(spacing: SL.Space.s3) {
-            Image(systemName: streak.weeks > 0 ? "flame.fill" : "flame")
-                .font(.system(size: 24, weight: .semibold))
+            SLGlyph(name: streak.weeks > 0 ? .flameFill : .flame, size: 26, fixed: true)
                 .foregroundStyle(streak.weeks > 0 ? SL.Signal.action : SL.Ink.secondary)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: SL.Space.s1) {

@@ -98,7 +98,7 @@ struct ProgressHomeView: View {
     private var logbookPill: some View {
         Button { open(.historiek) } label: {
             HStack(spacing: SL.Space.s2) {
-                Image(systemName: "list.bullet").font(.system(size: 13, weight: .semibold))
+                SLGlyph(name: .list, size: 16)
                 Text("Log").slBody(SL.Weight.semibold)
             }
             .foregroundStyle(SL.Ink.primary)
@@ -176,7 +176,7 @@ struct ProgressHomeView: View {
             if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
                 Text(bodyProgress.latest.map { app.display.kg($0.weightKg) } ?? "—")
-                    .slLead(SL.Weight.semibold)
+                    .font(.slScore(24))
                     .slNumerals()
                     .foregroundStyle(SL.Ink.primary)
             }
@@ -330,7 +330,7 @@ struct ProgressHomeView: View {
                     if let changeText {
                         // A gain or loss is the row's news; "Steady" is not.
                         Text(changeText)
-                            .font(.sl(change == 0 ? SL.TypeSize.body : SL.TypeSize.title, change == 0 ? SL.Weight.medium : SL.Weight.semibold))
+                            .font(change == 0 ? .sl(SL.TypeSize.body, SL.Weight.medium) : .slScore(28))
                             .slNumerals()
                             .foregroundStyle(ink)
                     } else {
@@ -429,7 +429,7 @@ struct ProgressHomeView: View {
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s5) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(tonnes(current.volumeKg))
-                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                        .font(.slScore(28))
                         .slNumerals()
                         .foregroundStyle(SL.Ink.primary)
                     Text("this week").slMeta().foregroundStyle(SL.Ink.secondary)
@@ -437,7 +437,7 @@ struct ProgressHomeView: View {
                 if let previous {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tonnes(previous.volumeKg))
-                            .font(.sl(SL.TypeSize.title, SL.Weight.regular))
+                            .font(.slScore(28, SL.Weight.medium))
                             .slNumerals()
                             .foregroundStyle(SL.Ink.secondary)
                         Text("last week").slMeta().foregroundStyle(SL.Ink.secondary)

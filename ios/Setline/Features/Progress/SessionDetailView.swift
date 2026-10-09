@@ -94,7 +94,7 @@ struct SessionDetailView: View {
                             if !editing {
                                 Button { confirmsDelete = true } label: {
                                     HStack(spacing: SL.Space.s2) {
-                                        Image(systemName: "trash")
+                                        SLGlyph(name: .trash, size: 17)
                                         Text("Delete this session")
                                     }
                                     .font(.sl(SL.TypeSize.body, SL.Weight.medium))
@@ -193,8 +193,7 @@ struct SessionDetailView: View {
                     item: shareImage,
                     preview: SharePreview("\(session.dayLabel) · \(app.display.shortDate(session.date))", image: shareImage)
                 ) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 17, weight: .medium))
+                    SLGlyph(name: .share, size: 20, fixed: true)
                         .foregroundStyle(SL.Ink.secondary)
                         .slHitTarget()
                 }

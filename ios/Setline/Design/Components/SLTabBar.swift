@@ -27,7 +27,7 @@ enum SLTab: String, CaseIterable, Identifiable {
         case .training: return "TabTraining"
         case .voeding: return "TabVoeding"
         case .progressie: return "TabProgressie"
-        case .friends: return "person.2"
+        case .friends: return "TabFriends"
         case .fotos: return "TabFotos"
         }
     }
@@ -43,6 +43,9 @@ enum SLTab: String, CaseIterable, Identifiable {
 /// achievable with `TabView`'s own bar.
 struct SLTabBar: View {
     @Binding var selection: SLTab
+    /// Things waiting on a tab — friend requests on Friends. Shown as a
+    /// count on the icon, gone once there is nothing left to answer.
+    var badges: [SLTab: Int] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var pill
 
@@ -60,19 +63,21 @@ struct SLTabBar: View {
                         // Deliberately unscaled, like the 11pt label beneath
                         // it: letting the bar follow Dynamic Type burst it open
                         // and struck the labels through at accessibility sizes.
-                        Group {
-                            // Friends has no drawn glyph; the system's two
-                            // people, at the same optical size, stand in.
-                            if tab == .friends {
-                                Image(systemName: tab.artwork)
-                                    .font(.system(size: 17, weight: .regular))
-                            } else {
-                                Image(tab.artwork)
-                                    .renderingMode(.template)
-                                    .resizable()
-                            }
-                        }
+                        Image(tab.artwork)
+                            .renderingMode(.template)
+                            .resizable()
                             .frame(width: 22, height: 22)
+                            .overlay(alignment: .topTrailing) {
+                                if let count = badges[tab], count > 0 {
+                                    Text("\(min(count, 9))")
+                                        .font(.slFixed(10, SL.Weight.bold))
+                                        .foregroundStyle(SL.Signal.onAction)
+                                        .frame(minWidth: 16, minHeight: 16)
+                                        .background(Circle().fill(SL.Signal.attention))
+                                        .overlay(Circle().strokeBorder(SL.Surface.raised, lineWidth: 2))
+                                        .offset(x: 8, y: -5)
+                                }
+                            }
                             .foregroundStyle(isActive ? SL.Signal.action : SL.Ink.secondary)
                             .accessibilityHidden(true)
                         Text(tab.label)
@@ -96,7 +101,7 @@ struct SLTabBar: View {
                 }
                 .buttonStyle(.plain)
                 .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
-                .accessibilityLabel(tab.label)
+                .accessibilityLabel(badges[tab].map { $0 > 0 ? "\(tab.label), \($0) waiting" : tab.label } ?? tab.label)
                 .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
             }
         }

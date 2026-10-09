@@ -207,8 +207,7 @@ struct DayPlanSheet: View {
                 }
                 // 20pt of room whether the tick is there or not, so nothing
                 // shifts when the choice moves.
-                Image(systemName: "checkmark")
-                    .font(.system(size: 15, weight: SL.Weight.semibold))
+                SLGlyph(name: .check, size: 16)
                     .foregroundStyle(SL.Ink.primary)
                     .frame(width: 20)
                     .opacity(isChosen ? 1 : 0)
