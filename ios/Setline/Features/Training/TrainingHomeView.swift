@@ -42,6 +42,9 @@ struct TrainingHomeView: View {
     @State private var dotsIn = TrainingIntro.played
     /// Today's ring breathes, so the eye lands on the next step.
     @State private var breathes = false
+    /// What Tally is saying, if anything, and how often it was tapped.
+    @State private var mascotLine: String?
+    @State private var mascotTaps = 0
     /// The date key of the last week-secured moment played, so it plays once.
     @AppStorage("setline.training.celebratedWeek") private var celebratedWeek = ""
     /// The date column of `Rest van de week`, growing with the text.
@@ -369,8 +372,14 @@ struct TrainingHomeView: View {
         let earned = earnedToday
         return VStack(alignment: .leading, spacing: 0) {
             // One layout at every streak, zero included, so the card never
-            // changes shape when a streak starts or lapses.
-            streakRow(streak, secured: secured)
+            // changes shape when a streak starts or lapses. Tally stands
+            // beside the number it is the face of.
+            HStack(alignment: .bottom, spacing: SL.Space.s2) {
+                streakRow(streak, secured: secured)
+                mascot(today, streak)
+            }
+            .overlay(alignment: .bottomTrailing) { mascotBubble }
+            .zIndex(1)
             weekDots
                 .padding(.top, SL.Space.s5)
             heroDivider(lit: secured)
@@ -387,9 +396,6 @@ struct TrainingHomeView: View {
         .padding(.top, SL.Space.s5)
         .padding(.bottom, SL.Space.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .topTrailing) {
-            if app.resumableSession != nil { moreMenu }
-        }
         .background(heroBackground(lit: secured, streak: streak))
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
@@ -402,6 +408,12 @@ struct TrainingHomeView: View {
         .onAppear {
             celebrateIfSecured(today, streak)
             playIntro(streak)
+            #if DEBUG
+            // `-SetlineMascotTalk` opens with Tally's first line showing.
+            if ProcessInfo.processInfo.arguments.contains("-SetlineMascotTalk") {
+                mascotLine = mascotLines(today, streak).first
+            }
+            #endif
         }
     }
 
@@ -436,8 +448,8 @@ struct TrainingHomeView: View {
                 .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
                 .contentShape(Rectangle())
         }
-        .padding(.top, SL.Space.s2)
-        .padding(.trailing, SL.Space.s2)
+        .padding(.vertical, -SL.Space.s3)
+        .padding(.trailing, -SL.Space.s2)
         .accessibilityLabel("More")
     }
 
@@ -568,6 +580,8 @@ struct TrainingHomeView: View {
                 Text(isDone ? "TODAY · DONE" : "TODAY")
                     .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
                     .tracking(1)
+                Spacer(minLength: 0)
+                if app.resumableSession != nil { moreMenu }
             }
             .foregroundStyle(content.isRest ? SL.Signal.recovery : SL.Signal.action)
             Button {
@@ -718,6 +732,98 @@ struct TrainingHomeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(SLPressStyle())
+        }
+    }
+
+    // MARK: - Tally
+
+    private func mascotMood(_ today: AgendaDay, _ streak: TrainingStreak) -> TallyMascot.Mood {
+        if streak.thisWeekMet { return .struck }
+        if today.isLogged { return .proud }
+        if today.isRest { return .resting }
+        if let workout = today.plannedDay, !app.liftsReady(in: workout).isEmpty { return .focused }
+        return .ready
+    }
+
+    private func mascot(_ today: AgendaDay, _ streak: TrainingStreak) -> some View {
+        Button {
+            mascotTaps += 1
+            let lines = mascotLines(today, streak)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                mascotLine = lines[(mascotTaps - 1) % lines.count]
+            }
+            let shown = mascotLine
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3.5))
+                if mascotLine == shown { withAnimation(.easeOut(duration: 0.2)) { mascotLine = nil } }
+            }
+        } label: {
+            TallyMascot(
+                done: streak.thisWeekDone,
+                goal: streak.thisWeekGoal,
+                mood: mascotMood(today, streak),
+                jumps: mascotTaps
+            )
+            .padding(SL.Space.s1)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.8), trigger: mascotTaps)
+        .accessibilityLabel("Tally, \(min(streak.thisWeekDone, streak.thisWeekGoal)) of \(streak.thisWeekGoal) workouts this week")
+        .accessibilityHint("Says how your week is going")
+    }
+
+    /// What Tally says, always from the account's own numbers. A tap moves
+    /// to the next line.
+    private func mascotLines(_ today: AgendaDay, _ streak: TrainingStreak) -> [String] {
+        let left = max(streak.thisWeekGoal - streak.thisWeekDone, 0)
+        let next = nextTraining(after: today.date).flatMap { day in day.plannedDay.map { "\($0.short) \(Agenda.when(day.date))" } }
+        switch mascotMood(today, streak) {
+        case .struck:
+            return [streak.weeks == 1 ? "Week struck. Your streak has started." : "Week struck. That's \(streak.weeks) in a row.",
+                    "Nothing left to prove this week. Rest well."]
+        case .proud:
+            return [left == 0 ? "Logged. That's the week." : left == 1 ? "Logged. One more strikes the week." : "Logged. \(left) to go this week.",
+                    "Good session. Eat, sleep, come back stronger."]
+        case .resting:
+            return ["Rest counts too. My bars need it.", next.map { "Next up: \($0)." } ?? "See you next session."]
+        case .focused:
+            let lifts = today.plannedDay.map { app.liftsReady(in: $0) } ?? []
+            return [lifts.count == 1 ? "\(lifts[0].name) can go up today." : "\(lifts.count) lifts can go up today. \(lifts.first?.name ?? "Bench") first?",
+                    left == 1 ? "One more and the week is struck." : "\(left) to go this week. Today's the next one."]
+        case .ready:
+            if streak.weeks == 0 {
+                return ["Every bar is a workout. Fill them all to start a streak.",
+                        left == 1 ? "One more and the week is struck." : "\(left) to go. Today's the next one."]
+            }
+            return [left == 1 ? "One more and the week is struck." : "\(left) to go this week. Today's the next one.",
+                    "Keep the \(streak.weeks)-week streak alive."]
+        }
+    }
+
+    @ViewBuilder
+    private var mascotBubble: some View {
+        if let mascotLine {
+            Text(mascotLine)
+                .slMeta(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.primary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, SL.Space.s3)
+                .padding(.vertical, SL.Space.s2)
+                .background(
+                    UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 4, style: .continuous)
+                        .fill(SL.Surface.raised2)
+                )
+                .overlay(
+                    UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 4, style: .continuous)
+                        .strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border)
+                )
+                .frame(maxWidth: 220, alignment: .trailing)
+                .offset(y: 44)
+                .transition(.scale(scale: 0.6, anchor: .topTrailing).combined(with: .opacity))
+                .allowsHitTesting(false)
+                .accessibilityAddTraits(.updatesFrequently)
         }
     }
 
