@@ -773,6 +773,21 @@ final class AppState {
         )
     }
 
+    /// The lifts in a workout the engine says are ready to go up, with the
+    /// weight it proposes — what Training can promise before a session
+    /// starts. None during lighter days.
+    func liftsReady(in day: WorkoutDay) -> [ReadyLift] {
+        guard activeDeload == nil else { return [] }
+        return day.exercises.compactMap { planned in
+            let exercise = exercise(planned.exerciseID)
+            let history = history(for: planned)
+            let proposal = ProgressionEngine.proposal(planned: planned, exercise: exercise, history: history)
+            guard proposal.tone == .ready, let weight = proposal.weightKg else { return nil }
+            let last = history.mostRecent?.sets.first(where: \.countsTowardProgression)?.weightKg
+            return ReadyLift(name: exercise.name, fromKg: last, toKg: weight)
+        }
+    }
+
     func exercise(_ id: String) -> Exercise {
         ExerciseCatalog.exercise(id)
             ?? customExercises.first { $0.id == id }?.exercise
@@ -897,4 +912,13 @@ final class AppState {
         }
         return parts.joined(separator: " · ")
     }
+}
+
+/// A lift the engine proposes to raise: last time's working weight and the
+/// one it suggests today.
+struct ReadyLift: Identifiable {
+    let name: String
+    let fromKg: Decimal?
+    let toKg: Decimal
+    var id: String { name }
 }

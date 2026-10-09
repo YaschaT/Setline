@@ -67,10 +67,16 @@ struct StripDay: View {
     /// everywhere else.
     @ViewBuilder
     private var mark: some View {
-        if day.isToday {
+        if day.isToday, !day.isLogged {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(isSelected ? SL.Signal.onAction : SL.Signal.action)
                 .frame(width: 12, height: 2)
+        } else if day.isLogged {
+            // Trained: the strip is the week's progress, so a logged day
+            // is a full lime dot.
+            Circle()
+                .fill(isSelected ? SL.Signal.onAction : SL.Signal.action)
+                .frame(width: 6, height: 6)
         } else {
             Circle()
                 .fill(day.isRest ? SL.Signal.recovery : SL.Surface.mute)

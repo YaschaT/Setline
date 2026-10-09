@@ -1,9 +1,9 @@
 import SwiftUI
 import SetlineCore
 
-/// Artboard 17R. Four kinds of record, each stated once, as a fact.
-///
-/// No confetti, no badge, no streak. 17R replaced base 17's comparison line,
+/// Artboard 17R. Four kinds of record, each stated once, as a fact — with,
+/// since, the medals a lift earns against its own history, the week it fills
+/// and any badge it wins. 17R replaced base 17's comparison line,
 /// per-exercise list and note link with the records themselves; the one
 /// addition is `Terug`, in the handoff's own back-link style, so a mis-tap on
 /// `Sessie afronden` never forces a save.
@@ -26,6 +26,12 @@ struct SessionCompleteView: View {
         let before = Set(Milestones.make(sessions: app.sessions, bestStreak: app.streak.best).filter(\.isReached).map(\.id))
         return Milestones.make(sessions: app.sessions + [pending], bestStreak: best)
             .filter { $0.isReached && !before.contains($0.id) }
+    }
+
+    /// Gold, silver and bronze this workout earns, judged before it is saved.
+    private var medals: [LiftMedal] {
+        let pending = runner.finishedSession(existing: nil)
+        return Medals.medals(for: pending, in: app.sessions + [pending])
     }
 
     var body: some View {
@@ -58,6 +64,8 @@ struct SessionCompleteView: View {
                         .padding(.top, SL.Space.s2)
 
                     volumeBlock
+
+                    if !medals.isEmpty { medalBlock.padding(.top, SL.Space.s5) }
 
                     // A workout written down for an earlier week does not
                     // move this week's dots, so it shows none.
@@ -95,6 +103,12 @@ struct SessionCompleteView: View {
             try? await Task.sleep(for: .milliseconds(450))
             if let milestone = newMilestones.first {
                 celebration = Celebration(symbol: "rosette", title: "Badge earned", detail: milestone.title, badge: milestone)
+            } else if let gold = medals.first(where: { $0.place == .gold }) {
+                celebration = Celebration(
+                    symbol: "medal.fill",
+                    title: "Best ever",
+                    detail: "\(gold.name) · \(app.display.kg(gold.weightKg)) × \(gold.reps)"
+                )
             } else if Calendar.current.isDate(runner.startedAt, equalTo: Date(), toGranularity: .weekOfYear) {
                 let streak = app.streak(adding: runner.startedAt, day: runner.day)
                 if streak.thisWeekDone == streak.thisWeekGoal {
@@ -115,6 +129,32 @@ struct SessionCompleteView: View {
             // Opaque, like the session's own bottom bar: records scroll
             // underneath it instead of showing through the actions.
             .background(SL.Surface.ground.ignoresSafeArea(edges: .bottom))
+        }
+    }
+
+    /// The medals, gold first: how many, then one row a lift.
+    private var medalBlock: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            HStack(alignment: .firstTextBaseline) {
+                SLEyebrow(text: medals.count == 1 ? "1 medal" : "\(medals.count) medals")
+                Spacer()
+                HStack(spacing: -8) {
+                    ForEach(Array(medals.prefix(5).enumerated()), id: \.offset) { _, medal in
+                        SLMedal(place: medal.place, size: 22)
+                    }
+                }
+                .accessibilityHidden(true)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(medals.enumerated()), id: \.element.id) { index, medal in
+                    SLMedalRow(medal: medal, display: app.display)
+                        .padding(.vertical, SL.Space.s3)
+                        .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                }
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .slBorderBox()
+            .slListCard()
         }
     }
 

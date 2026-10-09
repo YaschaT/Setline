@@ -42,6 +42,15 @@ struct SessionDetailView: View {
     }
 
     private var session: TrainingSession? { app.sessions.first { $0.id == sessionID } }
+
+    /// The medals the day earned against everything before it.
+    private var medals: [LiftMedal] {
+        guard let session else { return [] }
+        return Medals.medals(for: session, in: app.sessions)
+    }
+
+    /// The share picture, drawn when the page opens.
+    @State private var shareImage: Image?
     private var results: [ExerciseResult] { editing ? draft : (session?.results ?? []) }
     private var hasChanges: Bool { editing && (draft != session?.results || !removed.isEmpty) }
 
@@ -115,6 +124,15 @@ struct SessionDetailView: View {
             }
         }
         .sheet(item: $correcting) { target in correctionSheet(target) }
+        .task(id: session?.results) {
+            guard let session else { return }
+            shareImage = WorkoutShareCard(
+                session: session,
+                medals: medals,
+                streakWeeks: app.streak.weeks,
+                display: app.display
+            ).image()
+        }
         // An alert rather than a dialog, because both answers have to be
         // visible: one of them removes a workout from the account.
         .alert(
@@ -169,6 +187,19 @@ struct SessionDetailView: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            if let shareImage, !editing, let session {
+                ShareLink(
+                    item: shareImage,
+                    preview: SharePreview("\(session.dayLabel) · \(app.display.shortDate(session.date))", image: shareImage)
+                ) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .slHitTarget()
+                }
+                .accessibilityLabel("Share this workout")
+            }
 
             if session != nil {
                 Button { editing ? save() : startEditing() } label: {
@@ -232,6 +263,20 @@ struct SessionDetailView: View {
                 .slBody().slNumerals()
                 .foregroundStyle(SL.Ink.secondary)
                 .padding(.top, SL.Space.s2)
+
+            if !medals.isEmpty, !editing {
+                VStack(spacing: 0) {
+                    ForEach(Array(medals.enumerated()), id: \.element.id) { index, medal in
+                        SLMedalRow(medal: medal, display: app.display)
+                            .padding(.vertical, SL.Space.s3)
+                            .overlay(alignment: .top) { if index > 0 { SLHairline() } }
+                    }
+                }
+                .padding(.horizontal, SL.Space.s4)
+                .slBorderBox()
+                .slListCard()
+                .padding(.top, SL.Space.s4)
+            }
 
             if let pending = pendingNote {
                 Text(pending)
@@ -317,8 +362,15 @@ struct SessionDetailView: View {
             from: app.sessions,
             before: session.date
         )
+        let medal = editing ? nil : medals.first { $0.exerciseID == result.exerciseID }
         return VStack(alignment: .leading, spacing: 0) {
-            SLEyebrow(text: result.name)
+            HStack(spacing: SL.Space.s2) {
+                SLEyebrow(text: result.name)
+                if let medal {
+                    SLMedal(place: medal.place, size: 18)
+                        .accessibilityLabel(medal.place.title)
+                }
+            }
             if let stoodInFor = result.sets.compactMap(\.substitutedFrom).first {
                 Text("stood in for \(app.exercise(stoodInFor).name.lowercased())")
                     .slMeta()

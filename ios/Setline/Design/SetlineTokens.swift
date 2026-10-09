@@ -246,10 +246,15 @@ struct SLPrimaryButtonStyle: ButtonStyle {
                 )
             )
             .contentShape(shape)
+            // The one lime action sinks and springs back, and the phone
+            // answers as it goes down.
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
             .animation(
-                .easeOut(duration: SL.Motion.duration(SL.Motion.fast, reduceMotion: reduceMotion)),
+                reduceMotion ? nil
+                    : configuration.isPressed ? .easeOut(duration: 0.1) : .spring(response: 0.3, dampingFraction: 0.55),
                 value: configuration.isPressed
             )
+            .sensoryFeedback(.impact(weight: .medium), trigger: configuration.isPressed) { _, isDown in isDown }
             .slFocusRing(shape)
     }
 }

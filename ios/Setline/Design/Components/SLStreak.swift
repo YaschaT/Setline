@@ -240,10 +240,19 @@ struct MilestonesView: View {
 struct BadgeDetail: View {
     let milestone: Milestone
     @Environment(AppState.self) private var app
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The badge turns in like a coin as the sheet opens.
+    @State private var shown = false
 
     var body: some View {
         VStack(spacing: SL.Space.s4) {
             SLBadge(milestone: milestone, size: 150)
+                .rotation3DEffect(.degrees(shown || reduceMotion ? 0 : -110), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
+                .scaleEffect(shown || reduceMotion ? 1 : 0.7)
+                .onAppear {
+                    withAnimation(.spring(response: 0.7, dampingFraction: 0.55).delay(0.12)) { shown = true }
+                }
+                .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.8), trigger: shown)
                 .padding(.top, SL.Space.s8)
             Text(milestone.title)
                 .font(.sl(SL.TypeSize.title, SL.Weight.semibold))

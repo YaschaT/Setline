@@ -141,6 +141,69 @@ enum DemoData {
             ]))
         }
 
+        // `-SetlineDemoMedals` adds a fourth Push two days ago that beats,
+        // matches and trails the three before it, so the workout page shows
+        // gold, silver and bronze.
+        if ProcessInfo.processInfo.arguments.contains("-SetlineDemoMedals") {
+            let date = calendar.date(byAdding: .day, value: -2, to: Date())!
+            let change: [String: Decimal] = ["flat-bench": 2.5, "incline-bench": 0, "pec-fly": -2.5]
+            let planned = PlanCatalog.personal.first { $0.id == "push" }?.exercises ?? []
+            let results = planned.map { planned -> JSONValue in
+                let load = (loads[planned.exerciseID] ?? 40) + (change[planned.exerciseID] ?? -20)
+                let sets = planned.sets.map { prescription -> JSONValue in
+                    JSONValue.object([
+                        "weight": .string("\(load)"),
+                        "reps": .string("\(prescription.repRange.upperBound)"),
+                        "pausedReps": .string(""),
+                        "pauseSeconds": .string(""),
+                        "pauseEnabled": .bool(false),
+                        "rir": .number(1),
+                    ])
+                }
+                return .object([
+                    "exerciseId": .string(planned.exerciseID),
+                    "name": .string(ExerciseCatalog.exercise(planned.exerciseID)?.name ?? planned.exerciseID),
+                    "sets": .array(sets),
+                ])
+            }
+            sessions.append(.object([
+                "id": .string("demo-medals"),
+                "date": .string(LegacyAdapter.isoString(date)),
+                "dayId": .string("push"),
+                "dayLabel": .string("Push"),
+                "completion": .number(100),
+                "durationSeconds": .number(3060),
+                "results": .array(results),
+            ]))
+        }
+
+        // `-SetlineDemoStreak` fills every day of the four weeks before this
+        // one, so Training has a streak to show. `-SetlineDemoStreak secured`
+        // also fills this week up to its goal with today as the last one,
+        // for the week-secured moment.
+        let streakFlag = ProcessInfo.processInfo.arguments.firstIndex(of: "-SetlineDemoStreak")
+        if let streakFlag {
+            let secured = ProcessInfo.processInfo.arguments.indices.contains(streakFlag + 1)
+                && ProcessInfo.processInfo.arguments[streakFlag + 1] == "secured"
+            let monday = Schedule.mondayFirstWeek(containing: Date()).first ?? Date()
+            var dates: [Date] = (1...28).compactMap { calendar.date(byAdding: .day, value: -$0, to: monday) }
+            if secured {
+                let others = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
+                    .filter { !calendar.isDateInToday($0) }
+                dates += Array(others.prefix(5)) + [Date()]
+            }
+            for (index, date) in dates.enumerated() {
+                sessions.append(.object([
+                    "id": .string("demo-streak-\(index)"),
+                    "date": .string(LegacyAdapter.isoString(date)),
+                    "dayId": .string("legs"),
+                    "dayLabel": .string("Legs"),
+                    "completion": .number(100),
+                    "results": .array([]),
+                ]))
+            }
+        }
+
         // Today is a push day whatever the weekday, so the slice is always
         // reachable from a cold launch.
         // `-SetlineUpperDay` puts today on Upper, which is where the planned
