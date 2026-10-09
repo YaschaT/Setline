@@ -46,36 +46,34 @@ struct HistoriekSegmentView: View {
             } else {
                 List {
                     ForEach(months, id: \.title) { month in
-                        Section {
-                            ForEach(month.rows) { row in
-                                rowView(row)
-                                    .listRowInsets(EdgeInsets(top: 0, leading: SL.Space.s5, bottom: 0, trailing: SL.Space.s5))
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparatorTint(SL.Surface.hairline)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button("Delete", systemImage: "trash") { deleting = row }
-                                            .tint(SL.Signal.loss)
-                                    }
-                            }
-                        } header: {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(month.title).slLead().foregroundStyle(SL.Ink.primary)
-                                Spacer()
-                                Text(month.rows.count == 1 ? "1 session" : "\(month.rows.count) sessions")
-                                    .slMeta()
-                                    .foregroundStyle(SL.Ink.secondary)
-                            }
-                            .textCase(nil)
-                            // On the rows' own edge, not the list's header inset.
-                            .padding(.horizontal, SL.Space.s5 - 16)
-                            .padding(.top, SL.Space.s2)
-                            .padding(.bottom, SL.Space.s1)
-                            .accessibilityAddTraits(.isHeader)
+                        // The month heads its cards as a row of its own, so
+                        // it scrolls with them instead of pinning over them.
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(month.title).slLead().foregroundStyle(SL.Ink.primary)
+                            Spacer()
+                            Text(month.rows.count == 1 ? "1 session" : "\(month.rows.count) sessions")
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                        }
+                        .padding(.horizontal, SL.Space.s1)
+                        .listRowInsets(EdgeInsets(top: SL.Space.s5, leading: SL.Space.gutterSession, bottom: SL.Space.s1, trailing: SL.Space.gutterSession))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .accessibilityAddTraits(.isHeader)
+
+                        ForEach(month.rows) { row in
+                            rowView(row)
+                                .listRowInsets(EdgeInsets(top: 4, leading: SL.Space.gutterSession, bottom: 4, trailing: SL.Space.gutterSession))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button("Delete", systemImage: "trash") { deleting = row }
+                                        .tint(SL.Signal.loss)
+                                }
                         }
                     }
                 }
                 .listStyle(.plain)
-                .listSectionSpacing(SL.Space.s4)
                 .scrollContentBackground(.hidden)
                 .contentMargins(.bottom, SL.Space.s6, for: .scrollContent)
             }
@@ -99,29 +97,54 @@ struct HistoriekSegmentView: View {
         }
     }
 
+    /// A workout as a card: its kind of day as an icon, when, how complete,
+    /// and the weight it moved.
     private func rowView(_ row: SessionHistoryRow) -> some View {
-        Button { opened = Opened(id: row.id) } label: {
-            HStack(alignment: .firstTextBaseline) {
+        let complete = row.counts.map { $0.completed >= $0.planned } ?? ((row.completionPercent ?? 0) >= 100)
+        return Button { opened = Opened(id: row.id) } label: {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                SLWorkoutSymbol(dayName: row.dayLabel, size: 21)
+                    .foregroundStyle(complete ? SL.Signal.action : SL.Ink.primary)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                            .fill(complete ? SL.Signal.actionTint : SL.Surface.raised2)
+                    )
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(row.dayLabel) · \(WeekPlan.fullWeekday(row.date).prefix(2).lowercased()) \(app.display.shortDate(row.date))")
-                        .slBody(SL.Weight.medium)
+                    Text(row.dayLabel)
+                        .slBody(SL.Weight.semibold)
                         .foregroundStyle(SL.Ink.primary)
-                    if let detail = detail(row) {
-                        Text(detail).slMeta().foregroundStyle(SL.Ink.secondary)
-                    }
+                    Text(([WeekPlan.fullWeekday(row.date).prefix(3) + " " + app.display.shortDate(row.date)] + (detail(row).map { [$0] } ?? [])).joined(separator: " · "))
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                Spacer(minLength: SL.Space.s4)
-                Text(app.display.volumeKg(row.volumeKg))
-                    .slBody(SL.Weight.semibold)
-                    .slNumerals()
-                    .foregroundStyle(SL.Ink.primary)
+                Spacer(minLength: SL.Space.s2)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(app.display.volumeKg(row.volumeKg))
+                        .slBody(SL.Weight.semibold)
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("moved")
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                        .foregroundStyle(SL.Ink.secondary)
+                }
                 SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
             }
-            // The whole row is the target, and it clears 44 whatever the
-            // text size.
-            .padding(.vertical, 14)
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
             .frame(minHeight: SL.Space.hitMin)
-            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                    .fill(SL.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                    .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

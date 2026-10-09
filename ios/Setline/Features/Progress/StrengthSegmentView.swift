@@ -1,4 +1,3 @@
-import Charts
 import SwiftUI
 import UIKit
 import SetlineCore
@@ -35,20 +34,25 @@ struct StrengthSegmentView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: SL.Space.s4) {
                 if rows.isEmpty {
                     emptyState
                 } else {
                     title
                     if let progress {
-                        estimateBlock(progress)
-                        if progress.points.count > 1 { chart(progress) }
-                        if progress.rows.isEmpty { untrained } else { sessionList(progress) }
+                        heroCard(progress)
+                        if progress.rows.isEmpty {
+                            untrained
+                        } else {
+                            stats(progress)
+                            sessionList(progress)
+                        }
                     }
                 }
             }
             .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, 22)
+            .padding(.top, SL.Space.s3)
+            .padding(.bottom, SL.Space.s8)
         }
         .task(id: app.revision) { reload() }
         .onChange(of: selected) { _, _ in reloadProgress() }
@@ -75,66 +79,70 @@ struct StrengthSegmentView: View {
 
     // MARK: - The exercise is the title
 
+    /// The lift as a card: its muscle, its name (which is where you change
+    /// it), and the star.
     private var title: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: SL.Space.s3) {
-                Button { picking = true } label: {
-                    HStack(spacing: 6) {
-                        Text(progress?.name ?? "Exercise")
-                            .font(.sl(28, SL.Weight.semibold))
-                            .foregroundStyle(SL.Ink.primary)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.7)
-                            .multilineTextAlignment(.leading)
-                        Image(systemName: "chevron.down")
-                            .font(.sl(20, SL.Weight.medium))
-                            .foregroundStyle(SL.Ink.secondary)
+        HStack(spacing: SL.Space.s3) {
+            Button { picking = true } label: {
+                HStack(spacing: SL.Space.s3) {
+                    SLGlyph(name: .muscle(current?.group), size: 24, fixed: true)
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(width: 48, height: 48)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SL.Signal.actionTint))
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(progress?.name ?? "Exercise")
+                                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                                .foregroundStyle(SL.Ink.primary)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.8)
+                                .multilineTextAlignment(.leading)
+                            SLGlyph(name: .chevronDown, size: 14)
+                                .foregroundStyle(SL.Ink.secondary)
+                        }
+                        if let standing {
+                            Text(standing)
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Exercise: \(progress?.name ?? "none")")
+            .accessibilityHint("Double-tap to pick another exercise")
+            .accessibilityAddTraits(.isHeader)
+
+            if let current {
+                Button {
+                    Task { await app.setFavorite(exerciseID: current.exerciseID, isFavorite: !current.isFavorite) }
+                } label: {
+                    Image(systemName: current.isFavorite ? "star.fill" : "star")
+                        .font(.sl(20, SL.Weight.regular))
+                        .foregroundStyle(current.isFavorite ? Color(hex: 0xFFD166) : SL.Ink.tertiary)
+                        .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Exercise: \(progress?.name ?? "none")")
-                .accessibilityHint("Double-tap to pick another exercise")
-                .accessibilityAddTraits(.isHeader)
-
-                Spacer(minLength: SL.Space.s2)
-
-                if let current {
-                    Button {
-                        Task { await app.setFavorite(exerciseID: current.exerciseID, isFavorite: !current.isFavorite) }
-                    } label: {
-                        Image(systemName: current.isFavorite ? "star.fill" : "star")
-                            .font(.sl(20, SL.Weight.regular))
-                            .foregroundStyle(current.isFavorite ? SL.Ink.primary : SL.Ink.tertiary)
-                            .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(current.isFavorite ? "Remove star" : "Star this exercise")
-                }
-            }
-
-            if let standing {
-                Text(standing)
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(current.isFavorite ? "Remove star" : "Star this exercise")
             }
         }
+        .padding(SL.Space.s4)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
     }
 
     private var current: ExercisePicker.Row? {
         rows.first { $0.exerciseID == selected }
     }
 
-    /// "Borst · favoriet" — where this exercise sits, and whether it is one of
-    /// yours. The star says the same thing; the words are what VoiceOver and a
-    /// glance get.
-    ///
-    /// When the same lift was trained two ways, the series on screen is named
-    /// here too: a number computed from paused sets must not read as one about
-    /// the sets you pressed touch-and-go.
+    /// "Chest · favourite" — where this exercise sits, and whether it is one
+    /// of yours. When the same lift was trained two ways, the series on
+    /// screen is named here too: a number computed from paused sets must not
+    /// read as one about the sets you pressed touch-and-go.
     private var standing: String? {
         guard let current else { return nil }
         var parts = [current.group.title]
@@ -143,94 +151,68 @@ struct StrengthSegmentView: View {
         return parts.joined(separator: " · ")
     }
 
-    // MARK: - The estimate, in three layers
+    // MARK: - The estimate
 
-    private func estimateBlock(_ progress: StrengthProgress) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+    /// The number the screen exists for, what it moved, and its line.
+    private func heroCard(_ progress: StrengthProgress) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
             HStack(spacing: SL.Space.s1) {
                 Text("ESTIMATED 1RM")
-                    .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
-                    .tracking(SL.TypeSize.micro * 0.06)
-                    .foregroundStyle(SL.Ink.tertiary)
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(SL.Ink.secondary)
                 if progress.estimate != nil {
                     Button { explaining = true } label: {
                         Image(systemName: "info.circle")
-                            .font(.sl(17, SL.Weight.regular))
+                            .font(.sl(15, SL.Weight.regular))
                             .foregroundStyle(SL.Ink.tertiary)
-                            // Drawn where 40a's 32 box puts it, tappable at
-                            // the size a finger needs: the row keeps its own
-                            // height either way.
-                            .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                            .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("What is estimated 1RM?")
                 }
+                Spacer(minLength: 0)
             }
             .frame(height: 24)
-            .padding(.top, 24)
 
             if let estimate = progress.estimate {
-                // An estimate is stated in the steps a gym actually has, as the
-                // artboard does: Brzycki's 124,14 reads as 124.
+                // Stated in the steps a gym actually has: 124.14 reads as 124.
                 Text(app.display.kg(Estimates.round(estimate, toIncrement: 0.5)))
-                    .font(.slCapped(Self.heroSize, SL.Weight.semibold, maxScale: 1.4))
-                    .slLineHeight(1, size: Self.heroSize, maxScale: 1.4)
+                    .font(.slCapped(48, SL.Weight.semibold, maxScale: 1.4))
                     .slNumerals()
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .foregroundStyle(SL.Ink.primary)
-                    // SwiftUI draws the glyphs of a line tightened below the
-                    // font's own height lower in the box than a browser does.
-                    .offset(y: -0.117 * Self.heroScaledSize)
-                    // Read, never touched: lifted and given room to overhang,
-                    // the number reaches over the ⓘ above it, and at the
-                    // accessibility sizes it took the ⓘ's taps.
-                    .allowsHitTesting(false)
-                    .padding(.top, 6)
 
                 if let change = progress.change, let shown = progress.shownChange() {
-                    (
-                        Text("\(app.display.signedDelta(shown)) kg")
-                            .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
-                            // 40a draws a gain, and lime is what a gain reads
-                            // as. A drop is stated in the sentence's own ink:
-                            // it is a fact about the weeks, not a failure to
-                            // colour, and lime on it would read as a win.
-                            .foregroundColor(shown > 0 ? SL.Signal.action : SL.Ink.primary)
-                        + Text(" since \(app.display.shortDate(change.since))")
-                            .font(.sl(SL.TypeSize.body, SL.Weight.regular))
-                            .foregroundColor(SL.Ink.secondary)
-                    )
-                    .slNumerals()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-                    .accessibilityLabel("\(app.display.signedDelta(shown)) kilos since \(app.display.shortDate(change.since))")
+                    // A gain reads in lime; a drop in the sentence's own ink —
+                    // a fact about the weeks, not a failure to colour.
+                    Text("\(app.display.signedDelta(shown)) kg since \(app.display.shortDate(change.since))")
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        .slNumerals()
+                        .foregroundStyle(shown > 0 ? SL.Signal.action : SL.Ink.secondary)
+                        .padding(.horizontal, SL.Space.s3)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(shown > 0 ? SL.Signal.actionTint : SL.Surface.raised2))
+                        .accessibilityLabel("\(app.display.signedDelta(shown)) kilos since \(app.display.shortDate(change.since))")
                 } else if !progress.hasReference {
-                    Text("Building a reference · session \(progress.referenceSessionNumber) of \(ExerciseHistory.sessionsBeforeReference)")
-                        .slBody()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .padding(.top, 10)
+                    referenceMeter(progress)
                 }
 
+                if progress.points.count > 1 { chart(progress) }
+
                 if let source = progress.source {
-                    Text("Worked out from your best set: \(app.display.kg(source.weightKg)) × \(source.reps) on \(app.display.shortDate(source.date))")
+                    Text("From your best set: \(app.display.kg(source.weightKg)) × \(source.reps) on \(app.display.shortDate(source.date))")
                         .slMeta()
                         .slNumerals()
                         .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .padding(.top, SL.Space.s1)
+                        .foregroundStyle(SL.Ink.secondary)
                 }
             } else if progress.rows.isEmpty {
                 Text("Not logged yet")
-                    .font(.slCapped(Self.heroSize, SL.Weight.semibold, maxScale: 1.4))
-                    .slLineHeight(1, size: Self.heroSize, maxScale: 1.4)
-                    .offset(y: -0.117 * Self.heroScaledSize)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.4)
+                    .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
                     .foregroundStyle(SL.Ink.tertiary)
-                    .allowsHitTesting(false)
-                    .padding(.top, 6)
             } else {
                 // §10.2: an estimate loses accuracy as reps rise, so above ten
                 // reps the app states none rather than a flattering one.
@@ -238,69 +220,56 @@ struct StrengthSegmentView: View {
                     .slBody()
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(SL.Ink.secondary)
-                    .padding(.top, 10)
             }
         }
+        .padding(SL.Space.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
     }
 
-    /// 40a states the estimate at 52: larger than any other number in the app,
-    /// because it is the one the screen exists for.
-    private static let heroSize: CGFloat = 52
-
-    private static var heroScaledSize: CGFloat {
-        min(UIFontMetrics(forTextStyle: .body).scaledValue(for: heroSize), heroSize * 1.4)
+    /// The reference period as a meter that fills: three sessions before a
+    /// record can count.
+    private func referenceMeter(_ progress: StrengthProgress) -> some View {
+        let total = ExerciseHistory.sessionsBeforeReference
+        let done = min(progress.referenceSessionNumber, total)
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(spacing: 4) {
+                ForEach(0..<total, id: \.self) { index in
+                    Capsule()
+                        .fill(index < done ? SL.Signal.action : SL.Surface.raised2)
+                        .frame(height: 6)
+                }
+            }
+            Text("Building a reference · session \(progress.referenceSessionNumber) of \(total)")
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
+        }
+        .accessibilityElement(children: .combine)
     }
-
-    // MARK: - Chart
 
     private func chart(_ progress: StrengthProgress) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Chart(progress.points, id: \.date) { point in
-                LineMark(
-                    x: .value("Date", point.date),
-                    y: .value("Estimated 1RM", (point.estimate as NSDecimalNumber).doubleValue)
-                )
-                .interpolationMethod(.linear)
-                .lineStyle(StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
-                // 40a draws the line in ink: the lime is spent on the change
-                // above, and two lime things would both stop meaning anything.
-                .foregroundStyle(SL.Ink.primary)
-            }
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .chartYScale(domain: chartRange(progress.points))
-            .frame(height: 100)
-            .background(alignment: .bottom) { SLHairline() }
-            .accessibilityLabel("Estimated 1RM over \(progress.points.count) sessions")
-
+        VStack(spacing: SL.Space.s2) {
+            StrengthArea(values: progress.points.map(\.estimate), ink: SL.Signal.action)
+                .frame(height: 110)
             let labels = chartLabels(progress.points)
             HStack(spacing: 0) {
                 ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
                     Text(label)
                         .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                         .slNumerals()
-                        .foregroundStyle(SL.Ink.tertiary)
+                        .foregroundStyle(SL.Ink.secondary)
                     if index < labels.count - 1 { Spacer(minLength: SL.Space.s2) }
                 }
             }
-            .padding(.top, SL.Space.s2)
-            .accessibilityHidden(true)
         }
-        .padding(.top, 18)
+        .padding(.vertical, SL.Space.s1)
+        .accessibilityElement()
+        .accessibilityLabel("Estimated 1RM over \(progress.points.count) sessions")
     }
 
-    /// A little room above and below, so the stroke never touches the edges.
-    private func chartRange(_ points: [StrengthProgress.Point]) -> ClosedRange<Double> {
-        let values = points.map { ($0.estimate as NSDecimalNumber).doubleValue }
-        let low = values.min() ?? 0
-        let high = values.max() ?? 1
-        let padding = max((high - low) * 0.25, 1)
-        return (low - padding)...(high + padding)
-    }
-
-    /// First, middle and last, as the artboard labels them. The chart runs on
-    /// time, so the middle label is the date halfway between the two ends:
-    /// the middle session can sit anywhere along the line.
+    /// First, middle and last. The chart runs on sessions, so the middle
+    /// label is the date halfway between the two ends.
     private func chartLabels(_ points: [StrengthProgress.Point]) -> [String] {
         guard let first = points.first?.date, let last = points.last?.date else { return [] }
         guard points.count > 2 else {
@@ -310,52 +279,169 @@ struct StrengthSegmentView: View {
         return [first, middle, last].map { app.display.shortDate($0) }
     }
 
+    // MARK: - Stats
+
+    /// Three tiles, as Apple Fitness sums an activity: the heaviest set, how
+    /// often, and how many records.
+    private func stats(_ progress: StrengthProgress) -> some View {
+        let heaviest = progress.rows.max { $0.weightKg < $1.weightKg }
+        let records = progress.rows.filter { $0.marker == .record }.count
+        return HStack(spacing: SL.Space.s3) {
+            statTile("Heaviest", heaviest.map { app.display.number($0.weightKg) } ?? "—", unit: "kg")
+            statTile("Sessions", "\(progress.sessionCount)", unit: nil)
+            statTile("Records", "\(records)", unit: nil, medal: records > 0)
+        }
+    }
+
+    private func statTile(_ label: String, _ value: String, unit: String?, medal: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                Spacer(minLength: 0)
+                if medal { SLMedal(place: .gold, size: 18) }
+            }
+            .frame(height: 20)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.sl(24, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.primary)
+                if let unit {
+                    Text(unit).slMeta().foregroundStyle(SL.Ink.secondary)
+                }
+            }
+            .slNumerals()
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slBorderBox()
+        .slListCard()
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: - Sessions
 
     private func sessionList(_ progress: StrengthProgress) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("HEAVIEST SET PER SESSION")
-                .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
-                .tracking(SL.TypeSize.micro * 0.06)
-                .foregroundStyle(SL.Ink.tertiary)
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            Text("Sessions")
+                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.horizontal, SL.Space.s1)
+                .padding(.top, SL.Space.s3)
+                .padding(.bottom, SL.Space.s1)
                 .accessibilityAddTraits(.isHeader)
-
             ForEach(progress.rows) { row in
-                HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                    Text(sessionLabel(row))
-                        .slBody()
-                        .slNumerals()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: SL.Space.s2)
-                    Text("\(app.display.kg(row.weightKg)) × \(row.reps)")
-                        .slBody(SL.Weight.semibold)
-                        .slNumerals()
-                }
-                .frame(minHeight: 46)
-                .padding(.top, SL.Space.s2)
-                .overlay(alignment: .top) { SLHairline().padding(.top, SL.Space.s2) }
-                .accessibilityElement(children: .combine)
+                sessionCard(row)
             }
         }
-        .padding(.top, SL.Space.s5)
-        .padding(.bottom, SL.Space.s6)
     }
 
-    private func sessionLabel(_ row: StrengthProgress.SessionRow) -> String {
-        let date = app.display.shortDate(row.date)
-        return row.dayLabel.isEmpty ? date : "\(date) · \(row.dayLabel)"
+    private func sessionCard(_ row: StrengthProgress.SessionRow) -> some View {
+        let calendar = Calendar.current
+        let isRecord = row.marker == .record
+        return HStack(spacing: SL.Space.s3) {
+            VStack(spacing: 0) {
+                Text("\(calendar.component(.day, from: row.date))")
+                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+                Text(Self.month.string(from: row.date).uppercased())
+                    .font(.sl(10, SL.Weight.semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .frame(width: 44, height: 44)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.raised2))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(app.display.kg(row.weightKg)) × \(row.reps)")
+                    .slBody(SL.Weight.semibold)
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+                Text(row.dayLabel.isEmpty ? "\(row.setCount) sets" : "\(row.dayLabel) · \(row.setCount) sets")
+                    .slMeta()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            Spacer(minLength: SL.Space.s2)
+            marker(row.marker)
+        }
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
+        .slBorderBox()
+        .background(
+            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                .fill(SL.Surface.raised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                .strokeBorder(isRecord ? Color(hex: 0xFFD166).opacity(0.45) : SL.Surface.hairline, lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
+
+    /// What a session did: a record earns the gold medal, a gain its lime
+    /// kilos, a repeat an equals sign.
+    @ViewBuilder
+    private func marker(_ marker: StrengthProgress.Marker) -> some View {
+        switch marker {
+        case .record:
+            HStack(spacing: 6) {
+                Text("PR")
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
+                    .tracking(0.8)
+                    .foregroundStyle(Color(hex: 0xFFD166))
+                SLMedal(place: .gold, size: 28, shines: true)
+            }
+            .accessibilityLabel("Personal record")
+        case .delta(let value):
+            Text("\(app.display.signedDelta(value)) kg")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                .slNumerals()
+                .foregroundStyle(value > 0 ? SL.Signal.action : SL.Ink.secondary)
+                .padding(.horizontal, SL.Space.s2)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(value > 0 ? SL.Signal.actionTint : SL.Surface.raised2))
+        case .same:
+            Text("=")
+                .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(width: 28, height: 24)
+                .background(Capsule().fill(SL.Surface.raised2))
+                .accessibilityLabel("Same as before")
+        case .building(let session, let total):
+            Text("Ref \(session)/\(total)")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                .slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.horizontal, SL.Space.s2)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(SL.Surface.raised2))
+                .accessibilityLabel("Reference session \(session) of \(total)")
+        }
+    }
+
+    private static let month: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.dateFormat = "MMM"
+        return formatter
+    }()
 
     /// An exercise the catalogue offers and this account has never done. It is
     /// pickable on purpose — that is how you find out what is there.
     private var untrained: some View {
-        Text("Log this exercise once and you'll see your heaviest set per session here.")
+        Text("Log this exercise once and its sessions show up here as cards.")
             .slBody()
-            .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
             .fixedSize(horizontal: false, vertical: true)
             .foregroundStyle(SL.Ink.secondary)
-            .padding(.top, SL.Space.s5)
+            .padding(SL.Space.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .slBorderBox()
+            .slListCard()
     }
 
     // MARK: - Empty
@@ -367,7 +453,10 @@ struct StrengthSegmentView: View {
                 .slBody()
                 .foregroundStyle(SL.Ink.secondary)
         }
-        .padding(.top, SL.Space.s2)
+        .padding(SL.Space.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
         .fixedSize(horizontal: false, vertical: true)
     }
 

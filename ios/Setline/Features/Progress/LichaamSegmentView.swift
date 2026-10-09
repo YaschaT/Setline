@@ -23,20 +23,23 @@ struct LichaamSegmentView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: SL.Space.s4) {
                 if let latest = progress.latest {
                     header(latest)
-                    weighInButton
-                        .padding(.bottom, progress.points.count > 1 ? SL.Space.s6 : SL.Space.s5)
-                    if progress.points.count > 1 { chart }
-                    entries
+                    if !progress.entries.isEmpty { entries }
                 } else {
-                    emptyState
-                    weighInButton.padding(.top, SL.Space.s5)
+                    VStack(alignment: .leading, spacing: SL.Space.s5) {
+                        emptyState
+                        weighInButton
+                    }
+                    .padding(SL.Space.s5)
+                    .slBorderBox()
+                    .slListCard(radius: SL.Radius.xl)
                 }
             }
-            .padding(.horizontal, SL.Space.s5)
-            .padding(.top, SL.Space.s5)
+            .padding(.horizontal, SL.Space.gutterSession)
+            .padding(.top, SL.Space.s3)
+            .padding(.bottom, SL.Space.s8)
         }
         .task(id: app.revision) { reload() }
         .sheet(isPresented: $weighing) {
@@ -70,56 +73,74 @@ struct LichaamSegmentView: View {
             : "Opens today's weigh-in to update the weight")
     }
 
+    /// The weight as a hero card: the number, how it moved as a mint pill,
+    /// the line, and the one action.
     private func header(_ latest: BodyProgress.Entry) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("BODY WEIGHT")
-                .slMeta(SL.Weight.medium)
-                .foregroundStyle(SL.Ink.tertiary)
-            SLValueRow {
-                Text(app.display.kg(latest.weightKg))
-                    .slDisplay()
-                    .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                if let change = progress.change {
-                    Text("\(app.display.signedDelta(change.value)) / \(change.weeks) weeks")
-                        .slLead()
-                        .foregroundStyle(SL.Signal.recovery)
+        VStack(alignment: .leading, spacing: SL.Space.s4) {
+            VStack(alignment: .leading, spacing: SL.Space.s1) {
+                HStack(alignment: .firstTextBaseline, spacing: SL.Space.s1) {
+                    Text(app.display.number(latest.weightKg))
+                        .font(.slCapped(48, SL.Weight.semibold, maxScale: 1.4))
+                        .slNumerals()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("kg").slLead().foregroundStyle(SL.Ink.secondary)
+                    Spacer(minLength: SL.Space.s2)
+                    if let change = progress.change {
+                        Text("\(app.display.signedDelta(change.value)) kg · \(change.weeks) wk")
+                            .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                            .slNumerals()
+                            .foregroundStyle(SL.Signal.recovery)
+                            .padding(.horizontal, SL.Space.s3)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(SL.Signal.recoveryTint))
+                            .fixedSize()
+                    }
                 }
+                Text("Last weigh-in · \(app.display.shortDate(latest.date))")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
             }
-            .padding(.top, SL.Space.s2)
             .accessibilityElement(children: .combine)
 
-            Text("Last weigh-in · \(app.display.shortDate(latest.date))")
-                .slMeta()
-                .foregroundStyle(SL.Ink.tertiary)
-                .padding(.top, SL.Space.s1)
+            if progress.points.count > 1 { chart }
+            weighInButton
         }
-        .padding(.bottom, SL.Space.s5)
+        .padding(SL.Space.s5)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
     }
 
     private var chart: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
             Chart(progress.points) { entry in
+                AreaMark(
+                    x: .value("Date", entry.date),
+                    yStart: .value("Floor", range.lowerBound),
+                    yEnd: .value("Weight", (entry.weightKg as NSDecimalNumber).doubleValue)
+                )
+                .foregroundStyle(SL.Signal.recovery.opacity(0.08))
                 LineMark(
                     x: .value("Date", entry.date),
                     y: .value("Weight", (entry.weightKg as NSDecimalNumber).doubleValue)
                 )
-                .interpolationMethod(.linear)
-                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .interpolationMethod(.monotone)
+                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                 .foregroundStyle(SL.Signal.recovery)
+                if entry.id == progress.points.last?.id {
+                    PointMark(
+                        x: .value("Date", entry.date),
+                        y: .value("Weight", (entry.weightKg as NSDecimalNumber).doubleValue)
+                    )
+                    .symbolSize(70)
+                    .foregroundStyle(SL.Signal.recovery)
+                }
             }
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartYScale(domain: range)
-            .frame(height: 150)
-            .background(alignment: .top) {
-                VStack {
-                    SLHairline()
-                    Spacer()
-                    SLHairline()
-                }
-            }
+            .frame(height: 140)
             .accessibilityLabel("Your weight over \(progress.points.count) weigh-ins")
 
             let labels = chartLabels
@@ -127,46 +148,65 @@ struct LichaamSegmentView: View {
                 ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
                     Text(label)
                         .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                        .foregroundStyle(SL.Ink.tertiary)
+                        .foregroundStyle(SL.Ink.secondary)
                     if index < labels.count - 1 { Spacer(minLength: SL.Space.s2) }
                 }
             }
-            .padding(.top, 10)
             .accessibilityHidden(true)
         }
-        .padding(.bottom, SL.Space.s8)
     }
 
+    /// Every weigh-in, newest first, in one card; each change as a quiet pill.
     private var entries: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("WEIGH-INS")
-                .slMeta(SL.Weight.medium)
-                .foregroundStyle(SL.Ink.tertiary)
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            Text("Weigh-ins")
+                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.horizontal, SL.Space.s1)
+                .padding(.top, SL.Space.s3)
                 .padding(.bottom, SL.Space.s1)
                 .accessibilityAddTraits(.isHeader)
 
-            ForEach(Array(progress.entries.enumerated()), id: \.element.id) { index, entry in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(app.display.shortDate(entry.date)).slBody(SL.Weight.medium)
-                    Spacer(minLength: SL.Space.s4)
-                    Text(app.display.kg(entry.weightKg)).slLead()
-                    if let change = entry.change {
-                        Text(app.display.signedDelta(change))
-                            .slMeta()
-                            .foregroundStyle(SL.Ink.tertiary)
-                            .frame(minWidth: changeWidth, alignment: .trailing)
-                    } else {
-                        Text("").frame(minWidth: changeWidth)
+            VStack(spacing: 0) {
+                ForEach(Array(progress.entries.enumerated()), id: \.element.id) { index, entry in
+                    HStack(alignment: .center, spacing: SL.Space.s3) {
+                        Text(app.display.shortDate(entry.date))
+                            .slBody()
+                            .foregroundStyle(SL.Ink.secondary)
+                        Spacer(minLength: SL.Space.s4)
+                        Text(app.display.kg(entry.weightKg))
+                            .slBody(SL.Weight.semibold)
+                            .slNumerals()
+                            .foregroundStyle(SL.Ink.primary)
+                        Group {
+                            if let change = entry.change {
+                                Text(change == 0 ? "±0" : app.display.signedDelta(change))
+                                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                                    .slNumerals()
+                                    .foregroundStyle(change == 0 ? SL.Ink.secondary : SL.Signal.recovery)
+                                    .padding(.horizontal, SL.Space.s2)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(change == 0 ? SL.Surface.raised2 : SL.Signal.recoveryTint))
+                            } else {
+                                Text("Start")
+                                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                                    .foregroundStyle(SL.Ink.secondary)
+                                    .padding(.horizontal, SL.Space.s2)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(SL.Surface.raised2))
+                            }
+                        }
+                        .frame(minWidth: changeWidth + 12, alignment: .trailing)
                     }
+                    .padding(.horizontal, SL.Space.s4)
+                    .frame(minHeight: 52)
+                    .overlay(alignment: .top) { if index > 0 { SLHairline().padding(.leading, SL.Space.s4) } }
+                    .accessibilityElement(children: .combine)
                 }
-                .padding(.vertical, 14)
-                .overlay(alignment: .bottom) {
-                    if index < progress.entries.count - 1 { SLHairline() }
-                }
-                .accessibilityElement(children: .combine)
             }
+            .slBorderBox()
+            .slListCard()
         }
-        .padding(.bottom, SL.Space.s6)
     }
 
     private var range: ClosedRange<Double> {

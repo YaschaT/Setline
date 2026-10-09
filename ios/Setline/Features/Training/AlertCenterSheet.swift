@@ -87,7 +87,7 @@ struct AlertCenterSheet: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s3))
         return layout {
             HStack(spacing: SL.Space.s3) {
-                SLGlyph(name: .category(for: workout.short), size: 18)
+                SLWorkoutSymbol(dayName: workout.short, size: 17)
                     .foregroundStyle(SL.Ink.primary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(SL.Surface.raised2))

@@ -18,13 +18,16 @@ struct SLSheet<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             head
-            ScrollView {
+            // Up and down only: the content is held to the sheet's width, so
+            // a sideways drag never slides it left or right.
+            ScrollView(.vertical) {
                 content
                     .padding(.horizontal, SL.Space.gutterSession)
                     .padding(.bottom, SL.Space.s2)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .containerRelativeFrame(.horizontal)
             }
-            .scrollBounceBehavior(.basedOnSize)
+            .scrollBounceBehavior(.basedOnSize, axes: [.vertical, .horizontal])
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SL.Surface.raised)

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import SetlineCore
 
 /// One of the design's own glyphs, bundled as a template vector.
 ///
@@ -52,6 +53,13 @@ struct SLGlyph: View {
         case legs = "GlyphLegs"
         case upper = "GlyphUpper"
         case lower = "GlyphLower"
+        // Muscle groups, for exercise tiles.
+        case chest = "MuscleChest"
+        case back = "MuscleBack"
+        case shoulders = "MuscleShoulders"
+        case arms = "MuscleArms"
+        case legMuscles = "MuscleLegs"
+        case core = "MuscleCore"
     }
 
     let name: Name
@@ -70,6 +78,19 @@ struct SLGlyph: View {
 }
 
 extension SLGlyph.Name {
+    /// The glyph for the muscle group an exercise is filed under.
+    static func muscle(_ group: MuscleGroup?) -> SLGlyph.Name {
+        switch group {
+        case .borst: return .chest
+        case .rug: return .back
+        case .schouders: return .shoulders
+        case .armen: return .arms
+        case .benen: return .legMuscles
+        case .core: return .core
+        case nil: return .target
+        }
+    }
+
     /// The category glyph for a session by its name: "Push", "Upper A",
     /// "Full body B". A name outside the set borrows the upper-body glyph —
     /// the label beside it is what tells them apart.
@@ -81,5 +102,33 @@ extension SLGlyph.Name {
         case "lower": return .lower
         default: return .upper
         }
+    }
+}
+
+/// A training day as the figure Apple Fitness and Apple Watch use for the
+/// movement — icons people already know, where the design's own Push/Pull
+/// strokes need learning. Matched by the day's first word: "Push",
+/// "Upper A", "Full body B".
+struct SLWorkoutSymbol: View {
+    let dayName: String
+    var size: CGFloat = 20
+
+    static func systemName(for dayName: String) -> String {
+        switch dayName.split(separator: " ").first?.lowercased() {
+        case "push": return "figure.strengthtraining.traditional"
+        case "pull": return "figure.rower"
+        case "legs", "benen": return "figure.strengthtraining.functional"
+        case "lower": return "figure.step.training"
+        case "upper": return "dumbbell.fill"
+        case "core": return "figure.core.training"
+        default: return "figure.cross.training"
+        }
+    }
+
+    var body: some View {
+        Image(systemName: Self.systemName(for: dayName))
+            .font(.system(size: UIFontMetrics(forTextStyle: .body).scaledValue(for: size), weight: .semibold))
+            .symbolRenderingMode(.monochrome)
+            .accessibilityHidden(true)
     }
 }
