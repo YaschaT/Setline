@@ -150,7 +150,7 @@ struct RootView: View {
                         onAccount: { showsAccount = true }
                     )
                 case .voeding:
-                    NutritionHomeView()
+                    NutritionHomeView(onAccount: { showsAccount = true })
                 case .progressie:
                     ProgressHomeView()
                 case .friends:

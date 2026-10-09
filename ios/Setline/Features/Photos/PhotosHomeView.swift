@@ -343,7 +343,7 @@ struct PhotosHomeView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Photo \(tag), \(caption(shown))")
         .accessibilityHint("Double-tap to open the photo")
-        .accessibilityActions { Button("Verwijderen") { removing = shown.checkIn } }
+        .accessibilityActions { Button("Delete") { removing = shown.checkIn } }
     }
 
     /// A rectangle takes the size it is offered and nothing more; the picture
@@ -403,7 +403,7 @@ struct PhotosHomeView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Photo \(caption(shown))")
                     .accessibilityHint("Double-tap to open the photo")
-                    .accessibilityActions { Button("Verwijderen") { removing = shown.checkIn } }
+                    .accessibilityActions { Button("Delete") { removing = shown.checkIn } }
                 }
             }
         }
@@ -546,7 +546,7 @@ private struct PhotoViewer: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Button { confirms = true } label: { Text("Verwijderen") }
+            Button { confirms = true } label: { Text("Delete") }
                 .buttonStyle(SLOutlineButtonStyle(edge: SL.Signal.loss.opacity(0.5)))
         }
         .padding(.horizontal, SL.Space.gutterSession)

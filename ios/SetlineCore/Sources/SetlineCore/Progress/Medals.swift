@@ -60,17 +60,30 @@ public enum Medals {
     }
 
     /// The place one exercise's sets earn against its history, if any.
+    ///
+    /// Two ways a day can rank: its strongest set (the estimate), and its
+    /// heaviest. The better of the two counts — so the heaviest weight ever
+    /// moved is always gold, as the records screen says it is, even on a day
+    /// whose estimate trails a lighter set done for more reps.
     public static func place(for sets: [LoggedSet], history: ExerciseHistory) -> (place: LiftMedal.Place, set: LoggedSet)? {
-        guard history.hasReference, let top = best(sets) else { return nil }
-        let now = effort(top)
-        let better = history.appearances
-            .compactMap { best($0.sets).map(effort) }
-            // Matching a day is not beating it: an equal effort ranks below
-            // the day that did it first, so repeating a weight earns no gold.
-            .filter { $0 >= now - Estimates.epsilonKg }
-            .count
-        guard let place = LiftMedal.Place(rawValue: better + 1) else { return nil }
-        return (place, top)
+        guard history.hasReference, let strongest = best(sets) else { return nil }
+        let earlier = history.appearances.map(\.sets)
+
+        // Matching a day is not beating it: an equal effort ranks below the
+        // day that did it first, so repeating a weight earns no gold.
+        let byEffort = 1 + earlier.compactMap { best($0).map(effort) }
+            .filter { $0 >= effort(strongest) - Estimates.epsilonKg }.count
+
+        let heaviest = sets.filter { $0.countsTowardProgression && ($0.weightKg ?? 0) > 0 }
+            .max { ($0.weightKg ?? 0) < ($1.weightKg ?? 0) }
+        let byLoad = heaviest.map { top in
+            1 + earlier.compactMap { day in day.filter(\.countsTowardProgression).compactMap(\.weightKg).max() }
+                .filter { $0 >= (top.weightKg ?? 0) - Estimates.epsilonKg }.count
+        } ?? Int.max
+
+        let rank = min(byEffort, byLoad)
+        guard let place = LiftMedal.Place(rawValue: rank) else { return nil }
+        return (place, byLoad < byEffort ? heaviest ?? strongest : strongest)
     }
 
     /// Every medal one workout earns, gold first, judged against what came

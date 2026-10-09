@@ -18,6 +18,10 @@ struct SessionCompleteView: View {
     let onSave: () -> Void
 
     @State private var celebration: Celebration?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// This workout's bar has gone in; until then Tally shows the week before it.
+    @State private var tallyFilled = false
+    @State private var tallyJumps = 0
     @Environment(SocialStore.self) private var social
     @AppStorage("setline.social.shareWorkouts") private var sharesWorkouts = true
 
@@ -178,30 +182,50 @@ struct SessionCompleteView: View {
         }
     }
 
-    /// Where this workout leaves the week, before it is even saved: the dots
-    /// it fills, and the streak it keeps or starts.
+    /// Where this workout leaves the week, said by Tally: the bar this
+    /// workout adds fills in as the screen opens, Tally jumps, and says
+    /// what it means — or strikes the week through.
     private var streakBlock: some View {
         let streak = app.streak(adding: runner.startedAt, day: runner.day)
-        let completes = streak.thisWeekDone == streak.thisWeekGoal
-        return HStack(spacing: SL.Space.s3) {
-            SLGlyph(name: streak.weeks > 0 ? .flameFill : .flame, size: 26, fixed: true)
-                .foregroundStyle(streak.weeks > 0 ? SL.Signal.action : SL.Ink.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: SL.Space.s1) {
-                Text(completes
-                     ? (streak.weeks == 1 ? "Week goal reached · streak started" : "Week goal reached · \(streak.weeks)-week streak")
-                     : "\(min(streak.thisWeekDone, streak.thisWeekGoal)) of \(streak.thisWeekGoal) workouts this week")
-                    .slBody(SL.Weight.semibold)
-                    .foregroundStyle(SL.Ink.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                SLWeekDots(done: streak.thisWeekDone, goal: streak.thisWeekGoal)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        let completes = streak.thisWeekDone >= streak.thisWeekGoal
+        let left = max(streak.thisWeekGoal - streak.thisWeekDone, 0)
+        let line = completes
+            ? (streak.weeks == 1 ? "Week struck. Your streak has started." : "Week struck. That's \(streak.weeks) in a row.")
+            : left == 1 ? "Bar added. One more strikes the week." : "Bar added. \(left) to go this week."
+        return HStack(alignment: .center, spacing: SL.Space.s4) {
+            TallyMascot(
+                done: tallyFilled ? streak.thisWeekDone : max(streak.thisWeekDone - 1, 0),
+                goal: streak.thisWeekGoal,
+                mood: tallyFilled && completes ? .struck : .proud,
+                unit: 15,
+                jumps: tallyJumps
+            )
+            Text(line)
+                .slBody(SL.Weight.semibold)
+                .foregroundStyle(SL.Ink.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, SL.Space.s3)
+                .padding(.vertical, SL.Space.s2)
+                .background(
+                    UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 14, style: .continuous)
+                        .fill(SL.Surface.raised2)
+                )
+                .opacity(tallyFilled ? 1 : 0)
+                .offset(x: tallyFilled ? 0 : -8)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(SL.Space.s4)
         .slBorderBox()
         .slListCard()
-        .accessibilityElement(children: .combine)
+        .sensoryFeedback(.impact(weight: .medium), trigger: tallyJumps)
+        .task {
+            guard !tallyFilled else { return }
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 500))
+            withAnimation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.7)) { tallyFilled = true }
+            if !reduceMotion { tallyJumps += 1 }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(min(streak.thisWeekDone, streak.thisWeekGoal)) of \(streak.thisWeekGoal) workouts this week. \(line)")
     }
 
     private var volumeBlock: some View {

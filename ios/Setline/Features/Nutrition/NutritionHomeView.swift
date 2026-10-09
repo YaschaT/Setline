@@ -13,6 +13,13 @@ import SetlineCore
 /// more whole days in a row under the protein target.
 struct NutritionHomeView: View {
     @Environment(AppState.self) private var app
+    /// The avatar's way to Account, as on Training.
+    var onAccount: () -> Void = {}
+    /// The likely meal's ring breathes, like today's on Training.
+    @State private var breathes = false
+    /// The protein goal's moment has played for this date.
+    @AppStorage("setline.nutrition.proteinCelebrated") private var proteinCelebrated = ""
+    @State private var proteinPops = 0
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -67,8 +74,9 @@ struct NutritionHomeView: View {
         ScrollView {
             // 24 between sections, 8 from a section's head to its card.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                SLScreenTitle(title: "Nutrition", subtitle: SLDateText.long(now))
+                header
                 hero
+                    .padding(.top, SL.Space.s5)
                 ideasSection
                 eatenSection
             }
@@ -146,74 +154,112 @@ struct NutritionHomeView: View {
         return max(0, day.calories - Double(target))
     }
 
+    // MARK: - The head
+
+    /// Training's head, so the tabs read as one app: the avatar to Account,
+    /// the tab's name and the date, and one round button — here the targets.
+    private var header: some View {
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            Button(action: onAccount) {
+                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 40)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.92))
+            .accessibilityLabel("Account")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Nutrition")
+                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.primary)
+                    .accessibilityAddTraits(.isHeader)
+                Text(SLDateText.long(now))
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button { sheet = .targets } label: {
+                SLGlyph(name: .target, size: 18, fixed: true)
+                    .foregroundStyle(SL.Ink.primary)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(SL.Surface.raised))
+                    .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
+                    .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
+            .accessibilityLabel("Daily targets")
+        }
+    }
+
+    // MARK: - The day
+
+    private var proteinTarget: Double { day.target(for: .protein) }
+    private var proteinEaten: Double { day.total(of: .protein) }
+    private var proteinMet: Bool { proteinTarget > 0 && proteinEaten >= proteinTarget }
+
+    /// Training's card, read for food: the number first, the day's four
+    /// meals as its marks, the macros as its stat row, and the one action.
+    /// Protein is the goal the day is won by — the ring beside the number
+    /// fills toward it, and meeting it lights the card.
     private var hero: some View {
         let isOver = over > 0
-        let label = !day.hasTarget ? "Eaten today" : isOver ? "Over your target" : "Left to eat"
         let value = !day.hasTarget ? day.calories : isOver ? over : day.remaining
-        return VStack(alignment: .leading, spacing: SL.Space.s4) {
-            HStack(alignment: .center, spacing: SL.Space.s3) {
-                VStack(alignment: .leading, spacing: SL.Space.s1) {
-                    Text(label)
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        // At the font's own line. 1c's `34px/1` as an exact
-                        // line seats the baseline on the box's bottom edge on
-                        // iOS 26, and "kcal" then hangs below it: 4pt taller.
+        let unit = !day.hasTarget ? "kcal today" : isOver ? "kcal over" : "kcal left"
+        let proteinLeft = max(0, proteinTarget - proteinEaten)
+        let nudge: String = {
+            if !day.hasTarget { return "Set a target to count down" }
+            if proteinMet { return "Protein goal hit" }
+            if proteinTarget > 0 { return "\(app.display.whole(Decimal(proteinLeft))) g protein to go" }
+            return "of \(app.display.whole(Decimal(day.targets?.calories ?? 0))) kcal"
+        }()
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .bottom, spacing: SL.Space.s3) {
+                Button { sheet = .targets } label: {
+                    HStack(alignment: .bottom, spacing: SL.Space.s3) {
                         Text(app.display.whole(Decimal(value)))
-                            .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
-                            .slNumerals()
+                            .font(.slCapped(64, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
+                            .tracking(-2)
+                            .monospacedDigit()
                             .foregroundStyle(isOver ? SL.Signal.attention : SL.Signal.action)
+                            .contentTransition(.numericText(value: value))
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
-                        Text("kcal")
-                            .slLead(SL.Weight.regular)
-                            .foregroundStyle(SL.Ink.primary)
+                            .padding(.vertical, -8)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(unit)
+                                .slLead(SL.Weight.semibold)
+                                .foregroundStyle(SL.Ink.primary)
+                            HStack(spacing: 4) {
+                                if proteinMet { SLGlyph(name: .check, size: 12) }
+                                Text(nudge).slMeta(SL.Weight.semibold).slNumerals()
+                            }
+                            .foregroundStyle(day.hasTarget && !isOver ? SL.Signal.action : SL.Ink.secondary)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 2)
+                        Spacer(minLength: 0)
                     }
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(label), \(app.display.kcal(Decimal(value)))")
+                .buttonStyle(.plain)
+                .animation(reduceMotion ? nil : .snappy, value: value)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(app.display.kcal(Decimal(value))) \(unit.replacingOccurrences(of: "kcal ", with: "")). \(nudge).")
+                .accessibilityHint("Opens your daily targets")
+
+                if proteinTarget > 0 { proteinRing }
             }
 
-            if day.hasTarget {
-                SLBar(fraction: day.consumed, height: 8, fill: isOver ? SL.Signal.attention : SL.Signal.action)
-                    .accessibilityLabel("\(Int((day.consumed * 100).rounded())) percent of your calorie target eaten")
-            }
+            mealMarks.padding(.top, SL.Space.s5)
 
-            // One line for what the big number is counted from: eaten against
-            // the goal, the goal itself the way to change it.
-            Button { sheet = .targets } label: {
-                HStack(spacing: SL.Space.s1) {
-                    if day.hasTarget {
-                        Text("\(app.display.whole(Decimal(day.calories))) of \(app.display.whole(Decimal(day.targets?.calories ?? 0))) kcal eaten")
-                            .foregroundStyle(SL.Ink.secondary)
-                    } else {
-                        Text("Set a daily target")
-                            .foregroundStyle(SL.Signal.action)
-                    }
-                    SLGlyph(name: .chevronRight, size: 14)
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
-                .monospacedDigit()
-                .slHitTarget()
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Opens your daily targets")
+            Rectangle()
+                .fill(proteinMet ? SL.Signal.action.opacity(0.18) : SL.Surface.hairline)
+                .frame(height: SL.Metric.border)
+                .padding(.horizontal, -SL.Space.s5)
+                .padding(.vertical, SL.Space.s5)
 
-            // The three macros, in the same card as the energy they make up.
-            let macroLayout = typeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s4))
-                : AnyLayout(HStackLayout(alignment: .top, spacing: SL.Space.s4))
-            macroLayout {
-                ForEach(Array(Macro.allCases.enumerated()), id: \.element) { index, macro in
-                    macroColumn(macro, level: index)
-                }
-            }
-            .padding(.top, SL.Space.s3)
-            .overlay(alignment: .top) { SLHairline() }
+            macroRow
 
             Button {
                 // The clock is read again as the sheet opens: a screen left
@@ -225,16 +271,187 @@ struct NutritionHomeView: View {
             } label: {
                 HStack(spacing: 10) {
                     SLGlyph(name: .plus, size: 16)
-                    Text("Log a meal")
+                    // "Log lunch" until lunch has something in it; then
+                    // what the tap does is add to it.
+                    Text(day.sections.first { $0.meal == likely }?.isEmpty == false
+                         ? "Add to \(likely.spoken)" : "Log \(likely.spoken)")
                 }
             }
             .buttonStyle(SLPrimaryButtonStyle())
+            .padding(.top, SL.Space.s5)
             .accessibilityHint("Opens on \(likely.spoken)")
         }
-        .padding(SL.Space.s4)
-        .slBorderBox()
+        .padding(SL.Space.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .slHeroCard()
+        .background(
+            ZStack {
+                SL.Surface.raised
+                RadialGradient(colors: [SL.Signal.action.opacity(proteinMet ? 0.24 : 0.1), .clear],
+                               center: .topTrailing, startRadius: 0, endRadius: proteinMet ? 380 : 280)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(proteinMet ? SL.Signal.action.opacity(0.45) : SL.Surface.hairlineStrong.opacity(0.6), lineWidth: SL.Metric.border)
+        )
+        .shadow(color: proteinMet ? SL.Signal.action.opacity(0.14) : .clear, radius: 24)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: proteinMet)
+        .sensoryFeedback(.success, trigger: proteinPops)
+        .onChange(of: proteinMet, initial: true) { _, met in
+            let key = Schedule.dateKey(now)
+            guard met, proteinCelebrated != key else { return }
+            proteinCelebrated = key
+            proteinPops += 1
+        }
+        .onAppear {
+            guard !reduceMotion, !breathes else { return }
+            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(0.8)) { breathes = true }
+        }
+    }
+
+    /// Protein against its target, as a ring where Training keeps Tally: the
+    /// one number the day is won by. Full, it turns into a check.
+    private var proteinRing: some View {
+        let fraction = min(1, proteinEaten / max(proteinTarget, 1))
+        return ZStack {
+            Circle().stroke(SL.Signal.action.opacity(0.14), lineWidth: 6)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(SL.Signal.action, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(reduceMotion ? nil : .spring(response: 0.8, dampingFraction: 0.8).delay(0.2), value: fraction)
+            if proteinMet {
+                SLGlyph(name: .check, size: 20, fixed: true)
+                    .foregroundStyle(SL.Signal.action)
+                    .transition(.scale(scale: 0.3).combined(with: .opacity))
+            } else {
+                VStack(spacing: 0) {
+                    Text("\(Int((fraction * 100).rounded()))%")
+                        .font(.slFixed(14, SL.Weight.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("protein")
+                        .font(.slFixed(9, SL.Weight.medium))
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+            }
+        }
+        .frame(width: 60, height: 60)
+        .keyframeAnimator(initialValue: 1.0, trigger: proteinPops) { ring, scale in
+            ring.scaleEffect(scale)
+        } keyframes: { _ in
+            SpringKeyframe(1.18, duration: 0.18)
+            SpringKeyframe(1.0, duration: 0.4, spring: .bouncy)
+        }
+        .accessibilityElement()
+        .accessibilityLabel(proteinMet ? "Protein goal hit" : "\(Int((fraction * 100).rounded())) percent of your protein")
+    }
+
+    /// The day's four meals as Training's week marks: logged ones filled, the
+    /// one the clock suggests ringed and breathing, the rest waiting. A tap
+    /// logs into that meal.
+    private var mealMarks: some View {
+        let current = day.sections.first { $0.meal == likely }?.meal
+            ?? (likely == .preWorkout ? .snack : likely)
+        return HStack(spacing: 0) {
+            ForEach(day.sections) { section in
+                let logged = !section.isEmpty
+                let isNow = section.meal == current && !logged
+                Button {
+                    now = Date()
+                    sheet = .add(section.meal)
+                } label: {
+                    VStack(spacing: 6) {
+                        Text(section.meal == .snack ? "Snacks" : section.meal.label)
+                            .font(.sl(SL.TypeSize.micro, isNow ? SL.Weight.bold : SL.Weight.regular))
+                            .foregroundStyle(isNow ? SL.Ink.primary : SL.Ink.secondary)
+                            .lineLimit(1)
+                        mealMark(logged: logged, isNow: isNow)
+                        Text(logged ? app.display.whole(Decimal(section.calories)) : " ")
+                            .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                            .monospacedDigit()
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.85, bounces: true))
+                .accessibilityLabel("\(section.meal == .snack ? "Snacks" : section.meal.label), \(logged ? app.display.kcal(Decimal(section.calories)) : "nothing yet")")
+                .accessibilityHint("Logs food for this meal")
+            }
+        }
+        .padding(.horizontal, -SL.Space.s1)
+    }
+
+    @ViewBuilder
+    private func mealMark(logged: Bool, isNow: Bool) -> some View {
+        let size: CGFloat = 28
+        if logged {
+            Circle().fill(SL.Signal.action)
+                .overlay(SLGlyph(name: .check, size: 13).foregroundStyle(SL.Signal.onAction))
+                .frame(width: size, height: size)
+                .transition(.scale(scale: 0.4).combined(with: .opacity))
+        } else if isNow {
+            Circle().strokeBorder(SL.Signal.action, lineWidth: 2)
+                .background(Circle().fill(SL.Signal.action.opacity(0.12)).padding(-4))
+                .overlay(SLGlyph(name: .plus, size: 12).foregroundStyle(SL.Signal.action))
+                .background(
+                    Circle()
+                        .strokeBorder(SL.Signal.action.opacity(breathes ? 0 : 0.5), lineWidth: 1.5)
+                        .scaleEffect(breathes ? 1.7 : 1)
+                )
+                .frame(width: size, height: size)
+        } else {
+            Circle().strokeBorder(SL.Surface.mute, lineWidth: 1.5)
+                .frame(width: size, height: size)
+        }
+    }
+
+    /// The macros as Training's stat row: a number over a word, a thin bar
+    /// under each against its target, hairlines between.
+    private var macroRow: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(Macro.allCases.enumerated()), id: \.element) { index, macro in
+                let total = day.total(of: macro)
+                let target = day.target(for: macro)
+                let isOver = target > 0 && total > target
+                HStack(spacing: 0) {
+                    if index > 0 {
+                        Rectangle().fill(SL.Surface.hairline).frame(width: SL.Metric.border, height: 46)
+                            .padding(.trailing, SL.Space.s4)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: 1) {
+                            Text(app.display.whole(Decimal(total)))
+                                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                                .foregroundStyle(isOver ? SL.Signal.attention : SL.Ink.primary)
+                                .contentTransition(.numericText(value: total))
+                            Text(target > 0 ? "/\(app.display.whole(Decimal(target))) g" : " g")
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                        }
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        Text(macro.label.lowercased())
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                        if target > 0 {
+                            SLBar(fraction: day.fraction(of: macro), height: 4,
+                                  fill: isOver ? SL.Signal.attention : SL.Signal.action.opacity([1, 0.6, 0.4][min(index, 2)]))
+                                .padding(.trailing, SL.Space.s3)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(target > 0
+                    ? "\(macro.label), \(app.display.whole(Decimal(total))) of \(app.display.whole(Decimal(target))) grams"
+                    : "\(macro.label), \(app.display.whole(Decimal(total))) grams")
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy, value: day.calories)
     }
 
     // MARK: - Quick adds
@@ -243,14 +460,12 @@ struct NutritionHomeView: View {
     /// suggests. Protein-dense ones lead while protein is what is missing,
     /// and the head says how much is.
     private var ideasSection: some View {
-        let proteinTarget = day.target(for: .protein)
-        let proteinLeft = max(0, proteinTarget - day.total(of: .protein))
+        let proteinLeft = max(0, proteinTarget - proteinEaten)
         let ideas = FoodIdeas.ordered(proteinLeft: proteinLeft)
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(
-                title: "Quick adds",
-                meta: proteinTarget > 0 && proteinLeft > 0 ? "\(app.display.whole(Decimal(proteinLeft))) g protein to go" : nil
-            )
+            // The card already says what protein is missing; the head says
+            // what these are for.
+            SLSectionHead(title: "Quick adds", meta: proteinLeft > 0 ? "high protein first" : nil)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: SL.Space.s3) {
                     ForEach(ideas) { idea in ideaCard(idea) }
@@ -302,66 +517,6 @@ struct NutritionHomeView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(idea.name), \(idea.portion), \(app.display.whole(Decimal(idea.protein))) grams of protein, \(app.display.kcal(Decimal(idea.calories)))")
         .accessibilityHint("Adds it to \(likely.spoken)")
-    }
-
-    // MARK: - Macros
-
-    /// The three macros against their targets, side by side in one card: a
-    /// glance, not a list. Protein is the one the reader steers by, so it
-    /// leads and carries the full lime; the other two step back. At
-    /// accessibility sizes the three stack.
-    private var macros: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s4))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: SL.Space.s4))
-        return VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLSectionHead(title: "Macros")
-            layout {
-                ForEach(Array(Macro.allCases.enumerated()), id: \.element) { index, macro in
-                    macroColumn(macro, level: index)
-                }
-            }
-            .padding(SL.Space.s4)
-            .slBorderBox()
-            .slListCard()
-        }
-    }
-
-    private func macroColumn(_ macro: Macro, level: Int) -> some View {
-        let total = day.total(of: macro)
-        let target = day.target(for: macro)
-        let isOver = target > 0 && total > target
-        let name = macro.label
-        return VStack(alignment: .leading, spacing: SL.Space.s2) {
-            Text(name)
-                .slBody()
-                .foregroundStyle(SL.Ink.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            if target > 0 {
-                SLBar(
-                    fraction: day.fraction(of: macro),
-                    height: 6,
-                    fill: isOver ? SL.Signal.attention : SL.Signal.action.opacity([1, 0.6, 0.4][min(level, 2)])
-                )
-            }
-            // Whole grams: a tenth of a gram of fat is not something a day
-            // is steered by.
-            (Text(app.display.whole(Decimal(total))).font(.sl(SL.TypeSize.body, SL.Weight.semibold))
-                .foregroundStyle(isOver ? SL.Signal.attention : SL.Ink.primary)
-                + Text(target > 0 ? " / \(app.display.whole(Decimal(target))) g" : " g")
-                    .font(.sl(SL.TypeSize.meta, SL.Weight.regular)).foregroundStyle(SL.Ink.secondary))
-                .slNumerals()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            target > 0
-                ? "\(name), \(app.display.whole(Decimal(total))) of \(app.display.whole(Decimal(target))) grams"
-                : "\(name), \(app.display.whole(Decimal(total))) grams"
-        )
     }
 
     // MARK: - What was eaten

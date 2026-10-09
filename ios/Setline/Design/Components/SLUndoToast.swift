@@ -15,7 +15,7 @@ struct SLUndoToast: View {
     var body: some View {
         // The one undo in the dock: as high as the action it sits above, on
         // surface-2 inside the strong hairline, the message at 15 and
-        // `Ongedaan maken` in lime at the same size.
+        // `Undo` in lime at the same size.
         HStack(alignment: .center, spacing: SL.Space.s3) {
             Text(message)
                 .font(.sl(SL.TypeSize.body, SL.Weight.regular))
@@ -26,7 +26,7 @@ struct SLUndoToast: View {
             Spacer(minLength: SL.Space.s2)
             if let onUndo {
                 Button(action: onUndo) {
-                    Text("Ongedaan maken")
+                    Text("Undo")
                         .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
                         .foregroundStyle(SL.Signal.action)
                         .fixedSize()

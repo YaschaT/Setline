@@ -56,4 +56,14 @@ final class MedalsTests: XCTestCase {
         let today = session(4, weight: 100)
         XCTAssertTrue(Medals.medals(for: today, in: history + [today]).isEmpty)
     }
+
+    func testTheHeaviestWeightEverIsGoldEvenWhenFewerReps() throws {
+        // 100 × 8 estimates stronger than 102.5 × 6, but 102.5 is heavier
+        // than anything before: the records call it the heaviest ever.
+        let history = [session(1, weight: 100, reps: 8), session(2, weight: 100, reps: 8), session(3, weight: 95, reps: 8)]
+        let today = session(4, weight: 102.5, reps: 6)
+        let medal = try XCTUnwrap(Medals.medals(for: today, in: history + [today]).first)
+        XCTAssertEqual(medal.place, .gold)
+        XCTAssertEqual(medal.weightKg, 102.5)
+    }
 }

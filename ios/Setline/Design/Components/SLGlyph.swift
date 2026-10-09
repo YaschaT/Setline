@@ -44,6 +44,7 @@ struct SLGlyph: View {
         case trash = "IconTrash"
         case flame = "IconFlame"
         case flameFill = "IconFlameFill"
+        case target = "IconTarget"
 
         /// "Categoriestijl · één glyph-set, het label benoemt het type".
         case push = "GlyphPush"
