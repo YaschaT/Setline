@@ -451,7 +451,7 @@ final class SocialStore {
     private static let friendshipsQuery =
         "friendships?select=*,requester:profiles!friendships_requester_id_fkey(\(profileFields)),addressee:profiles!friendships_addressee_id_fkey(\(profileFields))"
     private static let feedQuery =
-        "posts?select=*,author:profiles(\(profileFields)),kudos(user_id,giver:profiles(\(profileFields))),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&order=workout_date.desc&limit=50"
+        "posts?select=*,author:profiles!posts_user_id_fkey(\(profileFields)),kudos(user_id,giver:profiles!kudos_user_id_fkey(\(profileFields))),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&order=workout_date.desc&limit=50"
 
     /// A missing table reads as "not set up"; anything else as a failure in
     /// words.
@@ -883,7 +883,7 @@ final class SocialStore {
 
     func comments(for post: FeedPost) async throws -> [PostComment] {
         if isDemo { return demoComments[post.id] ?? [] }
-        return try await get("comments?select=id,post_id,user_id,body,created_at,author:profiles(\(Self.profileFields))&post_id=eq.\(post.id)&order=created_at.asc")
+        return try await get("comments?select=id,post_id,user_id,body,created_at,author:profiles!comments_user_id_fkey(\(Self.profileFields))&post_id=eq.\(post.id)&order=created_at.asc")
     }
 
     func addComment(_ text: String, to post: FeedPost) async throws {
