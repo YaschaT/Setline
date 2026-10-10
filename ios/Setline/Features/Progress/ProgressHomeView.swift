@@ -32,6 +32,8 @@ struct ProgressHomeView: View {
     /// The exercise Kracht opens on, when a best-set row led there.
     @State private var openingExercise: String?
     @State private var weighing = false
+    @State private var choosingGoal = false
+    @State private var goal = GoalPreference.goal
 
     @State private var bodyProgress = BodyProgress.empty
     @State private var trend: [ProgressOverview.WeightPoint] = []
@@ -62,6 +64,18 @@ struct ProgressHomeView: View {
             }
         }
         #endif
+        .sheet(isPresented: $choosingGoal) {
+            GoalSheet(
+                latestKg: bodyProgress.latest.map { NSDecimalNumber(decimal: $0.weightKg).doubleValue },
+                onPick: { picked in
+                    GoalPreference.goal = picked
+                    goal = picked
+                    choosingGoal = false
+                    Task { await NutritionReminders.update(app: app) }
+                },
+                onClose: { choosingGoal = false }
+            )
+        }
         .sheet(isPresented: $weighing) {
             WeighInSheet(
                 date: Date(),
@@ -152,11 +166,46 @@ struct ProgressHomeView: View {
                     .buttonStyle(.plain)
                     .disabled(bodyProgress.entries.isEmpty)
                     .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opens all your weigh-ins and the trend")
+                goalBlock
                 weighButton
             }
             .padding(SL.Space.s5)
             .slBorderBox()
             .slListCard(radius: SL.Radius.xl)
+        }
+    }
+
+    /// The goal check, or the way to set one.
+    @ViewBuilder
+    private var goalBlock: some View {
+        if let goal {
+            let weighIns = GoalCheck.weighIns(bodyProgress)
+            GoalCheckCard(
+                check: GoalCheck.evaluate(goal: goal, weighIns: weighIns),
+                weeksOnTrack: GoalCheck.weeksOnTrack(goal: goal, weighIns: weighIns),
+                onChangeGoal: { choosingGoal = true }
+            )
+        } else {
+            Button { choosingGoal = true } label: {
+                HStack(spacing: SL.Space.s3) {
+                    Image(systemName: "scope")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(SL.Signal.actionTint))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Set a goal").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                        Text("Cut, lean bulk or bulk — Setline tells you if you're on track")
+                            .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: SL.Space.s2)
+                    SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+                }
+                .padding(SL.Space.s3)
+                .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised2))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.98))
         }
     }
 

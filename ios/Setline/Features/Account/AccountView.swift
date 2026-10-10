@@ -40,6 +40,8 @@ struct AccountView: View {
     @State private var confirmsDeleteAll = false
     @State private var deleteAllFailed = false
     @State private var showsBlocked = false
+    @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
+    @State private var remindersDenied = false
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -65,6 +67,31 @@ struct AccountView: View {
                     syncBlock
                     section("Plan")
                     planRows
+                    section("Reminders")
+                    Toggle(isOn: Binding(get: { mealReminders }, set: { on in
+                        if on {
+                            Task {
+                                if await NutritionReminders.requestPermission() {
+                                    mealReminders = true
+                                    await NutritionReminders.update(app: app)
+                                } else {
+                                    remindersDenied = true
+                                }
+                            }
+                        } else {
+                            mealReminders = false
+                            Task { await NutritionReminders.update(app: app) }
+                        }
+                    })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Meal reminders").slBody()
+                            Text("Breakfast 8–11, lunch 12–15, dinner after. Only when nothing is logged yet.")
+                                .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .tint(SL.Signal.action)
+                    .padding(.vertical, SL.Space.s3)
+                    .overlay(alignment: .bottom) { SLHairline() }
                     // Only once there is a social profile to post from.
                     if social.me != nil {
                         section("Privacy")
@@ -87,6 +114,11 @@ struct AccountView: View {
         .onChange(of: app.sessions.count) { _, _ in buildExports() }
         .sheet(isPresented: $reauthenticating) { reauthentication }
         .sheet(isPresented: $showsCredits) { credits }
+        .alert("Notifications are off for Setline", isPresented: $remindersDenied) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Turn them on in Settings › Setline › Notifications, then switch meal reminders on here.")
+        }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })
         }

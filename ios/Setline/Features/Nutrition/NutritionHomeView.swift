@@ -74,6 +74,17 @@ struct NutritionHomeView: View {
         day.sections.flatMap { section in section.entries.map { ($0, section) } }
     }
 
+    /// Off track on the body-weight goal: the fix lives here, with the calories.
+    @ViewBuilder
+    private var goalNudge: some View {
+        if let goal = GoalPreference.goal {
+            let check = GoalCheck.evaluate(goal: goal, weighIns: GoalCheck.weighIns(BodyProgress.make(metrics: app.metrics)))
+            if check.isOffTrack {
+                GoalCheckCard(check: check, weeksOnTrack: 0)
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
             // 24 between sections, 8 from a section's head to its card.
@@ -81,6 +92,7 @@ struct NutritionHomeView: View {
                 header
                 hero
                     .padding(.top, SL.Space.s5)
+                goalNudge
                 ideasSection
                 RecipesSection(display: app.display, initial: likely) { sheet = .recipe($0) }
                 eatenSection

@@ -94,7 +94,10 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: launchIntroDone)
         // Re-decided whenever the account changes: a logged workout takes
         // tonight's reminder away.
-        .task(id: app.revision) { await StreakReminder.update(app: app) }
+        .task(id: app.revision) {
+            await StreakReminder.update(app: app)
+            await NutritionReminders.update(app: app)
+        }
         .onChange(of: app.isLoading, initial: true) { _, loading in
             if !loading { launchLoadDone = true }
         }
