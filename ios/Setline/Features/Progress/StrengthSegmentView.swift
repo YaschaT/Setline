@@ -85,8 +85,8 @@ struct StrengthSegmentView: View {
         HStack(spacing: SL.Space.s3) {
             Button { picking = true } label: {
                 HStack(spacing: SL.Space.s3) {
-                    SLGlyph(name: .muscle(current?.group), size: 24, fixed: true)
-                        .foregroundStyle(SL.Signal.action)
+                    MuscleFigure(group: current?.group, highlight: SL.Signal.action, outline: SL.Ink.secondary.opacity(0.8))
+                        .padding(7)
                         .frame(width: 48, height: 48)
                         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SL.Signal.actionTint))
                     VStack(alignment: .leading, spacing: 2) {
@@ -250,7 +250,7 @@ struct StrengthSegmentView: View {
 
     private func chart(_ progress: StrengthProgress) -> some View {
         VStack(spacing: SL.Space.s2) {
-            StrengthArea(values: progress.points.map(\.estimate), ink: SL.Signal.action)
+            StrengthArea(values: progress.points.map(\.estimate), dates: progress.points.map(\.date), ink: SL.Signal.action)
                 .frame(height: 110)
             let labels = chartLabels(progress.points)
             HStack(spacing: 0) {
@@ -289,7 +289,7 @@ struct StrengthSegmentView: View {
         return HStack(spacing: SL.Space.s3) {
             statTile("Heaviest", heaviest.map { app.display.number($0.weightKg) } ?? "—", unit: "kg")
             statTile("Sessions", "\(progress.sessionCount)", unit: nil)
-            statTile("Records", "\(records)", unit: nil, medal: records > 0)
+            statTile("Records", records == 0 ? "—" : "\(records)", unit: nil, medal: records > 0)
         }
     }
 

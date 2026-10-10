@@ -232,6 +232,9 @@ public enum ProgressOverview {
         /// at `changePercent` + 100. Sessions before any measured lift are
         /// left out.
         public let strength: [Decimal]
+        /// The session date of each `strength` value, so the line can be
+        /// drawn on time rather than evenly per session.
+        public let strengthDates: [Date]
         public let lastTrained: Date
 
         public struct Leader: Equatable, Sendable {
@@ -276,7 +279,7 @@ public enum ProgressOverview {
 
         public init(
             dayID: String, label: String, sessions: Int, changePercent: Decimal?,
-            leader: Leader?, lifts: [Lift] = [], strength: [Decimal], lastTrained: Date
+            leader: Leader?, lifts: [Lift] = [], strength: [Decimal], strengthDates: [Date] = [], lastTrained: Date
         ) {
             self.dayID = dayID
             self.label = label
@@ -285,6 +288,7 @@ public enum ProgressOverview {
             self.leader = leader
             self.lifts = lifts
             self.strength = strength
+            self.strengthDates = strengthDates
             self.lastTrained = lastTrained
         }
     }
@@ -397,16 +401,9 @@ public enum ProgressOverview {
                 }
             }
             let mean = percents.isEmpty ? nil : percents.reduce(0, +) / Decimal(percents.count)
-            return DayProgress(
-                dayID: dayID,
-                label: latest.dayLabel,
-                sessions: days.count,
-                changePercent: mean.map { Estimates.round($0, toIncrement: 0.1) },
-                leader: leader,
-                lifts: liftBests,
-                strength: {
+            let strengthSeries: [(date: Date, value: Decimal)] = {
                     var bestSoFar: [String: Decimal] = [:]
-                    return days.compactMap { session -> Decimal? in
+                    return days.compactMap { session -> (date: Date, value: Decimal)? in
                         for result in session.results {
                             guard let reference = references[result.exerciseID],
                                   let top = scored(result)
@@ -422,14 +419,24 @@ public enum ProgressOverview {
                             bestSoFar[id] = 100
                         }
                         guard !bestSoFar.isEmpty else { return nil }
-                        return bestSoFar.values.reduce(0, +) / Decimal(bestSoFar.count)
+                        return (session.date, bestSoFar.values.reduce(0, +) / Decimal(bestSoFar.count))
                     }
-                }(),
+                }()
+            return DayProgress(
+                dayID: dayID,
+                label: latest.dayLabel,
+                sessions: days.count,
+                changePercent: mean.map { Estimates.round($0, toIncrement: 0.1) },
+                leader: leader,
+                lifts: liftBests,
+                strength: strengthSeries.map(\.value),
+                strengthDates: strengthSeries.map(\.date),
                 lastTrained: latest.date
             )
         }
         .sorted { $0.lastTrained > $1.lastTrained }
     }
+
 
     // MARK: - Tonnage per week
 

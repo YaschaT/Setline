@@ -261,6 +261,8 @@ final class ProgressOverviewTests: XCTestCase {
         let line = legs?.strength.map { Estimates.round($0, toIncrement: 0.1) }
         XCTAssertEqual(line, [100, 110, 110])
         XCTAssertEqual(legs?.changePercent, 10)
+        // Each point carries its session's date, so the line can sit on time.
+        XCTAssertEqual(legs?.strengthDates, [date(2), date(9), date(16)])
     }
 
     func testADayListsEachLiftsBestSetAndWhatItGained() {

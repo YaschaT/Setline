@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import SetlineCore
 
 /// One of the design's own glyphs, bundled as a template vector.
 ///
@@ -53,13 +52,6 @@ struct SLGlyph: View {
         case legs = "GlyphLegs"
         case upper = "GlyphUpper"
         case lower = "GlyphLower"
-        // Muscle groups, for exercise tiles.
-        case chest = "MuscleChest"
-        case back = "MuscleBack"
-        case shoulders = "MuscleShoulders"
-        case arms = "MuscleArms"
-        case legMuscles = "MuscleLegs"
-        case core = "MuscleCore"
     }
 
     let name: Name
@@ -78,19 +70,6 @@ struct SLGlyph: View {
 }
 
 extension SLGlyph.Name {
-    /// The glyph for the muscle group an exercise is filed under.
-    static func muscle(_ group: MuscleGroup?) -> SLGlyph.Name {
-        switch group {
-        case .borst: return .chest
-        case .rug: return .back
-        case .schouders: return .shoulders
-        case .armen: return .arms
-        case .benen: return .legMuscles
-        case .core: return .core
-        case nil: return .target
-        }
-    }
-
     /// The category glyph for a session by its name: "Push", "Upper A",
     /// "Full body B". A name outside the set borrows the upper-body glyph —
     /// the label beside it is what tells them apart.

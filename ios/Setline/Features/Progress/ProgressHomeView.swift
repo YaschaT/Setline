@@ -83,6 +83,7 @@ struct ProgressHomeView: View {
         let since = Calendar.current.date(byAdding: .day, value: -Self.bestWindowDays, to: Date()) ?? Date()
         days = ProgressOverview.progressByDay(in: app.sessions, since: since)
         volume = ProgressOverview.weeklyVolume(in: app.sessions)
+        weekWins = computeWeekWins()
     }
 
     // MARK: - Overview
@@ -277,20 +278,23 @@ struct ProgressHomeView: View {
 
                 if day.strength.count >= 2 {
                     VStack(spacing: SL.Space.s2) {
-                        StrengthArea(values: day.strength, ink: gained ? SL.Signal.action : SL.Ink.primary)
+                        StrengthArea(values: day.strength, dates: day.strengthDates, ink: gained ? SL.Signal.action : SL.Ink.primary)
                             .frame(height: 112)
                         HStack {
-                            Text("First session")
+                            Text(day.strengthDates.first.map { app.display.shortDate($0) } ?? "First session")
                             Spacer()
-                            Text("Latest")
+                            Text(day.strengthDates.last.map { app.display.shortDate($0) } ?? "Latest")
                         }
+                        .slNumerals()
                         .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                         .foregroundStyle(SL.Ink.secondary)
                     }
                     .accessibilityHidden(true)
                 }
 
-                if let leader = day.leader, leader.deltaKg > 0 {
+                // Shown only when Top lifts below doesn't already carry it.
+                if let leader = day.leader, leader.deltaKg > 0,
+                   !allLifts.prefix(4).contains(where: { $0.exerciseID == leader.exerciseID }) {
                     SLHairline()
                     Button { open(.kracht, exercise: leader.exerciseID) } label: {
                         HStack(spacing: SL.Space.s3) {
@@ -382,7 +386,10 @@ struct ProgressHomeView: View {
 
     /// Badges first, then gold, the week secured, silver, bronze — the
     /// rarest news leads, as Apple Fitness orders its awards.
-    private var weekWins: [Win] {
+    @State private var weekWins: [Win] = []
+
+    /// Worked out once per change of the log, not on every redraw.
+    private func computeWeekWins() -> [Win] {
         let weekStart = Schedule.mondayFirstWeek(containing: Date()).first ?? Date()
         let thisWeek = app.sessions.filter { $0.kind == .workout && $0.date >= weekStart }
         var best: [String: LiftMedal] = [:]
@@ -707,13 +714,17 @@ struct ProgressHomeView: View {
     }
 
     private func muscleChip(for exerciseID: String, lit: Bool, size: CGFloat = 40) -> some View {
-        SLGlyph(name: .muscle(ExerciseCatalog.exercise(exerciseID)?.group), size: size * 0.52, fixed: true)
-            .foregroundStyle(lit ? SL.Signal.action : SL.Ink.primary)
-            .frame(width: size, height: size)
-            .background(
-                RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                    .fill(lit ? SL.Signal.actionTint : SL.Surface.raised2)
-            )
+        MuscleFigure(
+            group: ExerciseCatalog.exercise(exerciseID)?.group,
+            highlight: lit ? SL.Signal.action : SL.Ink.primary,
+            outline: SL.Ink.secondary.opacity(0.8)
+        )
+        .padding(size * 0.09)
+        .frame(width: size, height: size)
+        .background(
+            RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                .fill(lit ? SL.Signal.actionTint : SL.Surface.raised2)
+        )
     }
 
     private func liftTile(_ lift: ProgressOverview.DayProgress.Lift) -> some View {
@@ -874,7 +885,7 @@ struct ProgressHomeView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .slMeta()
-                .foregroundStyle(lead ? SL.Signal.action : SL.Ink.secondary)
+                .foregroundStyle(SL.Ink.secondary)
             Text(value)
                 .font(.sl(lead ? 28 : SL.TypeSize.title, SL.Weight.semibold))
                 .slNumerals()
@@ -1053,6 +1064,8 @@ struct VolumeBars: View {
 /// drawing itself in on appear and ending on a ringed dot.
 struct StrengthArea: View {
     let values: [Decimal]
+    /// When given, points sit on time; otherwise evenly, one per session.
+    var dates: [Date] = []
     let ink: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1114,9 +1127,16 @@ struct StrengthArea: View {
         guard numbers.count > 1, let low = numbers.min(), let high = numbers.max() else { return [] }
         let span = max(high - low, 1)
         let inset: CGFloat = 8
+        let onTime = dates.count == numbers.count
+            && (dates.last ?? .distantPast).timeIntervalSince(dates.first ?? .distantPast) > 0
+        let start = dates.first?.timeIntervalSince1970 ?? 0
+        let length = max((dates.last?.timeIntervalSince1970 ?? 1) - start, 1)
         return numbers.enumerated().map { index, value in
-            CGPoint(
-                x: inset + (size.width - 2 * inset) * CGFloat(index) / CGFloat(numbers.count - 1),
+            let fraction = onTime
+                ? CGFloat((dates[index].timeIntervalSince1970 - start) / length)
+                : CGFloat(index) / CGFloat(numbers.count - 1)
+            return CGPoint(
+                x: inset + (size.width - 2 * inset) * fraction,
                 y: inset + (size.height - 2 * inset) * CGFloat(1 - (value - low) / span)
             )
         }
