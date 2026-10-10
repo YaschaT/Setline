@@ -23,6 +23,7 @@ struct RootView: View {
     /// Saved workouts go to friends unless switched off on the finish screen.
     /// A saved workout being turned into a post.
     @State private var composing: TrainingSession?
+    @Environment(\.scenePhase) private var scenePhase
     /// An invite link opened: setline://add/<username>.
     @State private var invite: InviteLink?
     private struct InviteLink: Identifiable { let id: String }
@@ -178,6 +179,10 @@ struct RootView: View {
         }
         // Requests are known before Friends is opened, so its badge can say so.
         .task(id: app.userID) { await social.load() }
+        // Back in the foreground, often back online: queued posts go out.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, !social.pending.isEmpty { Task { await social.load() } }
+        }
         .sheet(isPresented: $showsAccount) {
             AccountView(onClose: { showsAccount = false })
                 .background(SL.Surface.ground.ignoresSafeArea())

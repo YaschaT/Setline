@@ -55,7 +55,7 @@ enum PostVisibility: String, Codable, CaseIterable, Sendable {
 }
 
 /// A number a lifter can keep off a post.
-enum HiddenStat: String, Codable, CaseIterable, Sendable {
+enum HiddenStat: String, Codable, CaseIterable, Hashable, Sendable {
     case duration, volume, weights
 
     var label: String {
@@ -143,7 +143,7 @@ struct FeedPost: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// What the composer edits before anything is written.
-struct PostDraft {
+struct PostDraft: Codable {
     var title = ""
     var notes = ""
     var visibility = PostVisibility.defaultForNewPosts
@@ -154,6 +154,8 @@ struct PostDraft {
 
     static let maxPhotos = 4
     static let maxSongs = 5
+
+    private enum CodingKeys: String, CodingKey { case title, notes, visibility, hidden, place, tracks, photos }
 
     init() {}
 
@@ -169,7 +171,7 @@ struct PostDraft {
     }
 }
 
-struct DraftTrack: Identifiable, Hashable {
+struct DraftTrack: Identifiable, Hashable, Codable {
     var id = UUID()
     var kind = "song"
     var title: String
@@ -179,8 +181,8 @@ struct DraftTrack: Identifiable, Hashable {
 
 /// A photo on a draft: one already on the post, or a new one, already
 /// resized and re-encoded on this phone (no location or camera data).
-struct DraftPhoto: Identifiable {
-    let id = UUID()
+struct DraftPhoto: Identifiable, Codable {
+    var id = UUID()
     var existing: PostMedia?
     var jpeg: Data?
     var width: Int?
@@ -371,6 +373,7 @@ final class SocialStore {
             friendships = []
             feed = []
             phase = .loading
+            loadPending()
         }
         guard !myID.isEmpty else { return }
         if phase != .ready { phase = .loading }
@@ -389,6 +392,11 @@ final class SocialStore {
             self.friendships = try await friendships
             self.feed = try await feed
             phase = .ready
+            if !pending.isEmpty, !flushing {
+                flushing = true
+                await sendPending()
+                flushing = false
+            }
         } catch {
             phase = Self.phase(for: error)
         }
@@ -577,8 +585,74 @@ final class SocialStore {
     /// Turns a saved workout into a post — the lifter's explicit choice;
     /// saving a workout never posts it. Posting the same workout again
     /// updates the one post.
+    /// A post that could not go out for lack of a connection: kept on this
+    /// phone, photos included, and sent on the next successful load.
+    struct PendingPost: Codable, Identifiable {
+        var id: String { session.id }
+        let session: TrainingSession
+        let medals: [PostMedal]
+        let streakWeeks: Int
+        let draft: PostDraft
+    }
+
+    /// Thrown when a post was queued instead of sent.
+    struct Queued: Error {}
+
+    private(set) var pending: [PendingPost] = []
+    private var flushing = false
+
     func createPost(from session: TrainingSession, medals: [LiftMedal], streakWeeks: Int, draft: PostDraft) async throws {
+        let postMedals = medals.map {
+            PostMedal(place: $0.place.rawValue, name: $0.name, weight_kg: NSDecimalNumber(decimal: $0.weightKg).doubleValue, reps: $0.reps)
+        }
+        do {
+            try await sendPost(session: session, medals: postMedals, streakWeeks: streakWeeks, draft: draft)
+        } catch SupabaseClient.Failure.network {
+            pending.removeAll { $0.session.id == session.id }
+            pending.append(PendingPost(session: session, medals: postMedals, streakWeeks: streakWeeks, draft: draft))
+            savePending()
+            throw Queued()
+        }
+    }
+
+    /// Sends what was queued, oldest first; stops at the first that still
+    /// cannot go out.
+    func sendPending() async {
+        guard me != nil else { return }
+        for item in pending {
+            do {
+                try await sendPost(session: item.session, medals: item.medals, streakWeeks: item.streakWeeks, draft: item.draft)
+                pending.removeAll { $0.id == item.id }
+                savePending()
+            } catch {
+                return
+            }
+        }
+    }
+
+    private var pendingFile: URL? {
+        guard !myID.isEmpty, let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        return base.appendingPathComponent("PendingPosts", isDirectory: true).appendingPathComponent("\(myID).json")
+    }
+
+    private func loadPending() {
+        guard let file = pendingFile, let data = try? Data(contentsOf: file) else { pending = []; return }
+        pending = (try? JSONDecoder().decode([PendingPost].self, from: data)) ?? []
+    }
+
+    private func savePending() {
+        guard let file = pendingFile else { return }
+        if pending.isEmpty { try? FileManager.default.removeItem(at: file); return }
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? JSONEncoder().encode(pending).write(to: file, options: [.atomic, .completeFileProtection])
+    }
+
+    private func sendPost(session: TrainingSession, medals: [PostMedal], streakWeeks: Int, draft: PostDraft) async throws {
         guard session.kind == .workout else { return }
+        #if DEBUG
+        // `-SetlineSocialOffline`: posting fails as if there were no connection.
+        if isDemo, ProcessInfo.processInfo.arguments.contains("-SetlineSocialOffline") { throw SupabaseClient.Failure.network }
+        #endif
         let write = PostWrite(
             user_id: myID,
             session_id: session.id,
@@ -587,9 +661,7 @@ final class SocialStore {
             volume_kg: NSDecimalNumber(decimal: RecordsEngine.volumeLoad(session.results.flatMap(\.sets))).doubleValue,
             duration_seconds: session.durationSeconds,
             set_count: session.results.flatMap(\.sets).filter(\.countsTowardVolume).count,
-            medals: medals.map {
-                PostMedal(place: $0.place.rawValue, name: $0.name, weight_kg: NSDecimalNumber(decimal: $0.weightKg).doubleValue, reps: $0.reps)
-            },
+            medals: medals,
             streak_weeks: streakWeeks,
             draft: PostDraftFields(draft)
         )
@@ -613,6 +685,14 @@ final class SocialStore {
         )
         struct Row: Decodable { let id: String }
         guard let postID = try JSONDecoder().decode([Row].self, from: data).first?.id else { return }
+        // A retry after a dropped connection may find photos from the
+        // attempt before; they go first, so none is posted twice.
+        struct PathRow: Decodable { let path: String }
+        let leftover: [PathRow] = (try? await get("post_media?select=path&post_id=eq.\(postID)")) ?? []
+        if !leftover.isEmpty {
+            try await removeFiles(leftover.map(\.path))
+            _ = try await send("post_media?post_id=eq.\(postID)", method: "DELETE")
+        }
         try await syncAttachments(of: postID, existing: nil, draft: draft)
         await load()
     }
@@ -868,6 +948,13 @@ final class SocialStore {
         if friendships.isEmpty, !alone { friendships = demo.friendships(me: me!) }
         if feed.isEmpty { feed = demo.feed(me: me!).filter { !alone || $0.user_id == myID } }
         phase = .ready
+        if !pending.isEmpty, !flushing {
+            flushing = true
+            Task {
+                await sendPending()
+                flushing = false
+            }
+        }
     }
 }
 

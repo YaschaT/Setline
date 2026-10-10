@@ -370,8 +370,14 @@ struct PostComposerView: View {
                 try await social.update(post, draft: draft)
             }
             onClose()
+        } catch is SocialStore.Queued {
+            // Offline: kept on this phone and sent once the connection is
+            // back; the Friends tab says so.
+            onClose()
         } catch {
-            failure = "Couldn't post just now. Check your connection and try again — nothing was lost."
+            failure = isEditing
+                ? "Couldn't save your changes. Check your connection and try again — nothing was lost."
+                : "Couldn't post just now. Try again — nothing was lost."
         }
     }
 

@@ -32,6 +32,7 @@ struct FriendsView: View {
                     ProfileSetupCard()
                 case .ready:
                     if !social.incoming.isEmpty { requestsBanner }
+                    if !social.pending.isEmpty { pendingBanner }
                     if social.friends.isEmpty { onlyYouCard }
                     if social.feed.isEmpty {
                         if social.friends.isEmpty { firstPostHint } else { emptyFeed }
@@ -111,6 +112,33 @@ struct FriendsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SLPressStyle(scale: 0.98))
+    }
+
+    /// Posts made without a connection, waiting on this phone.
+    private var pendingBanner: some View {
+        HStack(spacing: SL.Space.s3) {
+            Image(systemName: "icloud.and.arrow.up")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SL.Signal.attention)
+                .frame(width: 34, height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(social.pending.count == 1 ? "1 post waiting to go out" : "\(social.pending.count) posts waiting to go out")
+                    .slBody(SL.Weight.semibold)
+                    .foregroundStyle(SL.Ink.primary)
+                Text("It's saved on this phone and posts when you're back online.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: SL.Space.s2)
+            Button("Retry") { Task { await social.load() } }
+                .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                .foregroundStyle(SL.Signal.action)
+                .frame(minHeight: SL.Space.hitMin)
+        }
+        .padding(SL.Space.s3)
+        .slBorderBox()
+        .slListCard()
     }
 
     /// No friends yet: Friends posts are visible to you alone, and the way
