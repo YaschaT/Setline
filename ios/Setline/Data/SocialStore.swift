@@ -500,6 +500,50 @@ final class SocialStore {
         _ = try await send("reports", method: "POST", body: body)
     }
 
+    // MARK: Blocked people
+
+    private(set) var blocked: [SocialProfile] = []
+
+    /// The people this account blocked, for Account › Privacy.
+    func loadBlocked() async {
+        if isDemo { return }
+        struct Row: Decodable { let blocked_id: String }
+        guard let rows: [Row] = try? await get("blocks?select=blocked_id&blocker_id=eq.\(myID)") else { return }
+        let ids = rows.map(\.blocked_id)
+        guard !ids.isEmpty else { blocked = []; return }
+        blocked = (try? await get("profiles?select=\(Self.profileFields)&user_id=in.(\(ids.joined(separator: ",")))")) ?? []
+    }
+
+    func unblock(_ other: String) async throws {
+        blocked.removeAll { $0.user_id == other }
+        if isDemo { return }
+        _ = try await send("blocks?blocker_id=eq.\(myID)&blocked_id=eq.\(other)", method: "DELETE")
+    }
+
+    // MARK: Export
+
+    /// Every post this account wrote, with its comments, for "Export
+    /// everything" (GDPR art. 20).
+    func exportMyPosts() async -> Data? {
+        let mine: [FeedPost]
+        if isDemo {
+            mine = feed.filter { $0.user_id == myID }
+        } else {
+            guard let rows: [FeedPost] = try? await get(
+                "posts?select=*,kudos(user_id),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&user_id=eq.\(myID)&order=workout_date.desc"
+            ) else { return nil }
+            mine = rows
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try? encoder.encode(mine)
+    }
+
+    // MARK: Invites
+
+    /// The link a friend opens to add this account: setline://add/<username>.
+    var inviteURL: URL? { me.flatMap { URL(string: "setline://add/\($0.username)") } }
+
     // MARK: Kudos
 
     func hasKudos(_ post: FeedPost) -> Bool { post.kudos.contains { $0.user_id == myID } }

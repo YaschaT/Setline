@@ -39,6 +39,7 @@ struct AccountView: View {
     @State private var choosingVisibility = false
     @State private var confirmsDeleteAll = false
     @State private var deleteAllFailed = false
+    @State private var showsBlocked = false
 
     private var summary: AccountSummary {
         AccountSummary.make(state: app.state ?? LegacyState(raw: [:]), plan: app.plan)
@@ -79,7 +80,10 @@ struct AccountView: View {
             }
         }
         .slRespondsToTextSize()
-        .task { buildExports() }
+        .task(id: social.myPostCount) {
+            buildExports()
+            await addPostsToExport()
+        }
         .onChange(of: app.sessions.count) { _, _ in buildExports() }
         .sheet(isPresented: $reauthenticating) { reauthentication }
         .sheet(isPresented: $showsCredits) { credits }
@@ -364,6 +368,7 @@ struct AccountView: View {
             }
             .padding(.vertical, SL.Space.s3)
             .overlay(alignment: .bottom) { SLHairline() }
+            row("Blocked people") { showsBlocked = true }
             Button { confirmsDeleteAll = true } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -379,6 +384,9 @@ struct AccountView: View {
             .overlay(alignment: .bottom) { SLHairline() }
             .disabled(social.myPostCount == 0)
             .opacity(social.myPostCount == 0 ? 0.5 : 1)
+        }
+        .sheet(isPresented: $showsBlocked) {
+            BlockedPeopleSheet(onClose: { showsBlocked = false })
         }
         .sheet(isPresented: $choosingVisibility) {
             VisibilitySheet(selection: $defaultVisibility, friendCount: social.friends.count, onClose: { choosingVisibility = false })
@@ -412,7 +420,7 @@ struct AccountView: View {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Export everything").slBody()
-                            Text("CSV and JSON").slMeta().foregroundStyle(SL.Ink.secondary)
+                            Text(social.me == nil ? "CSV and JSON" : "CSV and JSON · with your posts").slMeta().foregroundStyle(SL.Ink.secondary)
                         }
                         Spacer(minLength: SL.Space.s4)
                         // 23: the design's `download` glyph at 18 beside
@@ -558,6 +566,17 @@ struct AccountView: View {
                 if case .sessionExpired = state { return }
                 reauthenticating = false
             }
+    }
+
+    /// Your posts and their music, photos (as paths) and counts, beside the
+    /// training data: "Export everything" means everything.
+    private func addPostsToExport() async {
+        guard social.me != nil, !exports.isEmpty, let data = await social.exportMyPosts() else { return }
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("setline-export", isDirectory: true)
+            .appendingPathComponent("setline-posts.json")
+        guard (try? data.write(to: file, options: .atomic)) != nil else { return }
+        if !exports.contains(file) { exports.append(file) }
     }
 
     private func buildExports() {

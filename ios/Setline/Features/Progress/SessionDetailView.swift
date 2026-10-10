@@ -25,6 +25,14 @@ struct SessionDetailView: View {
     @State private var correcting: Target?
     @State private var confirmsDiscard = false
     @State private var confirmsDelete = false
+    @Environment(SocialStore.self) private var social
+    @State private var posting = false
+
+    /// This workout's post, if it has one.
+    private var existingPost: FeedPost? {
+        guard let id = session?.id else { return nil }
+        return social.feed.first { $0.session_id == id && $0.user_id == social.myID }
+    }
     @State private var isSaving = false
     /// Sets taken out while editing, by where they sit in the stored session.
     /// Held beside the draft rather than cut from it, so every other set keeps
@@ -198,6 +206,24 @@ struct SessionDetailView: View {
                         .slHitTarget()
                 }
                 .accessibilityLabel("Share this workout")
+            }
+
+            // A saved workout can become a post later, or its post be edited.
+            if let session, !editing, session.kind == .workout, social.me != nil {
+                Button { posting = true } label: {
+                    SLGlyph(name: .people, size: 20, fixed: true)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .slHitTarget()
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(existingPost == nil ? "Create post" : "Edit post")
+                .fullScreenCover(isPresented: $posting) {
+                    if let post = existingPost {
+                        PostComposerView(mode: .edit(post), onClose: { posting = false })
+                    } else {
+                        PostComposerView(mode: .create(session), onClose: { posting = false })
+                    }
+                }
             }
 
             if session != nil {

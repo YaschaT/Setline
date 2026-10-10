@@ -23,6 +23,9 @@ struct RootView: View {
     /// Saved workouts go to friends unless switched off on the finish screen.
     /// A saved workout being turned into a post.
     @State private var composing: TrainingSession?
+    /// An invite link opened: setline://add/<username>.
+    @State private var invite: InviteLink?
+    private struct InviteLink: Identifiable { let id: String }
 
     private enum Entry { case beginning, returning }
 
@@ -206,6 +209,16 @@ struct RootView: View {
                 // Opened and left with nothing done: there is nothing to park.
                 onClose: { running = nil }
             )
+        }
+        .onOpenURL { url in
+            guard url.scheme == "setline", url.host() == "add",
+                  let name = url.pathComponents.dropFirst().first, !name.isEmpty else { return }
+            tab = .friends
+            invite = InviteLink(id: name.lowercased())
+        }
+        .sheet(item: $invite) { link in
+            InviteLandingSheet(username: link.id, onClose: { invite = nil })
+                .environment(social)
         }
         .fullScreenCover(item: $composing) { session in
             PostComposerView(mode: .create(session), onClose: { composing = nil })

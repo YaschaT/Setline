@@ -612,6 +612,7 @@ private struct PeopleSheet: View {
     @State private var found: SocialProfile?
     @State private var searched = false
     @State private var busy = false
+    @State private var showsQR = false
 
     var body: some View {
         NavigationStack {
@@ -624,13 +625,26 @@ private struct PeopleSheet: View {
                                 Text("Friends find you by this").slMeta().foregroundStyle(SL.Ink.secondary)
                             }
                             Spacer()
-                            ShareLink(item: "Train with me on Setline. Add me: @\(me.username)") {
+                            ShareLink(item: social.inviteURL ?? URL(string: "https://setline.app")!, message: Text("Train with me on Setline. Add me: @\(me.username)")) {
                                 HStack(spacing: 6) {
                                     SLGlyph(name: .share, size: 16)
                                     Text("Invite")
                                 }
                                 .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
                             }
+                        }
+                    }
+                }
+
+                if let url = social.inviteURL, let me = social.me {
+                    Section {
+                        Button { showsQR = true } label: {
+                            Label("Show my QR code", systemImage: "qrcode")
+                                .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                                .foregroundStyle(SL.Ink.primary)
+                        }
+                        .sheet(isPresented: $showsQR) {
+                            InviteQRSheet(url: url, username: me.username, onClose: { showsQR = false })
                         }
                     }
                 }
