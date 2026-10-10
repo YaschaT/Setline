@@ -8,6 +8,8 @@ struct PostComposerView: View {
     enum Mode {
         case create(TrainingSession)
         case edit(FeedPost)
+        /// A rest day, with why.
+        case rest(Date)
     }
 
     @Environment(AppState.self) private var app
@@ -29,29 +31,43 @@ struct PostComposerView: View {
         switch mode {
         case .create: _draft = State(initialValue: PostDraft())
         case .edit(let post): _draft = State(initialValue: PostDraft(post: post))
+        case .rest:
+            var draft = PostDraft()
+            draft.restReason = RestReason.all.first?.label
+            _draft = State(initialValue: draft)
         }
     }
 
     private var isEditing: Bool { if case .edit = mode { return true } else { return false } }
+    /// A rest-day post, new or being edited.
+    private var isRest: Bool {
+        switch mode {
+        case .rest: return true
+        case .edit(let post): return post.isRest
+        case .create: return false
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: SL.Space.s6) {
-                    summary
+                    if isRest { restSummary } else { summary }
                     field("Title") {
                         TextField(defaultTitle, text: $draft.title)
                             .textInputAutocapitalization(.sentences)
                             .submitLabel(.done)
                     }
                     field("Notes") {
-                        TextField("How did it go?", text: $draft.notes, axis: .vertical)
+                        TextField(isRest ? "Why are you resting today?" : "How did it go?", text: $draft.notes, axis: .vertical)
                             .lineLimit(3...8)
                     }
                     photos
-                    attachments
-                    hiddenStats
+                    if !isRest {
+                        attachments
+                        hiddenStats
+                    }
                     visibilityRow
                     if isEditing { deleteButton }
                 }
@@ -119,7 +135,7 @@ struct PostComposerView: View {
             .buttonStyle(SLPrimaryButtonStyle())
             .disabled(posting)
             if !isEditing {
-                Button("Save without posting", action: onClose)
+                Button(isRest ? "Cancel" : "Save without posting", action: onClose)
                     .font(.sl(SL.TypeSize.body, SL.Weight.regular))
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(minHeight: SL.Space.hitMin)
@@ -159,7 +175,53 @@ struct PostComposerView: View {
         case .edit(let post):
             return Summary(day: post.title, date: post.date, volumeKg: post.volume_kg, seconds: post.duration_seconds,
                            sets: post.set_count, medals: post.medals, streak: post.streak_weeks)
+        case .rest(let date):
+            return Summary(day: "Rest day", date: date, volumeKg: 0, seconds: nil, sets: 0, medals: [], streak: app.streak.weeks)
         }
+    }
+
+    /// A rest day: the date and why, as chips. No numbers.
+    private var restSummary: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: "moon.zzz.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(SL.Signal.recovery)
+                    .frame(width: 44, height: 44)
+                    .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.recoveryTint))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Rest day").slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                    Text(app.display.shortDate(summaryData.date)).slMeta().foregroundStyle(SL.Ink.secondary)
+                }
+            }
+            Text("Why").slMeta(SL.Weight.semibold).foregroundStyle(SL.Ink.secondary)
+            FlowLayout(spacing: SL.Space.s2) {
+                ForEach(RestReason.all, id: \.label) { reason in
+                    let isOn = draft.restReason == reason.label
+                    Button { draft.restReason = reason.label } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: reason.symbol).font(.system(size: 13, weight: .semibold))
+                            Text(reason.label).font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        }
+                        .foregroundStyle(isOn ? SL.Signal.onAction : SL.Ink.primary)
+                        .padding(.horizontal, SL.Space.s3)
+                        .frame(minHeight: 36)
+                        .background(Capsule().fill(isOn ? SL.Signal.recovery : SL.Surface.raised2))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+                }
+            }
+            Text("A rest day doesn't count as a workout or for your streak.")
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(SL.Space.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
     }
 
     private var defaultTitle: String { summaryData.day }
@@ -376,12 +438,16 @@ struct PostComposerView: View {
                 try await social.createPost(from: session, medals: medals, streakWeeks: app.streak.weeks, draft: draft)
             case .edit(let post):
                 try await social.update(post, draft: draft)
+            case .rest(let date):
+                try await social.createRestPost(on: date, streakWeeks: app.streak.weeks, draft: draft)
             }
             onClose()
         } catch is SocialStore.Queued {
             // Offline: kept on this phone and sent once the connection is
             // back; the Friends tab says so.
             onClose()
+        } catch SupabaseClient.Failure.network where isRest {
+            failure = "No connection. Your rest day is still here — post it when you're back online."
         } catch {
             failure = isEditing
                 ? "Couldn't save your changes. Check your connection and try again — nothing was lost."
@@ -703,5 +769,54 @@ struct MusicSheet: View {
             : host.contains("soundcloud") ? "SoundCloud playlist"
             : "Playlist"
         tracks.append(DraftTrack(kind: "playlist", title: service, artist: nil, url: text))
+    }
+}
+
+
+/// Why a rest day happened.
+struct RestReason {
+    let label: String
+    let symbol: String
+
+    static let all: [RestReason] = [
+        RestReason(label: "Planned rest", symbol: "calendar"),
+        RestReason(label: "Sore", symbol: "bandage"),
+        RestReason(label: "Sick", symbol: "thermometer.medium"),
+        RestReason(label: "Busy", symbol: "briefcase"),
+        RestReason(label: "Travelling", symbol: "airplane"),
+        RestReason(label: "Active recovery", symbol: "figure.walk"),
+    ]
+
+    static func symbol(for label: String?) -> String {
+        all.first { $0.label == label }?.symbol ?? "moon.zzz.fill"
+    }
+}
+
+/// Lays chips out in rows, wrapping when the row is full.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += row + spacing; row = 0 }
+            x += size.width + spacing
+            row = max(row, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: min(widest, width), height: y + row)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, row: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX { x = bounds.minX; y += row + spacing; row = 0 }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            row = max(row, size.height)
+        }
     }
 }

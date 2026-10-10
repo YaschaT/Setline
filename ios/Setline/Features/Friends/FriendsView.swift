@@ -10,6 +10,20 @@ struct FriendsView: View {
     /// The avatar's way to Account, as on Training.
     let onAccount: () -> Void
     @State private var showsPeople = false
+    @State private var composing: ComposeTarget?
+    /// Workouts the lifter said not to post, so the prompt moves on.
+    @AppStorage("setline.social.skippedPrompts") private var skippedPrompts = ""
+
+    private enum ComposeTarget: Identifiable {
+        case workout(TrainingSession)
+        case rest(Date)
+        var id: String {
+            switch self {
+            case .workout(let session): return session.id
+            case .rest(let date): return SocialStore.restID(date)
+            }
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -33,6 +47,13 @@ struct FriendsView: View {
                     if social.offlineSince != nil { offlineBanner }
                     if !social.incoming.isEmpty { requestsBanner }
                     if !social.pending.isEmpty { pendingBanner }
+                    if let session = unpostedWorkout {
+                        latestWorkoutPrompt(session)
+                    }
+                    if !social.hasPost(sessionID: SocialStore.restID(Date())),
+                       !app.sessions.contains(where: { $0.kind == .workout && Calendar.current.isDateInToday($0.date) }) {
+                        restDayRow
+                    }
                     if social.friends.isEmpty { onlyYouCard }
                     if social.feed.isEmpty {
                         if social.friends.isEmpty { firstPostHint } else { emptyFeed }
@@ -49,6 +70,14 @@ struct FriendsView: View {
         }
         .refreshable { await social.load() }
         .task(id: app.userID) { await social.load() }
+        .fullScreenCover(item: $composing) { target in
+            switch target {
+            case .workout(let session):
+                PostComposerView(mode: .create(session), onClose: { composing = nil })
+            case .rest(let date):
+                PostComposerView(mode: .rest(date), onClose: { composing = nil })
+            }
+        }
         .sheet(isPresented: $showsPeople) {
             PeopleSheet(onClose: { showsPeople = false })
         }
@@ -104,6 +133,97 @@ struct FriendsView: View {
                     .slBody(SL.Weight.semibold)
                     .foregroundStyle(SL.Ink.primary)
                 Spacer()
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(SL.Space.s3)
+            .slBorderBox()
+            .slListCard()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.98))
+    }
+
+    /// The latest workout of the last three days that has no post yet and
+    /// wasn't waved away.
+    private var unpostedWorkout: TrainingSession? {
+        let skipped = Set(skippedPrompts.split(separator: ",").map(String.init))
+        let since = Date().addingTimeInterval(-3 * 86_400)
+        return app.sessions
+            .filter { $0.kind == .workout && $0.date >= since && !skipped.contains($0.id) && !social.hasPost(sessionID: $0.id) }
+            .max { $0.date < $1.date }
+    }
+
+    /// "Your latest workout — post it?", with a preview of the post.
+    private func latestWorkoutPrompt(_ session: TrainingSession) -> some View {
+        let golds = Medals.medals(for: session, in: app.sessions).filter { $0.place == .gold }
+        let volume = RecordsEngine.volumeLoad(session.results.flatMap(\.sets))
+        let sets = session.results.flatMap(\.sets).filter(\.countsTowardVolume).count
+        return VStack(alignment: .leading, spacing: SL.Space.s3) {
+            Text("YOUR LATEST WORKOUT")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                .tracking(1.2)
+                .foregroundStyle(SL.Ink.secondary)
+            // A small preview of the post it becomes.
+            HStack(spacing: SL.Space.s3) {
+                SLWorkoutSymbol(dayName: session.dayLabel, size: 20)
+                    .foregroundStyle(SL.Signal.action)
+                    .frame(width: 44, height: 44)
+                    .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.dayLabel).slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                    Text("\(PostCard.when(session.date)) · \(app.display.volumeKg(volume)) · \(sets) sets")
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                Spacer(minLength: 0)
+            }
+            if let gold = golds.first {
+                HStack(spacing: SL.Space.s2) {
+                    SLMedal(place: .gold, size: 22)
+                    Text(golds.count == 1 ? "Best ever · \(gold.name)" : "\(golds.count) bests ever · \(gold.name) and more")
+                        .slMeta(SL.Weight.semibold)
+                        .foregroundStyle(SLMedal.metal(.gold).face)
+                        .lineLimit(1)
+                }
+            }
+            HStack(spacing: SL.Space.s2) {
+                Button { composing = .workout(session) } label: { Text("Post it") }
+                    .buttonStyle(SLPrimaryButtonStyle())
+                Button("Not this one") {
+                    skippedPrompts = (skippedPrompts.split(separator: ",").map(String.init) + [session.id]).suffix(30).joined(separator: ",")
+                }
+                .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
+                .padding(.horizontal, SL.Space.s2)
+            }
+        }
+        .padding(SL.Space.s4)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
+    }
+
+    /// Resting today: share why, in one tap.
+    private var restDayRow: some View {
+        Button { composing = .rest(Date()) } label: {
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: "moon.zzz.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(SL.Signal.recovery)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(SL.Signal.recoveryTint))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(app.todayDay == nil ? "Rest day today?" : "Not training today?")
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("Post a rest day and say why")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                Spacer(minLength: SL.Space.s2)
                 SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
             }
             .padding(SL.Space.s3)
@@ -402,9 +522,13 @@ struct PostCard: View {
                     .padding(.top, SL.Space.s4)
             }
 
-            stats.padding(.top, SL.Space.s4)
+            if post.isRest {
+                restChip.padding(.top, SL.Space.s4)
+            } else {
+                stats.padding(.top, SL.Space.s4)
+            }
 
-            if !hiddenNumbers.isEmpty {
+            if !post.isRest, !hiddenNumbers.isEmpty {
                 Text(quietLine)
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
@@ -486,6 +610,21 @@ struct PostCard: View {
         .fullScreenCover(item: $profile) { target in
             FriendProfileView(userID: target.id, onClose: { profile = nil })
         }
+    }
+
+    /// A rest day's why, in the recovery mint.
+    private var restChip: some View {
+        HStack(spacing: 6) {
+            Image(systemName: RestReason.symbol(for: post.rest_reason))
+                .font(.system(size: 13, weight: .semibold))
+            Text(post.rest_reason ?? "Resting")
+                .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+        }
+        .foregroundStyle(SL.Signal.recovery)
+        .padding(.horizontal, SL.Space.s3)
+        .frame(minHeight: 32)
+        .background(Capsule().fill(SL.Signal.recoveryTint))
+        .accessibilityElement(children: .combine)
     }
 
     /// The numbers the lifter kept off this post.

@@ -124,6 +124,10 @@ struct FeedPost: Codable, Hashable, Identifiable, Sendable {
     var post_media: [PostMedia]? = nil
     var post_tracks: [PostTrack]? = nil
     var comments: [CommentCount]? = nil
+    var kind: String? = nil
+    var rest_reason: String? = nil
+
+    var isRest: Bool { kind == "rest" }
 
     /// Where it happened, when the lifter said.
     var place: WorkoutPlace? {
@@ -151,11 +155,13 @@ struct PostDraft: Codable {
     var place: WorkoutPlace?
     var tracks: [DraftTrack] = []
     var photos: [DraftPhoto] = []
+    /// A rest day's why ("Sore", "Travel"); nil on a workout.
+    var restReason: String?
 
     static let maxPhotos = 4
     static let maxSongs = 5
 
-    private enum CodingKeys: String, CodingKey { case title, notes, visibility, hidden, place, tracks, photos }
+    private enum CodingKeys: String, CodingKey { case title, notes, visibility, hidden, place, tracks, photos, restReason }
 
     init() {}
 
@@ -168,6 +174,7 @@ struct PostDraft: Codable {
         place = post.place
         tracks = post.tracks.map { DraftTrack(kind: $0.kind, title: $0.title, artist: $0.artist, url: $0.url) }
         photos = post.photos.map { DraftPhoto(existing: $0) }
+        restReason = post.rest_reason
     }
 }
 
@@ -200,10 +207,11 @@ private struct PostWrite: Encodable {
     let set_count: Int
     let medals: [PostMedal]
     let streak_weeks: Int
+    var kind = "workout"
     let draft: PostDraftFields
 
     private enum CodingKeys: String, CodingKey {
-        case user_id, session_id, workout_date, title, volume_kg, duration_seconds, set_count, medals, streak_weeks
+        case user_id, session_id, workout_date, title, volume_kg, duration_seconds, set_count, medals, streak_weeks, kind
     }
 
     func encode(to encoder: Encoder) throws {
@@ -217,6 +225,7 @@ private struct PostWrite: Encodable {
         try c.encode(set_count, forKey: .set_count)
         try c.encode(medals, forKey: .medals)
         try c.encode(streak_weeks, forKey: .streak_weeks)
+        try c.encode(kind, forKey: .kind)
         try draft.encode(to: encoder)
     }
 }
@@ -229,9 +238,11 @@ private struct PostDraftFields: Encodable {
     let notes: String?
     let hidden: [String]
     let place: WorkoutPlace?
+    let restReason: String?
     var editedAt: String?
 
     init(_ draft: PostDraft, editedAt: String? = nil) {
+        restReason = draft.restReason.map { String($0.prefix(40)) }
         visibility = draft.visibility
         let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         customTitle = title.isEmpty ? nil : String(title.prefix(60))
@@ -243,7 +254,7 @@ private struct PostDraftFields: Encodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case visibility, custom_title, notes, hidden_stats, place_kind, place_name, place_lat, place_lon, edited_at
+        case visibility, custom_title, notes, hidden_stats, place_kind, place_name, place_lat, place_lon, edited_at, rest_reason
     }
 
     func encode(to encoder: Encoder) throws {
@@ -258,6 +269,7 @@ private struct PostDraftFields: Encodable {
         try c.encode(shared?.latitude, forKey: .place_lat)
         try c.encode(shared?.longitude, forKey: .place_lon)
         if let editedAt { try c.encode(editedAt, forKey: .edited_at) }
+        if let restReason { try c.encode(restReason, forKey: .rest_reason) }
     }
 }
 
@@ -665,6 +677,45 @@ final class SocialStore {
         }
     }
 
+    /// The session id a rest day's post is stored under: one per day.
+    nonisolated static func restID(_ date: Date) -> String { "rest-\(Schedule.dateKey(date))" }
+
+    /// Posts a rest day, with why. It carries no numbers and never counts
+    /// as a workout.
+    func createRestPost(on date: Date, streakWeeks: Int, draft: PostDraft) async throws {
+        let write = PostWrite(
+            user_id: myID, session_id: Self.restID(date), workout_date: Self.isoString(date),
+            title: "Rest day", volume_kg: 0, duration_seconds: nil, set_count: 0, medals: [],
+            streak_weeks: streakWeeks, kind: "rest", draft: PostDraftFields(draft)
+        )
+        if isDemo {
+            guard let me else { return }
+            let id = feed.first { $0.session_id == write.session_id && $0.user_id == myID }?.id ?? UUID().uuidString
+            feed.removeAll { $0.id == id }
+            var post = FeedPost(id: id, user_id: myID, session_id: write.session_id, workout_date: write.workout_date,
+                                title: write.title, volume_kg: 0, duration_seconds: nil, set_count: 0, medals: [],
+                                streak_weeks: streakWeeks, author: me, kudos: [], kind: "rest")
+            demoApply(draft, to: &post)
+            feed.insert(post, at: 0)
+            return
+        }
+        let data = try await send(
+            "posts?on_conflict=user_id,session_id&select=id",
+            method: "POST",
+            body: try JSONEncoder().encode(write),
+            prefer: "resolution=merge-duplicates,return=representation"
+        )
+        struct Row: Decodable { let id: String }
+        guard let postID = try JSONDecoder().decode([Row].self, from: data).first?.id else { return }
+        try await syncAttachments(of: postID, existing: nil, draft: draft)
+        await load()
+    }
+
+    /// Whether this account already posted the given workout or rest day.
+    func hasPost(sessionID: String) -> Bool {
+        feed.contains { $0.session_id == sessionID && $0.user_id == myID } || pending.contains { $0.session.id == sessionID }
+    }
+
     /// Sends what was queued, oldest first; stops at the first that still
     /// cannot go out.
     func sendPending() async {
@@ -936,6 +987,7 @@ final class SocialStore {
         post.custom_title = fields.customTitle
         post.notes = fields.notes
         post.hidden_stats = fields.hidden
+        post.rest_reason = fields.restReason
         let shared = draft.place?.shared
         post.place_kind = shared?.kind.rawValue
         post.place_name = shared?.name

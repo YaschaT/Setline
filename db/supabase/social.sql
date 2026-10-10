@@ -425,3 +425,15 @@ create policy "post media delete own" on storage.objects
   for delete to authenticated using (
     bucket_id = 'post-media' and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- ================================================================== rest days
+-- A rest day can be posted too, with why: it is not a workout, carries no
+-- numbers and never counts toward a streak. Its session_id is
+-- "rest-YYYY-MM-DD", one per day.
+alter table public.posts add column if not exists kind text not null default 'workout';
+alter table public.posts drop constraint if exists posts_kind_check;
+alter table public.posts add constraint posts_kind_check check (kind in ('workout', 'rest'));
+alter table public.posts add column if not exists rest_reason text;
+alter table public.posts drop constraint if exists posts_rest_reason_check;
+alter table public.posts add constraint posts_rest_reason_check
+  check (rest_reason is null or (kind = 'rest' and char_length(rest_reason) between 1 and 40));
