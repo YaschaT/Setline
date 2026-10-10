@@ -19,6 +19,7 @@ struct ProgressHomeView: View {
         case lichaam = "Body"
         case historiek = "Log"
         case lifts = "Lifts"
+        case volume = "Volume"
 
         var id: String { rawValue }
     }
@@ -108,11 +109,13 @@ struct ProgressHomeView: View {
             // gap says what belongs together.
             VStack(alignment: .leading, spacing: SL.Space.s8) {
                 SLScreenTitle(title: "Progress", subtitle: "Last 8 weeks") { logbookPill }
+                // Three cards, most looked-at first: the win (with the
+                // week's medals under it), the number that moves every
+                // morning, then what the lifts did (with the work behind
+                // them as one line).
                 highlightCard
-                weekSection
-                liftsSection
-                volumeSection
                 weightSection
+                liftsSection
             }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Space.s5)
@@ -156,18 +159,20 @@ struct ProgressHomeView: View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
             sectionHead("Body weight", action: "See all") { open(.lichaam) }
             VStack(alignment: .leading, spacing: SL.Space.s4) {
-                if !lastWeighed.isEmpty {
-                    Text(lastWeighed)
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .padding(.bottom, -SL.Space.s3)
+                HStack(alignment: .center, spacing: SL.Space.s3) {
+                    Button { open(.lichaam) } label: { weightBody }
+                        .buttonStyle(.plain)
+                        .disabled(bodyProgress.entries.isEmpty)
+                        .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opens all your weigh-ins and the trend")
+                    Spacer(minLength: 0)
+                    weighButton
                 }
-                Button { open(.lichaam) } label: { weightBody }
-                    .buttonStyle(.plain)
-                    .disabled(bodyProgress.entries.isEmpty)
-                    .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opens all your weigh-ins and the trend")
+                if trend.count >= 2 {
+                    WeightTrendLine(points: trend)
+                        .frame(height: 40)
+                        .accessibilityHidden(true)
+                }
                 goalBlock
-                weighButton
             }
             .padding(SL.Space.s5)
             .slBorderBox()
@@ -180,11 +185,14 @@ struct ProgressHomeView: View {
     private var goalBlock: some View {
         if let goal {
             let weighIns = GoalCheck.weighIns(bodyProgress)
-            GoalCheckCard(
-                check: GoalCheck.evaluate(goal: goal, weighIns: weighIns),
-                weeksOnTrack: GoalCheck.weeksOnTrack(goal: goal, weighIns: weighIns),
-                onChangeGoal: { choosingGoal = true }
-            )
+            let check = GoalCheck.evaluate(goal: goal, weighIns: weighIns)
+            let weeks = GoalCheck.weeksOnTrack(goal: goal, weighIns: weighIns)
+            if !check.needsAction {
+                goalLine(check, weeksOnTrack: weeks)
+            } else {
+                // Off track says why and what to do, in full.
+                GoalCheckCard(check: check, weeksOnTrack: weeks, onChangeGoal: { choosingGoal = true })
+            }
         } else {
             Button { choosingGoal = true } label: {
                 HStack(spacing: SL.Space.s3) {
@@ -209,6 +217,49 @@ struct ProgressHomeView: View {
         }
     }
 
+    /// The goal in one line while there is nothing to act on: "Lean bulk ·
+    /// On track · 🔥 3 wk". Tapping it opens the goal.
+    private func goalLine(_ check: GoalCheck, weeksOnTrack: Int) -> some View {
+        Button { choosingGoal = true } label: {
+            HStack(spacing: SL.Space.s2) {
+                Image(systemName: check.verdictSymbol)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(check.verdictInk)
+                Text(check.goal.title)
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.primary)
+                Text("·").foregroundStyle(SL.Ink.tertiary)
+                Text(check.headline)
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.medium))
+                    .foregroundStyle(check.verdictInk)
+                    .lineLimit(1)
+                Spacer(minLength: SL.Space.s2)
+                if check.verdict == .onTrack, weeksOnTrack > 0 {
+                    HStack(spacing: 3) {
+                        SLGlyph(name: .flameFill, size: 12, fixed: true)
+                        Text("\(weeksOnTrack) wk").font(.sl(SL.TypeSize.meta, SL.Weight.semibold)).slNumerals()
+                    }
+                    .foregroundStyle(SL.Signal.action)
+                }
+                SLGlyph(name: .chevronRight, size: 11).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.s3)
+            .frame(minHeight: SL.Space.hitMin)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.raised2))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.98))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(goalSpoken(check, weeksOnTrack: weeksOnTrack))
+        .accessibilityHint("Opens your goal")
+    }
+
+    private func goalSpoken(_ check: GoalCheck, weeksOnTrack: Int) -> String {
+        let said: String = check.verdict == .onTrack ? check.headline : check.detail(app.display)
+        let weeks: String = check.verdict == .onTrack && weeksOnTrack > 0 ? ", \(weeksOnTrack) weeks on track" : ""
+        return "\(check.goal.title): \(said)\(weeks)"
+    }
+
     /// "Today", "Yesterday", "5 days ago".
     private var lastWeighed: String {
         guard let date = bodyProgress.latest?.date else { return "" }
@@ -222,36 +273,27 @@ struct ProgressHomeView: View {
     }
 
     private var weightBody: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s3) {
+        VStack(alignment: .leading, spacing: SL.Space.s1) {
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s1) {
                 Text(bodyProgress.latest.map { app.display.number($0.weightKg) } ?? "—")
-                    .font(.sl(SL.TypeSize.displayL, SL.Weight.semibold))
+                    .font(.sl(SL.TypeSize.display, SL.Weight.semibold))
                     .slNumerals()
                     .foregroundStyle(SL.Ink.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text("kg")
-                    .slLead()
+                    .slBody()
                     .foregroundStyle(SL.Ink.secondary)
-                Spacer(minLength: SL.Space.s2)
-                if let movement {
-                    movementPill(movement)
-                }
             }
-            if trend.count >= 2 {
-                WeightTrendLine(points: trend)
-                    .frame(height: 64)
-                HStack {
-                    Text(trend.first.map { app.display.shortDate($0.date) } ?? "")
-                    Spacer()
-                    Text("14-day average").foregroundStyle(SL.Signal.recovery.opacity(0.8))
-                    Spacer()
-                    Text("Now")
+            if let movement {
+                movementPill(movement)
+                if !lastWeighed.isEmpty {
+                    Text(lastWeighed)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                        .padding(.top, 2)
                 }
-                .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                .slNumerals()
-                .foregroundStyle(SL.Ink.secondary)
-                .lineLimit(1)
             } else {
                 Text(movementLine)
                     .slMeta()
@@ -264,6 +306,7 @@ struct ProgressHomeView: View {
         .accessibilityLabel(
             (bodyProgress.latest.map { "Body weight \(app.display.kg($0.weightKg))" } ?? "No weigh-in yet")
                 + (movement.map { ", \($0.value) \($0.label)" } ?? "")
+                + (lastWeighed.isEmpty ? "" : ", \(lastWeighed.lowercased())")
         )
     }
 
@@ -328,7 +371,7 @@ struct ProgressHomeView: View {
                 if day.strength.count >= 2 {
                     VStack(spacing: SL.Space.s2) {
                         StrengthArea(values: day.strength, dates: day.strengthDates, ink: gained ? SL.Signal.action : SL.Ink.primary)
-                            .frame(height: 112)
+                            .frame(height: 88)
                         HStack {
                             Text(day.strengthDates.first.map { app.display.shortDate($0) } ?? "First session")
                             Spacer()
@@ -372,6 +415,9 @@ struct ProgressHomeView: View {
                     .accessibilityLabel("Biggest gain: \(leader.name), plus \(app.display.number(leader.deltaKg)) kilos estimated")
                     .accessibilityHint("Opens the strength of this exercise")
                 }
+
+                SLHairline()
+                weekStrip
             }
             .padding(SL.Space.s5)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -393,6 +439,10 @@ struct ProgressHomeView: View {
                     .slBody()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if !days.isEmpty {
+                    SLHairline().padding(.vertical, SL.Space.s2)
+                    weekStrip
+                }
             }
             .padding(SL.Space.s5)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -467,106 +517,73 @@ struct ProgressHomeView: View {
         return wins
     }
 
-    private var weekSection: some View {
+    /// This week's medals as the highlight card's last line: a row of small
+    /// chips, each opening its lift, or one quiet line while there are none.
+    private var weekStrip: some View {
         let wins = weekWins
-        return VStack(alignment: .leading, spacing: SL.Space.s3) {
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
             HStack(alignment: .firstTextBaseline) {
-                Text("This week")
-                    .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
-                    .foregroundStyle(SL.Ink.primary)
-                    .accessibilityAddTraits(.isHeader)
+                Text("THIS WEEK")
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(SL.Ink.secondary)
                 Spacer(minLength: SL.Space.s2)
                 if !wins.isEmpty {
                     Text(wins.count == 1 ? "1 win" : "\(wins.count) wins")
-                        .slBody()
+                        .slMeta()
                         .slNumerals()
                         .foregroundStyle(SL.Ink.secondary)
                 }
             }
-            .padding(.horizontal, SL.Space.s1)
-
             if wins.isEmpty {
-                weekEmpty
-            } else {
-                // The row runs to the screen's edges, so a card cut off at
-                // the right says there is more.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: SL.Space.s3) {
-                        ForEach(Array(wins.enumerated()), id: \.element.id) { index, win in
-                            winCard(win, index: index)
+                HStack(spacing: SL.Space.s3) {
+                    HStack(spacing: -8) {
+                        ForEach([LiftMedal.Place.bronze, .silver, .gold], id: \.self) { place in
+                            SLMedal(place: place, size: 22).saturation(0).opacity(0.35)
                         }
                     }
-                    .scrollTargetLayout()
+                    .accessibilityHidden(true)
+                    Text("No medals yet. A lift's best day earns gold.")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .scrollTargetBehavior(.viewAligned)
-                .contentMargins(.horizontal, SL.Space.gutterSession, for: .scrollContent)
-                .padding(.horizontal, -SL.Space.gutterSession)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: SL.Space.s2) {
+                        ForEach(wins) { win in winChip(win) }
+                    }
+                }
+                .padding(.horizontal, -SL.Space.s5)
+                .contentMargins(.horizontal, SL.Space.s5, for: .scrollContent)
             }
         }
-    }
-
-    private var weekEmpty: some View {
-        HStack(spacing: SL.Space.s4) {
-            HStack(spacing: -10) {
-                ForEach([LiftMedal.Place.bronze, .silver, .gold], id: \.self) { place in
-                    SLMedal(place: place, size: 30)
-                        .saturation(0)
-                        .opacity(0.35)
-                }
-            }
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("No medals yet this week")
-                    .slBody(SL.Weight.semibold)
-                    .foregroundStyle(SL.Ink.primary)
-                Text("A lift's best day ever earns gold; its 2nd and 3rd best, silver and bronze.")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(SL.Space.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .slBorderBox()
-        .slListCard()
     }
 
     @ViewBuilder
-    private func winCard(_ win: Win, index: Int) -> some View {
+    private func winChip(_ win: Win) -> some View {
         switch win {
         case .medal(let medal):
             Button { open(.kracht, exercise: medal.exerciseID) } label: {
-                winFrame(
-                    eyebrow: medal.place.title,
-                    eyebrowInk: SLMedal.metal(medal.place).face,
-                    title: medal.name,
-                    detail: "\(app.display.kg(medal.weightKg)) × \(medal.reps)"
-                ) {
-                    SLMedal(place: medal.place, size: 44, shines: medal.place == .gold)
+                chipFrame(title: medal.name, detail: "\(app.display.kg(medal.weightKg)) × \(medal.reps)") {
+                    SLMedal(place: medal.place, size: 26, shines: medal.place == .gold)
                 }
             }
-            .buttonStyle(SLRowButtonStyle())
+            .buttonStyle(SLPressStyle(scale: 0.96))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(medal.place.title) on \(medal.name), \(app.display.kg(medal.weightKg)) × \(medal.reps)")
             .accessibilityHint("Opens the strength of this exercise")
         case .badge(let milestone):
-            winFrame(eyebrow: "New badge", eyebrowInk: SL.Signal.action, title: milestone.title, detail: "Earned this week") {
-                SLBadge(milestone: milestone, size: 46)
+            chipFrame(title: milestone.title, detail: "New badge") {
+                SLBadge(milestone: milestone, size: 28)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("New badge: \(milestone.title)")
         case .streak(let streak):
-            winFrame(
-                eyebrow: "Week secured",
-                eyebrowInk: SL.Signal.action,
-                title: streak.weeks == 1 ? "1-week streak" : "\(streak.weeks)-week streak",
-                detail: streak.thisWeekDone > streak.thisWeekGoal
-                    ? "\(streak.thisWeekDone) workouts, goal \(streak.thisWeekGoal)"
-                    : "All \(streak.thisWeekGoal) workouts done"
-            ) {
-                SLGlyph(name: .flameFill, size: 24, fixed: true)
+            chipFrame(title: "Week secured", detail: streak.weeks == 1 ? "1-week streak" : "\(streak.weeks)-week streak") {
+                SLGlyph(name: .flameFill, size: 14, fixed: true)
                     .foregroundStyle(SL.Signal.onAction)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 26, height: 26)
                     .background(Circle().fill(SL.Signal.action))
             }
             .accessibilityElement(children: .ignore)
@@ -574,41 +591,25 @@ struct ProgressHomeView: View {
         }
     }
 
-    /// The shared shape of a win: the award on top, what it is in its own
-    /// colour, then what it was for.
-    private func winFrame<Art: View>(
-        eyebrow: String,
-        eyebrowInk: Color,
-        title: String,
-        detail: String,
-        @ViewBuilder art: () -> Art
-    ) -> some View {
-        VStack(alignment: .leading, spacing: SL.Space.s3) {
+    private func chipFrame<Art: View>(title: String, detail: String, @ViewBuilder art: () -> Art) -> some View {
+        HStack(spacing: SL.Space.s2) {
             art()
-                .frame(height: 50, alignment: .bottomLeading)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(eyebrow.uppercased())
-                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
-                    .tracking(1)
-                    .foregroundStyle(eyebrowInk)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
                 Text(title)
-                    .slBody(SL.Weight.semibold)
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
                     .foregroundStyle(SL.Ink.primary)
-                    .lineLimit(2, reservesSpace: true)
-                    .multilineTextAlignment(.leading)
                 Text(detail)
-                    .slMeta()
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                     .slNumerals()
                     .foregroundStyle(SL.Ink.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
             }
+            .lineLimit(1)
         }
-        .padding(SL.Space.s4)
-        .frame(width: 164, alignment: .topLeading)
-        .slBorderBox()
-        .slListCard()
+        .padding(.leading, SL.Space.s2)
+        .padding(.trailing, SL.Space.s3)
+        .frame(minHeight: SL.Space.hitMin)
+        .background(Capsule().fill(SL.Surface.raised2))
+        .contentShape(Capsule())
     }
 
     // MARK: - Lifts
@@ -634,6 +635,7 @@ struct ProgressHomeView: View {
                     }
                 }
             }
+            volumeLine
         }
     }
 
@@ -849,14 +851,23 @@ struct ProgressHomeView: View {
     private var weighButton: some View {
         let weighed = app.weighIn() != nil
         return Button { weighing = true } label: {
-            HStack(spacing: SL.Space.s2) {
-                SLGlyph(name: weighed ? .calculate : .plus, size: 15)
+            HStack(spacing: 6) {
+                SLGlyph(name: weighed ? .calculate : .plus, size: 14, fixed: true)
                     .foregroundStyle(weighed ? SL.Ink.secondary : SL.Signal.recovery)
-                Text(weighed ? "Edit today's weigh-in" : "Weigh in")
+                Text(weighed ? "Edit" : "Weigh in")
+                    .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.primary)
             }
             .lineLimit(1)
+            .padding(.horizontal, SL.Space.s4)
+            .frame(minHeight: SL.Space.hitMin)
+            .background(Capsule().fill(SL.Surface.raised2))
+            .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border))
+            .contentShape(Capsule())
+            .fixedSize()
         }
-        .buttonStyle(SLOutlineButtonStyle())
+        .buttonStyle(SLPressStyle(scale: 0.94))
+        .accessibilityLabel(weighed ? "Edit today's weigh-in" : "Weigh in")
         .accessibilityHint(weighed
             ? "Opens today's weigh-in to update the weight"
             : "Opens the field to save today's weight")
@@ -883,9 +894,54 @@ struct ProgressHomeView: View {
 
     // MARK: - Volume
 
-    private var volumeSection: some View {
+    /// The work behind the lifts, as one line under them; the bars are a tap
+    /// away.
+    @ViewBuilder
+    private var volumeLine: some View {
+        if let current = volume.last {
+            let previous = volume.dropLast().last
+            Button { open(.volume) } label: {
+                HStack(spacing: SL.Space.s3) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: 36, height: 36)
+                        .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.raised2))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Volume this week")
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                            Text(tonnes(current.volumeKg))
+                                .slBody(SL.Weight.semibold)
+                                .slNumerals()
+                                .foregroundStyle(SL.Ink.primary)
+                            if let previous {
+                                Text("last week \(tonnes(previous.volumeKg))")
+                                    .slMeta()
+                                    .slNumerals()
+                                    .foregroundStyle(SL.Ink.secondary)
+                            }
+                        }
+                        .lineLimit(1)
+                    }
+                    Spacer(minLength: SL.Space.s2)
+                    SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+                }
+                .padding(SL.Space.s3)
+                .contentShape(Rectangle())
+                .slBorderBox()
+                .slListCard()
+            }
+            .buttonStyle(SLPressStyle(scale: 0.98))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Volume this week \(tonnes(current.volumeKg))" + (previous.map { ", last week \(tonnes($0.volumeKg))" } ?? ""))
+            .accessibilityHint("Opens the weekly volume")
+        }
+    }
+
+    private var volumeCard: some View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
-            sectionHead("Volume")
             VStack(alignment: .leading, spacing: SL.Space.s5) {
                 volumeStats
                 VolumeBars(weeks: volume, spoken: volumeSpoken, label: tonnes)
@@ -997,7 +1053,7 @@ struct ProgressHomeView: View {
             // One page per subject, reached from the overview: the lift page
             // names itself in its header card; the others take a title.
             if current != .kracht {
-                Text(current == .lichaam ? "Body weight" : current == .lifts ? "All lifts" : "Log")
+                Text(current == .lichaam ? "Body weight" : current == .lifts ? "All lifts" : current == .volume ? "Volume" : "Log")
                     .slTitle()
                     .foregroundStyle(SL.Ink.primary)
                     .accessibilityAddTraits(.isHeader)
@@ -1014,6 +1070,12 @@ struct ProgressHomeView: View {
                 LichaamSegmentView()
             case .lifts:
                 allLiftsPage
+            case .volume:
+                ScrollView {
+                    volumeCard
+                        .padding(.horizontal, SL.Space.gutterSession)
+                        .padding(.vertical, SL.Space.s4)
+                }
             }
 
             Spacer(minLength: 0)

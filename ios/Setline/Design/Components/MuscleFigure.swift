@@ -11,6 +11,8 @@ struct MuscleFigure: View {
     /// The filled muscle: lime for a lift that gained, ink otherwise.
     var highlight: Color = SL.Ink.primary
     var outline: Color = SL.Ink.secondary
+    /// A set stroke in points; nil scales it with the figure.
+    var lineWidth: CGFloat? = nil
 
     var body: some View {
         Canvas { context, size in
@@ -24,7 +26,7 @@ struct MuscleFigure: View {
                 context.fill(shaped(region), with: .color(highlight))
             }
             context.stroke(shaped(Self.silhouette), with: .color(outline),
-                           style: StrokeStyle(lineWidth: 1.1 * scale / 1.6, lineCap: .round, lineJoin: .round))
+                           style: StrokeStyle(lineWidth: lineWidth ?? 1.1 * scale / 1.6, lineCap: .round, lineJoin: .round))
             _ = transform
             transform = .identity
         }

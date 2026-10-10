@@ -627,6 +627,15 @@ final class AppState {
         await commit([StateChange(.removeSession(id: id))])
     }
 
+    /// Every logged workout out of the account, everywhere, with the paused
+    /// one. Each goes as its own tombstone, so the web app and an older copy
+    /// on another phone agree. The plan, food, weigh-ins and photos stay.
+    func removeAllSessions() async {
+        let changes = sessions.map { StateChange(.removeSession(id: $0.id)) }
+            + (activeSession == nil ? [] : [.activeSession(nil)])
+        await commit(changes)
+    }
+
     // MARK: - Streak
 
     /// Weeks in a row with as many workouts as the plan asked for.

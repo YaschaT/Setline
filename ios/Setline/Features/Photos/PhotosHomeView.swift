@@ -24,6 +24,8 @@ struct PhotosHomeView: View {
 
     @State private var checkIns: [CheckIn] = []
     @State private var picking: PhotosPickerItem?
+    /// The check-in camera, with its guide and the last photo to line up to.
+    @State private var capturing = false
     @State private var removing: CheckIn?
     @State private var failure: String?
     /// Whose photos are on screen; another account signed in reads its own.
@@ -95,6 +97,9 @@ struct PhotosHomeView: View {
             chosen = []
             checkIns = await photos.load()
             shownOwner = photos.owner
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-SetlinePhotoCamera") { capturing = true }
+            #endif
         }
         .onChange(of: picking) { _, item in
             guard let item else { return }
@@ -131,6 +136,18 @@ struct PhotosHomeView: View {
                     choosing = false
                 },
                 onClose: { choosing = false }
+            )
+        }
+        .fullScreenCover(isPresented: $capturing) {
+            PhotoCaptureView(
+                ghost: gallery.all.last.flatMap { shown in
+                    app.photos.flatMap { UIImage(contentsOfFile: $0.url(for: shown.checkIn).path) }
+                },
+                onTaken: { data in
+                    capturing = false
+                    Task { await keep(data, on: Date()) }
+                },
+                onClose: { capturing = false }
             )
         }
         .fullScreenCover(isPresented: $playingTimeline) {
@@ -293,21 +310,28 @@ struct PhotosHomeView: View {
                     .padding(.bottom, SL.Space.s4)
             }
 
-            PhotosPicker(selection: $picking, matching: .images, photoLibrary: .shared()) {
+            Button { capturing = true } label: {
                 HStack(spacing: 10) {
                     SLGlyph(name: .camera, size: 18)
                     Text(empty ? "Take your first photo" : isDue ? "Take this check-in" : "Add a photo")
                 }
             }
             .buttonStyle(SLPrimaryButtonStyle())
-            .accessibilityHint("Picks a photo from your library and keeps it on this phone")
+            .accessibilityHint(empty ? "Opens the camera with a guide to stand in"
+                               : "Opens the camera with your last photo to line up with")
+
+            PhotosPicker(selection: $picking, matching: .images, photoLibrary: .shared()) {
+                Text("Choose from library")
+            }
+            .buttonStyle(SLQuietButtonStyle())
+            .padding(.top, SL.Space.s1)
 
             Text("Photos stay on this phone. Never shared, never analysed.")
                 .slMeta()
                 .foregroundStyle(SL.Ink.secondary)
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
-                .padding(.top, SL.Space.s3)
+                .padding(.top, SL.Space.s1)
         }
         .padding(SL.Space.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -356,7 +380,7 @@ struct PhotosHomeView: View {
                 .accessibilityLabel("Photo \(caption(shown))")
                 .accessibilityHint("Opens the photo")
             }
-            PhotosPicker(selection: $picking, matching: .images, photoLibrary: .shared()) {
+            Button { capturing = true } label: {
                 VStack(spacing: 6) {
                     Group {
                         if isDue || recent.isEmpty {
@@ -645,7 +669,17 @@ struct PhotosHomeView: View {
             }
             // Dated by when it was taken, which is what it is compared by;
             // only a picture that says nothing is dated today.
-            checkIns = try await photos.add(data, on: PhotoDate.taken(in: data) ?? Date())
+            await keep(data, on: PhotoDate.taken(in: data) ?? Date())
+        } catch {
+            failure = "That photo couldn't be read. Try another one."
+        }
+    }
+
+    private func keep(_ data: Data, on date: Date) async {
+        failure = nil
+        guard let photos = app.photos else { return }
+        do {
+            checkIns = try await photos.add(data, on: date)
         } catch {
             failure = "The photo couldn't be saved. Your phone may be out of space."
         }

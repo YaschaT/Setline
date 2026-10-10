@@ -33,6 +33,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Setline uses the camera for your check-in photos, with a guide so every photo is taken the same way. They stay on this phone.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Setline reads your location once, only when you ask, to find gyms near you for a workout you share with friends.</string>
 	<key>NSSupportsLiveActivities</key>

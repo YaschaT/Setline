@@ -40,6 +40,7 @@ struct AccountView: View {
     @State private var confirmsDeleteAll = false
     @State private var deleteAllFailed = false
     @State private var showsBlocked = false
+    @State private var confirmsResetWorkouts = false
     @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
     @State private var remindersDenied = false
 
@@ -99,6 +100,7 @@ struct AccountView: View {
                     }
                     section("Data")
                     exportRow
+                    resetWorkoutsRow
                     row("Photo credits") { showsCredits = true }
                     signOutRow
                 }
@@ -480,6 +482,36 @@ struct AccountView: View {
             parts.append(summary.weighInCount == 1 ? "1 weigh-in" : "\(summary.weighInCount) weigh-ins")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// Starting over: every logged workout goes, the plan stays.
+    private var resetWorkoutsRow: some View {
+        let count = app.sessions.count
+        return Button { confirmsResetWorkouts = true } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Delete all workouts").slBody().foregroundStyle(SL.Signal.loss)
+                    Text(count == 0 ? "No workouts logged"
+                         : "\(count == 1 ? "1 workout" : "\(count) workouts") · your plan, food and weigh-ins stay")
+                        .slMeta().foregroundStyle(SL.Ink.secondary)
+                }
+                Spacer()
+            }
+            .padding(.vertical, SL.Space.s3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) { SLHairline() }
+        .disabled(count == 0)
+        .opacity(count == 0 ? 0.5 : 1)
+        .alert(count == 1 ? "Delete your workout?" : "Delete all \(count) workouts?", isPresented: $confirmsResetWorkouts) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete all", role: .destructive) {
+                Task { await app.removeAllSessions() }
+            }
+        } message: {
+            Text("Your log, records, streak and progress start from zero, here and on the web. This can't be undone, so export first if you want a copy. Your plan, food log, weigh-ins, photos and posts stay.")
+        }
     }
 
     private var signOutRow: some View {

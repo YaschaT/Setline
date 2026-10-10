@@ -21,6 +21,14 @@ enum GoalPreference {
 }
 
 extension GoalCheck {
+    /// Off track: there is something to change.
+    var needsAction: Bool {
+        switch verdict {
+        case .onTrack, .tooEarly: return false
+        default: return true
+        }
+    }
+
     /// The weigh-ins the check reads, from the app's metrics.
     static func weighIns(_ progress: BodyProgress) -> [(date: Date, kg: Double)] {
         progress.entries.map { ($0.date, NSDecimalNumber(decimal: $0.weightKg).doubleValue) }
@@ -225,16 +233,22 @@ struct GoalCheckCard: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var ink: Color {
-        switch check.verdict {
+    private var ink: Color { check.verdictInk }
+    private var symbol: String { check.verdictSymbol }
+}
+
+extension GoalCheck {
+    /// Mint on track, amber off it, quiet while there is too little to say.
+    var verdictInk: Color {
+        switch verdict {
         case .onTrack: return SL.Signal.recovery
         case .tooEarly: return SL.Ink.secondary
         default: return SL.Signal.attention
         }
     }
 
-    private var symbol: String {
-        switch check.verdict {
+    var verdictSymbol: String {
+        switch verdict {
         case .onTrack: return "checkmark.seal.fill"
         case .tooEarly: return "hourglass"
         case .tooFast: return "hare.fill"
