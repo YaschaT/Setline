@@ -76,6 +76,7 @@ struct PostComposerView: View {
             Text("Its photos, comments and kudos are removed for everyone. Your workout stays in your log.")
         }
         .onChange(of: picked) { _, items in Task { await addPhotos(items) } }
+        .onAppear { social.clearUploads() }
         .slRespondsToTextSize()
     }
 
@@ -232,7 +233,7 @@ struct PostComposerView: View {
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: SL.Space.s2), count: 4), spacing: SL.Space.s2) {
                 ForEach(draft.photos) { photo in
-                    DraftPhotoTile(photo: photo) {
+                    DraftPhotoTile(photo: photo, state: social.uploads[photo.id], onRetry: { Task { await post() } }) {
                         draft.photos.removeAll { $0.id == photo.id }
                     }
                 }
@@ -246,10 +247,17 @@ struct PostComposerView: View {
                     .accessibilityLabel("Add photos")
                 }
             }
-            Text("Location data is removed from photos before they leave your phone.")
-                .slMeta()
-                .foregroundStyle(SL.Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if draft.photos.contains(where: { social.uploads[$0.id] == .failed }) {
+                Text("A photo didn't upload. Tap it to try again, or remove it and post without it.")
+                    .slMeta()
+                    .foregroundStyle(SL.Signal.attention)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Location data is removed from photos before they leave your phone.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -431,6 +439,8 @@ private struct FlowChips: View {
 private struct DraftPhotoTile: View {
     @Environment(SocialStore.self) private var social
     let photo: DraftPhoto
+    var state: SocialStore.UploadState? = nil
+    var onRetry: () -> Void = {}
     let onRemove: () -> Void
     @State private var loaded: UIImage?
 
@@ -444,6 +454,32 @@ private struct DraftPhotoTile: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+            .overlay {
+                switch state {
+                case .waiting, .uploading:
+                    ZStack {
+                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.ground.opacity(0.55))
+                        ProgressView().tint(SL.Ink.primary)
+                    }
+                    .accessibilityLabel("Uploading photo")
+                case .failed:
+                    Button(action: onRetry) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.ground.opacity(0.6))
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).strokeBorder(SL.Signal.attention.opacity(0.7), lineWidth: 1.5)
+                            VStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise").font(.system(size: 16, weight: .bold))
+                                Text("Retry").font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                            }
+                            .foregroundStyle(SL.Signal.attention)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Photo didn't upload, retry")
+                default:
+                    EmptyView()
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")

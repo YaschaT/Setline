@@ -392,14 +392,59 @@ final class SocialStore {
             self.friendships = try await friendships
             self.feed = try await feed
             phase = .ready
+            offlineSince = nil
+            lastLoaded = Date()
+            saveFeedCache()
             if !pending.isEmpty, !flushing {
                 flushing = true
                 await sendPending()
                 flushing = false
             }
+        } catch SupabaseClient.Failure.network {
+            // No connection: what loaded last stays readable (SETLINE Social S3).
+            if feed.isEmpty { loadFeedCache() }
+            if me != nil || !feed.isEmpty {
+                offlineSince = offlineSince ?? Date()
+                phase = .ready
+            } else {
+                phase = .failed(SupabaseClient.Failure.network.errorDescription ?? "No connection.")
+            }
         } catch {
             phase = Self.phase(for: error)
         }
+    }
+
+    /// Set while the feed shows what loaded before the connection went.
+    private(set) var offlineSince: Date?
+    /// When the feed last loaded from the server.
+    private(set) var lastLoaded: Date?
+
+    private struct FeedCache: Codable {
+        let me: SocialProfile
+        let friendships: [Friendship]
+        let feed: [FeedPost]
+        let loaded: Date
+    }
+
+    private var feedCacheFile: URL? {
+        guard !myID.isEmpty, let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        return base.appendingPathComponent("SocialFeed", isDirectory: true).appendingPathComponent("\(myID).json")
+    }
+
+    private func saveFeedCache() {
+        guard let file = feedCacheFile, let me else { return }
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let cache = FeedCache(me: me, friendships: friendships, feed: feed, loaded: lastLoaded ?? Date())
+        try? JSONEncoder().encode(cache).write(to: file, options: [.atomic, .completeFileProtection])
+    }
+
+    private func loadFeedCache() {
+        guard let file = feedCacheFile, let data = try? Data(contentsOf: file),
+              let cache = try? JSONDecoder().decode(FeedCache.self, from: data) else { return }
+        me = me ?? cache.me
+        friendships = cache.friendships
+        feed = cache.feed
+        lastLoaded = cache.loaded
     }
 
     private static let profileFields = "user_id,username,display_name"
@@ -559,7 +604,7 @@ final class SocialStore {
     /// Gives or takes back kudos, shown at once and undone if the server
     /// refuses.
     func toggleKudos(_ post: FeedPost) async {
-        guard post.user_id != myID, let index = feed.firstIndex(where: { $0.id == post.id }) else { return }
+        guard offlineSince == nil, post.user_id != myID, let index = feed.firstIndex(where: { $0.id == post.id }) else { return }
         let giving = !hasKudos(post)
         let before = feed[index]
         if giving {
@@ -594,6 +639,11 @@ final class SocialStore {
         let streakWeeks: Int
         let draft: PostDraft
     }
+
+    /// Each new photo's upload, for the composer's tiles (SETLINE Social S1).
+    enum UploadState { case waiting, uploading, done, failed }
+    private(set) var uploads: [UUID: UploadState] = [:]
+    func clearUploads() { uploads = [:] }
 
     /// Thrown when a post was queued instead of sent.
     struct Queued: Error {}
@@ -731,6 +781,7 @@ final class SocialStore {
             try await removeFiles(removed.map(\.path))
             _ = try await send("post_media?id=in.(\(removed.map(\.id).joined(separator: ",")))", method: "DELETE")
         }
+        for photo in draft.photos where photo.existing == nil { uploads[photo.id] = .waiting }
         for (position, photo) in draft.photos.prefix(PostDraft.maxPhotos).enumerated() {
             if let media = photo.existing {
                 if media.position != position {
@@ -740,12 +791,19 @@ final class SocialStore {
                 continue
             }
             guard let jpeg = photo.jpeg else { continue }
-            let path = "\(myID)/\(postID)/\(UUID().uuidString.lowercased()).jpg"
-            _ = try await storage("object/post-media/\(path)", method: "POST", body: jpeg, contentType: "image/jpeg")
-            var row: [String: Any] = ["post_id": postID, "user_id": myID, "path": path, "position": position]
-            if let width = photo.width { row["width"] = width }
-            if let height = photo.height { row["height"] = height }
-            _ = try await send("post_media", method: "POST", body: try JSONSerialization.data(withJSONObject: row))
+            uploads[photo.id] = .uploading
+            do {
+                let path = "\(myID)/\(postID)/\(UUID().uuidString.lowercased()).jpg"
+                _ = try await storage("object/post-media/\(path)", method: "POST", body: jpeg, contentType: "image/jpeg")
+                var row: [String: Any] = ["post_id": postID, "user_id": myID, "path": path, "position": position]
+                if let width = photo.width { row["width"] = width }
+                if let height = photo.height { row["height"] = height }
+                _ = try await send("post_media", method: "POST", body: try JSONSerialization.data(withJSONObject: row))
+                uploads[photo.id] = .done
+            } catch {
+                uploads[photo.id] = .failed
+                throw error
+            }
         }
     }
 
@@ -948,6 +1006,12 @@ final class SocialStore {
         if friendships.isEmpty, !alone { friendships = demo.friendships(me: me!) }
         if feed.isEmpty { feed = demo.feed(me: me!).filter { !alone || $0.user_id == myID } }
         phase = .ready
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-SetlineSocialOffline") {
+            offlineSince = Date()
+            lastLoaded = Date().addingTimeInterval(-25 * 60)
+        }
+        #endif
         if !pending.isEmpty, !flushing {
             flushing = true
             Task {

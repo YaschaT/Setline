@@ -213,12 +213,13 @@ struct PostDetailView: View {
             titleVisibility: .visible
         ) {
             if let comment = reportingComment {
-                ForEach(["Spam", "Inappropriate", "Harassment", "Something else"], id: \.self) { reason in
-                    Button("Report: \(reason)") { Task { try? await social.report(comment: comment, reason: reason) } }
+                Button("Report comment", role: .destructive) {
+                    Task { try? await social.report(comment: comment, reason: "Reported from the app") }
                 }
-                Button("Block \(comment.author?.display_name ?? "them")", role: .destructive) {
+                Button("Block \(comment.author?.display_name.split(separator: " ").first.map(String.init) ?? "them")", role: .destructive) {
                     Task { try? await social.block(comment.user_id) }
                 }
+                Button("Cancel", role: .cancel) {}
             }
         } message: {
             Text("Setline reviews every report within 24 hours.")
@@ -303,7 +304,7 @@ struct PostDetailView: View {
 
     private func composer(_ post: FeedPost) -> some View {
         HStack(spacing: SL.Space.s2) {
-            TextField("Add a comment…", text: $draft, axis: .vertical)
+            TextField(social.offlineSince == nil ? "Add a comment…" : "Comments wait for a connection", text: $draft, axis: .vertical)
                 .lineLimit(1...4)
                 .focused($typing)
                 .font(.sl(SL.TypeSize.body, SL.Weight.regular))
@@ -334,7 +335,7 @@ struct PostDetailView: View {
                     .background(Circle().fill(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SL.Surface.hairlineStrong : SL.Signal.action))
             }
             .buttonStyle(.plain)
-            .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(sending || social.offlineSince != nil || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel("Send comment")
         }
         .padding(.horizontal, SL.Space.s4)
@@ -351,6 +352,7 @@ struct PostDetailView: View {
 /// no workouts — only the way to ask.
 struct FriendProfileView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(SocialStore.self) private var social
     let userID: String
     let onClose: () -> Void
@@ -390,6 +392,7 @@ struct FriendProfileView: View {
                     identity
                     if isMe || isFriend {
                         stats
+                        badges
                         postList
                     } else {
                         locked
@@ -473,25 +476,61 @@ struct FriendProfileView: View {
         }
     }
 
-    private var stats: some View {
-        let golds = posts.flatMap(\.medals).filter { $0.place == 1 }.count
-        return HStack(spacing: SL.Space.s3) {
-            statTile("\(streak)", streak == 1 ? "week streak" : "week streak")
-            statTile("\(posts.count)", posts.count == 1 ? "post" : "posts")
-            statTile("\(golds)", golds == 1 ? "best ever" : "bests ever")
+    /// PRs this year: your own gold medals across every workout logged
+    /// this year; for a friend, the golds on the posts you can see.
+    @State private var prsThisYear = 0
+    private var reachedBadges: [Milestone] {
+        Milestones.make(sessions: app.sessions, bestStreak: app.streak.best).filter(\.isReached)
+    }
+
+    private func countPRs() {
+        let year = Calendar.current.component(.year, from: Date())
+        if isMe {
+            let thisYear = app.sessions.filter { $0.kind == .workout && Calendar.current.component(.year, from: $0.date) == year }
+            prsThisYear = thisYear.reduce(0) { $0 + Medals.medals(for: $1, in: app.sessions).filter { $0.place == .gold }.count }
+        } else {
+            prsThisYear = posts.filter { Calendar.current.component(.year, from: $0.date) == year }
+                .flatMap(\.medals).filter { $0.place == 1 }.count
         }
+    }
+
+    private var stats: some View {
+        let workouts = isMe ? app.sessions.filter { $0.kind == .workout }.count : posts.count
+        return HStack(spacing: SL.Space.s3) {
+            statTile("\(streak)", "week streak")
+            statTile("\(workouts)", isMe ? (workouts == 1 ? "workout" : "workouts") : (workouts == 1 ? "post" : "posts"))
+            statTile(prsThisYear == 0 ? "—" : "\(prsThisYear)", "PRs this year")
+        }
+        .task(id: posts.count) { countPRs() }
     }
 
     private func statTile(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value).font(.sl(24, SL.Weight.semibold)).slNumerals().foregroundStyle(SL.Ink.primary)
-            Text(label).slMeta().foregroundStyle(SL.Ink.secondary)
+            Text(label).slMeta().foregroundStyle(SL.Ink.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .slBorderBox()
         .slListCard()
         .accessibilityElement(children: .combine)
+    }
+
+    /// Your badges, earned first; friends' badges are not shared.
+    @ViewBuilder
+    private var badges: some View {
+        let earned = reachedBadges
+        if isMe, !earned.isEmpty {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                Text("Badges").slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).accessibilityAddTraits(.isHeader)
+                HStack(spacing: SL.Space.s3) {
+                    ForEach(earned.suffix(4)) { badge in
+                        SLBadge(milestone: badge, size: 64)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
     }
 
     private var postList: some View {
@@ -503,40 +542,66 @@ struct FriendProfileView: View {
                     .foregroundStyle(SL.Ink.secondary)
                     .padding(.vertical, SL.Space.s3)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
-                        Button { opened = ProfileTarget(id: post.id) } label: {
-                            HStack(spacing: SL.Space.s3) {
-                                SLWorkoutSymbol(dayName: post.title, size: 18)
-                                    .foregroundStyle(SL.Ink.secondary)
-                                    .frame(width: 36, height: 36)
-                                    .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.raised2))
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(post.displayTitle).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).lineLimit(1)
-                                    Text("\(PostCard.when(post.date)) · \(post.title)").slMeta().foregroundStyle(SL.Ink.secondary)
-                                }
-                                Spacer(minLength: SL.Space.s2)
-                                if isMe && post.postVisibility == .private {
-                                    Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(SL.Ink.secondary)
-                                        .accessibilityLabel("Only you")
-                                }
-                                if let gold = post.medals.first(where: { $0.place == 1 }), let place = LiftMedal.Place(rawValue: gold.place) {
-                                    SLMedal(place: place, size: 20)
-                                }
-                                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
-                            }
-                            .padding(.horizontal, SL.Space.s4)
-                            .frame(minHeight: 60)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(SLRowButtonStyle())
-                        .overlay(alignment: .top) { if index > 0 { SLHairline().padding(.leading, 64) } }
+                let columns = typeSize.isAccessibilitySize
+                    ? [GridItem(.flexible())]
+                    : [GridItem(.flexible(), spacing: SL.Space.s3), GridItem(.flexible(), spacing: SL.Space.s3)]
+                LazyVGrid(columns: columns, spacing: SL.Space.s3) {
+                    ForEach(posts) { post in
+                        Button { opened = ProfileTarget(id: post.id) } label: { postTile(post) }
+                            .buttonStyle(SLRowButtonStyle())
                     }
                 }
-                .slBorderBox()
-                .slListCard()
             }
         }
+    }
+
+    private func postTile(_ post: FeedPost) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(spacing: 6) {
+                Text("\(PostCard.when(post.date)) · \(post.title)")
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                    .foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(1)
+                if isMe && post.postVisibility == .private {
+                    Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(SL.Ink.secondary)
+                        .accessibilityLabel("Only you")
+                }
+            }
+            Text(post.displayTitle)
+                .slBody(SL.Weight.semibold)
+                .foregroundStyle(SL.Ink.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            if let photo = post.photos.first {
+                PostPhoto(path: photo.path)
+                    .frame(height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: SL.Radius.sm, style: .continuous))
+            } else if let gold = post.medals.first(where: { $0.place == 1 }), let place = LiftMedal.Place(rawValue: gold.place) {
+                HStack(spacing: 6) {
+                    SLMedal(place: place, size: 18)
+                    Text(post.medals.filter { $0.place == 1 }.count == 1 ? "1 gold" : "\(post.medals.filter { $0.place == 1 }.count) gold")
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                        .foregroundStyle(SLMedal.metal(place).face)
+                }
+            } else {
+                Text(kudosAndComments(post))
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+        .slBorderBox()
+        .slListCard()
+        .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func kudosAndComments(_ post: FeedPost) -> String {
+        let k = post.kudos.count, c = post.commentCount
+        if k == 0 && c == 0 { return "No kudos yet" }
+        return "\(k) kudos · \(c == 1 ? "1 comment" : "\(c) comments")"
     }
 
     private var locked: some View {

@@ -17,10 +17,9 @@ struct FriendsView: View {
                 header
                 switch social.phase {
                 case .loading:
-                    ProgressView()
-                        .tint(SL.Ink.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, SL.Space.s12)
+                    // Cards in the shape of the posts on their way (S2).
+                    FeedSkeleton()
+                    FeedSkeleton(short: true)
                 case .notSetUp:
                     notice(
                         title: "Friends is almost ready",
@@ -31,6 +30,7 @@ struct FriendsView: View {
                 case .needsProfile:
                     ProfileSetupCard()
                 case .ready:
+                    if social.offlineSince != nil { offlineBanner }
                     if !social.incoming.isEmpty { requestsBanner }
                     if !social.pending.isEmpty { pendingBanner }
                     if social.friends.isEmpty { onlyYouCard }
@@ -112,6 +112,41 @@ struct FriendsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SLPressStyle(scale: 0.98))
+    }
+
+    /// No connection: the feed below is what loaded last (S3).
+    private var offlineBanner: some View {
+        HStack(spacing: SL.Space.s3) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SL.Signal.attention)
+                .frame(width: 34, height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("You're offline").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                Text(offlineDetail)
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: SL.Space.s2)
+            Button("Retry") { Task { await social.load() } }
+                .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.primary)
+                .padding(.horizontal, SL.Space.s3)
+                .frame(minHeight: 36)
+                .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1))
+                .frame(minHeight: SL.Space.hitMin)
+        }
+        .padding(SL.Space.s3)
+        .slBorderBox()
+        .slListCard()
+        .accessibilityElement(children: .combine)
+    }
+
+    private var offlineDetail: String {
+        guard let loaded = social.lastLoaded else { return "Kudos and comments wait for a connection." }
+        let time = loaded.formatted(date: Calendar.current.isDateInToday(loaded) ? .omitted : .abbreviated, time: .shortened)
+        return "Showing what loaded at \(time). Kudos and comments wait for a connection."
     }
 
     /// Posts made without a connection, waiting on this phone.
@@ -369,6 +404,13 @@ struct PostCard: View {
 
             stats.padding(.top, SL.Space.s4)
 
+            if !hiddenNumbers.isEmpty {
+                Text(quietLine)
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .padding(.top, SL.Space.s2)
+            }
+
             if let place = post.place {
                 PostPlaceView(place: place).padding(.top, SL.Space.s4)
             }
@@ -444,6 +486,16 @@ struct PostCard: View {
         .fullScreenCover(item: $profile) { target in
             FriendProfileView(userID: target.id, onClose: { profile = nil })
         }
+    }
+
+    /// The numbers the lifter kept off this post.
+    private var hiddenNumbers: [HiddenStat] { HiddenStat.allCases.filter { post.hides($0) } }
+
+    /// "Numbers hidden on this post" — or which, when only some are.
+    private var quietLine: String {
+        if hiddenNumbers.count == HiddenStat.allCases.count { return "Numbers hidden on this post" }
+        let names = hiddenNumbers.map { $0 == .weights ? "weights" : $0.label.lowercased() }
+        return "\(names.joined(separator: " and ").prefix(1).uppercased())\(names.joined(separator: " and ").dropFirst()) hidden on this post"
     }
 
     /// The title and notes: a way into the post on the feed, plain text in it.
@@ -544,6 +596,8 @@ struct PostCard: View {
                     .contentShape(Capsule())
                 }
                 .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
+                .disabled(social.offlineSince != nil)
+                .opacity(social.offlineSince != nil ? 0.45 : 1)
                 .sensoryFeedback(.impact(weight: .medium), trigger: bursts)
                 .accessibilityLabel(given ? "Take back kudos" : "Give kudos")
             }
@@ -800,5 +854,50 @@ private struct PeopleSheet: View {
         found = try? await social.find(username: query)
         searched = true
         busy = false
+    }
+}
+
+
+/// A post card's shape while the feed loads.
+private struct FeedSkeleton: View {
+    var short = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dim = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s4) {
+            HStack(spacing: SL.Space.s3) {
+                Circle().fill(SL.Surface.raised2).frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 6) {
+                    bar(120, 12, SL.Surface.hairlineStrong)
+                    bar(70, 10, SL.Surface.raised2)
+                }
+            }
+            bar(160, 28, SL.Surface.hairlineStrong)
+            if !short {
+                HStack(spacing: SL.Space.s3) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 8).fill(SL.Surface.raised2).frame(height: 34)
+                    }
+                }
+                RoundedRectangle(cornerRadius: SL.Radius.lg).fill(SL.Surface.raised2).frame(height: 150)
+                bar(130, 40, SL.Surface.raised2, radius: 20)
+            }
+        }
+        .padding(SL.Space.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .slBorderBox()
+        .slListCard(radius: SL.Radius.xl)
+        .opacity(short ? 0.6 : 1)
+        .opacity(dim ? 0.55 : 1)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dim = true }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func bar(_ width: CGFloat, _ height: CGFloat, _ fill: Color, radius: CGFloat = 6) -> some View {
+        RoundedRectangle(cornerRadius: radius).fill(fill).frame(width: width, height: height)
     }
 }
