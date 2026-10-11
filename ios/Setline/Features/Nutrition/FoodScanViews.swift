@@ -251,6 +251,8 @@ struct FoodPhotoScanSheet: View {
     @State private var photo: UIImage?
     @State private var text = ""
     @State private var items: [ScannedFood] = []
+    /// Per row, what else it could be — offered under "Other match".
+    @State private var alternatives: [UUID: [ScannedFood]] = [:]
     @State private var leftOut: Set<UUID> = []
     @State private var picking: UIImagePickerController.SourceType?
     @FocusState private var typing: Bool
@@ -288,6 +290,20 @@ struct FoodPhotoScanSheet: View {
         .padding(.bottom, SL.Space.s3)
         .background(SL.Surface.ground.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        #if DEBUG
+        .onAppear {
+            // `-SetlineScanImage <path>` / `-SetlineScanText "<line>"` read a
+            // meal straight away, so the scan can be checked without taps.
+            let arguments = ProcessInfo.processInfo.arguments
+            if let flag = arguments.firstIndex(of: "-SetlineScanImage"), arguments.indices.contains(flag + 1) {
+                photo = UIImage(contentsOfFile: arguments[flag + 1])
+            }
+            if let flag = arguments.firstIndex(of: "-SetlineScanText"), arguments.indices.contains(flag + 1) {
+                text = arguments[flag + 1]
+            }
+            if photo != nil || !text.isEmpty { scan() }
+        }
+        #endif
         .sheet(isPresented: Binding(get: { picking != nil }, set: { if !$0 { picking = nil } })) {
             if let source = picking {
                 ImagePicker(source: source) { image in
@@ -440,6 +456,28 @@ struct FoodPhotoScanSheet: View {
                 Spacer(minLength: SL.Space.s2)
                 confidence(item.confidence)
             }
+            if included, let others = alternatives[item.id], !others.isEmpty {
+                Menu {
+                    ForEach(others) { other in
+                        Button("\(other.name) · \(app.display.whole(Decimal(other.scaled(to: item.grams).calories))) kcal") {
+                            let swapped = other.scaled(to: item.grams)
+                            let replaced = ScannedFood(name: swapped.name, grams: swapped.grams, calories: swapped.calories,
+                                                       protein: swapped.protein, carbs: swapped.carbs, fat: swapped.fat,
+                                                       confidence: .high)
+                            alternatives[replaced.id] = others.filter { $0.id != other.id } + [item]
+                            items[index] = replaced
+                        }
+                    }
+                } label: {
+                    Label("Other match", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .padding(.horizontal, SL.Space.s3)
+                        .frame(minHeight: 32)
+                        .background(Capsule().fill(SL.Surface.raised2))
+                }
+                .padding(.leading, 44)
+            }
             if included {
                 GramsStepper(grams: Binding(
                     get: { items[index].grams },
@@ -495,19 +533,48 @@ struct FoodPhotoScanSheet: View {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             var found: [ScannedFood] = []
+            var others: [UUID: [ScannedFood]] = [:]
             // What was typed comes first: it says exactly what and how much.
             for part in MealRecognition.parts(of: line) {
-                if let food = MealRecognition.scanned(part) {
+                let tableOthers = MealRecognition.candidates(part.words).map { food in
+                    food.scanned(grams: part.grams, confidence: .medium)
+                }
+                let searchedOthers = await searched(part)
+                // A table dish that is only part of what was typed ("pizza" in
+                // "dr oetker pizza bolognese") gives way to the product.
+                let tableFits = MealRecognition.match(part.words).map { MealRecognition.coverage(part.words, by: $0) >= 0.6 } ?? false
+                if let food = MealRecognition.scanned(part), tableFits || searchedOthers.isEmpty {
                     found.append(food)
-                } else if let food = await searched(part) {
-                    found.append(food)
+                    others[food.id] = (tableOthers + searchedOthers).filter { $0.name != food.name }
+                } else if let product = searchedOthers.first {
+                    // Without a typed amount, the dish's usual portion (a
+                    // pizza is 250 g, not 100).
+                    let usual = part.grams ?? MealRecognition.match(part.words)?.grams ?? product.grams
+                    let sized = product.scaled(to: usual)
+                    let pick = ScannedFood(name: sized.name, grams: sized.grams, calories: sized.calories,
+                                           protein: sized.protein, carbs: sized.carbs, fat: sized.fat, confidence: .medium)
+                    found.append(pick)
+                    others[pick.id] = Array(searchedOthers.dropFirst()) + (MealRecognition.scanned(part).map { [$0] } ?? []) + tableOthers
+                } else if let first = (tableOthers + searchedOthers).first {
+                    let rest = Array((tableOthers + searchedOthers).dropFirst())
+                    let pick = ScannedFood(name: first.name, grams: first.grams, calories: first.calories,
+                                           protein: first.protein, carbs: first.carbs, fat: first.fat,
+                                           confidence: tableOthers.isEmpty ? .low : .medium)
+                    found.append(pick)
+                    others[pick.id] = rest
                 }
             }
             if let image {
-                let seen = MealRecognition.fromLabels(await MealScanner.labels(in: image))
-                found += seen.filter { item in !found.contains { $0.name == item.name } }
+                let labels = await MealScanner.labels(in: image)
+                let seen = MealRecognition.fromLabels(labels, limit: 8)
+                let shown = Array(seen.prefix(4)).filter { item in !found.contains { $0.name == item.name } }
+                for item in shown {
+                    others[item.id] = seen.filter { $0.name != item.name && !shown.contains($0) }
+                }
+                found += shown
             }
             items = found
+            alternatives = others
             if found.isEmpty {
                 phase = .empty
             } else {
@@ -517,15 +584,28 @@ struct FoodPhotoScanSheet: View {
         }
     }
 
-    /// A typed food the table doesn't know, looked up like any search: the
-    /// first product, at the typed amount or 100 g.
-    private func searched(_ part: MealRecognition.Part) async -> ScannedFood? {
-        guard case .found(let products) = await app.searchFood(part.words), let product = products.first else { return nil }
+    /// What the search finds for a typed food, the names closest to what
+    /// was typed first, at the typed amount or 100 g. Weak matches are left
+    /// out: a wrong product is worse than none.
+    private func searched(_ part: MealRecognition.Part) async -> [ScannedFood] {
+        let products: [FoodProduct]
+        switch await app.searchFood(part.words) {
+        case .found(let found), .partial(let found, _): products = found
+        case .failed: return []
+        }
         let grams = part.grams ?? 100
-        let portion = FoodSearch.portion(of: product, grams: grams)
-        return ScannedFood(name: product.name, grams: grams, calories: portion.calories,
-                           protein: portion.protein, carbs: portion.carbs, fat: portion.fat,
-                           confidence: part.grams == nil ? .low : .medium)
+        return products
+            .map { ($0, MealRecognition.similarity(part.words, to: $0.name, brand: $0.brand)) }
+            .filter { $0.1 >= 0.5 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(4)
+            .map { product, score in
+                let portion = FoodSearch.portion(of: product, grams: grams)
+                let label = product.brand.isEmpty || product.brand == "Generiek" ? product.name : "\(product.name) · \(product.brand)"
+                return ScannedFood(name: label, grams: grams, calories: portion.calories,
+                                   protein: portion.protein, carbs: portion.carbs, fat: portion.fat,
+                                   confidence: score >= 0.9 ? .medium : .low)
+            }
     }
 }
 

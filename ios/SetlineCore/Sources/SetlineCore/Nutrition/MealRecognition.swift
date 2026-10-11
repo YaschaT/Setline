@@ -141,6 +141,44 @@ public enum MealRecognition {
         f("peanut_butter", "Peanut butter", 20, 588, 25, 20, 50, ["peanut butter", "pindakaas"]),
         f("olive_oil", "Olive oil", 10, 884, 0, 0, 100, ["olive oil", "olijfolie", "oil", "olie"]),
         f("butter", "Butter", 10, 717, 0.9, 0.1, 81, ["butter", "boter", "roomboter"]),
+        // Dishes as they are eaten here (Belgium, the Netherlands)
+        f("pie", "Chicken pie (vol-au-vent)", 250, 160, 11, 9, 9,
+          ["kippenpastei", "vol-au-vent", "vol au vent", "koninginnenhapje", "chicken pie", "pie", "pastei"]),
+        f("stew", "Flemish beef stew", 250, 165, 18, 6, 7.5, ["stoofvlees", "stoverij", "carbonnade", "beef stew", "stoofpot"]),
+        f("stamppot", "Stamppot", 350, 110, 3, 13, 5, ["stoemp", "stamppot", "hutspot", "boerenkool"]),
+        f("frikandel", "Frikandel", 75, 250, 12, 10, 18, ["frikandel", "frikadel", "curryworst"], piece: 75),
+        f("croquette", "Croquette", 70, 240, 8, 20, 14, ["kroket", "kroketten", "bitterbal", "bitterballen", "croquette"], piece: 70),
+        f("croque", "Croque monsieur", 150, 290, 15, 22, 16, ["croque", "croque monsieur", "tosti"], piece: 150),
+        f("pistolet", "Bread roll", 60, 270, 9, 52, 2.5, ["pistolet", "pistolets", "piccolo", "bread roll", "kaiserbroodje"], piece: 60),
+        f("bolognese", "Spaghetti bolognese", 400, 150, 7, 18, 5, ["bolognese", "spaghetti bolognese", "spaghetti bolo", "bolo"]),
+        f("lasagna", "Lasagne", 350, 165, 9, 13, 8.5, ["lasagne", "lasagna"]),
+        f("casserole", "Oven dish", 350, 140, 8, 12, 7, ["ovenschotel", "casserole", "gratin"]),
+        f("witloof", "Chicory with ham and cheese", 350, 120, 8, 5, 8, ["witloof", "witloof met hesp", "chicory gratin"]),
+        f("waterzooi", "Waterzooi", 350, 95, 8, 5, 5, ["waterzooi"]),
+        f("nasi", "Nasi goreng", 350, 160, 6, 20, 6, ["nasi", "nasi goreng", "fried rice", "gebakken rijst"]),
+        f("bami", "Bami goreng", 350, 150, 6, 20, 5, ["bami", "bami goreng", "fried noodles", "noedels", "noodles"]),
+        f("springroll", "Spring roll", 100, 220, 6, 25, 11, ["loempia", "spring roll", "springroll"], piece: 100),
+        f("chili", "Chili con carne", 350, 110, 8, 10, 4, ["chili", "chili con carne"]),
+        f("quiche", "Quiche", 150, 260, 10, 18, 17, ["quiche"]),
+        f("risotto", "Risotto", 300, 140, 4, 20, 5, ["risotto"]),
+        f("paella", "Paella", 350, 155, 9, 19, 5, ["paella"]),
+        f("ramen", "Ramen", 500, 90, 4.5, 12, 3, ["ramen"]),
+        f("stir_fry", "Stir-fry", 350, 120, 9, 9, 6, ["stir fry", "wok", "roerbak"]),
+        f("spareribs", "Spareribs", 300, 290, 22, 6, 20, ["spareribs", "ribs", "ribbetjes"]),
+        f("ham", "Ham", 50, 145, 21, 1.5, 6, ["ham", "hesp", "beenham"]),
+        f("hotdog", "Hot dog", 150, 250, 10, 22, 14, ["hotdog", "hot dog"], piece: 150),
+        f("nachos", "Nachos", 150, 345, 9, 36, 19, ["nachos"]),
+        f("quesadilla", "Quesadilla", 180, 290, 13, 24, 16, ["quesadilla"], piece: 180),
+        f("falafel", "Falafel", 100, 333, 13, 32, 18, ["falafel"], piece: 17),
+        f("samosa", "Samosa", 100, 262, 5, 30, 14, ["samosa"], piece: 60),
+        f("pierogi", "Pierogi", 200, 190, 6, 28, 6, ["pierogi"]),
+        f("crepe", "Crêpe", 120, 220, 6, 28, 9, ["crepe", "crêpe", "flensje"], piece: 60),
+        f("pretzel", "Pretzel", 80, 338, 9, 69, 3, ["pretzel", "bretzel"], piece: 80),
+        f("pudding", "Pudding", 150, 120, 3, 19, 3.5, ["pudding", "vla", "custard"]),
+        f("pastry", "Pastry", 80, 400, 6, 45, 22, ["pastry", "koffiekoek", "gebak"], piece: 80),
+        f("mayonnaise", "Mayonnaise", 15, 680, 1, 1, 75, ["mayo", "mayonaise", "mayonnaise"]),
+        f("ketchup", "Ketchup", 15, 100, 1.2, 24, 0.1, ["ketchup"]),
+        f("fries_sauce", "Fries sauce", 30, 300, 1, 10, 28, ["frietsaus", "andalouse", "samurai", "cocktailsaus"]),
         // Sweets and drinks
         f("cake", "Cake", 100, 371, 4, 53, 16, ["cake", "taart"]),
         f("cheesecake", "Cheesecake", 120, 321, 5.5, 25.5, 22.5, ["cheesecake"]),
@@ -168,6 +206,7 @@ public enum MealRecognition {
         "frozen_dessert": "ice_cream", "chocolate_chip": "cookie", "citrus_fruit": "oranges",
         "seafood": "shellfish_prepared", "shellfish": "shellfish_prepared", "meat": "beef",
         "bean": "green_beans", "gingerbread": "cookie", "tapioca_pearls": "bubble_tea",
+        "spaghetti_bolognese": "bolognese",
     ]
 
     /// Labels too broad to log on their own: kept only when nothing more
@@ -240,14 +279,114 @@ public enum MealRecognition {
 
     /// The table's food a few words mean: the longest alias found in them.
     public static func match(_ words: String) -> Food? {
-        let text = " \(words.lowercased()) "
+        let lowered = words.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+        let text = " \(lowered) "
+        let tokens = lowered.split(separator: " ").map(String.init)
         var best: (Food, Int)?
         for food in foods {
-            for alias in food.aliases where text.contains(" \(alias) ") || text.contains(" \(alias)s ") {
-                if alias.count > (best?.1 ?? 0) { best = (food, alias.count) }
+            for raw in food.aliases {
+                let alias = raw.folding(options: .diacriticInsensitive, locale: nil)
+                // A whole word, or — for a long, specific name — inside a
+                // Dutch compound: "kippenpasteitje" is still kippenpastei.
+                let whole = text.contains(" \(alias) ") || text.contains(" \(alias)s ") || text.contains(" \(alias)en ")
+                let inside = alias.count >= 6 && !alias.contains(" ") && tokens.contains { $0.contains(alias) }
+                if (whole || inside), alias.count > (best?.1 ?? 0) { best = (food, alias.count) }
             }
         }
-        return best?.0
+        if let best { return best.0 }
+        // A typo in a longer name: "kippenpqstei" is still kippenpastei.
+        var closest: (Food, Int)?
+        for food in foods {
+            for raw in food.aliases where raw.count >= 6 && !raw.contains(" ") {
+                let alias = raw.folding(options: .diacriticInsensitive, locale: nil)
+                for token in tokens where abs(token.count - alias.count) <= 2 {
+                    let distance = Self.distance(token, alias)
+                    if distance <= 2, distance < (closest?.1 ?? 3) { closest = (food, distance) }
+                }
+            }
+        }
+        return closest?.0
+    }
+
+    /// Letters to change, add or remove to turn one word into the other.
+    static func distance(_ a: String, _ b: String) -> Int {
+        let a = Array(a), b = Array(b)
+        guard !a.isEmpty else { return b.count }
+        guard !b.isEmpty else { return a.count }
+        var previous = Array(0...b.count)
+        for i in 1...a.count {
+            var current = [i] + Array(repeating: 0, count: b.count)
+            for j in 1...b.count {
+                current[j] = min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1))
+            }
+            previous = current
+        }
+        return previous[b.count]
+    }
+
+    /// Other table foods a few words could mean, best first — what "Other
+    /// match" offers next to the one chosen.
+    public static func candidates(_ words: String, limit: Int = 4) -> [Food] {
+        let tokens = Set(words.lowercased().split(separator: " ").map(String.init).filter { $0.count >= 3 })
+        guard !tokens.isEmpty else { return [] }
+        return foods
+            .map { food -> (Food, Int) in
+                // Short aliases ("ei", "kip") only count as whole words: inside
+                // "kippenpastei" they mean nothing.
+                let score = food.aliases.reduce(0) { total, alias in
+                    total + tokens.filter { token in
+                        token == alias || (alias.count >= 4 && token.contains(alias)) || (token.count >= 4 && alias.contains(token))
+                    }.count
+                }
+                return (food, score)
+            }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(limit)
+            .map(\.0)
+    }
+
+    /// The words that carry meaning in what was typed, folded: no accents,
+    /// no filler, and brands written one way ("dokter" → "dr").
+    static func significant(_ text: String) -> [String] {
+        let filler: Set<String> = ["met", "and", "with", "van", "the", "een", "and", "of", "en", "de", "het"]
+        let synonyms = ["dokter": "dr", "doctor": "dr", "dr.": "dr"]
+        return text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map { synonyms[String($0)] ?? String($0) }
+            .filter { ($0.count >= 3 || $0 == "dr") && !filler.contains($0) }
+    }
+
+    /// A typed word found among others: exactly, inside one, or one or two
+    /// letters off for a longer word ("bolognaise" is bolognese).
+    static func found(_ word: String, in words: [String]) -> Bool {
+        words.contains { other in
+            other == word || (word.count >= 4 && other.contains(word)) || (other.count >= 4 && word.contains(other))
+                || (word.count >= 6 && abs(other.count - word.count) <= 2 && distance(word, other) <= 2)
+        }
+    }
+
+    /// How well a product answers what was typed, 0…1: the share of the
+    /// typed words found in its name and brand, with a little extra for a
+    /// generic table food over a brand.
+    public static func similarity(_ query: String, to name: String, brand: String) -> Double {
+        let asked = significant(query)
+        guard !asked.isEmpty else { return 0 }
+        let haystack = significant("\(name) \(brand)")
+        let hits = asked.filter { found($0, in: haystack) }.count
+        var score = Double(hits) / Double(asked.count)
+        if brand.lowercased() == "generiek" || brand.isEmpty { score += 0.15 }
+        return min(1, score)
+    }
+
+    /// How much of what was typed a table food explains, 0…1. "pizza" is
+    /// all of "pizza", but only a third of "dr oetker pizza bolognese" — then
+    /// the product itself answers better than a general pizza.
+    public static func coverage(_ query: String, by food: Food) -> Double {
+        let asked = significant(query)
+        guard !asked.isEmpty else { return 0 }
+        let words = food.aliases.flatMap { significant($0) } + significant(food.name)
+        return Double(asked.filter { found($0, in: words) }.count) / Double(asked.count)
     }
 
     /// A typed part as a food, when the table knows it: the amount as typed,

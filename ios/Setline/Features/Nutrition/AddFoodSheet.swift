@@ -93,12 +93,26 @@ struct AddFoodSheet: View {
                                 .foregroundStyle(SL.Ink.tertiary)
                                 .padding(.top, SL.Space.s3)
                         }
+                        if isSearch, !bestDishes.isEmpty {
+                            group("BEST MATCH", top: 22) {
+                                ForEach(bestDishes, id: \.key) { food in
+                                    dishRow(food)
+                                }
+                            }
+                        }
                         if searching {
                             loading.padding(.top, SL.Space.s3)
                         } else if !results.isEmpty {
-                            group("RESULTATEN", top: 22) {
+                            group(bestDishes.isEmpty ? "RESULTS" : "PRODUCTS", top: bestDishes.isEmpty ? 22 : 18) {
                                 ForEach(results) { product in
                                     productRow(product)
+                                }
+                            }
+                            if !generalDishes.isEmpty {
+                                group("GENERAL ESTIMATE", top: 18) {
+                                    ForEach(generalDishes, id: \.key) { food in
+                                        dishRow(food)
+                                    }
                                 }
                             }
                             Text("Check the packaging; Open Food Facts is maintained by its users.")
@@ -319,10 +333,10 @@ struct AddFoodSheet: View {
         searching = false
         switch outcome {
         case let .found(products):
-            results = products
+            results = Self.ranked(products, for: asked)
             note = nil
         case let .partial(products, text):
-            results = products
+            results = Self.ranked(products, for: asked)
             note = text
         case let .failed(message):
             results = []
@@ -435,6 +449,55 @@ struct AddFoodSheet: View {
     /// A product from the search, at the 100 g its values are given for. The
     /// amount is changed afterwards on the row itself (42d), where the macros
     /// follow it.
+    /// Dishes the app knows by name — "kippenpastei", "stoofvlees" — with a
+    /// usual portion and standard values: shown above the database's
+    /// products, which often answer a dish with an unrelated brand.
+    private var dishMatches: [MealRecognition.Food] {
+        let asked = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard asked.count >= FoodSearch.shortestQuery else { return [] }
+        var list: [MealRecognition.Food] = []
+        if let best = MealRecognition.match(asked) { list.append(best) }
+        for food in MealRecognition.candidates(asked, limit: 3) where !list.contains(where: { $0.key == food.key }) {
+            list.append(food)
+        }
+        return Array(list.prefix(3))
+    }
+
+    /// A dish that is what was typed ("kippenpastei") leads; one that is only
+    /// part of it ("pizza" in "dr oetker pizza bolognese") waits under the
+    /// products, as a general estimate — the product itself answers better.
+    private var bestDishes: [MealRecognition.Food] {
+        let asked = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return dishMatches.filter { MealRecognition.coverage(asked, by: $0) >= 0.6 || results.isEmpty && !searching }
+    }
+
+    private var generalDishes: [MealRecognition.Food] {
+        dishMatches.filter { food in !bestDishes.contains { $0.key == food.key } }
+    }
+
+    private func dishRow(_ food: MealRecognition.Food) -> some View {
+        let portion = food.scanned(confidence: .medium)
+        let entry = portion.entry(id: Self.newID(), on: date, meal: chosen)
+        return row(
+            title: food.name,
+            detail: "\(Int(portion.grams)) g · \(app.display.kcal(Decimal(portion.calories))) · \(app.display.whole(Decimal(portion.protein))) g protein",
+            favorite: entry
+        ) {
+            onLog(portion.entry(id: Self.newID(), on: date, meal: chosen))
+        }
+    }
+
+    /// The search's products, the ones whose name says what was typed first.
+    private static func ranked(_ products: [FoodProduct], for query: String) -> [FoodProduct] {
+        products.enumerated()
+            .sorted { a, b in
+                let left = MealRecognition.similarity(query, to: a.element.name, brand: a.element.brand)
+                let right = MealRecognition.similarity(query, to: b.element.name, brand: b.element.brand)
+                return left == right ? a.offset < b.offset : left > right
+            }
+            .map(\.element)
+    }
+
     /// A product at 100 g, as it would be logged — what a star keeps.
     private func productEntry(_ product: FoodProduct) -> NutritionEntry {
         let draft = FoodSearch.portion(of: product, grams: 100)
