@@ -72,4 +72,24 @@ final class MealRecognitionTests: XCTestCase {
         let product = MealRecognition.similarity("dokter oetker pizza bolognaise", to: "Ristorante Pizza Bolognese", brand: "Dr. Oetker")
         XCTAssertEqual(product, 1, accuracy: 0.01)
     }
+
+    func testBreadAsksWhatIsOnItPerSlice() throws {
+        let bread = try XCTUnwrap(MealRecognition.scanned(.init(words: "boterhammen", grams: nil, count: 4)))
+        XCTAssertEqual(bread.grams, 140)
+        let question = try XCTUnwrap(MealRecognition.questions(for: bread.key).first)
+        XCTAssertEqual(question.text, "What's on it?")
+        let choco = try XCTUnwrap(question.answers.first { $0.id == "choco" })
+        let added = try XCTUnwrap(MealRecognition.added(choco, to: bread))
+        XCTAssertEqual(added.name, "Chocolate spread")
+        XCTAssertEqual(added.grams, 60)
+    }
+
+    func testDishAsksHowBigAndKeepsItsRow() throws {
+        let pizza = try XCTUnwrap(MealRecognition.match("pizza")).scanned(confidence: .medium)
+        let question = try XCTUnwrap(MealRecognition.questions(for: pizza.key).first)
+        let large = try XCTUnwrap(question.answers.first { $0.id == "large" })
+        let bigger = MealRecognition.sized(pizza, by: large)
+        XCTAssertEqual(bigger.grams, 350)
+        XCTAssertEqual(bigger.id, pizza.id)
+    }
 }

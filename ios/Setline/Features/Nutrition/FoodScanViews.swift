@@ -253,6 +253,16 @@ struct FoodPhotoScanSheet: View {
     @State private var items: [ScannedFood] = []
     /// Per row, what else it could be — offered under "Other match".
     @State private var alternatives: [UUID: [ScannedFood]] = [:]
+    /// Per row, the answers tapped to its questions.
+    @State private var answered: [UUID: Set<String>] = [:]
+    /// Per row, the rows its answers added, by answer.
+    @State private var added: [UUID: [String: UUID]] = [:]
+
+    private var addedIDs: Set<UUID> { Set(added.values.flatMap(\.values)) }
+
+    private func questionKey(_ item: ScannedFood) -> String? {
+        item.key ?? MealRecognition.match(item.name)?.key
+    }
     @State private var leftOut: Set<UUID> = []
     @State private var picking: UIImagePickerController.SourceType?
     @FocusState private var typing: Bool
@@ -432,6 +442,7 @@ struct FoodPhotoScanSheet: View {
 
     private func resultRow(index: Int, item: ScannedFood) -> some View {
         let included = !leftOut.contains(item.id)
+        let isAdded = addedIDs.contains(item.id)
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             HStack(spacing: SL.Space.s3) {
                 Button {
@@ -484,9 +495,86 @@ struct FoodPhotoScanSheet: View {
                     set: { items[index] = items[index].scaled(to: $0) }
                 ), serving: nil, compact: true)
                 .padding(.leading, 44)
+                if !addedIDs.contains(item.id) {
+                    ForEach(MealRecognition.questions(for: questionKey(item))) { question in
+                        questionView(question, for: item)
+                            .padding(.leading, 44)
+                    }
+                }
             }
         }
         .padding(SL.Space.s3)
+        .padding(.leading, isAdded ? SL.Space.s6 : 0)
+        .background(isAdded ? SL.Signal.actionTint.opacity(0.35) : Color.clear)
+    }
+
+    /// A question about a row, answered with chips: what's on the bread,
+    /// which sauce, how big the plate. Answers can be changed until it's added.
+    private func questionView(_ question: MealRecognition.Question, for item: ScannedFood) -> some View {
+        let chosen = answered[item.id] ?? []
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(spacing: 6) {
+                Image(systemName: question.symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SL.Signal.action)
+                Text(question.text)
+                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.primary)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(question.answers) { answer in
+                        let on = chosen.contains(answer.id)
+                        Button { choose(answer, of: question, for: item) } label: {
+                            HStack(spacing: 4) {
+                                if on { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)) }
+                                Text(answer.label)
+                            }
+                            .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                            .foregroundStyle(on ? SL.Signal.onAction : SL.Ink.primary)
+                            .padding(.horizontal, SL.Space.s3)
+                            .frame(minHeight: 34)
+                            .background(Capsule().fill(on ? SL.Signal.action : SL.Surface.raised2))
+                            .overlay(Capsule().strokeBorder(on ? Color.clear : SL.Surface.hairlineStrong, lineWidth: 1))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(SLPressStyle(scale: 0.92, bounces: true))
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+            }
+        }
+        .padding(.top, SL.Space.s1)
+        .sensoryFeedback(.selection, trigger: chosen)
+    }
+
+    private func choose(_ answer: MealRecognition.Question.Answer, of question: MealRecognition.Question, for item: ScannedFood) {
+        var chosen = answered[item.id] ?? []
+        switch question.kind {
+        case .size:
+            chosen = chosen.subtracting(question.answers.map(\.id))
+            chosen.insert(answer.id)
+            if let index = items.firstIndex(where: { $0.id == item.id }) {
+                withAnimation(.snappy) { items[index] = MealRecognition.sized(item, by: answer) }
+            }
+        case .adds:
+            if chosen.contains(answer.id) {
+                chosen.remove(answer.id)
+                if let childID = added[item.id]?[answer.id] {
+                    withAnimation(.snappy) { items.removeAll { $0.id == childID } }
+                    leftOut.remove(childID)
+                    added[item.id]?[answer.id] = nil
+                }
+            } else if let child = MealRecognition.added(answer, to: item),
+                      let index = items.firstIndex(where: { $0.id == item.id }) {
+                chosen.insert(answer.id)
+                let after = index + 1 + (added[item.id]?.count ?? 0)
+                withAnimation(.snappy) { items.insert(child, at: min(after, items.count)) }
+                added[item.id, default: [:]][answer.id] = child.id
+                SLSound.pop.play()
+            }
+        }
+        answered[item.id] = chosen
     }
 
     private func confidence(_ level: ScannedFood.Confidence) -> some View {
@@ -575,6 +663,8 @@ struct FoodPhotoScanSheet: View {
             }
             items = found
             alternatives = others
+            answered = [:]
+            added = [:]
             if found.isEmpty {
                 phase = .empty
             } else {

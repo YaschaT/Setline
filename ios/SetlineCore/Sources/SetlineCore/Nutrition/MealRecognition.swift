@@ -30,7 +30,7 @@ public enum MealRecognition {
                 protein: (protein * factor * 10).rounded() / 10,
                 carbs: (carbs * factor * 10).rounded() / 10,
                 fat: (fat * factor * 10).rounded() / 10,
-                confidence: confidence
+                confidence: confidence, key: key
             )
         }
     }
@@ -179,6 +179,20 @@ public enum MealRecognition {
         f("mayonnaise", "Mayonnaise", 15, 680, 1, 1, 75, ["mayo", "mayonaise", "mayonnaise"]),
         f("ketchup", "Ketchup", 15, 100, 1.2, 24, 0.1, ["ketchup"]),
         f("fries_sauce", "Fries sauce", 30, 300, 1, 10, 28, ["frietsaus", "andalouse", "samurai", "cocktailsaus"]),
+        // On bread, with pasta, in coffee: what the questions add
+        f("choco_spread", "Chocolate spread", 15, 539, 6.3, 57.5, 31, ["choco", "nutella", "chocopasta", "hazelnootpasta", "chocolate spread"]),
+        f("jam", "Jam", 15, 250, 0.4, 60, 0.1, ["jam", "confituur", "konfituur"]),
+        f("honey", "Honey", 10, 304, 0.3, 82, 0, ["honey", "honing"]),
+        f("chicken_spread", "Chicken spread", 20, 105, 20, 1, 2.5, ["kipfilet beleg", "kip beleg", "chicken spread"]),
+        f("speculoos", "Speculoos spread", 15, 584, 1.5, 57, 38, ["speculoospasta", "speculoos", "lotus"]),
+        f("tomato_sauce", "Tomato sauce", 100, 50, 1.5, 8, 1.5, ["tomatensaus", "tomato sauce", "marinara"]),
+        f("meat_sauce", "Meat sauce", 120, 110, 8, 6, 6, ["vleessaus", "meat sauce", "bolognesesaus"]),
+        f("pesto", "Pesto", 30, 450, 5, 5, 45, ["pesto"]),
+        f("cream_sauce", "Cream sauce", 80, 180, 2, 5, 17, ["roomsaus", "cream sauce", "carbonara"]),
+        f("grated_cheese", "Grated cheese", 15, 400, 28, 2, 31, ["geraspte kaas", "parmezaan", "parmesan", "grated cheese"]),
+        f("vinaigrette", "Vinaigrette", 20, 300, 0, 5, 30, ["vinaigrette", "dressing"]),
+        f("caesar", "Caesar dressing", 20, 450, 2, 4, 48, ["caesar dressing"]),
+        f("sugar", "Sugar", 5, 400, 0, 100, 0, ["sugar", "suiker"]),
         // Sweets and drinks
         f("cake", "Cake", 100, 371, 4, 53, 16, ["cake", "taart"]),
         f("cheesecake", "Cheesecake", 120, 321, 5.5, 25.5, 22.5, ["cheesecake"]),
@@ -387,6 +401,131 @@ public enum MealRecognition {
         guard !asked.isEmpty else { return 0 }
         let words = food.aliases.flatMap { significant($0) } + significant(food.name)
         return Double(asked.filter { found($0, in: words) }.count) / Double(asked.count)
+    }
+
+    // MARK: - Questions that make it precise
+
+    /// A question the scan can ask about a food it found — what's on the
+    /// bread, which sauce, how big the plate was — answered with a tap.
+    public struct Question: Identifiable, Equatable, Sendable {
+        public enum Kind: Equatable, Sendable {
+            /// Each answer adds its own row (the Nutella on the bread).
+            case adds
+            /// One answer scales the food itself (a large plate).
+            case size
+        }
+
+        public struct Answer: Identifiable, Equatable, Sendable {
+            public let id: String
+            public let label: String
+            /// For `adds`: the table food it adds, and how much — per piece of
+            /// the food asked about (a slice), or for the whole of it.
+            public let addsKey: String?
+            public let grams: Double
+            public let perPiece: Bool
+            /// For `size`: what the usual amount is multiplied by.
+            public let factor: Double
+        }
+
+        public let id: String
+        public let text: String
+        public let symbol: String
+        public let kind: Kind
+        public let answers: [Answer]
+    }
+
+    private static func add(_ id: String, _ label: String, _ key: String, _ grams: Double, perPiece: Bool = false) -> Question.Answer {
+        .init(id: id, label: label, addsKey: key, grams: grams, perPiece: perPiece, factor: 1)
+    }
+
+    private static let sizeQuestion = Question(
+        id: "size", text: "How big was your plate?", symbol: "circle.dashed", kind: .size,
+        answers: [
+            .init(id: "small", label: "Small", addsKey: nil, grams: 0, perPiece: false, factor: 0.7),
+            .init(id: "normal", label: "Normal", addsKey: nil, grams: 0, perPiece: false, factor: 1),
+            .init(id: "large", label: "Large", addsKey: nil, grams: 0, perPiece: false, factor: 1.4),
+        ]
+    )
+
+    /// The questions worth asking about a food, by its table key.
+    public static func questions(for key: String?) -> [Question] {
+        guard let key else { return [] }
+        let breads: Set<String> = ["bread", "white_bread", "pistolet", "bagel", "croissant", "tortilla", "pancake", "crepe", "waffle", "sandwich"]
+        let starches: Set<String> = ["pasta", "spaghetti", "rice", "potato"]
+        let dishes: Set<String> = ["pizza", "pie", "stew", "stamppot", "bolognese", "lasagna", "casserole", "witloof", "waterzooi", "curry",
+                                   "nasi", "bami", "chili", "risotto", "paella", "ramen", "stir_fry", "soup", "quiche", "kebab", "burrito", "sushi"]
+        let bowls: Set<String> = ["yogurt", "skyr", "quark", "oatmeal", "oats", "cereal", "cottage_cheese"]
+        if breads.contains(key) {
+            return [Question(id: "on", text: "What's on it?", symbol: "square.stack.3d.down.forward", kind: .adds, answers: [
+                add("butter", "Butter", "butter", 5, perPiece: true),
+                add("choco", "Choco / Nutella", "choco_spread", 15, perPiece: true),
+                add("jam", "Jam", "jam", 15, perPiece: true),
+                add("peanut", "Peanut butter", "peanut_butter", 15, perPiece: true),
+                add("cheese", "Cheese", "cheese", 20, perPiece: true),
+                add("ham", "Ham", "ham", 20, perPiece: true),
+                add("chicken", "Chicken spread", "chicken_spread", 20, perPiece: true),
+                add("speculoos", "Speculoos", "speculoos", 15, perPiece: true),
+                add("honey", "Honey", "honey", 10, perPiece: true),
+            ])]
+        }
+        if starches.contains(key) {
+            return [Question(id: "sauce", text: "Any sauce with it?", symbol: "drop.fill", kind: .adds, answers: [
+                add("tomato", "Tomato sauce", "tomato_sauce", 100),
+                add("meat", "Meat sauce", "meat_sauce", 120),
+                add("pesto", "Pesto", "pesto", 30),
+                add("cream", "Cream sauce", "cream_sauce", 80),
+                add("cheese", "Grated cheese", "grated_cheese", 15),
+                add("oil", "Oil or butter", "olive_oil", 10),
+            ])]
+        }
+        if key == "fries" {
+            return [Question(id: "sauce", text: "Sauce with your fries?", symbol: "drop.fill", kind: .adds, answers: [
+                add("mayo", "Mayo", "mayonnaise", 30),
+                add("ketchup", "Ketchup", "ketchup", 20),
+                add("fries_sauce", "Fries sauce", "fries_sauce", 30),
+            ])]
+        }
+        if key == "salad" {
+            return [Question(id: "dressing", text: "Any dressing?", symbol: "drop.fill", kind: .adds, answers: [
+                add("vinaigrette", "Vinaigrette", "vinaigrette", 20),
+                add("caesar", "Caesar", "caesar", 20),
+                add("oil", "Olive oil", "olive_oil", 10),
+                add("cheese", "Cheese", "grated_cheese", 15),
+            ])]
+        }
+        if key == "coffee" || key == "tea_drink" {
+            return [Question(id: "milk", text: "Milk or sugar?", symbol: "cup.and.saucer.fill", kind: .adds, answers: [
+                add("milk", "Milk", "milk", 30),
+                add("sugar", "Sugar", "sugar", 5),
+            ])]
+        }
+        if bowls.contains(key) {
+            return [Question(id: "topping", text: "Anything on top?", symbol: "sparkles", kind: .adds, answers: [
+                add("fruit", "Fruit", "berry", 75),
+                add("granola", "Granola", "cereal", 30),
+                add("honey", "Honey", "honey", 10),
+                add("nuts", "Nuts", "nut", 15),
+                add("peanut", "Peanut butter", "peanut_butter", 15),
+            ])]
+        }
+        if dishes.contains(key) { return [sizeQuestion] }
+        return []
+    }
+
+    /// The row an answer adds to a food: the topping at its amount — per
+    /// slice when it goes on each slice, so choco on four slices is four
+    /// times fifteen grams.
+    public static func added(_ answer: Question.Answer, to item: ScannedFood) -> ScannedFood? {
+        guard let key = answer.addsKey, let food = foods.first(where: { $0.key == key }) else { return nil }
+        let base = foods.first { $0.key == item.key }
+        let pieces = answer.perPiece ? max(1, (item.grams / (base?.pieceGrams ?? item.grams)).rounded()) : 1
+        return food.scanned(grams: answer.grams * pieces, confidence: .high)
+    }
+
+    /// A food at its usual amount times a size answer.
+    public static func sized(_ item: ScannedFood, by answer: Question.Answer) -> ScannedFood {
+        let usual = foods.first { $0.key == item.key }?.grams ?? item.grams
+        return item.scaled(to: (usual * answer.factor).rounded())
     }
 
     /// A typed part as a food, when the table knows it: the amount as typed,

@@ -77,11 +77,16 @@ public struct ScannedFood: Identifiable, Equatable, Sendable, Decodable {
     public let carbs: Double
     public let fat: Double
     public let confidence: Confidence
+    /// The table food it is, when it is one: what decides which questions
+    /// can make it more precise.
+    public let key: String?
 
     private enum CodingKeys: String, CodingKey { case name, grams, calories, protein, carbs, fat, confidence }
 
-    public init(name: String, grams: Double, calories: Double, protein: Double, carbs: Double, fat: Double, confidence: Confidence = .medium) {
-        id = UUID()
+    public init(name: String, grams: Double, calories: Double, protein: Double, carbs: Double, fat: Double,
+                confidence: Confidence = .medium, key: String? = nil, id: UUID = UUID()) {
+        self.id = id
+        self.key = key
         self.name = name
         self.grams = grams
         self.calories = calories
@@ -104,7 +109,8 @@ public struct ScannedFood: Identifiable, Equatable, Sendable, Decodable {
         )
     }
 
-    /// The same food at another amount; the values follow the grams.
+    /// The same food at another amount; the values follow the grams. It
+    /// stays the same row: answers and other matches stay attached to it.
     public func scaled(to newGrams: Double) -> ScannedFood {
         let factor = grams > 0 ? newGrams / grams : 1
         return ScannedFood(
@@ -113,7 +119,7 @@ public struct ScannedFood: Identifiable, Equatable, Sendable, Decodable {
             protein: (protein * factor * 10).rounded() / 10,
             carbs: (carbs * factor * 10).rounded() / 10,
             fat: (fat * factor * 10).rounded() / 10,
-            confidence: confidence
+            confidence: confidence, key: key, id: id
         )
     }
 
