@@ -95,6 +95,10 @@ struct TallyMascot: View {
         }
         .task {
             guard !reduceMotion else { return }
+            // Only once the screen has settled: started during a sheet's
+            // slide-in, the repeating animation would repeat the slide too.
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
             bobbing = true
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Double.random(in: 2.6...4.2)))

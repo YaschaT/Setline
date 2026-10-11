@@ -257,6 +257,9 @@ struct FoodPhotoScanSheet: View {
     @State private var answered: [UUID: Set<String>] = [:]
     /// Per row, the rows its answers added, by answer.
     @State private var added: [UUID: [String: UUID]] = [:]
+    /// Tally's jumps, and the last thing Tally reacted to.
+    @State private var tallyJumps = 0
+    @State private var lastAnswer: (food: String, answer: String)?
 
     private var addedIDs: Set<UUID> { Set(added.values.flatMap(\.values)) }
 
@@ -270,6 +273,10 @@ struct FoodPhotoScanSheet: View {
     var body: some View {
         VStack(spacing: SL.Space.s4) {
             ScanTopBar(title: "Scan your meal", subtitle: "A photo, or a line about what you ate", onClose: onClose)
+
+            TallyGuide(line: tallyLine, mood: tallyMood, jumps: tallyJumps)
+                .onTapGesture { tallyJumps += 1 }
+                .zIndex(1)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: SL.Space.s4) {
@@ -508,6 +515,72 @@ struct FoodPhotoScanSheet: View {
         .background(isAdded ? SL.Signal.actionTint.opacity(0.35) : Color.clear)
     }
 
+    // MARK: - Tally
+
+    /// The first question still open, and the food it's about.
+    private var openQuestion: (food: ScannedFood, question: MealRecognition.Question)? {
+        for item in items where !leftOut.contains(item.id) && !addedIDs.contains(item.id) {
+            for question in MealRecognition.questions(for: questionKey(item)) where (answered[item.id] ?? []).isEmpty {
+                return (item, question)
+            }
+        }
+        return nil
+    }
+
+    private var tallyMood: TallyMascot.Mood {
+        switch phase {
+        case .start: .ready
+        case .reading: .focused
+        case .empty: .resting
+        case .results: openQuestion == nil ? .proud : .ready
+        }
+    }
+
+    /// What Tally says: always about what is on screen now, never chat.
+    private var tallyLine: String {
+        switch phase {
+        case .start:
+            return "Hi! Show me your plate, or tell me what you ate."
+        case .reading:
+            return "Hmm, let me have a look…"
+        case .empty:
+            return "I couldn't make that out. Tell me what it was?"
+        case .results:
+            let names = items.filter { !addedIDs.contains($0.id) }.map { Self.short($0.name) }
+            let seen = names.count <= 1 ? (names.first ?? "something")
+                : names.dropLast().joined(separator: ", ") + " and " + (names.last ?? "")
+            if let open = openQuestion {
+                let food = Self.short(open.food.name)
+                let ask: String = switch open.question.kind {
+                case .size: "how big was the \(food)?"
+                case .adds: open.question.id == "on" ? "anything on that \(food)?"
+                    : open.question.id == "sauce" ? "any sauce with the \(food)?"
+                    : open.question.id == "dressing" ? "dressing on the salad?"
+                    : open.question.id == "milk" ? "milk or sugar in your \(food)?"
+                    : "anything on top of the \(food)?"
+                }
+                if let last = lastAnswer {
+                    return "\(last.answer) on the \(last.food), nice. And \(ask)"
+                }
+                return "I see \(seen). Quick one: \(ask)"
+            }
+            if let last = lastAnswer {
+                return "\(last.answer) on the \(last.food) — got it! All set? Add it to \(meal.spoken)."
+            }
+            return "I see \(seen). Check the grams, then add it to \(meal.spoken)."
+        }
+    }
+
+    /// "White rice, cooked" → "rice"; "Chicken pie (vol-au-vent)" → "chicken pie".
+    private static func short(_ name: String) -> String {
+        let base = name.split(separator: "(").first.map(String.init) ?? name
+        let first = base.split(separator: ",").first.map(String.init) ?? base
+        let words = first.split(separator: " ")
+        let trimmed = words.count > 1 && ["white", "mixed", "fried"].contains(words[0].lowercased())
+            ? words.dropFirst().joined(separator: " ") : first
+        return trimmed.lowercased().trimmingCharacters(in: .whitespaces)
+    }
+
     /// A question about a row, answered with chips: what's on the bread,
     /// which sauce, how big the plate. Answers can be changed until it's added.
     private func questionView(_ question: MealRecognition.Question, for item: ScannedFood) -> some View {
@@ -571,6 +644,8 @@ struct FoodPhotoScanSheet: View {
                 let after = index + 1 + (added[item.id]?.count ?? 0)
                 withAnimation(.snappy) { items.insert(child, at: min(after, items.count)) }
                 added[item.id, default: [:]][answer.id] = child.id
+                lastAnswer = (Self.short(item.name), answer.label.components(separatedBy: " / ").first ?? answer.label)
+                tallyJumps += 1
                 SLSound.pop.play()
             }
         }
@@ -665,10 +740,12 @@ struct FoodPhotoScanSheet: View {
             alternatives = others
             answered = [:]
             added = [:]
+            lastAnswer = nil
             if found.isEmpty {
                 phase = .empty
             } else {
                 SLSound.pop.play()
+                tallyJumps += 1
                 phase = .results
             }
         }
@@ -758,6 +835,54 @@ private struct ImagePicker: UIViewControllerRepresentable {
 }
 
 // MARK: - Shared pieces
+
+/// Tally, the app's mascot, guiding the scan: a few bars with a face beside
+/// one speech bubble that says what is happening and what Tally wants to know.
+private struct TallyGuide: View {
+    let line: String
+    let mood: TallyMascot.Mood
+    let jumps: Int
+
+    var body: some View {
+        // Tally sits at the top and never moves with the bubble: its bars
+        // breathe on a repeating animation, which would otherwise repeat any
+        // change of place too.
+        HStack(alignment: .top, spacing: SL.Space.s3) {
+            TallyMascot(done: 3, goal: 3, mood: mood, unit: 12, jumps: jumps)
+                .fixedSize()
+                .frame(width: 52, height: 56, alignment: .bottomLeading)
+                .accessibilityHidden(true)
+            Text(line)
+                .slBody(SL.Weight.medium)
+                .foregroundStyle(SL.Ink.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .contentTransition(.opacity)
+                .padding(.horizontal, SL.Space.s4)
+                .padding(.vertical, SL.Space.s3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    BubbleShape()
+                        .fill(SL.Surface.raised2)
+                )
+                .overlay(BubbleShape().stroke(SL.Surface.hairlineStrong, lineWidth: 1))
+                .animation(.easeOut(duration: SL.Motion.base), value: line)
+                .accessibilityLabel("Tally says: \(line)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// A rounded bubble with a small tail on the left, toward Tally.
+    private struct BubbleShape: Shape {
+        func path(in rect: CGRect) -> Path {
+            var path = Path(roundedRect: rect, cornerRadius: 16, style: .continuous)
+            path.move(to: CGPoint(x: rect.minX + 2, y: rect.minY + 16))
+            path.addLine(to: CGPoint(x: rect.minX - 8, y: rect.minY + 28))
+            path.addLine(to: CGPoint(x: rect.minX + 2, y: rect.minY + 32))
+            path.closeSubpath()
+            return path
+        }
+    }
+}
 
 private struct ScanTopBar: View {
     let title: String
