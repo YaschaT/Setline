@@ -92,4 +92,14 @@ final class MealRecognitionTests: XCTestCase {
         XCTAssertEqual(bigger.grams, 350)
         XCTAssertEqual(bigger.id, pizza.id)
     }
+
+    func testPhotoGuessOffersLookalikes() throws {
+        let paella = try XCTUnwrap(MealRecognition.food(forLabel: "paella")).scanned(confidence: .medium)
+        let question = MealRecognition.identityQuestion(for: paella)
+        XCTAssertEqual(question.kind, .identity)
+        let labels = question.answers.map(\.label)
+        XCTAssertEqual(labels.first, "Yes")
+        XCTAssertTrue(labels.contains("Nasi goreng"))
+        XCTAssertEqual(labels.last, "Something else")
+    }
 }

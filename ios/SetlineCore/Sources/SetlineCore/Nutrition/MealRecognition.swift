@@ -413,6 +413,9 @@ public enum MealRecognition {
             case adds
             /// One answer scales the food itself (a large plate).
             case size
+            /// Whether a photo's guess is right: yes, a lookalike, or
+            /// something else to type.
+            case identity
         }
 
         public struct Answer: Identifiable, Equatable, Sendable {
@@ -425,6 +428,23 @@ public enum MealRecognition {
             public let perPiece: Bool
             /// For `size`: what the usual amount is multiplied by.
             public let factor: Double
+
+            public init(id: String, label: String, addsKey: String?, grams: Double, perPiece: Bool, factor: Double) {
+                self.id = id
+                self.label = label
+                self.addsKey = addsKey
+                self.grams = grams
+                self.perPiece = perPiece
+                self.factor = factor
+            }
+        }
+
+        public init(id: String, text: String, symbol: String, kind: Kind, answers: [Answer]) {
+            self.id = id
+            self.text = text
+            self.symbol = symbol
+            self.kind = kind
+            self.answers = answers
         }
 
         public let id: String
@@ -510,6 +530,52 @@ public enum MealRecognition {
         }
         if dishes.contains(key) { return [sizeQuestion] }
         return []
+    }
+
+    /// Dishes a photo easily mistakes for each other: a plate of yellow rice
+    /// is paella, nasi or risotto; noodles are ramen or bami.
+    private static let lookalikeGroups: [[String]] = [
+        ["paella", "nasi", "risotto", "rice", "curry", "stir_fry", "chili"],
+        ["spaghetti", "bolognese", "pasta", "lasagna", "bami", "ramen"],
+        ["pie", "quiche", "casserole", "lasagna", "waterzooi", "stew"],
+        ["stew", "curry", "chili", "soup", "waterzooi"],
+        ["pizza", "quiche", "quesadilla", "croque"],
+        ["hamburger", "sandwich", "hotdog", "croque", "kebab"],
+        ["grilled_chicken", "fried_chicken", "turkey", "fish", "salmon", "steak"],
+        ["fries", "potato", "croquette"],
+        ["salad", "vegetable", "broccoli", "green_beans"],
+        ["pancake", "crepe", "waffle"],
+        ["cake", "cheesecake", "pastry", "muffin", "cookie"],
+        ["yogurt", "skyr", "quark", "pudding", "oatmeal"],
+        ["burrito", "taco", "quesadilla", "tortilla", "springroll"],
+        ["sushi", "springroll", "dumpling"],
+    ]
+
+    /// What a photo's guess could also be, closest first.
+    public static func lookalikes(of key: String?, limit: Int = 3) -> [Food] {
+        guard let key else { return [] }
+        var seen: [String] = []
+        for group in lookalikeGroups where group.contains(key) {
+            for other in group where other != key && !seen.contains(other) { seen.append(other) }
+        }
+        return seen.prefix(limit).compactMap { other in foods.first { $0.key == other } }
+    }
+
+    /// "Is that paella?" for a photo's guess: yes, its lookalikes, or
+    /// something else to tell.
+    public static func identityQuestion(for item: ScannedFood) -> Question {
+        var answers: [Question.Answer] = [.init(id: "yes", label: "Yes", addsKey: nil, grams: 0, perPiece: false, factor: 1)]
+        for food in lookalikes(of: item.key) {
+            answers.append(.init(id: "is-\(food.key)", label: short(food.name), addsKey: food.key, grams: food.grams, perPiece: false, factor: 1))
+        }
+        answers.append(.init(id: "else", label: "Something else", addsKey: nil, grams: 0, perPiece: false, factor: 1))
+        return Question(id: "what", text: "Is that right?", symbol: "eye", kind: .identity, answers: answers)
+    }
+
+    /// "Chicken pie (vol-au-vent)" → "Chicken pie"; "White rice, cooked" → "White rice".
+    public static func short(_ name: String) -> String {
+        let base = name.split(separator: "(").first.map(String.init) ?? name
+        return (base.split(separator: ",").first.map(String.init) ?? base).trimmingCharacters(in: .whitespaces)
     }
 
     /// The row an answer adds to a food: the topping at its amount — per

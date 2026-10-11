@@ -264,6 +264,11 @@ struct FoodPhotoScanSheet: View {
     @State private var closed: Set<String> = []
     /// What the last line typed after a scan added, for Tally to say so.
     @State private var lastAdded: [String] = []
+    /// Rows that came from the photo: Tally checks those first.
+    @State private var fromPhoto: Set<UUID> = []
+    /// The photo guess "Something else" points at: what is typed next
+    /// takes its place.
+    @State private var replacing: UUID?
 
     private var addedIDs: Set<UUID> { Set(added.values.flatMap(\.values)) }
 
@@ -327,11 +332,21 @@ struct FoodPhotoScanSheet: View {
                 text = arguments[flag + 1]
             }
             if photo != nil || !text.isEmpty { scan() }
+            // `-SetlineScanChoose <answer id>` answers Tally's first question.
+            if let flag = arguments.firstIndex(of: "-SetlineScanChoose"), arguments.indices.contains(flag + 1) {
+                let id = arguments[flag + 1]
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    if let open = openQuestion, let answer = open.question.answers.first(where: { $0.id == id }) {
+                        choose(answer, of: open.question, for: open.food)
+                    }
+                }
+            }
             // `-SetlineScanThen "<line>"` adds a line once the first read is in.
             if let flag = arguments.firstIndex(of: "-SetlineScanThen"), arguments.indices.contains(flag + 1) {
                 let more = arguments[flag + 1]
                 Task {
-                    try? await Task.sleep(for: .seconds(2))
+                    try? await Task.sleep(for: .seconds(3))
                     text = more
                     send()
                 }
@@ -366,6 +381,8 @@ struct FoodPhotoScanSheet: View {
                     .padding(.leading, 64)
                     .transition(.opacity)
             }
+            // Telling Tally, right under what Tally says.
+            inputField
         }
         .padding(SL.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -445,39 +462,7 @@ struct FoodPhotoScanSheet: View {
     /// after it, what to add — and under it the one lime action.
     private var dock: some View {
         let chosen = items.filter { !leftOut.contains($0.id) }
-        let canSend = text.trimmingCharacters(in: .whitespaces).count >= 2
-        return VStack(spacing: SL.Space.s2) {
-            HStack(alignment: .bottom, spacing: SL.Space.s2) {
-                TextField("", text: $text,
-                          prompt: Text(items.isEmpty ? "Tell Tally what you ate…" : "Add more: a coke, 2 eggs…")
-                              .foregroundColor(SL.Ink.tertiary),
-                          axis: .vertical)
-                    .lineLimit(1...3)
-                    .font(.sl(SL.TypeSize.body, SL.Weight.regular))
-                    .foregroundStyle(SL.Ink.primary)
-                    .tint(SL.Signal.action)
-                    .focused($typing)
-                    .submitLabel(.send)
-                    .onSubmit { send() }
-                    .padding(.leading, SL.Space.s4)
-                    .padding(.vertical, 12)
-                Button(action: send) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(canSend ? SL.Signal.onAction : SL.Ink.tertiary)
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(canSend ? SL.Signal.action : SL.Surface.hairlineStrong))
-                }
-                .buttonStyle(SLPressStyle(scale: 0.9))
-                .disabled(!canSend)
-                .padding(.trailing, 7)
-                .padding(.bottom, 7)
-                .accessibilityLabel("Send to Tally")
-            }
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SL.Surface.raised2))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(typing ? SL.Signal.action.opacity(0.5) : SL.Surface.hairlineStrong, lineWidth: 1))
-
+        return Group {
             if case .results = phase, !chosen.isEmpty, !typing {
                 Button {
                     let stamp = Int(Date().timeIntervalSince1970 * 1000)
@@ -488,14 +473,49 @@ struct FoodPhotoScanSheet: View {
                     Text(chosen.count == 1 ? "Add to \(meal.spoken)" : "Add \(chosen.count) items to \(meal.spoken)")
                 }
                 .buttonStyle(SLPrimaryButtonStyle())
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.top, SL.Space.s2)
+                .padding(.bottom, SL.Space.s2)
+                .background(SL.Surface.ground)
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, SL.Space.gutterSession)
-        .padding(.top, SL.Space.s2)
-        .padding(.bottom, SL.Space.s2)
-        .background(SL.Surface.ground)
         .animation(.snappy, value: typing)
+    }
+
+    /// The one place to tell Tally anything: what you ate, what to add, or
+    /// what a wrong guess really was.
+    private var inputField: some View {
+        let canSend = text.trimmingCharacters(in: .whitespaces).count >= 2
+        let prompt = replacing != nil ? "What was it? e.g. nasi goreng"
+            : items.isEmpty ? "Tell Tally what you ate…" : "Add more: a coke, 2 eggs…"
+        return HStack(alignment: .bottom, spacing: SL.Space.s2) {
+            TextField("", text: $text, prompt: Text(prompt).foregroundColor(SL.Ink.tertiary), axis: .vertical)
+                .lineLimit(1...3)
+                .font(.sl(SL.TypeSize.body, SL.Weight.regular))
+                .foregroundStyle(SL.Ink.primary)
+                .tint(SL.Signal.action)
+                .focused($typing)
+                .submitLabel(.send)
+                .onSubmit { send() }
+                .padding(.leading, SL.Space.s4)
+                .padding(.vertical, 11)
+            Button(action: send) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(canSend ? SL.Signal.onAction : SL.Ink.tertiary)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(canSend ? SL.Signal.action : SL.Surface.hairlineStrong))
+            }
+            .buttonStyle(SLPressStyle(scale: 0.9))
+            .disabled(!canSend)
+            .padding(.trailing, 6)
+            .padding(.bottom, 6)
+            .accessibilityLabel("Send to Tally")
+        }
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SL.Surface.ground))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .strokeBorder(typing || replacing != nil ? SL.Signal.action.opacity(0.5) : SL.Surface.hairlineStrong, lineWidth: 1))
     }
 
     /// Before a scan, reads what was typed; after one, adds it to the plate.
@@ -534,16 +554,6 @@ struct FoodPhotoScanSheet: View {
         let isAdded = addedIDs.contains(item.id)
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             HStack(spacing: SL.Space.s3) {
-                Button {
-                    if included { leftOut.insert(item.id) } else { leftOut.remove(item.id) }
-                } label: {
-                    Image(systemName: included ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22))
-                        .foregroundStyle(included ? SL.Signal.action : SL.Surface.mute)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(included ? "Leave out \(item.name)" : "Include \(item.name)")
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.name)
                         .slBody(SL.Weight.semibold)
@@ -555,6 +565,18 @@ struct FoodPhotoScanSheet: View {
                 }
                 Spacer(minLength: SL.Space.s2)
                 confidence(item.confidence)
+                Button { withAnimation(.snappy) { remove(item.id) } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(SL.Surface.raised2))
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.9))
+                .padding(.trailing, -SL.Space.s2)
+                .accessibilityLabel("Remove \(item.name)")
             }
             if included {
                 HStack(spacing: SL.Space.s2) {
@@ -562,11 +584,11 @@ struct FoodPhotoScanSheet: View {
                         get: { items[index].grams },
                         set: { items[index] = items[index].scaled(to: $0) }
                     ), serving: nil, compact: true)
+                    Spacer(minLength: 0)
                     if let others = alternatives[item.id], !others.isEmpty {
                         otherMatch(others, for: item, at: index)
                     }
                 }
-                .padding(.leading, 44)
             }
         }
         .padding(SL.Space.s3)
@@ -578,6 +600,9 @@ struct FoodPhotoScanSheet: View {
 
     /// The first question still open, and the food it's about.
     private var openQuestion: (food: ScannedFood, question: MealRecognition.Question)? {
+        for item in items where fromPhoto.contains(item.id) && !closed.contains("\(item.id)-what") {
+            return (item, MealRecognition.identityQuestion(for: item))
+        }
         for item in items where !leftOut.contains(item.id) && !addedIDs.contains(item.id) {
             for question in MealRecognition.questions(for: questionKey(item)) where !closed.contains("\(item.id)-\(question.id)") {
                 return (item, question)
@@ -612,6 +637,7 @@ struct FoodPhotoScanSheet: View {
                 let food = Self.short(open.food.name)
                 let ask: String = switch open.question.kind {
                 case .size: "how big was the \(food)?"
+                case .identity: "is that \(food)?"
                 case .adds: open.question.id == "on" ? "anything on that \(food)?"
                     : open.question.id == "sauce" ? "any sauce with the \(food)?"
                     : open.question.id == "dressing" ? "dressing on the salad?"
@@ -619,24 +645,40 @@ struct FoodPhotoScanSheet: View {
                     : "anything on top of the \(food)?"
                 }
                 if let last = lastAnswer, last.question == "\(open.food.id)-\(open.question.id)" {
-                    return "\(last.answer) on the \(last.food), nice. Anything else on it? Tap Done when that's it."
+                    return "\(Self.capitalized(last.answer)) on the \(last.food), nice. Anything else on it? Tap Done when that's it."
                 }
                 if !lastAdded.isEmpty {
                     return "Added \(Self.list(lastAdded)). And \(ask)"
                 }
+                if open.question.kind == .identity {
+                    return replacing != nil
+                        ? "No problem — type what it was just below, and I'll swap it."
+                        : "I think I see \(Self.short(open.food.name)). Is that right?"
+                }
+                if let last = lastAnswer, last.question == "what" {
+                    return "\(Self.capitalized(last.answer)) it is! And \(ask)"
+                }
                 if let last = lastAnswer, last.question == "size" {
-                    return "\(last.answer) of \(last.food), noted. And \(ask)"
+                    return "\(Self.capitalized(last.answer)) of \(last.food), noted. And \(ask)"
                 }
                 return "I see \(seen). Quick one: \(ask)"
             }
             if !lastAdded.isEmpty {
                 return "Added \(Self.list(lastAdded)). Anything else? Otherwise, add it to \(meal.spoken)."
             }
+            if let last = lastAnswer, last.question == "what" {
+                return "\(Self.capitalized(last.answer)) it is! Check the grams, then add it to \(meal.spoken)."
+            }
             if lastAnswer != nil || !closed.isEmpty {
                 return "Got it! Check the grams, then add it to \(meal.spoken)."
             }
             return "I see \(seen). Check the grams, then add it to \(meal.spoken)."
         }
+    }
+
+
+    private static func capitalized(_ text: String) -> String {
+        text.prefix(1).uppercased() + text.dropFirst()
     }
 
     /// "rice, fries and mayo"
@@ -662,7 +704,7 @@ struct FoodPhotoScanSheet: View {
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(question.answers) { answer in
-                    let on = chosen.contains(answer.id)
+                    let on = chosen.contains(answer.id) || (answer.id == "else" && replacing == item.id)
                     Button { choose(answer, of: question, for: item) } label: {
                         HStack(spacing: 4) {
                             if on { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)) }
@@ -679,6 +721,7 @@ struct FoodPhotoScanSheet: View {
                     .buttonStyle(SLPressStyle(scale: 0.92, bounces: true))
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
+                if question.kind != .identity {
                 Button {
                     closed.insert("\(item.id)-\(question.id)")
                     lastAnswer = nil
@@ -693,6 +736,7 @@ struct FoodPhotoScanSheet: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(SLPressStyle(scale: 0.92))
+                }
             }
         }
         .sensoryFeedback(.selection, trigger: chosen)
@@ -701,6 +745,29 @@ struct FoodPhotoScanSheet: View {
     private func choose(_ answer: MealRecognition.Question.Answer, of question: MealRecognition.Question, for item: ScannedFood) {
         var chosen = answered[item.id] ?? []
         switch question.kind {
+        case .identity:
+            if answer.id == "else" {
+                replacing = item.id
+                typing = true
+                return
+            }
+            closed.insert("\(item.id)-what")
+            replacing = nil
+            if answer.id != "yes", let key = answer.addsKey,
+               let food = MealRecognition.foods.first(where: { $0.key == key }),
+               let index = items.firstIndex(where: { $0.id == item.id }) {
+                let swapped = food.scanned(confidence: .high)
+                let kept = ScannedFood(name: swapped.name, grams: swapped.grams, calories: swapped.calories,
+                                       protein: swapped.protein, carbs: swapped.carbs, fat: swapped.fat,
+                                       confidence: .high, key: swapped.key, id: item.id)
+                withAnimation(.snappy) { items[index] = kept }
+                lastAnswer = (food: Self.short(food.name), answer: Self.short(food.name), question: "what")
+            } else {
+                lastAnswer = (food: Self.short(item.name), answer: Self.short(item.name), question: "what")
+            }
+            tallyJumps += 1
+            SLSound.pop.play()
+            return
         case .size:
             chosen = chosen.subtracting(question.answers.map(\.id))
             chosen.insert(answer.id)
@@ -730,6 +797,25 @@ struct FoodPhotoScanSheet: View {
             }
         }
         answered[item.id] = chosen
+    }
+
+    /// Takes a row off the plate, with whatever its answers added to it.
+    private func remove(_ id: UUID, keepPlace: Bool = false) {
+        let children = Array((added[id] ?? [:]).values)
+        items.removeAll { $0.id == id || children.contains($0.id) }
+        added[id] = nil
+        for (parent, map) in added {
+            if let answer = map.first(where: { $0.value == id })?.key {
+                added[parent]?[answer] = nil
+                answered[parent]?.remove(answer)
+            }
+        }
+        answered[id] = nil
+        fromPhoto.remove(id)
+        alternatives[id] = nil
+        if replacing == id, !keepPlace { replacing = nil }
+        if !keepPlace { lastAnswer = nil; lastAdded = [] }
+        if items.isEmpty, !keepPlace { phase = .start }
     }
 
     /// What else a row could be, one tap from its grams.
@@ -783,6 +869,7 @@ struct FoodPhotoScanSheet: View {
         Task {
             var found: [ScannedFood] = []
             var others: [UUID: [ScannedFood]] = [:]
+            var photoRows: Set<UUID> = []
             // What was typed comes first: it says exactly what and how much.
             for part in MealRecognition.parts(of: line) {
                 let tableOthers = MealRecognition.candidates(part.words).map { food in
@@ -821,6 +908,20 @@ struct FoodPhotoScanSheet: View {
                     others[item.id] = seen.filter { $0.name != item.name && !shown.contains($0) }
                 }
                 found += shown
+                photoRows = Set(shown.map(\.id))
+            }
+            if adding, let target = replacing, let index = items.firstIndex(where: { $0.id == target }), let first = found.first {
+                // "Something else": the typed food takes the guess's place.
+                remove(target, keepPlace: true)
+                items.insert(first, at: min(index, items.count))
+                items.insert(contentsOf: found.dropFirst(), at: min(index + 1, items.count))
+                alternatives.merge(others) { $1 }
+                replacing = nil
+                lastAdded = []
+                lastAnswer = (Self.short(first.name), Self.short(first.name), "what")
+                SLSound.pop.play()
+                tallyJumps += 1
+                return
             }
             if adding {
                 items += found
@@ -835,6 +936,8 @@ struct FoodPhotoScanSheet: View {
             }
             items = found
             alternatives = others
+            fromPhoto = photoRows
+            replacing = nil
             answered = [:]
             added = [:]
             closed = []
@@ -880,6 +983,18 @@ struct FoodPhotoScanSheet: View {
 /// nothing leaves the phone.
 enum MealScanner {
     static func labels(in image: UIImage) async -> [(label: String, confidence: Float)] {
+        #if DEBUG
+        // `-SetlineFakeLabels "paella:0.5,food:0.9"` stands in for the
+        // recognition, which the simulator can't run.
+        let arguments = ProcessInfo.processInfo.arguments
+        if let flag = arguments.firstIndex(of: "-SetlineFakeLabels"), arguments.indices.contains(flag + 1) {
+            return arguments[flag + 1].split(separator: ",").compactMap { pair in
+                let parts = pair.split(separator: ":")
+                guard parts.count == 2, let value = Float(parts[1]) else { return nil }
+                return (String(parts[0]), value)
+            }
+        }
+        #endif
         guard let cgImage = image.cgImage else { return [] }
         let orientation = CGImagePropertyOrientation(image.imageOrientation)
         return await Task.detached(priority: .userInitiated) {
