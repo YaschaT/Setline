@@ -174,6 +174,7 @@ struct NextBadgeCard: View {
         case .sessions, .streak: return "\(current)/\(target)"
         case .heaviest: return "\(current)/\(target) kg"
         case .volume: return "\(current)/\(target) t"
+        default: return "\(current)/\(target)"
         }
     }
 }

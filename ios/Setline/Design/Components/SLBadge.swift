@@ -24,6 +24,12 @@ struct SLBadge: View {
         case .streak: return "flame.fill"
         case .heaviest: return "dumbbell.fill"
         case .volume: return "mountain.2.fill"
+        case .logging: return "fork.knife"
+        case .protein: return "bolt.heart.fill"
+        case .fullDay: return "sun.horizon.fill"
+        case .onTrack: return "scope"
+        case .weighIns: return "scalemass.fill"
+        case .photos: return "camera.fill"
         }
     }
 

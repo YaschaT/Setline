@@ -5,6 +5,24 @@ import SetlineCore
 // MARK: - The chosen goal
 
 /// The body-weight goal, kept on this phone (the web app has no goal yet).
+extension AppState {
+    /// Badges for the habits around training: food, weigh-ins, the goal,
+    /// photos. Photo dates are passed in where they have been read.
+    func habitMilestones(photoDates: [Date] = []) -> [Milestone] {
+        let weighIns = GoalCheck.weighIns(BodyProgress.make(metrics: metrics))
+        if let goal = GoalPreference.goal {
+            GoalPreference.noteWeeksOnTrack(GoalCheck.weeksOnTrack(goal: goal, weighIns: weighIns))
+        }
+        return Milestones.habits(
+            entries: nutritionEntries,
+            proteinTarget: targets.map { Double($0.protein) },
+            weighInDates: weighIns.map(\.date),
+            photoDates: photoDates,
+            bestWeeksOnTrack: GoalPreference.bestWeeksOnTrack
+        )
+    }
+}
+
 enum GoalPreference {
     private static let key = "setline.weightGoal"
     private static let sinceKey = "setline.weightGoal.since"
@@ -18,6 +36,15 @@ enum GoalPreference {
     }
 
     static var since: Date? { UserDefaults.standard.object(forKey: sinceKey) as? Date }
+
+    private static let bestKey = "setline.weightGoal.bestWeeks"
+
+    /// The longest run on track ever seen, kept so a badge once earned stays.
+    static var bestWeeksOnTrack: Int { UserDefaults.standard.integer(forKey: bestKey) }
+
+    static func noteWeeksOnTrack(_ weeks: Int) {
+        if weeks > bestWeeksOnTrack { UserDefaults.standard.set(weeks, forKey: bestKey) }
+    }
 }
 
 extension GoalCheck {

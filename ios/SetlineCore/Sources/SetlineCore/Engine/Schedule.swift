@@ -22,6 +22,13 @@ public enum Schedule {
         return formatter.string(from: date)
     }
 
+    /// "2026-10-11" back to the start of that day.
+    public static func date(fromKey key: String, calendar: Calendar = .current) -> Date? {
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
     public static func canonicalDay(
         for date: Date,
         overrides: [String: String],

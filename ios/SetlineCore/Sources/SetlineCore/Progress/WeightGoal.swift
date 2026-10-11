@@ -223,3 +223,35 @@ public struct MealWindow: Equatable, Sendable {
         }
     }
 }
+
+// MARK: - The band
+
+/// Where the weight should be, day by day, from the moment the goal was set:
+/// the start weight grown (or shrunk) at the goal's slowest and fastest pace.
+public struct GoalBand: Equatable, Sendable {
+    public let start: Date
+    public let startKg: Double
+    public let goal: WeightGoal
+
+    public init(goal: WeightGoal, start: Date, startKg: Double) {
+        self.goal = goal
+        self.start = start
+        self.startKg = startKg
+    }
+
+    /// The band's low and high weight on a date.
+    public func range(on date: Date) -> ClosedRange<Double> {
+        let weeks = max(0, date.timeIntervalSince(start) / (7 * 86_400))
+        let a = startKg * (1 + goal.weeklyRange.lowerBound * weeks)
+        let b = startKg * (1 + goal.weeklyRange.upperBound * weeks)
+        return min(a, b) ... max(a, b)
+    }
+
+    /// The start weight: the trend's value on the start day, or the first
+    /// one after it, or the last one before.
+    public static func make(goal: WeightGoal, since: Date, trend: [(date: Date, kg: Double)]) -> GoalBand? {
+        let sorted = trend.sorted { $0.date < $1.date }
+        guard let point = sorted.first(where: { $0.date >= since.addingTimeInterval(-86_400) }) ?? sorted.last else { return nil }
+        return GoalBand(goal: goal, start: min(since, point.date), startKg: point.kg)
+    }
+}

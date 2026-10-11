@@ -386,6 +386,7 @@ struct TrainingHomeView: View {
             celebrateIfSecured(today, streak)
             playIntro(streak)
             #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-SetlineBadges") { sheet = .milestones }
             // `-SetlinePickDay 3` shows the week's Wednesday in the card.
             let arguments = ProcessInfo.processInfo.arguments
             if let flag = arguments.firstIndex(of: "-SetlinePickDay"), arguments.indices.contains(flag + 1),

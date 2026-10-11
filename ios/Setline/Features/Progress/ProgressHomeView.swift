@@ -174,9 +174,24 @@ struct ProgressHomeView: View {
                     weighButton
                 }
                 if trend.count >= 2 {
-                    WeightTrendLine(points: trend)
-                        .frame(height: 40)
-                        .accessibilityHidden(true)
+                    if let band = goalBand {
+                        GoalBandChart(points: trend, band: band)
+                            .frame(height: 96)
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 2).fill(SL.Signal.action.opacity(0.25)).frame(width: 14, height: 8)
+                            Text("\(band.goal.title) target")
+                                .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                                .foregroundStyle(SL.Ink.secondary)
+                            Spacer(minLength: 0)
+                            Text("Your trend")
+                                .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                                .foregroundStyle(SL.Signal.recovery)
+                        }
+                    } else {
+                        WeightTrendLine(points: trend)
+                            .frame(height: 40)
+                            .accessibilityHidden(true)
+                    }
                 }
                 goalBlock
             }
@@ -199,6 +214,7 @@ struct ProgressHomeView: View {
                 // Off track says why and what to do, in full.
                 GoalCheckCard(check: check, weeksOnTrack: weeks, onChangeGoal: { choosingGoal = true })
             }
+            goalInsights(goal)
         } else {
             Button { choosingGoal = true } label: {
                 HStack(spacing: SL.Space.s3) {
@@ -264,6 +280,52 @@ struct ProgressHomeView: View {
         let said: String = check.verdict == .onTrack ? check.headline : check.detail(app.display)
         let weeks: String = check.verdict == .onTrack && weeksOnTrack > 0 ? ", \(weeksOnTrack) weeks on track" : ""
         return "\(check.goal.title): \(said)\(weeks)"
+    }
+
+    /// The goal's band from the day it was set, on the 14-day trend.
+    private var goalBand: GoalBand? {
+        guard let goal, let since = GoalPreference.since else { return nil }
+        return GoalBand.make(goal: goal, since: since,
+                             trend: trend.map { ($0.date, NSDecimalNumber(decimal: $0.average).doubleValue) })
+    }
+
+    /// Why the scale moves the way it does: what was eaten against the
+    /// target, and — the sign a bulk is muscle — whether the lifts climb too.
+    @ViewBuilder
+    private func goalInsights(_ goal: WeightGoal) -> some View {
+        let history = app.nutritionHistory()
+        let food: String? = {
+            guard history.logged.count >= 3, let average = history.averageCalories else { return nil }
+            var line = "Avg \(app.display.whole(Decimal(average))) kcal"
+            if let target = history.calorieTarget { line += " of \(app.display.whole(Decimal(target)))" }
+            if history.calorieTarget != nil { line += " · protein hit \(history.daysProteinHit) of \(history.logged.count) days" }
+            return line
+        }()
+        let lift = allLifts.first { ($0.deltaKg ?? 0) > 0 }
+        if food != nil || lift != nil {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                if let food { insightRow("fork.knife", "Food, last 2 weeks", food) }
+                if let lift, let delta = lift.deltaKg {
+                    insightRow("dumbbell.fill", goal == .cut ? "Strength kept" : "Strength with it",
+                               "\(lift.name) +\(app.display.number(delta)) kg estimated max")
+                }
+            }
+        }
+    }
+
+    private func insightRow(_ symbol: String, _ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: SL.Space.s3) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(SL.Surface.raised2))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Ink.secondary)
+                Text(value).slMeta().slNumerals().foregroundStyle(SL.Ink.primary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// "Today", "Yesterday", "5 days ago".
@@ -1262,6 +1324,82 @@ struct StrengthArea: View {
 
 /// The 14-day average weight as a soft mint line over a faint fill, the
 /// latest point marked.
+/// The 14-day trend over the goal's band: the band in faint lime from the
+/// day the goal was set, the trend in mint, and the latest point.
+struct GoalBandChart: View {
+    let allPoints: [ProgressOverview.WeightPoint]
+    let band: GoalBand
+    /// Half the band's least width: a day's water and salt, so a band that
+    /// starts at one weight still reads as a band.
+    private let margin = 0.25
+
+    init(points: [ProgressOverview.WeightPoint], band: GoalBand) {
+        allPoints = points
+        self.band = band
+    }
+
+    /// From a week before the goal was set; all of it when that is too little.
+    private var points: [ProgressOverview.WeightPoint] {
+        let recent = allPoints.filter { $0.date >= band.start.addingTimeInterval(-7 * 86_400) }
+        return recent.count >= 2 ? recent : allPoints
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let values = points.map { NSDecimalNumber(decimal: $0.average).doubleValue }
+            let first = points.first?.date ?? band.start
+            let last = max(points.last?.date ?? Date(), Date())
+            let bandDays = stride(from: max(first, band.start).timeIntervalSince1970, through: last.timeIntervalSince1970, by: 86_400)
+                .map { Date(timeIntervalSince1970: $0) }
+            let ranges = bandDays.map { day -> ClosedRange<Double> in
+                let range = band.range(on: day)
+                return (range.lowerBound - margin)...(range.upperBound + margin)
+            }
+            let low = min(values.min() ?? 0, ranges.map(\.lowerBound).min() ?? .infinity) - 0.2
+            let high = max(values.max() ?? 0, ranges.map(\.upperBound).max() ?? -.infinity) + 0.2
+            let span = max(high - low, 0.6)
+            let total = max(last.timeIntervalSince(first), 1)
+            let x = { (date: Date) in CGFloat(date.timeIntervalSince(first) / total) * size.width }
+            let y = { (kg: Double) in size.height - CGFloat((kg - low) / span) * size.height }
+            ZStack(alignment: .topLeading) {
+                Path { path in
+                    guard !bandDays.isEmpty else { return }
+                    path.move(to: CGPoint(x: x(bandDays[0]), y: y(ranges[0].upperBound)))
+                    for (day, range) in zip(bandDays, ranges) { path.addLine(to: CGPoint(x: x(day), y: y(range.upperBound))) }
+                    for (day, range) in zip(bandDays, ranges).reversed() { path.addLine(to: CGPoint(x: x(day), y: y(range.lowerBound))) }
+                    path.closeSubpath()
+                }
+                .fill(SL.Signal.action.opacity(0.16))
+                .overlay(
+                    Path { path in
+                        guard let day = bandDays.first else { return }
+                        path.move(to: CGPoint(x: x(day), y: 0))
+                        path.addLine(to: CGPoint(x: x(day), y: size.height))
+                    }
+                    .stroke(SL.Signal.action.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                )
+                Path { path in
+                    for (index, point) in points.enumerated() {
+                        let p = CGPoint(x: x(point.date), y: y(values[index]))
+                        if index == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                    }
+                }
+                .stroke(SL.Signal.recovery, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                if let point = points.last, let value = values.last {
+                    Circle()
+                        .fill(SL.Signal.recovery)
+                        .frame(width: 10, height: 10)
+                        .overlay(Circle().stroke(SL.Surface.raised, lineWidth: 2))
+                        .position(x: x(point.date), y: y(value))
+                }
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Weight trend against your \(band.goal.title.lowercased()) band")
+    }
+}
+
 struct WeightTrendLine: View {
     let points: [ProgressOverview.WeightPoint]
 

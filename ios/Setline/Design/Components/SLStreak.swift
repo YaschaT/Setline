@@ -171,6 +171,10 @@ struct MilestonesView: View {
     let onClose: () -> Void
     @Environment(AppState.self) private var app
     @State private var opened: Milestone?
+    @State private var family: Milestone.Family = .training
+    @State private var photoDates: [Date] = []
+
+    private var all: [Milestone] { milestones + app.habitMilestones(photoDates: photoDates) }
 
     private let columns = [GridItem(.adaptive(minimum: 100), spacing: SL.Space.s4, alignment: .top)]
 
@@ -178,8 +182,15 @@ struct MilestonesView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: SL.Space.s8) {
-                    ForEach([Milestone.Kind.sessions, .streak, .heaviest, .volume], id: \.self) { kind in
-                        let items = milestones.filter { $0.kind == kind }
+                    Picker("Badges", selection: $family) {
+                        ForEach(Milestone.Family.allCases, id: \.self) { family in
+                            let items = all.filter { $0.kind.family == family }
+                            Text("\(familyTitle(family)) \(items.filter(\.isReached).count)").tag(family)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    ForEach(kinds(family), id: \.self) { kind in
+                        let items = all.filter { $0.kind == kind }
                         VStack(alignment: .leading, spacing: SL.Space.s4) {
                             SLSectionHead(title: title(kind), meta: "\(items.filter(\.isReached).count) of \(items.count)")
                             LazyVGrid(columns: columns, spacing: SL.Space.s5) {
@@ -204,6 +215,34 @@ struct MilestonesView: View {
                 BadgeDetail(milestone: item)
                     .presentationDetents([.medium])
             }
+            .task {
+                #if DEBUG
+                let arguments = ProcessInfo.processInfo.arguments
+                if let flag = arguments.firstIndex(of: "-SetlineBadgeFamily"), arguments.indices.contains(flag + 1),
+                   let chosen = Milestone.Family(rawValue: arguments[flag + 1]) {
+                    family = chosen
+                }
+                #endif
+                if let photos = app.photos {
+                    photoDates = await photos.load().compactMap { Schedule.date(fromKey: $0.date) }
+                }
+            }
+        }
+    }
+
+    private func kinds(_ family: Milestone.Family) -> [Milestone.Kind] {
+        switch family {
+        case .training: return [.sessions, .streak, .heaviest, .volume]
+        case .food: return [.logging, .protein, .fullDay]
+        case .progress: return [.onTrack, .weighIns, .photos]
+        }
+    }
+
+    private func familyTitle(_ family: Milestone.Family) -> String {
+        switch family {
+        case .training: return "Training"
+        case .food: return "Food"
+        case .progress: return "Progress"
         }
     }
 
@@ -230,6 +269,12 @@ struct MilestonesView: View {
         case .streak: return "Streaks"
         case .heaviest: return "Heaviest set"
         case .volume: return "Total lifted"
+        case .logging: return "Days logged"
+        case .protein: return "Protein streak"
+        case .fullDay: return "Full days"
+        case .onTrack: return "On track with your goal"
+        case .weighIns: return "Weigh-in habit"
+        case .photos: return "Check-in photos"
         }
     }
 }

@@ -31,6 +31,10 @@ struct RootView: View {
     /// Face ID itself takes the app out of the foreground; while it asks,
     /// coming back must not ask again.
     @State private var unlocking = false
+    /// A food or progress badge just earned.
+    @State private var habitBadge: Celebration?
+    /// Habit badges already seen, so each is celebrated once.
+    @AppStorage("setline.badges.habitsSeen") private var habitsSeen = ""
     /// An invite link opened: setline://add/<username>.
     @State private var invite: InviteLink?
     private struct InviteLink: Identifiable { let id: String }
@@ -104,7 +108,9 @@ struct RootView: View {
         .task(id: app.revision) {
             await StreakReminder.update(app: app)
             await NutritionReminders.update(app: app)
+            celebrateHabits()
         }
+        .slCelebration($habitBadge)
         .onChange(of: app.isLoading, initial: true) { _, loading in
             if !loading { launchLoadDone = true }
         }
@@ -254,6 +260,23 @@ struct RootView: View {
         .fullScreenCover(item: $composing) { session in
             PostComposerView(mode: .create(session), onClose: { composing = nil })
         }
+    }
+
+    /// A food or progress badge reached since the last look gets its moment;
+    /// the first look only remembers, so nothing old is celebrated.
+    private func celebrateHabits() {
+        guard app.isSignedIn, !app.isLoading else { return }
+        let reached = app.habitMilestones().filter(\.isReached)
+        let ids = Set(reached.map(\.id))
+        if habitsSeen.isEmpty {
+            habitsSeen = ids.isEmpty ? "-" : ids.sorted().joined(separator: ",")
+            return
+        }
+        let seen = Set(habitsSeen.split(separator: ",").map(String.init))
+        if let new = reached.filter({ !seen.contains($0.id) }).max(by: { $0.tier < $1.tier }) {
+            habitBadge = Celebration(symbol: "rosette", title: "Badge earned", detail: new.title, badge: new)
+        }
+        habitsSeen = seen.union(ids).sorted().joined(separator: ",")
     }
 
     private func refreshShield() {
