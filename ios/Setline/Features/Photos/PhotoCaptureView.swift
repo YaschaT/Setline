@@ -336,6 +336,7 @@ struct PhotoCaptureView: View {
     }
 
     private func capture() {
+        SLSound.shutter()
         Task {
             guard let data = await camera.capture() else { return }
             taken = data

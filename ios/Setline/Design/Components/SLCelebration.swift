@@ -63,6 +63,7 @@ private struct SLCelebrationModifier: ViewModifier {
                 .accessibilityAddTraits(.isStaticText)
                 .task(id: item.id) {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    SLSound.chime.play()
                     AccessibilityNotification.Announcement("\(item.title). \(item.detail)").post()
                     try? await Task.sleep(for: .seconds(2.6))
                     if self.item?.id == item.id { dismiss() }

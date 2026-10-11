@@ -182,6 +182,37 @@ public struct MealWindow: Equatable, Sendable {
         }
     }
 
+    /// Today's reminders still worth sending, then every reminder of the next
+    /// `days` days — so the phone still reminds on a day the app isn't
+    /// opened. Rescheduled whenever something is logged, which takes a
+    /// logged meal's reminder away.
+    public static func upcoming(entries: [NutritionEntry], now: Date, days: Int = 3, calendar: Calendar = .current) -> [(window: MealWindow, fire: Date)] {
+        var result = due(entries: entries, now: now, calendar: calendar)
+        let today = calendar.startOfDay(for: now)
+        for offset in 1...max(1, days) {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            for window in all {
+                if let fire = calendar.date(bySettingHour: window.remindAt.hour, minute: window.remindAt.minute, second: 0, of: day) {
+                    result.append((window, fire))
+                }
+            }
+        }
+        return result
+    }
+
+    /// The meal whose reminder time has passed today with nothing logged
+    /// for it, while its window is still open — what the app says in place
+    /// of a notification when it is open.
+    public static func missing(entries: [NutritionEntry], now: Date, calendar: Calendar = .current) -> MealWindow? {
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        return all.last { window in
+            (hour, minute) >= (window.remindAt.hour, window.remindAt.minute)
+                && hour < window.endHour
+                && !window.isLogged(in: entries, on: now, calendar: calendar)
+        }
+    }
+
     /// The reminders still worth sending today, in order.
     public static func due(entries: [NutritionEntry], now: Date, calendar: Calendar = .current) -> [(window: MealWindow, fire: Date)] {
         all.compactMap { window in

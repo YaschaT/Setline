@@ -33,8 +33,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Setline uses Face ID to unlock the app when you turn on the app lock, so your log, body weight and photos stay yours.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Setline uses the camera for your check-in photos, with a guide so every photo is taken the same way. They stay on this phone.</string>
+	<string>Setline uses the camera for check-in photos, scanning barcodes and scanning a meal you want to log. Check-in photos stay on this phone.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Setline reads your location once, only when you ask, to find gyms near you for a workout you share with friends.</string>
 	<key>NSSupportsLiveActivities</key>

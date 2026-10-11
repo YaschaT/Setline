@@ -710,6 +710,46 @@ final class AppState {
         NutritionDay.make(entries: nutritionEntries, on: date, targets: targets)
     }
 
+    // MARK: - Food without typing
+
+    func lookupBarcode(_ code: String) async -> FoodLookupService.BarcodeOutcome {
+        await FoodLookupService().barcode(code)
+    }
+
+
+    // MARK: - Favorite foods
+
+    /// Kept on this phone, per account: one tap to log again.
+    private(set) var foodFavoritesRevision = 0
+
+    private var favoritesKey: String { "setline.food.favorites.\(session?.email.lowercased() ?? "none")" }
+
+    var foodFavorites: [FavoriteFood] {
+        _ = foodFavoritesRevision
+        guard let data = UserDefaults.standard.data(forKey: favoritesKey) else { return [] }
+        return (try? JSONDecoder().decode([FavoriteFood].self, from: data)) ?? []
+    }
+
+    func isFavorite(_ entry: NutritionEntry) -> Bool {
+        foodFavorites.contains { $0.matches(entry) }
+    }
+
+    func toggleFavorite(_ entry: NutritionEntry) {
+        var list = foodFavorites
+        if let index = list.firstIndex(where: { $0.matches(entry) }) {
+            list.remove(at: index)
+        } else {
+            list.insert(FavoriteFood(entry), at: 0)
+        }
+        UserDefaults.standard.set(try? JSONEncoder().encode(list), forKey: favoritesKey)
+        foodFavoritesRevision += 1
+    }
+
+    /// The days before today as eaten, newest first.
+    func nutritionHistory(days: Int = 14, before date: Date = Date()) -> NutritionHistory {
+        NutritionHistory.make(entries: nutritionEntries, targets: targets, days: days, before: date)
+    }
+
     // MARK: - Weigh-ins
 
     /// Every weigh-in the account holds, newest last.

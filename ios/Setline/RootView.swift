@@ -24,6 +24,13 @@ struct RootView: View {
     /// A saved workout being turned into a post.
     @State private var composing: TrainingSession?
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(AppLock.preferenceKey) private var appLock = false
+    /// Locked until Face ID says otherwise; set at launch and whenever the
+    /// app goes to the background with the lock on.
+    @State private var locked = AppLock.isOn
+    /// Face ID itself takes the app out of the foreground; while it asks,
+    /// coming back must not ask again.
+    @State private var unlocking = false
     /// An invite link opened: setline://add/<username>.
     @State private var invite: InviteLink?
     private struct InviteLink: Identifiable { let id: String }
@@ -101,6 +108,22 @@ struct RootView: View {
         .onChange(of: app.isLoading, initial: true) { _, loading in
             if !loading { launchLoadDone = true }
         }
+        // Over everything, sheets included: locked, or out of the foreground
+        // where the app switcher would show the screen.
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .background, appLock { locked = true }
+            refreshShield()
+            if phase == .active, appLock, locked, app.isSignedIn { unlock() }
+        }
+        .onChange(of: locked) { _, _ in refreshShield() }
+        .onChange(of: app.isSignedIn) { _, signedIn in
+            refreshShield()
+            if signedIn, appLock, locked, scenePhase == .active { unlock() }
+        }
+        .onChange(of: appLock) { _, on in
+            if !on { locked = false }
+            refreshShield()
+        }
         .preferredColorScheme(.dark)
         .tint(SL.Signal.action)
         .environment(social)
@@ -160,7 +183,7 @@ struct RootView: View {
                 case .voeding:
                     NutritionHomeView(onAccount: { showsAccount = true })
                 case .progressie:
-                    ProgressHomeView()
+                    ProgressHomeView(onAccount: { showsAccount = true })
                 case .friends:
                     FriendsView(onAccount: { showsAccount = true })
                 case .fotos:
@@ -230,6 +253,25 @@ struct RootView: View {
         }
         .fullScreenCover(item: $composing) { session in
             PostComposerView(mode: .create(session), onClose: { composing = nil })
+        }
+    }
+
+    private func refreshShield() {
+        if appLock, app.isSignedIn, locked || scenePhase != .active {
+            AppLockWindow.show(locked: locked, onUnlock: unlock)
+        } else {
+            AppLockWindow.hide()
+        }
+    }
+
+    private func unlock() {
+        guard !unlocking else { return }
+        unlocking = true
+        Task {
+            if await AppLock.authenticate(reason: "Unlock Setline") { locked = false }
+            // Let the foreground settle before another ask is allowed.
+            try? await Task.sleep(for: .milliseconds(600))
+            unlocking = false
         }
     }
 

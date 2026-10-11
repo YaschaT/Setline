@@ -19,6 +19,8 @@ struct FoodEntrySheet: View {
     let entry: NutritionEntry
     let onSave: (NutritionEntry) -> Void
     let onDelete: (NutritionEntry) -> Void
+    /// Logs the same item again, today. Offered on an item from another day.
+    var onRelog: ((NutritionEntry) -> Void)? = nil
 
     @State private var amount: Double
     @State private var meal: Meal
@@ -31,11 +33,13 @@ struct FoodEntrySheet: View {
     init(
         entry: NutritionEntry,
         onSave: @escaping (NutritionEntry) -> Void,
-        onDelete: @escaping (NutritionEntry) -> Void
+        onDelete: @escaping (NutritionEntry) -> Void,
+        onRelog: ((NutritionEntry) -> Void)? = nil
     ) {
         self.entry = entry
         self.onSave = onSave
         self.onDelete = onDelete
+        self.onRelog = onRelog
         _amount = State(initialValue: entry.amount ?? 0)
         _meal = State(initialValue: Self.heading(of: entry))
     }
@@ -93,6 +97,14 @@ struct FoodEntrySheet: View {
             }
             .scrollBounceBehavior(.basedOnSize)
 
+            if let onRelog, entry.date != Schedule.dateKey(Date()) {
+                Button { onRelog(edited) } label: {
+                    Label("Log again today", systemImage: "arrow.uturn.forward")
+                }
+                .buttonStyle(SLOutlineButtonStyle())
+                .padding(.bottom, SL.Space.s2)
+            }
+
             Button { onSave(edited) } label: { Text("Save") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .disabled(!touched || edited == entry)
@@ -119,6 +131,26 @@ struct FoodEntrySheet: View {
         .slRespondsToTextSize()
     }
 
+    /// Kept as a favorite: one tap to log it again from Add food or the
+    /// quick adds.
+    private var favoriteButton: some View {
+        let isFavorite = app.isFavorite(entry)
+        return Button {
+            app.toggleFavorite(entry)
+            if !isFavorite { SLSound.pop.play() }
+        } label: {
+            Image(systemName: isFavorite ? "star.fill" : "star")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(isFavorite ? SL.Signal.action : SL.Ink.secondary)
+                .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                .background(Circle().fill(SL.Surface.raised2))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
+        .sensoryFeedback(.selection, trigger: isFavorite)
+        .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
+    }
+
     // MARK: - Chrome
 
     private var grip: some View {
@@ -134,10 +166,14 @@ struct FoodEntrySheet: View {
     /// entry carries one; it is never derived from the meal it is filed under.
     private var head: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(entry.name)
-                .font(.sl(28, SL.Weight.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(SL.Ink.primary)
+            HStack(alignment: .top, spacing: SL.Space.s3) {
+                Text(entry.name)
+                    .font(.sl(28, SL.Weight.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(SL.Ink.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                favoriteButton
+            }
                 .accessibilityAddTraits(.isHeader)
             Text(standing)
                 .slBody()

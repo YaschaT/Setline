@@ -42,6 +42,9 @@ struct AccountView: View {
     @State private var showsBlocked = false
     @State private var confirmsResetWorkouts = false
     @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
+    @AppStorage(SLSound.preferenceKey) private var soundsOn = true
+    @AppStorage(AppLock.preferenceKey) private var appLock = false
+    @State private var showsPolicy = false
     @State private var remindersDenied = false
 
     private var summary: AccountSummary {
@@ -93,11 +96,14 @@ struct AccountView: View {
                     .tint(SL.Signal.action)
                     .padding(.vertical, SL.Space.s3)
                     .overlay(alignment: .bottom) { SLHairline() }
+                    section("Sounds & security")
+                    appRows
+                    section("Privacy")
                     // Only once there is a social profile to post from.
                     if social.me != nil {
-                        section("Privacy")
                         privacyRows
                     }
+                    row("Privacy policy", detail: "What Setline keeps, where, and your rights") { showsPolicy = true }
                     section("Data")
                     exportRow
                     resetWorkoutsRow
@@ -382,6 +388,54 @@ struct AccountView: View {
             .padding(.vertical, SL.Space.s3)
             .overlay(alignment: .bottom) { SLHairline() }
             .onChange(of: rirEverySet) { _, value in RIRPreference.everySet = value }
+        }
+    }
+
+    // MARK: - Sounds & security
+
+    private var appRows: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Toggle(isOn: $soundsOn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sounds").slBody()
+                    Text("A quiet click for a saved set, a chime for a record. Muted by the silent switch.")
+                        .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(SL.Signal.action)
+            .padding(.vertical, SL.Space.s3)
+            .overlay(alignment: .bottom) { SLHairline() }
+            .onChange(of: soundsOn) { _, on in if on { SLSound.tick.play() } }
+            #if DEBUG
+            .onAppear {
+                // `-SetlinePrivacyPolicy` opens the policy straight away.
+                if ProcessInfo.processInfo.arguments.contains("-SetlinePrivacyPolicy") { showsPolicy = true }
+            }
+            #endif
+
+            if AppLock.isAvailable {
+                Toggle(isOn: Binding(get: { appLock }, set: { on in
+                    // Proving it is you before the lock goes on or off.
+                    Task {
+                        if await AppLock.authenticate(reason: on ? "Turn on the app lock" : "Turn off the app lock") {
+                            appLock = on
+                        }
+                    }
+                })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Lock with \(AppLock.methodName)").slBody()
+                        Text("Asks for \(AppLock.methodName) when you come back to Setline, and hides it in the app switcher.")
+                            .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(SL.Signal.action)
+                .padding(.vertical, SL.Space.s3)
+                .overlay(alignment: .bottom) { SLHairline() }
+            }
+        }
+        .sheet(isPresented: $showsPolicy) {
+            PrivacyPolicyView(onClose: { showsPolicy = false })
+                .presentationDragIndicator(.visible)
         }
     }
 

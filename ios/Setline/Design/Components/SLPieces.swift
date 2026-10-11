@@ -297,3 +297,95 @@ extension String {
             )
     }
 }
+
+/// Every tab's head, in one place and one shape: the avatar to Account, the
+/// tab's name over one line of context, and the tab's own round buttons.
+///
+/// Pinned above the scroll with `.slTabHeader`, so it stands at the same
+/// height on every tab and the first card starts at the same line under it.
+struct SLTabHeader<Trailing: View>: View {
+    @Environment(AppState.self) private var app
+    let title: String
+    var subtitle: String? = nil
+    /// Training's streak tier around the avatar; clear elsewhere, with the
+    /// same room kept so nothing shifts between tabs.
+    var ring: AnyShapeStyle = AnyShapeStyle(Color.clear)
+    let onAccount: () -> Void
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            Button(action: onAccount) {
+                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 40)
+                    .padding(3)
+                    .overlay(Circle().strokeBorder(ring, lineWidth: 2))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.92))
+            .slFocusRing(Circle())
+            .accessibilityLabel("Account")
+            .accessibilityHint("Opens your account")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+                    .foregroundStyle(SL.Ink.primary)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle {
+                    Text(subtitle)
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: SL.Space.s1) { trailing }
+        }
+        .frame(height: SL.Metric.tabHeaderHeight)
+    }
+}
+
+extension SLTabHeader where Trailing == EmptyView {
+    init(title: String, subtitle: String? = nil, ring: AnyShapeStyle = AnyShapeStyle(Color.clear), onAccount: @escaping () -> Void) {
+        self.init(title: title, subtitle: subtitle, ring: ring, onAccount: onAccount) { EmptyView() }
+    }
+}
+
+/// The round button a tab's head carries: 38 across in a 44 target.
+struct SLHeaderButton: View {
+    let glyph: SLGlyph.Name
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            SLGlyph(name: glyph, size: 18, fixed: true)
+                .foregroundStyle(SL.Ink.primary)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(SL.Surface.raised))
+                .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
+                .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                .contentShape(Circle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
+        .accessibilityLabel(label)
+    }
+}
+
+extension View {
+    /// Pins a tab's head above its scroll: same place on every tab, the
+    /// content passing under it on the ground colour.
+    func slTabHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
+        safeAreaInset(edge: .top, spacing: 0) {
+            header()
+                .padding(.horizontal, SL.Space.gutterSession)
+                .padding(.top, SL.Space.s3)
+                .padding(.bottom, SL.Space.s3)
+                .frame(maxWidth: .infinity)
+                .background(SL.Surface.ground)
+        }
+    }
+}

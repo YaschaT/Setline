@@ -1,5 +1,16 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
+
+/// Shows Setline's own reminders while Setline is open too — iOS keeps them
+/// silent in the foreground unless the app says otherwise.
+final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate, Sendable {
+    static let shared = NotificationPresenter()
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+}
 
 @main
 struct SetlineApp: App {
@@ -17,6 +28,10 @@ struct SetlineApp: App {
             )
         }
     }()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = NotificationPresenter.shared
+    }
 
     var body: some Scene {
         WindowGroup {

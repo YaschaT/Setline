@@ -105,9 +105,11 @@ struct SessionCompleteView: View {
         }
         .slCelebration($celebration)
         .task {
-            // The moment this workout earns, once, a beat after the screen
-            // appears: a milestone first, else a completed week.
-            try? await Task.sleep(for: .milliseconds(450))
+            // The workout done, heard as the screen arrives; then the moment
+            // it earns, once, a beat later: a milestone first, else a
+            // completed week.
+            SLSound.success.play()
+            try? await Task.sleep(for: .milliseconds(900))
             if let milestone = newMilestones.first {
                 celebration = Celebration(symbol: "rosette", title: "Badge earned", detail: milestone.title, badge: milestone)
             } else if let gold = medals.first(where: { $0.place == .gold }) {

@@ -25,6 +25,8 @@ struct ProgressHomeView: View {
     }
 
     @Environment(AppState.self) private var app
+    /// The avatar's way to Account, as on every tab.
+    var onAccount: () -> Void = {}
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -108,7 +110,6 @@ struct ProgressHomeView: View {
             // 24 between sections, 8 from a section's head to its card: the
             // gap says what belongs together.
             VStack(alignment: .leading, spacing: SL.Space.s8) {
-                SLScreenTitle(title: "Progress", subtitle: "Last 8 weeks") { logbookPill }
                 // Three cards, most looked-at first: the win (with the
                 // week's medals under it), the number that moves every
                 // morning, then what the lifts did (with the work behind
@@ -118,8 +119,13 @@ struct ProgressHomeView: View {
                 liftsSection
             }
             .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s5)
+            .padding(.top, SL.Metric.tabContentTop)
             .padding(.bottom, SL.Space.s6)
+        }
+        .slTabHeader {
+            SLTabHeader(title: "Progress", subtitle: "Last 8 weeks", onAccount: onAccount) {
+                SLHeaderButton(glyph: .list, label: "Log") { open(.historiek) }
+            }
         }
     }
 

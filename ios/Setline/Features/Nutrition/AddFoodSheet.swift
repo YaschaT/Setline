@@ -22,9 +22,17 @@ struct AddFoodSheet: View {
     /// Which heading the ⊕ adds to. 42c preselects it from the hour.
     let meal: Meal
     let onLog: (NutritionEntry) -> Void
+    /// Several at once, from a meal scan. Falls back to one by one.
+    var onLogAll: (([NutritionEntry]) -> Void)? = nil
     let onClose: () -> Void
 
     @State private var chosen: Meal
+    @State private var scanning: Scanner?
+
+    private enum Scanner: String, Identifiable {
+        case barcode, photo
+        var id: String { rawValue }
+    }
     @State private var query = ""
     @State private var results: [FoodProduct] = []
     @State private var note: String?
@@ -48,11 +56,13 @@ struct AddFoodSheet: View {
         date: Date,
         meal: Meal,
         onLog: @escaping (NutritionEntry) -> Void,
+        onLogAll: (([NutritionEntry]) -> Void)? = nil,
         onClose: @escaping () -> Void
     ) {
         self.date = date
         self.meal = meal
         self.onLog = onLog
+        self.onLogAll = onLogAll
         self.onClose = onClose
         _chosen = State(initialValue: meal)
     }
@@ -72,6 +82,7 @@ struct AddFoodSheet: View {
                 .scrollDismissesKeyboard(.interactively)
             } else {
                 searchField.padding(.top, SL.Space.s3)
+                if !isSearch { scanTools.padding(.top, SL.Space.s2) }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         if let note {
@@ -126,6 +137,28 @@ struct AddFoodSheet: View {
         // 42c opens 120 from the top of the frame. A detent's fraction is of
         // the container between the safe areas, not of the screen, so the
         // number is larger than the artboard's 86%.
+        #if DEBUG
+        .onAppear {
+            let arguments = ProcessInfo.processInfo.arguments
+            if let flag = arguments.firstIndex(of: "-SetlineScan"), arguments.indices.contains(flag + 1) {
+                scanning = Scanner(rawValue: arguments[flag + 1])
+            }
+        }
+        #endif
+        .fullScreenCover(item: $scanning) { scanner in
+            switch scanner {
+            case .barcode:
+                BarcodeScanSheet(date: date, meal: chosen, onLog: { entry in
+                    scanning = nil
+                    onLog(entry)
+                }, onClose: { scanning = nil })
+            case .photo:
+                FoodPhotoScanSheet(date: date, meal: chosen, onLog: { entries in
+                    scanning = nil
+                    if let onLogAll { onLogAll(entries) } else { entries.forEach(onLog) }
+                }, onClose: { scanning = nil })
+            }
+        }
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.fraction(0.94)])
         .presentationDragIndicator(.hidden)
         .presentationBackground(SL.Surface.raised)
@@ -184,6 +217,40 @@ struct AddFoodSheet: View {
         }
         .frame(minHeight: 24)
         .padding(.bottom, 14)
+    }
+
+    // MARK: - Without typing
+
+    /// The two ways in that skip the keyboard: a barcode, or a photo (or a
+    /// line) of the meal. Quiet tiles beside each other, under the search.
+    private var scanTools: some View {
+        HStack(spacing: SL.Space.s2) {
+            scanTile("Barcode", detail: "Packaged food", symbol: "barcode.viewfinder") { scanning = .barcode }
+            scanTile("Scan meal", detail: "Photo or a line", symbol: "camera.viewfinder") { scanning = .photo }
+        }
+    }
+
+    private func scanTile(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: symbol)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(SL.Signal.action)
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: SL.Radius.sm, style: .continuous).fill(SL.Signal.actionTint))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                    Text(detail).slMeta().foregroundStyle(SL.Ink.tertiary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(SL.Space.s2)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.raised2))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.97))
+        .accessibilityHint(title == "Barcode" ? "Opens the camera to scan a barcode" : "Opens the meal scan")
     }
 
     // MARK: - Looking it up
@@ -276,7 +343,23 @@ struct AddFoodSheet: View {
         let recent = FoodMemory.recent(in: entries, excluding: today)
             .filter { entry in !often.contains { $0.name.lowercased() == entry.name.lowercased() } }
 
-        if often.isEmpty && recent.isEmpty {
+        let favorites = app.foodFavorites
+        if !favorites.isEmpty {
+            group("FAVORITES", top: 22) {
+                ForEach(favorites) { favorite in
+                    row(
+                        title: favorite.name,
+                        detail: [favorite.portion, app.display.kcal(Decimal(favorite.calories))]
+                            .compactMap { $0 }.joined(separator: " · "),
+                        star: true,
+                        favorite: favorite.entry(id: "fav", on: date, meal: chosen)
+                    ) {
+                        onLog(favorite.entry(id: Self.newID(), on: date, meal: chosen))
+                    }
+                }
+            }
+        }
+        if often.isEmpty && recent.isEmpty && favorites.isEmpty {
             Text("Search for a product, or enter it yourself. What you log appears here.")
                 .slBody()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.body)
@@ -286,14 +369,14 @@ struct AddFoodSheet: View {
             ownValuesInvitation.padding(.top, SL.Space.s4)
         } else {
             if !often.isEmpty {
-                group("OFTEN AT \(chosen.label.uppercased())", top: 22) {
+                group("OFTEN AT \(chosen.label.uppercased())", top: favorites.isEmpty ? 22 : 18) {
                     ForEach(often) { entry in
                         memoryRow(entry)
                     }
                 }
             }
             if !recent.isEmpty {
-                group("RECENT", top: often.isEmpty ? 22 : 18) {
+                group("RECENT", top: often.isEmpty && favorites.isEmpty ? 22 : 18) {
                     ForEach(recent) { entry in
                         memoryRow(entry)
                     }
@@ -341,7 +424,8 @@ struct AddFoodSheet: View {
             title: entry.name,
             detail: [entry.portion, app.display.kcal(Decimal(entry.calories))]
                 .compactMap { $0 }
-                .joined(separator: " · ")
+                .joined(separator: " · "),
+            favorite: entry
         ) {
             // The day this sheet logs to, at the moment it is tapped.
             onLog(FoodMemory.repeated(entry, on: date, meal: chosen))
@@ -351,11 +435,20 @@ struct AddFoodSheet: View {
     /// A product from the search, at the 100 g its values are given for. The
     /// amount is changed afterwards on the row itself (42d), where the macros
     /// follow it.
+    /// A product at 100 g, as it would be logged — what a star keeps.
+    private func productEntry(_ product: FoodProduct) -> NutritionEntry {
+        let draft = FoodSearch.portion(of: product, grams: 100)
+        return NutritionEntry(id: "fav-\(product.id)", date: Schedule.dateKey(date), meal: chosen.rawValue, name: draft.name,
+                              calories: draft.calories, protein: draft.protein, carbs: draft.carbs, fat: draft.fat,
+                              amount: draft.amount, unit: draft.unit)
+    }
+
     private func productRow(_ product: FoodProduct) -> some View {
         row(
             title: product.name,
             detail: "100 g · \(app.display.kcal(Decimal(product.calories)))\(product.brand.isEmpty ? "" : " · \(product.brand)")",
-            photo: .url(product.imageURL)
+            photo: .url(product.imageURL),
+            favorite: productEntry(product)
         ) {
             let draft = FoodSearch.portion(of: product, grams: 100)
             onLog(
@@ -376,40 +469,75 @@ struct AddFoodSheet: View {
         }
     }
 
-    private func row(title: String, detail: String, photo: SLFoodPhoto.Source? = nil, add: @escaping () -> Void) -> some View {
-        Button(action: add) {
-            HStack(spacing: SL.Space.s3) {
-                if let photo {
-                    SLFoodPhoto(source: photo).frame(width: 44, height: 44)
+    /// A food to add: the photo or star, the name and its portion, a star to
+    /// keep it as a favorite, and the ⊕.
+    private func row(title: String, detail: String, photo: SLFoodPhoto.Source? = nil, star: Bool = false,
+                     favorite: NutritionEntry? = nil, add: @escaping () -> Void) -> some View {
+        HStack(spacing: SL.Space.s1) {
+            Button(action: add) {
+                HStack(spacing: SL.Space.s3) {
+                    if let photo {
+                        SLFoodPhoto(source: photo).frame(width: 44, height: 44)
+                    } else if star {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(SL.Signal.action)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(SL.Signal.actionTint))
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(title)
+                            .slLead()
+                            .foregroundStyle(SL.Ink.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(detail)
+                            .slMeta()
+                            .slNumerals()
+                            .foregroundStyle(SL.Ink.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: SL.Space.s2)
                 }
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title)
-                        .slLead()
-                        .foregroundStyle(SL.Ink.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(detail)
-                        .slMeta()
-                        .slNumerals()
-                        .foregroundStyle(SL.Ink.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 50)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title), \(detail)")
+            .accessibilityHint("Double-tap to add to \(chosen.spoken)")
+
+            if let favorite {
+                let isFavorite = app.isFavorite(favorite)
+                Button {
+                    app.toggleFavorite(favorite)
+                    if !isFavorite { SLSound.pop.play() }
+                } label: {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(isFavorite ? SL.Signal.action : SL.Ink.tertiary)
+                        .frame(minWidth: 40, minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                        .contentTransition(.symbolEffect(.replace))
                 }
-                Spacer(minLength: SL.Space.s2)
+                .buttonStyle(.plain)
+                .sensoryFeedback(.selection, trigger: isFavorite)
+                .accessibilityLabel(isFavorite ? "Remove \(title) from favorites" : "Add \(title) to favorites")
+            }
+
+            Button(action: add) {
                 Image(systemName: "plus.circle")
                     .font(.sl(24, SL.Weight.regular))
                     .foregroundStyle(SL.Ink.secondary)
                     .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
                     // 42c hangs the ⊕ 10 past the gutter, so the glyph lines
                     // up with the text above it rather than its hit area. The
                     // hang is the room the glyph leaves in that area, so a
                     // glyph grown with the text is never cut off at the edge.
                     .padding(.trailing, -max(0, (SL.Space.hitMin - plusSize) / 2))
             }
-            .frame(minHeight: 50)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add \(title) to \(chosen.spoken)")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(detail)")
-        .accessibilityHint("Double-tap to add to \(chosen.spoken)")
     }
 
     // MARK: - Food no database has

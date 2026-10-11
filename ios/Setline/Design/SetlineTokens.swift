@@ -205,6 +205,10 @@ enum SL {
         /// adds to it: 58 across.
         static let tabItemHeight:     CGFloat = 56
         static let tabBarHeight:      CGFloat = 58
+        /// Every tab's pinned head (`SLTabHeader`).
+        static let tabHeaderHeight:   CGFloat = 52
+        /// From the head to the first card, on every tab.
+        static let tabContentTop:     CGFloat = 20
         static let segmentHeight:     CGFloat = 44
         static let chipHeight:        CGFloat = 44
         static let dayTileHeight:     CGFloat = 64   // 72 on the first-run home

@@ -28,7 +28,6 @@ struct FriendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SL.Space.s4) {
-                header
                 switch social.phase {
                 case .loading:
                     // Cards in the shape of the posts on their way (S2).
@@ -65,9 +64,10 @@ struct FriendsView: View {
                 }
             }
             .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s5)
+            .padding(.top, SL.Metric.tabContentTop)
             .padding(.bottom, SL.Space.s6)
         }
+        .slTabHeader { header }
         .refreshable { await social.load() }
         .task(id: app.userID) { await social.load() }
         .fullScreenCover(item: $composing) { target in
@@ -85,37 +85,16 @@ struct FriendsView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: SL.Space.s3) {
-            Button(action: onAccount) {
-                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 40)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(SLPressStyle(scale: 0.92))
-            .accessibilityLabel("Account")
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Friends")
-                    .font(.sl(SL.TypeSize.display, SL.Weight.bold))
-                    .foregroundStyle(SL.Ink.primary)
-                    .accessibilityAddTraits(.isHeader)
-                if let me = social.me {
-                    Text("@\(me.username) · \(social.friends.count == 1 ? "1 friend" : "\(social.friends.count) friends")")
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                }
-            }
-            Spacer()
+        SLTabHeader(
+            title: "Friends",
+            subtitle: social.me.map { "@\($0.username) · \(social.friends.count == 1 ? "1 friend" : "\(social.friends.count) friends")" },
+            onAccount: onAccount
+        ) {
             if social.phase == .ready {
-                Button { showsPeople = true } label: {
-                    SLGlyph(name: .personAdd, size: 18, fixed: true)
-                        .foregroundStyle(SL.Ink.primary)
-                        .frame(width: 38, height: 38)
-                        .background(Circle().fill(SL.Surface.raised))
-                        .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
-                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
-                .accessibilityLabel(social.incoming.isEmpty ? "Add friends" : "Friends, \(social.incoming.count) requests")
+                SLHeaderButton(
+                    glyph: .personAdd,
+                    label: social.incoming.isEmpty ? "Add friends" : "Friends, \(social.incoming.count) requests"
+                ) { showsPeople = true }
             }
         }
     }
@@ -715,6 +694,7 @@ struct PostCard: View {
             if !isMine {
                 Button {
                     if !given { bursts += 1 }
+                    if !given { SLSound.pop.play() }
                     Task { await social.toggleKudos(post) }
                 } label: {
                     HStack(spacing: 6) {

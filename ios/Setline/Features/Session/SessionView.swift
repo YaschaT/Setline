@@ -1382,6 +1382,7 @@ struct SessionView: View {
             )
         )
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        SLSound.tick.play()
         AccessibilityNotification.Announcement(
             "Set \(setIndex + 1) saved, \(app.display.kg(weight)) × \(reps)"
         ).post()

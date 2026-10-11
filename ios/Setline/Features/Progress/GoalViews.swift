@@ -207,6 +207,13 @@ struct GoalCheckCard: View {
                 .slNumerals()
                 .foregroundStyle(SL.Ink.meta)
                 .fixedSize(horizontal: false, vertical: true)
+            if check.needsAction, let eaten = eatenLine {
+                HStack(alignment: .top, spacing: SL.Space.s2) {
+                    Image(systemName: "fork.knife").font(.system(size: 12, weight: .semibold))
+                    Text(eaten).slMeta().slNumerals().fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(SL.Ink.primary)
+            }
             if check.verdict == .onTrack, weeksOnTrack > 0 {
                 HStack(spacing: 6) {
                     SLGlyph(name: .flameFill, size: 14, fixed: true)
@@ -231,6 +238,21 @@ struct GoalCheckCard: View {
         .padding(SL.Space.s4)
         .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised2))
         .accessibilityElement(children: .contain)
+    }
+
+    /// What the food log says over the same two weeks: whether the target
+    /// was eaten at all, before the target itself is blamed.
+    private var eatenLine: String? {
+        let history = app.nutritionHistory()
+        guard history.logged.count >= 3, let average = history.averageCalories else { return nil }
+        let avg = app.display.whole(Decimal(average))
+        guard let gap = history.averageGap, let target = history.calorieTarget else {
+            return "You logged \(avg) kcal a day on \(history.logged.count) days."
+        }
+        if abs(gap) <= target / 10 {
+            return "You logged \(avg) kcal a day, on your target: the target itself needs to move."
+        }
+        return "You logged \(avg) kcal a day, \(app.display.whole(Decimal(abs(gap)))) \(gap > 0 ? "over" : "under") your target. Eat to the target first."
     }
 
     private var ink: Color { check.verdictInk }
@@ -275,23 +297,26 @@ enum NutritionReminders {
 
     static func update(app: AppState, now: Date = Date()) async {
         let center = UNUserNotificationCenter.current()
-        let ids = MealWindow.all.map { "setline.meal.\($0.meal.rawValue)" }
-        center.removePendingNotificationRequests(withIdentifiers: ids + [goalID])
+        let earlier = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix("setline.meal.") }
+        center.removePendingNotificationRequests(withIdentifiers: earlier + [goalID])
         guard app.isSignedIn else { return }
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional else { return }
 
         if mealsOn {
-            for (window, fire) in MealWindow.due(entries: app.nutritionEntries, now: now) {
+            for (window, fire) in MealWindow.upcoming(entries: app.nutritionEntries, now: now) {
                 let content = UNMutableNotificationContent()
                 content.title = "\(window.label) not logged yet"
                 content.body = window.meal == .avondeten
                     ? "Log dinner and any snacks — a full day keeps your goal check honest."
                     : "Takes ten seconds. Your \(window.label.lowercased()) window closes at \(window.endHour):00."
                 content.sound = .default
+                content.threadIdentifier = "setline.meals"
                 let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
                 try? await center.add(UNNotificationRequest(
-                    identifier: "setline.meal.\(window.meal.rawValue)", content: content,
+                    identifier: "setline.meal.\(window.meal.rawValue).\(Schedule.dateKey(fire))", content: content,
                     trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)))
             }
         }

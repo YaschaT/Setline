@@ -55,6 +55,16 @@ struct NutritionHomeView: View {
     }
     /// The row whose delete is showing, by entry id. One at a time.
     @State private var swiped: String?
+    /// The day the food log shows, by date key; nil is today.
+    @State private var diaryDay: String?
+    @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
+    /// The offer to switch reminders on, once answered, isn't made again.
+    @AppStorage("setline.reminders.offered") private var remindersOffered = false
+    @State private var remindersDenied = false
+
+    /// The meals opened in the food log. Closed by default: the totals say
+    /// enough until a meal is looked into.
+    @State private var openMeals: Set<String> = []
 
     struct Toast: Identifiable {
         let id = UUID()
@@ -74,6 +84,97 @@ struct NutritionHomeView: View {
         day.sections.flatMap { section in section.entries.map { ($0, section) } }
     }
 
+    /// The in-app side of the meal reminders: a meal whose reminder time has
+    /// passed with nothing logged says so here, with the way to log it; and
+    /// while reminders are off, the app offers them once.
+    @ViewBuilder
+    private var mealNudge: some View {
+        if let missing = MealWindow.missing(entries: app.nutritionEntries, now: now) {
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(SL.Signal.attention)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(SL.Signal.attention.opacity(0.14)))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(missing.label) isn't logged yet")
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                    Text(missing.endHour >= 24 ? "Dinner and snacks count until midnight" : "Your \(missing.label.lowercased()) window closes at \(missing.endHour):00")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                Spacer(minLength: SL.Space.s2)
+                Button {
+                    now = Date()
+                    sheet = .add(missing.meal)
+                } label: {
+                    Text("Log")
+                        .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                        .foregroundStyle(SL.Signal.onAction)
+                        .padding(.horizontal, SL.Space.s4)
+                        .frame(minHeight: 36)
+                        .background(Capsule().fill(SL.Signal.action))
+                }
+                .buttonStyle(SLPressStyle(scale: 0.94))
+                .accessibilityLabel("Log \(missing.label.lowercased())")
+            }
+            .padding(SL.Space.s3)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised))
+            .overlay(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).strokeBorder(SL.Signal.attention.opacity(0.35), lineWidth: 1))
+            .accessibilityElement(children: .contain)
+        } else if !mealReminders, !remindersOffered {
+            HStack(alignment: .top, spacing: SL.Space.s3) {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SL.Signal.action)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(SL.Signal.actionTint))
+                VStack(alignment: .leading, spacing: SL.Space.s2) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Get a nudge when a meal isn't logged")
+                            .slBody(SL.Weight.semibold)
+                            .foregroundStyle(SL.Ink.primary)
+                        Text(remindersDenied
+                             ? "Notifications are off for Setline. Turn them on in Settings › Setline › Notifications."
+                             : "Breakfast at 10:30, lunch at 14:30, dinner at 20:30 — only when nothing is logged yet.")
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack(spacing: SL.Space.s2) {
+                        Button {
+                            Task {
+                                if await NutritionReminders.requestPermission() {
+                                    mealReminders = true
+                                    remindersOffered = true
+                                    await NutritionReminders.update(app: app)
+                                } else {
+                                    remindersDenied = true
+                                }
+                            }
+                        } label: {
+                            Text(remindersDenied ? "Try again" : "Turn on")
+                                .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                                .foregroundStyle(SL.Signal.onAction)
+                                .padding(.horizontal, SL.Space.s4)
+                                .frame(minHeight: 36)
+                                .background(Capsule().fill(SL.Signal.action))
+                        }
+                        .buttonStyle(SLPressStyle(scale: 0.94))
+                        Button("Not now") { remindersOffered = true }
+                            .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                            .foregroundStyle(SL.Ink.secondary)
+                            .frame(minHeight: 36)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(SL.Space.s3)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised))
+        }
+    }
+
     /// Off track on the body-weight goal: the fix lives here, with the calories.
     @ViewBuilder
     private var goalNudge: some View {
@@ -89,18 +190,20 @@ struct NutritionHomeView: View {
         ScrollView {
             // 24 between sections, 8 from a section's head to its card.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                header
+                // Today, then what it was made of, then ideas for what is
+                // still missing — Training's order: now, done, next.
                 hero
-                    .padding(.top, SL.Space.s5)
+                mealNudge
                 goalNudge
+                foodLog
                 ideasSection
                 RecipesSection(display: app.display, initial: likely) { sheet = .recipe($0) }
-                eatenSection
             }
             .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s5)
+            .padding(.top, SL.Metric.tabContentTop)
             .padding(.bottom, SL.Space.s6)
         }
+        .slTabHeader { header }
         .scrollDismissesKeyboard(.immediately)
         .safeAreaInset(edge: .bottom) {
             // The undo sits above the tab bar, where a deleted row can be put
@@ -127,12 +230,15 @@ struct NutritionHomeView: View {
         .sheet(item: $sheet) { which in
             switch which {
             case .add(let meal):
-                AddFoodSheet(date: now, meal: meal) { entry in
+                AddFoodSheet(date: now, meal: meal, onLog: { entry in
                     sheet = nil
                     add(entry)
-                } onClose: {
+                }, onLogAll: { entries in
                     sheet = nil
-                }
+                    addAll(entries)
+                }, onClose: {
+                    sheet = nil
+                })
             case .edit(let entry):
                 FoodEntrySheet(
                     entry: entry,
@@ -143,6 +249,12 @@ struct NutritionHomeView: View {
                     onDelete: { removed in
                         sheet = nil
                         delete(removed)
+                    },
+                    onRelog: { again in
+                        sheet = nil
+                        let moment = Date()
+                        now = moment
+                        add(FoodMemory.repeated(again, on: moment, meal: Meal.likely(at: moment)))
                     }
                 )
             case .recipe(let recipe):
@@ -163,7 +275,12 @@ struct NutritionHomeView: View {
             }
         }
         .slRespondsToTextSize()
-        .onAppear { now = Date() }
+        .onAppear {
+            now = Date()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-SetlineAddFood") { sheet = .add(likely) }
+            #endif
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { now = Date() }
         }
@@ -184,36 +301,8 @@ struct NutritionHomeView: View {
     /// Training's head, so the tabs read as one app: the avatar to Account,
     /// the tab's name and the date, and one round button — here the targets.
     private var header: some View {
-        HStack(alignment: .center, spacing: SL.Space.s3) {
-            Button(action: onAccount) {
-                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 40)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(SLPressStyle(scale: 0.92))
-            .accessibilityLabel("Account")
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Nutrition")
-                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
-                    .foregroundStyle(SL.Ink.primary)
-                    .accessibilityAddTraits(.isHeader)
-                Text(SLDateText.long(now))
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button { sheet = .targets } label: {
-                SLGlyph(name: .target, size: 18, fixed: true)
-                    .foregroundStyle(SL.Ink.primary)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(SL.Surface.raised))
-                    .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
-                    .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
-            .accessibilityLabel("Daily targets")
+        SLTabHeader(title: "Nutrition", subtitle: SLDateText.long(now), onAccount: onAccount) {
+            SLHeaderButton(glyph: .target, label: "Daily targets") { sheet = .targets }
         }
     }
 
@@ -328,6 +417,7 @@ struct NutritionHomeView: View {
             guard met, proteinCelebrated != key else { return }
             proteinCelebrated = key
             proteinPops += 1
+            SLSound.chime.play()
         }
         .onAppear {
             guard !reduceMotion, !breathes else { return }
@@ -487,13 +577,41 @@ struct NutritionHomeView: View {
     private var ideasSection: some View {
         let proteinLeft = max(0, proteinTarget - proteinEaten)
         let ideas = FoodIdeas.ordered(proteinLeft: proteinLeft)
+        let favorites = app.foodFavorites
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             // The card already says what protein is missing; the head says
             // what these are for.
-            SLSectionHead(title: "Quick adds", meta: proteinLeft > 0 ? "high protein first" : nil)
+            SLSectionHead(title: "Quick adds", meta: !favorites.isEmpty ? "favorites first" : proteinLeft > 0 ? "high protein first" : nil)
+            // Two short rows rather than one row of tall cards: a quick add
+            // is one tap, and should look like one — not like a recipe.
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: SL.Space.s3) {
-                    ForEach(ideas) { idea in ideaCard(idea) }
+                LazyHGrid(rows: [GridItem(.fixed(56), spacing: SL.Space.s2), GridItem(.fixed(56))], spacing: SL.Space.s2) {
+                    ForEach(favorites) { favorite in
+                        quickPill(
+                            id: "fav-\(favorite.id)", name: favorite.name,
+                            detail: "\(app.display.whole(Decimal(favorite.protein))) g protein · \(app.display.whole(Decimal(favorite.calories)))",
+                            art: AnyView(Image(systemName: "star.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(SL.Signal.action)
+                                .frame(width: 36, height: 36)
+                                .background(Circle().fill(SL.Signal.actionTint)))
+                        ) { moment in
+                            favorite.entry(id: "food-\(Int(moment.timeIntervalSince1970 * 1000))", on: moment, meal: Meal.likely(at: moment))
+                        }
+                    }
+                    ForEach(ideas) { idea in
+                        quickPill(
+                            id: idea.id, name: idea.name,
+                            detail: "\(app.display.whole(Decimal(idea.protein))) g protein · \(app.display.whole(Decimal(idea.calories)))",
+                            art: AnyView(SLFoodPhoto(source: .asset(idea.imageName), cornerRadius: 18)
+                                .saturation(0.7)
+                                .frame(width: 36, height: 36)
+                                .clipShape(Circle())
+                                .overlay(Circle().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1)))
+                        ) { moment in
+                            idea.entry(id: "food-\(Int(moment.timeIntervalSince1970 * 1000))", date: moment, meal: Meal.likely(at: moment))
+                        }
+                    }
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
             }
@@ -501,64 +619,46 @@ struct NutritionHomeView: View {
         }
     }
 
-    /// A quick add as the app's own card: the protein it brings is the
-    /// number, the food a small round photo — graded down so a white plate
-    /// and a dark one sit alike on the ground — and the add a quiet round
-    /// button. One lime action per screen stays the card above's.
-    private func ideaCard(_ idea: FoodIdea) -> some View {
-        let justAdded = addedIdea == idea.id
+    /// A quick add in one line: a small photo, the name and what it brings,
+    /// and the add — which turns into a check for a moment once tapped.
+    private func quickPill(id: String, name: String, detail: String, art: AnyView, entry: @escaping (Date) -> NutritionEntry) -> some View {
+        let justAdded = addedIdea == id
         return Button {
             let moment = Date()
             now = moment
-            add(idea.entry(id: "food-\(Int(moment.timeIntervalSince1970 * 1000))", date: moment, meal: Meal.likely(at: moment)))
-            addedIdea = idea.id
+            add(entry(moment))
+            addedIdea = id
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1.4))
-                if addedIdea == idea.id { withAnimation(.easeOut(duration: 0.2)) { addedIdea = nil } }
+                if addedIdea == id { withAnimation(.easeOut(duration: 0.2)) { addedIdea = nil } }
             }
         } label: {
-            VStack(alignment: .leading, spacing: SL.Space.s3) {
-                HStack(alignment: .top) {
-                    SLFoodPhoto(source: .asset(idea.imageName), cornerRadius: 24)
-                        .saturation(0.7)
-                        .overlay(Circle().fill(SL.Surface.ground.opacity(0.32)))
-                        .frame(width: 48, height: 48)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1.5))
-                    Spacer(minLength: 0)
-                    SLGlyph(name: justAdded ? .check : .plus, size: 14, fixed: true)
-                        .foregroundStyle(justAdded ? SL.Signal.onAction : SL.Signal.action)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(justAdded ? SL.Signal.action : SL.Surface.raised2))
-                        .overlay(Circle().strokeBorder(justAdded ? Color.clear : SL.Surface.hairlineStrong, lineWidth: 1))
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(app.display.whole(Decimal(idea.protein)))
-                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
-                        .foregroundStyle(SL.Ink.primary)
-                    Text("g protein")
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                }
-                .monospacedDigit()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(idea.name)
+            HStack(spacing: SL.Space.s3) {
+                art
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
                         .slBody(SL.Weight.semibold)
                         .foregroundStyle(SL.Ink.primary)
                         .lineLimit(1)
-                    Text("\(idea.portion) · \(app.display.kcal(Decimal(idea.calories)))")
-                        .slMeta()
+                    Text(detail)
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                         .monospacedDigit()
                         .foregroundStyle(SL.Ink.secondary)
                         .lineLimit(1)
                 }
+                Spacer(minLength: SL.Space.s1)
+                SLGlyph(name: justAdded ? .check : .plus, size: 12, fixed: true)
+                    .foregroundStyle(justAdded ? SL.Signal.onAction : SL.Signal.action)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(justAdded ? SL.Signal.action : SL.Surface.raised2))
+                    .contentTransition(.symbolEffect(.replace))
             }
-            .padding(SL.Space.s4)
-            .frame(width: 156, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised))
+            .padding(.leading, 10)
+            .padding(.trailing, SL.Space.s2)
+            .frame(width: 250, height: 56)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised))
             .overlay(
-                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
                     .strokeBorder(justAdded ? SL.Signal.action.opacity(0.5) : SL.Surface.hairline, lineWidth: SL.Metric.border)
             )
             .contentShape(Rectangle())
@@ -567,43 +667,290 @@ struct NutritionHomeView: View {
         .sensoryFeedback(.success, trigger: justAdded) { _, now in now }
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: justAdded)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(idea.name), \(idea.portion), \(app.display.whole(Decimal(idea.protein))) grams of protein, \(app.display.kcal(Decimal(idea.calories)))")
+        .accessibilityLabel("\(name), \(detail)")
         .accessibilityHint("Adds it to \(likely.spoken)")
     }
 
     // MARK: - What was eaten
 
-    private var eatenSection: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
+    // MARK: - The food log
+
+    private var history: NutritionHistory { app.nutritionHistory(before: now) }
+
+    /// The day on screen in the log: today, or a day picked from the strip.
+    private var shownDay: (day: NutritionDay, past: NutritionHistory.Day?) {
+        guard let diaryDay, let past = history.days.first(where: { $0.id == diaryDay }) else { return (day, nil) }
+        return (past.summary, past)
+    }
+
+    /// One card for what was eaten, today and before: a strip of days to pick
+    /// from, the picked day's meals folded to one line each, and how the two
+    /// weeks went in one line at the foot.
+    private var foodLog: some View {
+        let shown = shownDay
+        let count = shown.day.entries.count
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLSectionHead(
-                title: "Eaten today",
-                meta: "\(eaten.count) \(eaten.count == 1 ? "item" : "items")"
+                title: shown.past == nil ? "Eaten today" : shown.past!.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)),
+                meta: "\(count) \(count == 1 ? "item" : "items")"
             )
             VStack(spacing: 0) {
-                if eaten.isEmpty {
-                    // Said plainly rather than shown as a row of zeroes.
-                    VStack(alignment: .leading, spacing: SL.Space.s1) {
-                        Text("Nothing logged yet")
-                            .slLead()
-                            .foregroundStyle(SL.Ink.primary)
-                        Text("What you log counts right away.")
-                            .slBody()
-                            .slLineHeight(1.45, size: SL.TypeSize.body)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(SL.Ink.secondary)
-                    }
-                    .padding(SL.Space.s4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    ForEach(Array(eaten.enumerated()), id: \.element.entry.id) { index, item in
-                        row(item.entry, in: item.section)
-                            .overlay(alignment: .top) { if index > 0 { SLHairline() } }
-                    }
+                dayStrip
+                    .padding(.vertical, SL.Space.s3)
+                if let past = shown.past {
+                    SLHairline()
+                    pastSummary(past)
+                }
+                ForEach(shown.day.sections) { section in
+                    SLHairline()
+                    mealGroup(section, today: shown.past == nil)
+                }
+                if !history.logged.isEmpty {
+                    SLHairline()
+                    stretchLine
                 }
             }
             .slBorderBox()
             .slListCard()
         }
+        .onChange(of: diaryDay) { _, _ in openMeals = [] }
+    }
+
+    /// Two weeks and today, today on the right: the weekday, the date, and a
+    /// dot for how the day went — mint on target, amber off, none unlogged.
+    private var dayStrip: some View {
+        let past = Array(history.days.reversed())
+        return ScrollViewReader { reader in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: SL.Space.s1) {
+                    ForEach(past) { day in
+                        dayChip(date: day.date, key: day.id,
+                                dot: !day.isLogged ? nil : day.onTarget || !day.summary.hasTarget ? SL.Signal.recovery : SL.Signal.attention,
+                                enabled: day.isLogged)
+                    }
+                    dayChip(date: now, key: nil, dot: day.entries.isEmpty ? nil : SL.Signal.action, enabled: true)
+                        .id("today")
+                }
+                .padding(.leading, SL.Space.s3)
+                .padding(.trailing, SL.Space.s4)
+            }
+            .onAppear {
+                reader.scrollTo("today", anchor: .trailing)
+                #if DEBUG
+                // `-SetlineFoodDay 2` opens the log on the day before yesterday.
+                let arguments = ProcessInfo.processInfo.arguments
+                if let flag = arguments.firstIndex(of: "-SetlineFoodDay"), arguments.indices.contains(flag + 1),
+                   let back = Int(arguments[flag + 1]), history.days.indices.contains(back - 1) {
+                    diaryDay = history.days[back - 1].id
+                }
+                #endif
+            }
+        }
+    }
+
+    private func dayChip(date: Date, key: String?, dot: Color?, enabled: Bool) -> some View {
+        let isSelected = diaryDay == key
+        return Button {
+            withAnimation(.easeOut(duration: SL.Motion.base)) { diaryDay = key }
+        } label: {
+            VStack(spacing: 3) {
+                Text(key == nil ? "Today" : date.formatted(.dateTime.weekday(.abbreviated)))
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                    .foregroundStyle(isSelected ? SL.Ink.primary : SL.Ink.secondary)
+                    .lineLimit(1)
+                Text(date.formatted(.dateTime.day()))
+                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
+                    .slNumerals()
+                    .foregroundStyle(enabled ? SL.Ink.primary : SL.Ink.tertiary)
+                Circle()
+                    .fill(dot ?? .clear)
+                    .frame(width: 5, height: 5)
+            }
+            .frame(width: key == nil ? 52 : 44, height: 62)
+            .background(
+                RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                    .fill(isSelected ? SL.Surface.raised2 : .clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                    .strokeBorder(isSelected ? SL.Surface.hairlineStrong : .clear, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.94))
+        .disabled(!enabled)
+        .accessibilityLabel(key == nil ? "Today" : date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+        .accessibilityValue(enabled ? "" : "Nothing logged")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// A past day in one line: its calories, the three macros against their
+    /// targets, and what it missed.
+    private func pastSummary(_ past: NutritionHistory.Day) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                Text(app.display.kcal(Decimal(past.summary.calories)))
+                    .slLead()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+                if let target = past.summary.targets?.calories, target > 0 {
+                    Text("of \(app.display.whole(Decimal(target)))")
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                Spacer(minLength: SL.Space.s2)
+                if past.onTarget {
+                    flagChip("On target", ink: SL.Signal.recovery)
+                }
+            }
+            HStack(spacing: SL.Space.s4) {
+                macroFigure("P", past.summary.protein, past.summary.target(for: .protein), low: past.flags.contains(.lowProtein))
+                macroFigure("C", past.summary.carbs, past.summary.target(for: .carbs), low: past.flags.contains(.lowCarbs))
+                macroFigure("F", past.summary.fat, past.summary.target(for: .fat), low: false)
+                Spacer(minLength: 0)
+            }
+            if !past.flags.isEmpty {
+                HStack(spacing: SL.Space.s1) {
+                    ForEach(past.flags, id: \.self) { flagChip($0.label, ink: SL.Signal.attention) }
+                }
+            }
+        }
+        .padding(SL.Space.s4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func macroFigure(_ letter: String, _ eaten: Double, _ target: Double, low: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Text(letter)
+                .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.secondary)
+            Text(app.display.whole(Decimal(eaten)))
+                .slBody(SL.Weight.semibold)
+                .foregroundStyle(low ? SL.Signal.attention : SL.Ink.primary)
+            if target > 0 {
+                Text("/\(app.display.whole(Decimal(target)))")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+        }
+        .slNumerals()
+        .lineLimit(1)
+    }
+
+    private func flagChip(_ text: String, ink: Color) -> some View {
+        Text(text)
+            .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+            .foregroundStyle(ink)
+            .padding(.horizontal, SL.Space.s2)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(ink.opacity(0.14)))
+            .fixedSize()
+    }
+
+    /// A meal in one line — its name, how many items, its calories — opening
+    /// to the items. An empty meal today offers to add to it instead.
+    @ViewBuilder
+    private func mealGroup(_ section: MealSection, today: Bool) -> some View {
+        let isOpen = openMeals.contains(section.id)
+        if section.isEmpty {
+            Button {
+                if today { sheet = .add(section.meal) }
+            } label: {
+                HStack(spacing: SL.Space.s3) {
+                    Text(section.title)
+                        .slBody()
+                        .foregroundStyle(SL.Ink.secondary)
+                    Spacer(minLength: SL.Space.s2)
+                    if today {
+                        HStack(spacing: 4) {
+                            SLGlyph(name: .plus, size: 12, fixed: true)
+                            Text("Add").slMeta(SL.Weight.semibold)
+                        }
+                        .foregroundStyle(SL.Ink.secondary)
+                    } else {
+                        Text("—").slBody().foregroundStyle(SL.Ink.tertiary)
+                    }
+                }
+                .padding(.horizontal, SL.Space.s4)
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!today)
+            .accessibilityLabel(today ? "\(section.title), nothing yet. Add" : "\(section.title), nothing logged")
+        } else {
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.easeOut(duration: SL.Motion.base)) {
+                        if isOpen { openMeals.remove(section.id) } else { openMeals.insert(section.id) }
+                    }
+                } label: {
+                    HStack(spacing: SL.Space.s3) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(section.title)
+                                .slBody(SL.Weight.semibold)
+                                .foregroundStyle(SL.Ink.primary)
+                            Text(section.entries.map(\.name).joined(separator: ", "))
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: SL.Space.s2)
+                        (Text(app.display.whole(Decimal(section.calories)))
+                            .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                            .foregroundColor(SL.Ink.primary)
+                            + Text(" kcal").font(.sl(SL.TypeSize.meta, SL.Weight.regular)).foregroundColor(SL.Ink.secondary))
+                            .slNumerals()
+                            .fixedSize()
+                        SLGlyph(name: .chevronDown, size: 12)
+                            .foregroundStyle(SL.Ink.tertiary)
+                            .rotationEffect(.degrees(isOpen ? 180 : 0))
+                    }
+                    .padding(.horizontal, SL.Space.s4)
+                    .padding(.vertical, SL.Space.s3)
+                    .frame(minHeight: 60)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(section.title), \(section.entries.count) \(section.entries.count == 1 ? "item" : "items"), \(app.display.kcal(Decimal(section.calories)))")
+                .accessibilityHint(isOpen ? "Folds the items away" : "Shows the items")
+                .accessibilityAddTraits(.isButton)
+
+                if isOpen {
+                    ForEach(section.entries) { entry in
+                        row(entry, in: section)
+                            .overlay(alignment: .top) { SLHairline().padding(.leading, SL.Space.s4) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// "14 days · avg 2,350 kcal · on target 4 of 6 · protein 3 of 6"
+    private var stretchLine: some View {
+        let logged = history.logged.count
+        var parts = ["Last 14 days"]
+        if let average = history.averageCalories { parts.append("avg \(app.display.whole(Decimal(average))) kcal") }
+        if history.calorieTarget != nil {
+            parts.append("on target \(history.daysOnCalories)/\(logged)")
+            parts.append("protein \(history.daysProteinHit)/\(logged)")
+        }
+        return HStack(spacing: SL.Space.s2) {
+            Image(systemName: "chart.bar.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(SL.Ink.secondary)
+            Text(parts.joined(separator: " · "))
+                .slMeta()
+                .slNumerals()
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     /// One logged item: when, what it was and which meal, and what it cost.
@@ -686,6 +1033,25 @@ struct NutritionHomeView: View {
         // A swipe is not reachable with VoiceOver, so the same delete is an
         // action on the row.
         .accessibilityAction(named: "Delete") { delete(entry) }
+        // Holding a row keeps it as a favorite, or logs it again today.
+        .contextMenu {
+            Button {
+                app.toggleFavorite(entry)
+            } label: {
+                Label(app.isFavorite(entry) ? "Remove from favorites" : "Add to favorites",
+                      systemImage: app.isFavorite(entry) ? "star.slash" : "star")
+            }
+            if entry.date != Schedule.dateKey(Date()) {
+                Button {
+                    let moment = Date()
+                    now = moment
+                    add(FoodMemory.repeated(entry, on: moment, meal: Meal.likely(at: moment)))
+                } label: {
+                    Label("Log again today", systemImage: "arrow.uturn.forward")
+                }
+            }
+        }
+        .accessibilityAction(named: app.isFavorite(entry) ? "Remove from favorites" : "Add to favorites") { app.toggleFavorite(entry) }
     }
 
     private static let swipeReveal: CGFloat = 112
@@ -701,10 +1067,9 @@ struct NutritionHomeView: View {
         return formatter.string(from: date)
     }
 
-    /// "Lunch · 100 g · 46 g eiwit"
+    /// "100 g · 46 g protein"
     private func detail(_ entry: NutritionEntry, in section: MealSection) -> String {
         [
-            section.title,
             entry.portion,
             "\(app.display.whole(Decimal(entry.protein))) g protein",
         ]
@@ -732,8 +1097,19 @@ struct NutritionHomeView: View {
     /// id, merged field by field at the far end.
     private func add(_ entry: NutritionEntry) {
         Task { await app.log(food: entry) }
+        SLSound.pop.play()
         show("\(entry.name) added to \(mealName(entry).lowercased())") {
             Task { await app.removeFood(id: entry.id) }
+        }
+    }
+
+    /// A meal scan's items, in one go, with one undo for all of them.
+    private func addAll(_ entries: [NutritionEntry]) {
+        guard !entries.isEmpty else { return }
+        Task { for entry in entries { await app.log(food: entry) } }
+        SLSound.pop.play()
+        show(entries.count == 1 ? "\(entries[0].name) added" : "\(entries.count) items added") {
+            Task { for entry in entries { await app.removeFood(id: entry.id) } }
         }
     }
 

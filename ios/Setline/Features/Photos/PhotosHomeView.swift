@@ -61,9 +61,7 @@ struct PhotosHomeView: View {
         ScrollView {
             // 24 between sections, 8 from a section's head to its card.
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                header
                 hero
-                    .padding(.top, SL.Space.s5)
 
                 if let failure {
                     SLAttentionCard(title: "Didn't work") {
@@ -84,9 +82,10 @@ struct PhotosHomeView: View {
 
             }
             .padding(.horizontal, SL.Space.gutterSession)
-            .padding(.top, SL.Space.s5)
+            .padding(.top, SL.Metric.tabContentTop)
             .padding(.bottom, SL.Space.s6)
         }
+        .slTabHeader { header }
         .task(id: app.photos?.owner) {
             guard let photos = app.photos else {
                 checkIns = []
@@ -180,37 +179,9 @@ struct PhotosHomeView: View {
     /// Training's head: the avatar to Account, the tab and how many photos,
     /// and one round button — the timelapse, once there is something to play.
     private var header: some View {
-        HStack(alignment: .center, spacing: SL.Space.s3) {
-            Button(action: onAccount) {
-                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 40)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(SLPressStyle(scale: 0.92))
-            .accessibilityLabel("Account")
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Photos")
-                    .font(.sl(SL.TypeSize.lead, SL.Weight.semibold))
-                    .foregroundStyle(SL.Ink.primary)
-                    .accessibilityAddTraits(.isHeader)
-                Text(gallery.all.count == 1 ? "1 photo" : "\(gallery.all.count) photos")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
+        SLTabHeader(title: "Photos", subtitle: gallery.all.count == 1 ? "1 photo" : "\(gallery.all.count) photos", onAccount: onAccount) {
             if gallery.all.count > 1 {
-                Button { playingTimeline = true } label: {
-                    SLGlyph(name: .play, size: 16, fixed: true)
-                        .foregroundStyle(SL.Ink.primary)
-                        .frame(width: 38, height: 38)
-                        .background(Circle().fill(SL.Surface.raised))
-                        .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
-                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
-                .accessibilityLabel("Play timelapse")
+                SLHeaderButton(glyph: .play, label: "Play timelapse") { playingTimeline = true }
             }
         }
     }
