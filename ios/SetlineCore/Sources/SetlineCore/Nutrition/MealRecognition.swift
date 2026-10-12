@@ -71,7 +71,7 @@ public enum MealRecognition {
         f("cottage_cheese", "Cottage cheese", 150, 98, 11, 3.4, 4.3, ["cottage cheese", "huttenkase"]),
         f("cheese", "Cheese", 30, 402, 25, 1.3, 33, ["cheese", "kaas"], piece: 20),
         f("milk", "Semi-skimmed milk", 250, 47, 3.5, 4.8, 1.5, ["milk", "melk"]),
-        f("whey", "Whey protein powder", 30, 380, 78, 7, 5, ["whey", "protein shake", "eiwitshake", "proteine"], piece: 30),
+        f("whey", "Whey protein powder", 30, 380, 78, 7, 5, ["whey", "whey protein", "protein powder", "eiwitpoeder", "proteinepoeder", "isolate", "casein", "caseine", "protein shake", "eiwitshake", "proteine"], piece: 30),
         // Meat and fish
         f("grilled_chicken", "Chicken breast, cooked", 150, 165, 31, 0, 3.6, ["chicken", "chicken breast", "kip", "kipfilet", "kippenborst"], piece: 150),
         f("fried_chicken", "Fried chicken", 150, 246, 24, 9, 13, ["fried chicken", "gefrituurde kip"]),
@@ -255,6 +255,12 @@ public enum MealRecognition {
         public let words: String
         public let grams: Double?
         public let count: Double?
+
+        public init(words: String, grams: Double?, count: Double?) {
+            self.words = words
+            self.grams = grams
+            self.count = count
+        }
     }
 
     /// "200 g rice, 2 eggs and chicken breast" → three parts.

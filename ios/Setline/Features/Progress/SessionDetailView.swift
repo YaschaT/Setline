@@ -417,7 +417,42 @@ struct SessionDetailView: View {
                 )
             }
             .padding(.top, SL.Space.s2)
+
+            if editing {
+                Button { addSet(to: resultIndex) } label: {
+                    Label("Add set", systemImage: "plus")
+                        .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                                .strokeBorder(SL.Signal.action.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
+                .accessibilityHint("Adds a set you did but didn't log")
+            }
         }
+    }
+
+    /// A set done but not logged: it starts as a copy of the exercise's last
+    /// set and opens straight away to be corrected.
+    private func addSet(to resultIndex: Int) {
+        guard draft.indices.contains(resultIndex) else { return }
+        let last = draft[resultIndex].sets.last
+        var set = LoggedSet(
+            index: draft[resultIndex].sets.count,
+            weightKg: last?.weightKg,
+            reps: last?.reps ?? 8,
+            modifiers: last?.modifiers ?? .none,
+            origin: .sessionAdded
+        )
+        set.substitutedFrom = last?.substitutedFrom
+        withAnimation(.easeOut(duration: SL.Motion.fast)) { draft[resultIndex].sets.append(set) }
+        correcting = Target(resultIndex: resultIndex, setIndex: set.index)
     }
 
     @ViewBuilder
@@ -619,7 +654,22 @@ struct SessionDetailView: View {
             }
         }
 
-        guard !corrections.isEmpty || !removals.isEmpty else { return stopEditing() }
+        // Sets past the end of what was stored are new, unless taken out again.
+        var additions: [SetAddition] = []
+        seen = [:]
+        for (resultIndex, result) in draft.enumerated() {
+            let occurrence = seen[result.exerciseID, default: 0]
+            seen[result.exerciseID] = occurrence + 1
+            let storedCount = session.results.indices.contains(resultIndex) ? session.results[resultIndex].sets.count : 0
+            let added = result.sets.enumerated()
+                .filter { $0.offset >= storedCount && !removed.contains(Target(resultIndex: resultIndex, setIndex: $0.offset).id) }
+                .map(\.element)
+            if !added.isEmpty {
+                additions.append(SetAddition(exerciseID: result.exerciseID, occurrence: occurrence, sets: added))
+            }
+        }
+
+        guard !corrections.isEmpty || !removals.isEmpty || !additions.isEmpty else { return stopEditing() }
         isSaving = true
         let id = session.id
         Task {
@@ -627,6 +677,7 @@ struct SessionDetailView: View {
             // then take their sets out from the back forward.
             if !corrections.isEmpty { await app.correct(sessionID: id, corrections) }
             if !removals.isEmpty { await app.removeSets(sessionID: id, removals) }
+            if !additions.isEmpty { await app.addSets(sessionID: id, additions) }
             isSaving = false
             stopEditing()
             // A session whose last set has gone is gone: there is nothing left

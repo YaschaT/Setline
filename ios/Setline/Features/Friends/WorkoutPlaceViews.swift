@@ -28,8 +28,8 @@ final class NearbyGyms {
             return
         }
         here = location.coordinate
-        let region = MKCoordinateRegion(center: location.coordinate, latitudinalMeters: 5_000, longitudinalMeters: 5_000)
-        let points = MKLocalPointsOfInterestRequest(center: location.coordinate, radius: 2_500)
+        let region = MKCoordinateRegion(center: location.coordinate, latitudinalMeters: 20_000, longitudinalMeters: 20_000)
+        let points = MKLocalPointsOfInterestRequest(center: location.coordinate, radius: 10_000)
         points.pointOfInterestFilter = MKPointOfInterestFilter(including: [.fitnessCenter])
         let words = MKLocalSearch.Request()
         words.naturalLanguageQuery = "gym"
@@ -47,7 +47,7 @@ final class NearbyGyms {
             let coordinate = item.placemark.coordinate
             guard let name = item.name, !name.isEmpty, seen.insert(name.lowercased()).inserted else { return nil }
             let distance = location.distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
-            guard distance <= 3_000 else { return nil }
+            guard distance <= 10_000 else { return nil }
             return (WorkoutPlace(kind: .gym, name: name, latitude: coordinate.latitude, longitude: coordinate.longitude),
                     distance, Self.soundsLikeGym(name))
         }
@@ -82,6 +82,53 @@ final class NearbyGyms {
             return nil
         }
         return nil
+    }
+}
+
+// MARK: - Searching by name
+
+/// "basic fit rijkevorsel": Apple Maps' own suggestions as you type, gyms and
+/// addresses alike, then the exact place for the one tapped.
+@MainActor
+@Observable
+final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
+    private(set) var suggestions: [MKLocalSearchCompletion] = []
+    private let completer = MKLocalSearchCompleter()
+
+    override init() {
+        super.init()
+        completer.resultTypes = [.pointOfInterest, .address]
+        completer.delegate = self
+    }
+
+    func update(_ query: String, near coordinate: CLLocationCoordinate2D?) {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 2 else {
+            suggestions = []
+            return
+        }
+        if let coordinate {
+            completer.region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 60_000, longitudinalMeters: 60_000)
+        }
+        completer.queryFragment = trimmed
+    }
+
+    nonisolated func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        // The completer answers on the main thread it was set up on.
+        MainActor.assumeIsolated { self.suggestions = Array(self.completer.results.prefix(8)) }
+    }
+
+    nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        MainActor.assumeIsolated { self.suggestions = [] }
+    }
+
+    /// The place behind a suggestion, with its coordinates.
+    func place(for completion: MKLocalSearchCompletion) async -> WorkoutPlace? {
+        let request = MKLocalSearch.Request(completion: completion)
+        guard let item = try? await MKLocalSearch(request: request).start().mapItems.first else { return nil }
+        let coordinate = item.placemark.coordinate
+        return WorkoutPlace(kind: .gym, name: item.name ?? completion.title,
+                            latitude: coordinate.latitude, longitude: coordinate.longitude)
     }
 }
 
@@ -130,6 +177,84 @@ struct WorkoutPlaceRow: View {
     }
 }
 
+/// The post's place, near the top where it is seen: the map once picked,
+/// and before that the question with the last gym as one tap.
+struct WorkoutPlaceCard: View {
+    @Binding var place: WorkoutPlace?
+    @State private var picking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            HStack {
+                Text("Where did you train?").slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                Spacer()
+                if place != nil {
+                    Button("Change") { picking = true }
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(minHeight: SL.Space.hitMin)
+                    Button { place = nil } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(SL.Ink.secondary)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(SL.Surface.raised2))
+                            .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove the place")
+                }
+            }
+            if let place {
+                PostPlaceView(place: place)
+            } else {
+                HStack(spacing: SL.Space.s2) {
+                    if let last = WorkoutPlace.lastGym {
+                        chip(last.name, symbol: "dumbbell.fill", lit: true) { place = last }
+                    }
+                    chip(WorkoutPlace.lastGym == nil ? "Add your gym" : "Somewhere else", symbol: "magnifyingglass", lit: WorkoutPlace.lastGym == nil) {
+                        picking = true
+                    }
+                }
+                Text("Optional. Friends see it on the post.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.tertiary)
+            }
+        }
+        .padding(SL.Space.s4)
+        .slBorderBox()
+        .slListCard()
+        .sheet(isPresented: $picking) {
+            WorkoutPlaceSheet(
+                current: place,
+                onPick: { picked in
+                    place = picked
+                    if picked?.kind == .gym { WorkoutPlace.lastGym = picked }
+                    picking = false
+                },
+                onClose: { picking = false }
+            )
+        }
+    }
+
+    private func chip(_ title: String, symbol: String, lit: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 13, weight: .semibold))
+                Text(title).lineLimit(1)
+            }
+            .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+            .foregroundStyle(lit ? SL.Signal.onAction : SL.Ink.primary)
+            .padding(.horizontal, SL.Space.s3)
+            .frame(minHeight: 40)
+            .background(Capsule().fill(lit ? SL.Signal.action : SL.Surface.raised2))
+            .overlay(Capsule().strokeBorder(lit ? Color.clear : SL.Surface.hairlineStrong, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.95))
+    }
+}
+
 /// The choices, privacy first: no place, the gym from last time, gyms near
 /// you (location read once, on request), home, or outdoors (shown as an
 /// area of about a kilometre).
@@ -139,10 +264,73 @@ struct WorkoutPlaceSheet: View {
     let onClose: () -> Void
 
     @State private var gyms = NearbyGyms()
+    @State private var search = PlaceSearch()
+    @State private var query = ""
+    @FocusState private var searching: Bool
 
     var body: some View {
         SLSheet(title: "Where did you train?", subtitle: "Friends see it on this workout", onClose: onClose) {
             VStack(alignment: .leading, spacing: SL.Space.s4) {
+                searchField
+                if query.trimmingCharacters(in: .whitespaces).count >= 2 {
+                    searchResults
+                } else {
+                    choices
+                }
+            }
+        }
+    }
+
+    /// Typing a name is the fastest way to any gym, near or not.
+    private var searchField: some View {
+        HStack(spacing: SL.Space.s2) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SL.Ink.secondary)
+            TextField("", text: $query, prompt: Text("Search a gym or address").foregroundColor(SL.Ink.tertiary))
+                .font(.sl(SL.TypeSize.body, SL.Weight.regular))
+                .foregroundStyle(SL.Ink.primary)
+                .tint(SL.Signal.action)
+                .focused($searching)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(SL.Ink.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, SL.Space.s4)
+        .frame(minHeight: 48)
+        .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised))
+        .overlay(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+            .strokeBorder(searching ? SL.Signal.action.opacity(0.5) : SL.Surface.hairlineStrong, lineWidth: 1))
+        .onChange(of: query) { _, text in search.update(text, near: gyms.here) }
+    }
+
+    /// Apple Maps' matches, and always the way to use the typed name as it is.
+    private var searchResults: some View {
+        let typed = query.trimmingCharacters(in: .whitespaces)
+        return group {
+            ForEach(search.suggestions, id: \.self) { suggestion in
+                option(suggestion.title, symbol: "mappin.circle.fill",
+                       detail: suggestion.subtitle.isEmpty ? nil : suggestion.subtitle, isOn: current?.name == suggestion.title) {
+                    Task {
+                        if let place = await search.place(for: suggestion) { onPick(place) }
+                    }
+                }
+            }
+            option("Use “\(typed)”", symbol: "plus.circle.fill",
+                   detail: "Your own name, without a map", isOn: false) {
+                onPick(WorkoutPlace(kind: .gym, name: typed, latitude: nil, longitude: nil))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var choices: some View {
                 group {
                     option("Don't show a place", symbol: "eye.slash", detail: nil, isOn: current == nil) { onPick(nil) }
                     if let last = WorkoutPlace.lastGym {
@@ -155,8 +343,6 @@ struct WorkoutPlaceSheet: View {
                 }
 
                 nearby
-            }
-        }
     }
 
     @ViewBuilder
@@ -202,7 +388,7 @@ struct WorkoutPlaceSheet: View {
                     .padding(.horizontal, SL.Space.s1)
                 group {
                     if found.isEmpty {
-                        Text("No gyms found within 3 km.")
+                        Text("No gyms found within 10 km. Search by name above.")
                             .slBody()
                             .foregroundStyle(SL.Ink.secondary)
                             .padding(SL.Space.s4)

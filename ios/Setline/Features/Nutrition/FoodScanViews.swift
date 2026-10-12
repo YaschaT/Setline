@@ -269,6 +269,18 @@ struct FoodPhotoScanSheet: View {
     /// The photo guess "Something else" points at: what is typed next
     /// takes its place.
     @State private var replacing: UUID?
+    /// The conversation with Tally on the server, when it answered: what
+    /// Tally said, the question still open, and every turn so far. Nil means
+    /// the scan was read on the phone.
+    @State private var chat: TallyChat?
+    /// Tally is redoing the plate after an answer.
+    @State private var thinking = false
+
+    struct TallyChat {
+        var say: String
+        var question: FoodScanAnswer.Question?
+        var turns: [FoodScanRequest.Turn]
+    }
 
     private var addedIDs: Set<UUID> { Set(added.values.flatMap(\.values)) }
 
@@ -293,7 +305,7 @@ struct FoodPhotoScanSheet: View {
                     switch phase {
                     case .start:
                         captureTiles
-                        Label("Recognised on this phone. Free, and the photo never leaves it.", systemImage: "lock.fill")
+                        Label("Tally reads your photo with Google's Gemini AI. Setline doesn't keep it.", systemImage: "sparkles")
                             .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                             .foregroundStyle(SL.Ink.tertiary)
                             .frame(maxWidth: .infinity)
@@ -376,7 +388,11 @@ struct FoodPhotoScanSheet: View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
             TallyGuide(line: tallyLine, mood: tallyMood, jumps: tallyJumps)
                 .onTapGesture { tallyJumps += 1 }
-            if case .results = phase, let open = openQuestion {
+            if case .results = phase, let question = chat?.question, !thinking {
+                chatChips(question)
+                    .padding(.leading, 64)
+                    .transition(.opacity)
+            } else if case .results = phase, let open = openQuestion {
                 answerChips(open.question, for: open.food)
                     .padding(.leading, 64)
                     .transition(.opacity)
@@ -543,7 +559,8 @@ struct FoodPhotoScanSheet: View {
                       carbs: chosen.reduce(0) { $0 + $1.carbs },
                       fat: chosen.reduce(0) { $0 + $1.fat })
                 .padding(.top, SL.Space.s2)
-            Text("Usual portions and standard values. Weighing beats guessing.")
+            Text(chat != nil ? "Estimated by Tally from what it sees. Weighing beats guessing."
+                 : "Usual portions and standard values. Weighing beats guessing.")
                 .slMeta()
                 .foregroundStyle(SL.Ink.tertiary)
         }
@@ -600,6 +617,7 @@ struct FoodPhotoScanSheet: View {
 
     /// The first question still open, and the food it's about.
     private var openQuestion: (food: ScannedFood, question: MealRecognition.Question)? {
+        if chat != nil { return nil }
         for item in items where fromPhoto.contains(item.id) && !closed.contains("\(item.id)-what") {
             return (item, MealRecognition.identityQuestion(for: item))
         }
@@ -616,15 +634,27 @@ struct FoodPhotoScanSheet: View {
         case .start: .ready
         case .reading: .focused
         case .empty: .resting
-        case .results: openQuestion == nil ? .proud : .ready
+        case .results: thinking ? .focused : (openQuestion == nil && chat?.question == nil) ? .proud : .ready
         }
     }
 
     /// What Tally says: always about what is on screen now, never chat.
     private var tallyLine: String {
+        if let chat {
+            if thinking { return "Got it, redoing the plate…" }
+            switch phase {
+            case .results:
+                if let question = chat.question { return "\(chat.say) \(question.text)" }
+                return "\(chat.say) Check the grams, then add it to \(meal.spoken)."
+            case .empty:
+                return "\(chat.say) Tell me what it was?"
+            case .start, .reading:
+                break
+            }
+        }
         switch phase {
         case .start:
-            return "Hi! Show me your plate, or tell me what you ate."
+            return "Hi! Show me your plate or the package, or tell me what you ate."
         case .reading:
             return "Hmm, let me have a look…"
         case .empty:
@@ -862,11 +892,13 @@ struct FoodPhotoScanSheet: View {
         if !adding {
             phase = .reading
             leftOut = []
+            chat = nil
         }
         let image = adding ? nil : photo
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if adding { text = "" }
         Task {
+            if await askTally(line: line, image: image, adding: adding) { return }
             var found: [ScannedFood] = []
             var others: [UUID: [ScannedFood]] = [:]
             var photoRows: Set<UUID> = []
@@ -900,7 +932,21 @@ struct FoodPhotoScanSheet: View {
                     others[pick.id] = rest
                 }
             }
+            var readPackage = false
             if let image {
+                let looked = await MealScanner.look(at: image)
+                // A package says what it is in print: its barcode, its
+                // nutrition table, its name. That beats any guess from looks.
+                if let product = await packaged(looked) {
+                    found.append(product.food)
+                    others[product.food.id] = product.others
+                    // A name read from big print is checked with Tally; a
+                    // barcode or a nutrition table is what it says.
+                    if product.food.confidence != .high { photoRows.insert(product.food.id) }
+                    readPackage = true
+                }
+            }
+            if let image, !readPackage {
                 let labels = await MealScanner.labels(in: image)
                 let seen = MealRecognition.fromLabels(labels, limit: 8)
                 let shown = Array(seen.prefix(4)).filter { item in !found.contains { $0.name == item.name } }
@@ -954,6 +1000,175 @@ struct FoodPhotoScanSheet: View {
         }
     }
 
+    /// Asks Tally on the server: the photo, what was typed and — on a
+    /// follow-up — the plate and every turn so far. True when Tally answered
+    /// and the screen shows that answer; false sends the scan to the phone's
+    /// own reading.
+    private func askTally(line: String, image: UIImage?, adding: Bool, answer: String? = nil) async -> Bool {
+        let following = adding || answer != nil
+        if following && chat == nil { return false }
+        var turns = chat?.turns ?? []
+        if let answer, let question = chat?.question {
+            turns += [.tally(question.text), .user(answer)]
+        }
+        let request = FoodScanRequest(
+            imageJPEG: (image ?? (following ? photo : nil)).flatMap(Self.jpeg),
+            text: answer == nil ? line : nil,
+            plate: following ? items.filter { !leftOut.contains($0.id) } : [],
+            turns: turns
+        )
+        if following { thinking = true }
+        let outcome = await app.scanMeal(request)
+        thinking = false
+        guard case .answer(let reply) = outcome else { return false }
+        if !line.isEmpty, answer == nil { turns.append(.user(line)) }
+        turns.append(.tally(reply.say))
+        chat = TallyChat(say: reply.say, question: reply.question, turns: turns)
+        if adding { text = "" }
+        withAnimation(.snappy) {
+            items = reply.items
+            alternatives = [:]
+            fromPhoto = []
+            leftOut = []
+            answered = [:]
+            added = [:]
+            closed = []
+            lastAnswer = nil
+            lastAdded = []
+            replacing = nil
+        }
+        if !line.isEmpty, !adding { text = "" }
+        if reply.items.isEmpty && !following {
+            phase = .empty
+        } else {
+            SLSound.pop.play()
+            tallyJumps += 1
+            phase = .results
+        }
+        return true
+    }
+
+    /// A tap on one of Tally's options, or Skip.
+    private func answerTally(_ option: String?) {
+        guard let option else {
+            chat?.question = nil
+            return
+        }
+        Task { _ = await askTally(line: "", image: nil, adding: false, answer: option) }
+    }
+
+    private func chatChips(_ question: FoodScanAnswer.Question) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(question.options, id: \.self) { option in
+                    Button { answerTally(option) } label: {
+                        Text(option)
+                            .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                            .foregroundStyle(SL.Ink.primary)
+                            .padding(.horizontal, SL.Space.s3)
+                            .frame(minHeight: 36)
+                            .background(Capsule().fill(SL.Surface.raised2))
+                            .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(SLPressStyle(scale: 0.92, bounces: true))
+                }
+                Button { answerTally(nil) } label: {
+                    Text("Skip")
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .padding(.horizontal, SL.Space.s3)
+                        .frame(minHeight: 36)
+                        .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.92))
+            }
+        }
+    }
+
+    /// The photo as Tally gets it: 1024 px on the long side is plenty to
+    /// read a plate or a label, and keeps the upload small.
+    private static func jpeg(_ image: UIImage) -> Data? {
+        let longest = max(image.size.width, image.size.height)
+        let scale = min(1, 1024 / max(longest, 1))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.7)
+    }
+
+    /// The product a photo of a package shows, best evidence first: the
+    /// barcode in Open Food Facts, then the label's own nutrition table, then
+    /// the name in big print — matched to a common food or searched.
+    private func packaged(_ looked: MealScanner.Look) async -> (food: ScannedFood, others: [ScannedFood])? {
+        let reading = PackageLabel.read(looked.text)
+        let table = reading.tableFood
+
+        for code in looked.barcodes {
+            if case .found(let product) = await FoodLookupService().barcode(code) {
+                let grams = product.servingGrams ?? reading.nutrition?.servingGrams ?? table?.grams ?? 100
+                return (row(product.product, grams: grams, key: table?.key), [])
+            }
+        }
+
+        // The product itself, found by the brand and name on the package.
+        let branded = await brandedProducts(reading)
+        let grams = reading.nutrition?.servingGrams ?? table?.grams ?? 100
+        let others = branded.dropFirst().prefix(4).map { row($0, grams: grams, key: table?.key, confidence: .medium) }
+            + (table.map { [$0.scanned(confidence: .low)] } ?? [])
+
+        if let nutrition = reading.nutrition {
+            // The label's own numbers are this exact product; the search only
+            // lends it its name.
+            let name = branded.first.map(displayName)
+                ?? (reading.title.isEmpty ? table?.name ?? "Product from the label" : PackageLabel.displayName(reading.title))
+            let food = nutrition.scanned(name: name, grams: grams)
+            return (ScannedFood(name: food.name, grams: food.grams, calories: food.calories, protein: food.protein,
+                                carbs: food.carbs, fat: food.fat, confidence: .high, key: table?.key), Array(others))
+        }
+        if let product = branded.first {
+            return (row(product, grams: grams, key: table?.key, confidence: .medium), Array(others))
+        }
+        if let table {
+            return (table.scanned(confidence: .medium), [])
+        }
+        return nil
+    }
+
+    /// Open Food Facts asked with the big print, and with all of the front
+    /// print when the brand sits in smaller letters; only products whose own
+    /// name and brand the package shows are kept.
+    private func brandedProducts(_ reading: PackageLabel.Reading) async -> [FoodProduct] {
+        var found: [FoodProduct] = []
+        for query in [reading.title, reading.printed] where query.count >= 3 {
+            let trimmed = String(query.prefix(80))
+            switch await app.searchFood(trimmed) {
+            case .found(let products), .partial(let products, _): found += products
+            case .failed: break
+            }
+            if !PackageLabel.products(found, matching: reading.printed).isEmpty { break }
+        }
+        var seen = Set<String>()
+        return PackageLabel.products(found, matching: reading.printed).filter { seen.insert($0.id).inserted }
+    }
+
+    private func displayName(_ product: FoodProduct) -> String {
+        let brand = product.brand
+        let unknown = brand.isEmpty || brand == "Generiek" || brand == "Merk onbekend"
+            || product.name.localizedCaseInsensitiveContains(brand)
+        return unknown ? product.name : "\(product.name) · \(brand)"
+    }
+
+    private func row(_ product: FoodProduct, grams: Double, key: String?, confidence: ScannedFood.Confidence = .high) -> ScannedFood {
+        let portion = FoodSearch.portion(of: product, grams: grams)
+        return ScannedFood(name: displayName(product), grams: grams, calories: portion.calories, protein: portion.protein,
+                           carbs: portion.carbs, fat: portion.fat, confidence: confidence, key: key)
+    }
+
     /// What the search finds for a typed food, the names closest to what
     /// was typed first, at the typed amount or 100 g. Weak matches are left
     /// out: a wrong product is worse than none.
@@ -982,6 +1197,48 @@ struct FoodPhotoScanSheet: View {
 /// Apple's on-device image recognition, asked what is in a photo. Free, and
 /// nothing leaves the phone.
 enum MealScanner {
+    /// The print on a photo: text with where it sits, and any barcode.
+    struct Look: Sendable {
+        var text: [PackageLabel.Observation] = []
+        var barcodes: [String] = []
+    }
+
+    static func look(at image: UIImage) async -> Look {
+        #if DEBUG
+        // `-SetlineFakeText "100% WHEY|Protein 78 g"` stands in for text
+        // recognition on the simulator; the first line is the biggest print.
+        let arguments = ProcessInfo.processInfo.arguments
+        if let flag = arguments.firstIndex(of: "-SetlineFakeText"), arguments.indices.contains(flag + 1) {
+            let lines = arguments[flag + 1].split(separator: "|").map(String.init)
+            return Look(text: lines.enumerated().map { index, text in
+                PackageLabel.Observation(text: text, x: 0.1, y: 0.9 - Double(index) * 0.08, width: 0.6,
+                                         height: index == 0 ? 0.08 : 0.02)
+            })
+        }
+        #endif
+        guard let cgImage = image.cgImage else { return Look() }
+        let orientation = CGImagePropertyOrientation(image.imageOrientation)
+        return await Task.detached(priority: .userInitiated) {
+            let text = VNRecognizeTextRequest()
+            text.recognitionLevel = .accurate
+            text.usesLanguageCorrection = true
+            text.recognitionLanguages = ["en-US", "nl-NL", "fr-FR", "de-DE"]
+            let barcodes = VNDetectBarcodesRequest()
+            barcodes.symbologies = [.ean13, .ean8, .upce, .code128]
+            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation)
+            try? handler.perform([text, barcodes])
+            var look = Look()
+            look.text = (text.results ?? []).compactMap { observation in
+                guard let best = observation.topCandidates(1).first else { return nil }
+                let box = observation.boundingBox
+                return PackageLabel.Observation(text: best.string, x: box.minX, y: box.minY,
+                                                width: box.width, height: box.height)
+            }
+            look.barcodes = Array(Set((barcodes.results ?? []).compactMap(\.payloadStringValue)))
+            return look
+        }.value
+    }
+
     static func labels(in image: UIImage) async -> [(label: String, confidence: Float)] {
         #if DEBUG
         // `-SetlineFakeLabels "paella:0.5,food:0.9"` stands in for the

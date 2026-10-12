@@ -167,6 +167,7 @@ struct SessionView: View {
                     },
                     onClose: { closeEntry() },
                     onRemove: runner.isAddedSet(slotIndex: editing.slot, setIndex: editing.set)
+                        || (!row.isLogged && runner.slots[editing.slot].sets.count > 1)
                         ? { removeSet(slot: editing.slot, set: editing.set) }
                         : nil
                 )
@@ -343,7 +344,7 @@ struct SessionView: View {
     /// first; either way the toast can put it back.
     private func removeSet(slot: Int, set: Int) {
         closeEntry()
-        guard let removed = runner.removeAddedSet(slotIndex: slot, setIndex: set) else { return }
+        guard let removed = runner.removeSet(slotIndex: slot, setIndex: set) else { return }
         show("Set \(set + 1) removed.") { runner.restore(removed, slotIndex: slot) }
     }
 
@@ -468,6 +469,7 @@ struct SessionView: View {
     /// people who know it, never the only way in.
     private var exerciseHead: some View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
+            exerciseNavigator
             // Where you are in the session, one segment per exercise. The
             // bar is also the way to the full list.
             Button {
@@ -523,11 +525,66 @@ struct SessionView: View {
         }
     }
 
-    /// "1 of 7 · next: Incline bench press"
+    /// "Next: Incline bench press"
     private var headSubtitle: String {
-        let position = "\(runner.currentIndex + 1) of \(runner.slots.count)"
-        guard let next = runner.nextSlotIndex else { return "\(position) · last exercise" }
-        return "\(position) · next: \(runner.slots[next].exercise.name)"
+        guard let next = runner.nextSlotIndex else { return "Last exercise" }
+        return "Next: \(runner.slots[next].exercise.name)"
+    }
+
+    /// Where you are, said in words, with the way to the previous and next
+    /// exercise and to the whole list — visible buttons, never a gesture to
+    /// discover.
+    private var exerciseNavigator: some View {
+        HStack(spacing: SL.Space.s2) {
+            navArrow("chevron.left", label: "Previous exercise", enabled: runner.currentIndex > 0) {
+                runner.currentIndex -= 1
+            }
+            Button {
+                withAnimation(.easeInOut(duration: SL.Motion.duration(SL.Motion.base, reduceMotion: reduceMotion))) {
+                    showsExerciseList.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Exercise \(runner.currentIndex + 1) of \(runner.slots.count)")
+                        .slMeta(SL.Weight.semibold)
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                    Image(systemName: showsExerciseList ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(SL.Ink.secondary)
+                }
+                .padding(.horizontal, SL.Space.s3)
+                .frame(minHeight: 36)
+                .background(Capsule().fill(SL.Surface.raised2))
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Exercise \(runner.currentIndex + 1) of \(runner.slots.count)")
+            .accessibilityHint(showsExerciseList ? "Hides the exercise list" : "Shows every exercise of this session")
+            navArrow("chevron.right", label: "Next exercise", enabled: runner.nextSlotIndex != nil) {
+                runner.advance()
+            }
+        }
+    }
+
+    private func navArrow(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(enabled ? SL.Ink.primary : SL.Ink.tertiary.opacity(0.5))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(SL.Surface.raised2))
+                .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.92))
+        .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 
     private func segmentColor(index: Int, slot: SessionRunner.ExerciseSlot) -> Color {
@@ -784,9 +841,66 @@ struct SessionView: View {
                 }
                 .overlay(alignment: .top) { if position > 0 { SLHairline() } }
             }
+            setCountControls(slotIndex: slotIndex)
+                .overlay(alignment: .top) { SLHairline() }
         }
         .slBorderBox()
         .slListCard()
+    }
+
+    /// Fewer or more sets, today only, in plain sight under the list. Remove
+    /// takes the last set still open; done sets are corrected from their row.
+    private func setCountControls(slotIndex: Int) -> some View {
+        let removable = runner.removableSetIndex(slotIndex: slotIndex)
+        return HStack(spacing: 0) {
+            Button { removeLastOpenSet() } label: {
+                Label("Remove set", systemImage: "minus")
+                    .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                    .foregroundStyle(removable == nil ? SL.Ink.tertiary : SL.Ink.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 48)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(SLRowButtonStyle())
+            .disabled(removable == nil)
+            .accessibilityHint("Removes the last open set, for this session only")
+
+            Rectangle().fill(SL.Surface.hairline).frame(width: 1, height: 24)
+
+            Button { addSet() } label: {
+                Label("Add set", systemImage: "plus")
+                    .font(.sl(SL.TypeSize.body, SL.Weight.medium))
+                    .foregroundStyle(SL.Signal.action)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 48)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(SLRowButtonStyle())
+            .accessibilityHint("Adds a set to this exercise, for this session only")
+        }
+    }
+
+    /// Takes the last open set out, for today; the toast puts it back.
+    private func removeLastOpenSet() {
+        let slot = runner.currentIndex
+        guard let index = runner.removableSetIndex(slotIndex: slot),
+              let removed = runner.removeSet(slotIndex: slot, setIndex: index)
+        else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        show("Set \(index + 1) removed. Just for this session.") { runner.restore(removed, slotIndex: slot) }
+    }
+
+    /// The circle on an open row: one tap logs it as shown, like ticking it
+    /// off. A row without a weight yet opens its sheet instead.
+    private func quickCheck(slotIndex: Int, setIndex: Int) {
+        let set = runner.slots[slotIndex].sets[setIndex]
+        let calibrating = setIndex == 0 && runner.needsCalibration(slotIndex: slotIndex)
+        guard !calibrating, let weight = set.weightKg, weight > 0 else {
+            entryOpensOnKeypad = (set.weightKg ?? 0) <= 0
+            runner.editing = (slotIndex, setIndex)
+            return
+        }
+        save(slotIndex: slotIndex, setIndex: setIndex)
     }
 
     private static let activeAnchor = "active-set"
@@ -801,23 +915,29 @@ struct SessionView: View {
             : (row.weightKind == .awaitingCalibration ? "after set 1" : "× \(reps)")
         let note = done ? note(for: row) : nil
         let last = runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "last \($0)" }
-        return Button {
-            entryOpensOnKeypad = false
-            runner.editing = (slotIndex, row.index)
-        } label: {
-            HStack(spacing: SL.Space.s3) {
-                ZStack {
-                    if done {
-                        Circle().fill(SL.Signal.actionTint)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(SL.Signal.action)
-                    } else {
-                        Circle().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1.5)
-                    }
+        return HStack(spacing: 0) {
+            Button {
+                if done {
+                    entryOpensOnKeypad = false
+                    runner.editing = (slotIndex, row.index)
+                } else {
+                    quickCheck(slotIndex: slotIndex, setIndex: row.index)
                 }
-                .frame(width: 24, height: 24)
+            } label: {
+                checkCircle(done: done)
+                    .padding(.leading, SL.Space.s4)
+                    .padding(.trailing, SL.Space.s3)
+                    .frame(minHeight: 52)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.9))
+            .accessibilityLabel(done ? "Set \(row.indexLabel) done, correct it" : "Log set \(row.indexLabel) as shown, \(value)")
 
+            Button {
+                entryOpensOnKeypad = false
+                runner.editing = (slotIndex, row.index)
+            } label: {
+            HStack(spacing: SL.Space.s3) {
                 Text(row.isAdded ? "Extra set" : "Set \(row.indexLabel)")
                     .slBody()
                     .foregroundStyle(done ? SL.Ink.primary : SL.Ink.secondary)
@@ -839,15 +959,33 @@ struct SessionView: View {
                     .monospacedDigit()
                     .foregroundStyle(done ? SL.Ink.primary : SL.Ink.secondary)
                     .frame(minWidth: 72, alignment: .trailing)
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
             }
-            .padding(.horizontal, SL.Space.s4)
+            .padding(.trailing, SL.Space.s4)
             .frame(minHeight: 52)
             .contentShape(Rectangle())
+            }
+            .buttonStyle(SLRowButtonStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spoken(row, value: value, phase: done ? .done : .pending))
+            .accessibilityHint(done ? "Opens this set to correct it" : "Opens this set")
         }
-        .buttonStyle(SLRowButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(row, value: value, phase: done ? .done : .pending))
-        .accessibilityHint(done ? "Opens this set to correct it" : "Opens this set")
+    }
+
+    /// Done: a filled lime check. Open: an empty ring that reads as a box to
+    /// tick.
+    private func checkCircle(done: Bool) -> some View {
+        ZStack {
+            if done {
+                Circle().fill(SL.Signal.action)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(SL.Surface.ground)
+            } else {
+                Circle().strokeBorder(SL.Ink.tertiary, lineWidth: 2)
+            }
+        }
+        .frame(width: 28, height: 28)
     }
 
     /// The set you're on, open in place: what it is and what it was last
@@ -1124,7 +1262,6 @@ struct SessionView: View {
     /// each thing is, so nothing has to be guessed from a button's name.
     private func moreMenu(setIndex: Int) -> some View {
         Menu {
-            Button("Add a set", systemImage: "plus") { addSet() }
             Button("Type the weight", systemImage: "keyboard") {
                 entryOpensOnKeypad = true
                 runner.editing = (runner.currentIndex, setIndex)
@@ -1338,7 +1475,7 @@ struct SessionView: View {
         } label: {
             // The numbers are right above, in the steppers; the button only
             // has to say what it does.
-            Text("Save set")
+            Label("Save set", systemImage: "checkmark")
                 .lineLimit(1)
         }
         .buttonStyle(SLPrimaryButtonStyle(prominent: true))

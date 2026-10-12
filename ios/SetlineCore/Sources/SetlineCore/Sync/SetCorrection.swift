@@ -117,3 +117,37 @@ public struct SetCorrection: Codable, Hashable, Sendable {
         return object
     }
 }
+
+/// Sets added afterwards to one exercise of a saved workout: done, just not
+/// logged at the time. They go after the sets already there.
+public struct SetAddition: Hashable, Sendable {
+    public let exerciseID: String
+    /// Which result with that exercise id; zero for the first.
+    public let occurrence: Int
+    public let sets: [LoggedSet]
+
+    public init(exerciseID: String, occurrence: Int = 0, sets: [LoggedSet]) {
+        self.exerciseID = exerciseID
+        self.occurrence = occurrence
+        self.sets = sets
+    }
+}
+
+public extension TrainingSession {
+    /// The workout with the added sets in place, numbered after the sets each
+    /// exercise already has. An exercise that isn't in the workout is skipped.
+    func adding(_ additions: [SetAddition]) -> TrainingSession {
+        var copy = self
+        for addition in additions where !addition.sets.isEmpty {
+            let matches = copy.results.indices.filter { copy.results[$0].exerciseID == addition.exerciseID }
+            guard matches.indices.contains(addition.occurrence) else { continue }
+            let index = matches[addition.occurrence]
+            for set in addition.sets {
+                var placed = set
+                placed.index = copy.results[index].sets.count
+                copy.results[index].sets.append(placed)
+            }
+        }
+        return copy
+    }
+}

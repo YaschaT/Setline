@@ -146,7 +146,7 @@ struct PrivacyPolicyView: View {
             "Supabase (sign-in, friends and posts) and Cloudflare (sync of your log) host the data above.",
             "Food search sends only what you type to Open Food Facts, through our server, without your account.",
             "A scanned barcode is looked up in Open Food Facts straight from your phone; only the number is sent.",
-            "Meal scan recognises food on this phone with Apple's built-in image recognition. The photo never leaves your phone; a typed food the app doesn't know is looked up like a normal search.",
+            "Meal scan sends the meal photo and what you type to Setline's server, which asks Google's Gemini AI what is on it. Setline doesn't store the photo. Google's free service may use what it receives to improve its products, so don't scan anything you wouldn't want seen. Without a connection, the photo is read on this phone with Apple's built-in recognition instead.",
         ]),
         Section(title: "Your rights", symbol: "checkmark.shield.fill", lines: [
             "Under the GDPR you can see, correct, export and delete your data.",

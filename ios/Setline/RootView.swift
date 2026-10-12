@@ -149,6 +149,10 @@ struct RootView: View {
                 tab = requested
             }
             if arguments.contains("-SetlineAccount") { showsAccount = true }
+            // `-SetlineComposePost` opens a new post for the latest workout.
+            if arguments.contains("-SetlineComposePost") {
+                composing = app.sessions.first { $0.kind == .workout }
+            }
             if ProcessInfo.processInfo.arguments.contains("-SetlineOpenSession") {
                 if let paused = app.resumableSession, let day = app.day(for: paused) {
                     running = RunningSession(day: day, snapshot: paused)

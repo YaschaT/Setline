@@ -635,6 +635,24 @@ final class SessionRunner {
         return slots[slotIndex].model.removeAddedSet(at: setIndex)
     }
 
+    /// The row "Remove set" takes: the last one still open. Done work is
+    /// never removed from the list this way, and an exercise keeps one row.
+    func removableSetIndex(slotIndex: Int) -> Int? {
+        guard slots.indices.contains(slotIndex), slots[slotIndex].sets.count > 1 else { return nil }
+        return slots[slotIndex].sets.lastIndex { !$0.isLogged }
+    }
+
+    /// Takes one open row out for today, prescribed or added. The program is
+    /// untouched; the session simply asks one set fewer.
+    func removeSet(slotIndex: Int, setIndex: Int) -> SessionSlot.RemovedSet? {
+        guard slots.indices.contains(slotIndex) else { return nil }
+        if editing?.slot == slotIndex {
+            editing = nil
+            editingStartsPartial = false
+        }
+        return slots[slotIndex].model.removeSet(at: setIndex)
+    }
+
     func restore(_ removed: SessionSlot.RemovedSet, slotIndex: Int) {
         guard slots.indices.contains(slotIndex) else { return }
         slots[slotIndex].model.restore(removed)

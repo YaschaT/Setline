@@ -87,6 +87,7 @@ final class AppState {
     let display = NumberDisplay.english
     private let client: SupabaseClient
     private let foodSearch = FoodSearchService()
+    private let mealScan = MealScanService()
     private var store: LocalStore?
     /// One sync at a time. A change made while one runs asks for another pass.
     private var isSyncing = false
@@ -621,6 +622,14 @@ final class AppState {
         await commit([StateChange(.removeSessionSets(sessionID: sessionID, removals: removals))])
     }
 
+    /// Sets done that day but not logged at the time, added to a saved
+    /// workout after the sets each exercise already has. The whole session is
+    /// written again, as finishing it does.
+    func addSets(sessionID: String, _ additions: [SetAddition]) async {
+        guard !additions.isEmpty, let session = sessions.first(where: { $0.id == sessionID }) else { return }
+        await commit([.upsert(session.adding(additions))])
+    }
+
     /// Takes one logged workout out of the account, everywhere: the web app
     /// reads the same tombstone and an older copy cannot bring it back.
     func removeSession(id: String) async {
@@ -711,6 +720,22 @@ final class AppState {
     }
 
     // MARK: - Food without typing
+
+    /// Tally's meal scan on the Setline server, as this account. Demo mode
+    /// has no account, so it never leaves the phone there.
+    func scanMeal(_ request: FoodScanRequest) async -> MealScanService.Outcome {
+        #if DEBUG
+        // `-SetlineFakeMealScan '<answer json>'` stands in for the server.
+        let arguments = ProcessInfo.processInfo.arguments
+        if let flag = arguments.firstIndex(of: "-SetlineFakeMealScan"), arguments.indices.contains(flag + 1),
+           let data = arguments[flag + 1].data(using: .utf8),
+           let answer = try? JSONDecoder().decode(FoodScanAnswer.self, from: data) {
+            try? await Task.sleep(for: .seconds(1))
+            return .answer(answer)
+        }
+        #endif
+        return await mealScan.scan(request, auth: auth)
+    }
 
     func lookupBarcode(_ code: String) async -> FoodLookupService.BarcodeOutcome {
         await FoodLookupService().barcode(code)

@@ -230,6 +230,9 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         public let position: Int
         /// The exercise the row was on. It only ever goes back there.
         public let exerciseID: String
+        /// What the program asked of a prescribed row that was dropped for
+        /// today; nil for an added row.
+        public var prescription: SetPrescription? = nil
     }
 
     /// Adds one working row for this session only.
@@ -270,9 +273,39 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         return removed
     }
 
+    /// Removes a row for today: an added row, logged or not, or a prescribed
+    /// row that is still open — the program is not touched, only this
+    /// session's count shrinks, so the exercise can be done without it.
+    /// The last row of an exercise stays.
+    public mutating func removeSet(at position: Int) -> RemovedSet? {
+        guard active.sets.indices.contains(position), active.sets.count > 1 else { return nil }
+        let row = active.sets[position]
+        if row.origin == .sessionAdded { return removeAddedSet(at: position) }
+        guard !row.isLogged,
+              let offset = prescribedRows.firstIndex(where: { $0.id == row.id }),
+              active.prescription.indices.contains(offset)
+        else { return nil }
+        let prescription = active.prescription.remove(at: offset)
+        active.sets.remove(at: position)
+        renumber()
+        return RemovedSet(set: row, position: position, exerciseID: active.exerciseID, prescription: prescription)
+    }
+
     /// Puts a removed row back where it was, logged data included — once, and
     /// only into the exercise it was removed from.
     public mutating func restore(_ removed: RemovedSet) {
+        if removed.set.origin == .prescribed {
+            guard let prescription = removed.prescription,
+                  removed.exerciseID == active.exerciseID,
+                  !active.sets.contains(where: { $0.id == removed.set.id })
+            else { return }
+            let position = min(removed.position, prescribedRows.count)
+            let offset = prescribedRows.prefix(position).count
+            active.sets.insert(removed.set, at: position)
+            active.prescription.insert(prescription, at: min(offset, active.prescription.count))
+            renumber()
+            return
+        }
         guard removed.set.origin == .sessionAdded,
               removed.exerciseID == active.exerciseID,
               !active.sets.contains(where: { $0.id == removed.set.id })
@@ -283,8 +316,7 @@ public struct SessionSlot: Codable, Hashable, Sendable {
         renumber()
     }
 
-    /// Set numbers follow the rows. Only added rows are ever removed, and they
-    /// sit after every prescribed row, so a prescribed set keeps its number.
+    /// Set numbers follow the rows.
     private mutating func renumber() {
         for position in active.sets.indices { active.sets[position].index = position }
     }

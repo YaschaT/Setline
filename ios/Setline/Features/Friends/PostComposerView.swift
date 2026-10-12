@@ -53,7 +53,10 @@ struct PostComposerView: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: SL.Space.s6) {
-                    if isRest { restSummary } else { summary }
+                    if isRest { restSummary } else {
+                        summary
+                        WorkoutPlaceCard(place: $draft.place)
+                    }
                     field("Title") {
                         TextField(defaultTitle, text: $draft.title)
                             .textInputAutocapitalization(.sentences)
@@ -334,7 +337,7 @@ struct PostComposerView: View {
         picked = []
     }
 
-    // MARK: - Music, place
+    // MARK: - Music
 
     private var attachments: some View {
         VStack(spacing: 0) {
@@ -345,9 +348,6 @@ struct PostComposerView: View {
                 )
             }
             .buttonStyle(SLRowButtonStyle())
-            SLHairline().padding(.leading, 52)
-            WorkoutPlaceRow(place: $draft.place)
-                .padding(.horizontal, SL.Space.s3)
         }
         .slBorderBox()
         .slListCard()

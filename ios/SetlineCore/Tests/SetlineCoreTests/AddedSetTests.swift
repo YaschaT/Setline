@@ -535,4 +535,31 @@ final class AddedSetTests: XCTestCase {
         let read = LegacyAdapter.sessions(from: try LegacyState(data: state.encoded()))
         XCTAssertEqual(read.first?.results.first?.sets.map(\.origin), [.prescribed, .sessionAdded])
     }
+
+    // MARK: - Removing a planned set for today
+
+    func testAnOpenPrescribedSetCanBeDroppedForTodayAndPutBack() throws {
+        var slot = freshSlot()
+        write(&slot, row: 0, reps: 6)
+        let removed = try XCTUnwrap(slot.removeSet(at: 2))
+        XCTAssertEqual(slot.active.sets.count, 2)
+        XCTAssertEqual(slot.active.prescription.count, 2)
+        XCTAssertEqual(slot.prescribedSetCount, 2)
+        XCTAssertEqual(removed.prescription?.repRange, 6...8)
+
+        slot.restore(removed)
+        XCTAssertEqual(slot.active.sets.count, 3)
+        XCTAssertEqual(slot.active.prescription, bench.sets)
+        XCTAssertEqual(slot.active.sets.map(\.index), [0, 1, 2])
+    }
+
+    func testLoggedPrescribedSetsAndTheLastRowStay() {
+        var slot = freshSlot()
+        write(&slot, row: 0, reps: 6)
+        XCTAssertNil(slot.removeSet(at: 0))
+        XCTAssertNotNil(slot.removeSet(at: 2))
+        XCTAssertNotNil(slot.removeSet(at: 1))
+        XCTAssertNil(slot.removeSet(at: 0))
+        XCTAssertFalse(slot.hasOpenSets)
+    }
 }

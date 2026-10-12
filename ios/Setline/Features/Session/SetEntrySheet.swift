@@ -132,7 +132,7 @@ struct SetEntrySheet: View {
         slot.sets.indices.contains(setIndex) && slot.sets[setIndex].origin == .sessionAdded
     }
 
-    private var canRemove: Bool { isAddedSet && onRemove != nil }
+    private var canRemove: Bool { onRemove != nil }
 
     /// The first frame's estimate, until the content has been measured.
     ///

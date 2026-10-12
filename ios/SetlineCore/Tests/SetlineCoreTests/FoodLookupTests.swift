@@ -36,6 +36,27 @@ final class FoodLookupTests: XCTestCase {
         XCTAssertEqual(answer.items[0].confidence, .high)
     }
 
+    func testMealScanAnswerCarriesTallysLineAndQuestion() throws {
+        let answer = try JSONDecoder().decode(FoodScanAnswer.self, from: """
+        {"say":"Stoofvlees with fries!","items":[{"name":"Stoofvlees","grams":250,"calories":420,"protein":38,"carbs":12,"fat":22,"confidence":"medium"}],
+         "question":{"text":"Mayo with the fries?","options":["Yes","No"]}}
+        """.data(using: .utf8)!)
+        XCTAssertEqual(answer.say, "Stoofvlees with fries!")
+        XCTAssertEqual(answer.question?.options, ["Yes", "No"])
+        let none = try JSONDecoder().decode(FoodScanAnswer.self, from: #"{"say":"x","items":[],"question":null}"#.data(using: .utf8)!)
+        XCTAssertNil(none.question)
+    }
+
+    func testMealScanRequestSendsThePlateBack() throws {
+        let plate = [ScannedFood(name: "Fries", grams: 180, calories: 560, protein: 6, carbs: 70, fat: 28, confidence: .medium)]
+        let request = FoodScanRequest(imageJPEG: Data([1, 2]), text: "", plate: plate, turns: [.tally("Mayo?"), .user("No")])
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+        XCTAssertEqual(json["image"] as? String, "AQI=")
+        XCTAssertNil(json["text"])
+        XCTAssertEqual((json["plate"] as? [[String: Any]])?.first?["confidence"] as? String, "medium")
+        XCTAssertEqual((json["turns"] as? [[String: Any]])?.last?["role"] as? String, "user")
+    }
+
     func testFavoriteRoundTripsAnEntry() {
         let entry = NutritionEntry(id: "a", date: "2026-10-10", meal: "lunch", name: "Skyr", calories: 95, protein: 16.5, carbs: 5.7, fat: 0.3, amount: 150, unit: "g")
         let favorite = FavoriteFood(entry)

@@ -132,9 +132,69 @@ public struct ScannedFood: Identifiable, Equatable, Sendable, Decodable {
     }
 }
 
-/// The scan's answer: what it saw, or why it could not.
+/// The scan's answer: what it saw, what Tally says about it, and the one
+/// thing it would like to know (`/api/meal-scan`, `lib/meal-scan.ts`).
 public struct FoodScanAnswer: Decodable, Sendable {
+    public struct Question: Decodable, Equatable, Sendable {
+        public let text: String
+        public let options: [String]
+    }
+
     public let items: [ScannedFood]
+    public let say: String
+    public let question: Question?
+
+    private enum CodingKeys: String, CodingKey { case items, say, question }
+
+    public init(items: [ScannedFood], say: String = "", question: Question? = nil) {
+        self.items = items
+        self.say = say
+        self.question = question
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = (try? container.decode([ScannedFood].self, forKey: .items)) ?? []
+        say = (try? container.decode(String.self, forKey: .say)) ?? ""
+        question = (try? container.decodeIfPresent(Question.self, forKey: .question)).flatMap { $0 }
+            .flatMap { $0.options.count >= 2 ? $0 : nil }
+    }
+}
+
+/// What the phone sends to the meal scan: the photo, what was said, and on a
+/// follow-up the plate so far, so the answer is the whole plate again.
+public struct FoodScanRequest: Encodable, Sendable {
+    public struct Turn: Encodable, Equatable, Sendable {
+        public let role: String
+        public let text: String
+        public static func tally(_ text: String) -> Turn { Turn(role: "assistant", text: text) }
+        public static func user(_ text: String) -> Turn { Turn(role: "user", text: text) }
+    }
+
+    public struct PlateItem: Encodable, Sendable {
+        let name: String
+        let grams: Double
+        let calories: Double
+        let protein: Double
+        let carbs: Double
+        let fat: Double
+        let confidence: String
+    }
+
+    public var image: String?
+    public var text: String?
+    public var plate: [PlateItem]?
+    public var turns: [Turn]?
+
+    public init(imageJPEG: Data?, text: String?, plate: [ScannedFood] = [], turns: [Turn] = []) {
+        image = imageJPEG?.base64EncodedString()
+        self.text = text?.isEmpty == true ? nil : text
+        self.plate = plate.isEmpty ? nil : plate.map {
+            PlateItem(name: $0.name, grams: $0.grams, calories: $0.calories, protein: $0.protein,
+                      carbs: $0.carbs, fat: $0.fat, confidence: $0.confidence.rawValue)
+        }
+        self.turns = turns.isEmpty ? nil : turns
+    }
 }
 
 // MARK: - Favorites
