@@ -367,7 +367,13 @@ final class SocialStore {
     /// Ties the store to the app's sign-in, once, at launch.
     func attach(_ app: AppState) { self.app = app }
 
-    private var isDemo: Bool { DemoData.isEnabled }
+    private var isDemo: Bool {
+        #if DEBUG
+        DemoData.isEnabled
+        #else
+        false
+        #endif
+    }
     var myID: String { app?.userID ?? "" }
 
     var friends: [SocialProfile] {

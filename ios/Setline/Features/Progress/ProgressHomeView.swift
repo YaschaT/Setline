@@ -44,6 +44,24 @@ struct ProgressHomeView: View {
     @State private var volume: [ProgressOverview.WeekVolume] = []
     @State private var days: [ProgressOverview.DayProgress] = []
 
+    /// Strength by exercise: the lift on screen, its estimate series, and
+    /// every exercise the selector offers.
+    @State private var strengthID: String?
+    @State private var strength: StrengthProgress?
+    @State private var exerciseRows: [ExercisePicker.Row] = []
+    /// Recently trained exercises that have an estimate to show: a chip
+    /// that only leads to "no estimate" is a dead end.
+    @State private var estimable: [ExercisePicker.Row] = []
+    @State private var choosingExercise = false
+    /// The weight chart's span, remembered on this phone.
+    @AppStorage("setline.progress.weightRange") private var weightRange = WeightRange.month.rawValue
+
+    enum WeightRange: Int, CaseIterable, Identifiable {
+        case week = 7, month = 30, quarter = 90
+        var id: Int { rawValue }
+        var label: String { "\(rawValue)D" }
+    }
+
     /// "Laatste 8 weken".
     private static let bestWindowDays = 56
 
@@ -79,6 +97,21 @@ struct ProgressHomeView: View {
                 onClose: { choosingGoal = false }
             )
         }
+        .sheet(isPresented: $choosingExercise) {
+            ExercisePickerSheet(
+                rows: exerciseRows,
+                selected: strengthID,
+                onPick: { row in
+                    strengthID = row.exerciseID
+                    choosingExercise = false
+                    reloadStrength()
+                },
+                onStar: { row in
+                    Task { await app.setFavorite(exerciseID: row.exerciseID, isFavorite: !row.isFavorite) }
+                },
+                onClose: { choosingExercise = false }
+            )
+        }
         .sheet(isPresented: $weighing) {
             WeighInSheet(
                 date: Date(),
@@ -98,9 +131,50 @@ struct ProgressHomeView: View {
         bodyProgress = BodyProgress.make(metrics: app.metrics)
         trend = ProgressOverview.weightTrend(bodyProgress)
         let since = Calendar.current.date(byAdding: .day, value: -Self.bestWindowDays, to: Date()) ?? Date()
-        days = ProgressOverview.progressByDay(in: app.sessions, since: since)
+        // The headline percent speaks for the main lifts, as Quick progress does.
+        days = ProgressOverview.progressByDay(in: app.sessions, since: since,
+                                              counts: { StrengthHeadline.isMainLift($0, plan: app.plan) })
         volume = ProgressOverview.weeklyVolume(in: app.sessions)
         weekWins = computeWeekWins()
+        exerciseRows = ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises)
+        estimable = ExercisePicker.recent(in: exerciseRows, limit: 16).filter { row in
+            StrengthHeadline.progress(exerciseID: row.exerciseID, name: row.name, sessions: app.sessions, plan: app.plan).estimate != nil
+        }
+        .prefix(8).map { $0 }
+        if strengthID == nil || !(exerciseRows.contains { $0.exerciseID == strengthID && $0.hasHistory }) {
+            // The main lift that moved most — the same one Training leads
+            // with — so the page opens on a gain, not on a dip.
+            strengthID = StrengthHeadline.pick(rows: exerciseRows, sessions: app.sessions, plan: app.plan)?.exerciseID
+                ?? estimable.first?.exerciseID
+                ?? ExercisePicker.recent(in: exerciseRows, limit: 1).first?.exerciseID
+        }
+        // The lift the page opens on leads the chips, so its lit chip is in
+        // view; the order then holds while chips are tapped.
+        if let id = strengthID, let index = estimable.firstIndex(where: { $0.exerciseID == id }) {
+            estimable.insert(estimable.remove(at: index), at: 0)
+        }
+        reloadStrength()
+    }
+
+    /// The comparable series the account has for the lift on screen: paused
+    /// and touch-and-go, full and partial range never share a line.
+    private func reloadStrength() {
+        guard let id = strengthID, let row = exerciseRows.first(where: { $0.exerciseID == id }) else {
+            strength = nil
+            return
+        }
+        strength = StrengthHeadline.progress(exerciseID: id, name: row.name, sessions: app.sessions, plan: app.plan)
+    }
+
+    /// The chips: what was trained lately, newest first, and the lift on
+    /// screen even when it came from the selector.
+    private var recentExercises: [ExercisePicker.Row] {
+        var recent = estimable
+        if let id = strengthID, !recent.contains(where: { $0.exerciseID == id }),
+           let row = exerciseRows.first(where: { $0.exerciseID == id }) {
+            recent.insert(row, at: 0)
+        }
+        return recent
     }
 
     // MARK: - Overview
@@ -114,9 +188,12 @@ struct ProgressHomeView: View {
                 // week's medals under it), the number that moves every
                 // morning, then what the lifts did (with the work behind
                 // them as one line).
+                // Four things, most looked-at first: the win, each lift's
+                // strength, the scale, and every workout.
                 highlightCard
+                strengthSection
                 weightSection
-                liftsSection
+                logCard
             }
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.top, SL.Metric.tabContentTop)
@@ -124,9 +201,57 @@ struct ProgressHomeView: View {
         }
         .slTabHeader {
             SLTabHeader(title: "Progress", subtitle: "Last 8 weeks", onAccount: onAccount) {
-                SLHeaderButton(glyph: .list, label: "Log") { open(.historiek) }
+                EmptyView()
             }
         }
+    }
+
+    /// Every logged workout, as a card right under the highlight: how many
+    /// there are and the latest one, so it reads as the way in to all of them.
+    private var logCard: some View {
+        let workouts = app.sessions.filter { $0.kind == .workout }.sorted { $0.date > $1.date }
+        return Button { open(.historiek) } label: {
+            HStack(spacing: SL.Space.s3) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(SL.Signal.actionTint)
+                    if let latest = workouts.first {
+                        SLWorkoutSymbol(dayName: latest.dayLabel, size: 20)
+                    } else {
+                        SLGlyph(name: .list, size: 20).foregroundStyle(SL.Signal.action)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("All workouts").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                    Text(logLine(workouts))
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: SL.Space.s2)
+                Text("\(workouts.count)")
+                    .slLead(SL.Weight.semibold)
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+                SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .frame(minHeight: 68)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .slBorderBox()
+        .slListCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("All workouts, \(workouts.count). \(logLine(workouts))")
+        .accessibilityHint("Opens every logged session, to look back or edit one")
+    }
+
+    /// "Last: Push · Mon 5 Oct"
+    private func logLine(_ workouts: [TrainingSession]) -> String {
+        guard let latest = workouts.first else { return "Your logged sessions show up here" }
+        return "Last: \(latest.dayLabel) · \(Schedule.weekdayLabel(latest.date)) \(app.display.shortDate(latest.date))"
     }
 
     /// Every logged workout, one tap from the top of the tab: neutral, since
@@ -156,6 +281,150 @@ struct ProgressHomeView: View {
     }
 
 
+    // MARK: - Strength by exercise
+
+    /// One lift at a time: chips for what was trained lately, its estimated
+    /// max, what that moved, and its line. "See all" opens the searchable
+    /// selector; the card opens the lift's own page.
+    private var strengthSection: some View {
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            sectionHead("Strength", action: exerciseRows.contains(where: \.hasHistory) ? "See all" : nil) {
+                choosingExercise = true
+            }
+            if recentExercises.isEmpty {
+                Text("Log a workout and each lift's strength shows here.")
+                    .slBody()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(SL.Space.s5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .slBorderBox()
+                    .slListCard(radius: SL.Radius.xl)
+            } else {
+                exerciseChips
+                strengthCard
+                volumeLine
+            }
+        }
+    }
+
+    private var exerciseChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: SL.Space.s2) {
+                ForEach(recentExercises) { row in
+                    let on = row.exerciseID == strengthID
+                    Button {
+                        strengthID = row.exerciseID
+                        reloadStrength()
+                        UISelectionFeedbackGenerator().selectionChanged()
+                    } label: {
+                        Text(row.name)
+                            .font(.sl(SL.TypeSize.meta, on ? SL.Weight.semibold : SL.Weight.medium))
+                            .foregroundStyle(on ? SL.Signal.onAction : SL.Ink.primary)
+                            .lineLimit(1)
+                            .padding(.horizontal, SL.Space.s3)
+                            .frame(height: 34)
+                            .background(Capsule().fill(on ? SL.Signal.action : SL.Surface.raised))
+                            .overlay(Capsule().strokeBorder(on ? Color.clear : SL.Surface.hairline, lineWidth: 1))
+                            .frame(minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
+                }
+            }
+        }
+        .padding(.horizontal, -SL.Space.gutterSession)
+        .contentMargins(.horizontal, SL.Space.gutterSession, for: .scrollContent)
+    }
+
+    @ViewBuilder
+    private var strengthCard: some View {
+        if let progress = strength {
+            Button { open(.kracht, exercise: progress.exerciseID) } label: {
+                VStack(alignment: .leading, spacing: SL.Space.s3) {
+                    Text("ESTIMATED 1RM")
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(SL.Ink.secondary)
+                    if let estimate = progress.estimate {
+                        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                            Text(app.display.kg(Estimates.round(estimate, toIncrement: 0.5)))
+                                .font(.sl(34, SL.Weight.semibold))
+                                .slNumerals()
+                                .foregroundStyle(SL.Ink.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            Spacer(minLength: SL.Space.s2)
+                            if let change = progress.change, let shown = progress.shownChange() {
+                                Text(shown == 0 ? "Steady since \(app.display.shortDate(change.since))"
+                                     : "\(app.display.signedDelta(shown)) kg since \(app.display.shortDate(change.since))")
+                                    .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                                    .slNumerals()
+                                    .foregroundStyle(shown > 0 ? SL.Signal.action : SL.Ink.secondary)
+                                    .padding(.horizontal, SL.Space.s3)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(shown > 0 ? SL.Signal.actionTint : SL.Surface.raised2))
+                                    .fixedSize()
+                            }
+                        }
+                        if progress.points.count > 1 {
+                            StrengthArea(values: progress.points.map(\.estimate), dates: progress.points.map(\.date), ink: SL.Signal.action)
+                                .frame(height: 96)
+                                .id(progress.exerciseID)
+                                .accessibilityHidden(true)
+                            HStack {
+                                Text(progress.points.first.map { app.display.shortDate($0.date) } ?? "")
+                                Spacer()
+                                Text(progress.points.last.map { app.display.shortDate($0.date) } ?? "")
+                            }
+                            .slNumerals()
+                            .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                            .foregroundStyle(SL.Ink.secondary)
+                            .accessibilityHidden(true)
+                        } else {
+                            Text("One more session of \(progress.name) and its line appears.")
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let source = progress.source {
+                            Text("From \(app.display.kg(source.weightKg)) × \(source.reps) on \(app.display.shortDate(source.date))")
+                                .slMeta()
+                                .slNumerals()
+                                .foregroundStyle(SL.Ink.secondary)
+                        }
+                    } else {
+                        Text(progress.rows.isEmpty
+                             ? "\(progress.name) has no full-range sets to compare yet."
+                             : "Above 10 reps, SETLINE makes no estimate.")
+                            .slBody()
+                            .foregroundStyle(SL.Ink.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(SL.Space.s5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .slBorderBox()
+                .slListCard(radius: SL.Radius.xl)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.98))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(strengthSpoken(progress))
+            .accessibilityHint("Opens every session of this lift")
+        }
+    }
+
+    private func strengthSpoken(_ progress: StrengthProgress) -> String {
+        guard let estimate = progress.estimate else { return "\(progress.name), no estimate yet" }
+        var text = "\(progress.name), estimated max \(app.display.kg(Estimates.round(estimate, toIncrement: 0.5)))"
+        if let change = progress.change, let shown = progress.shownChange() {
+            text += ", \(app.display.signedDelta(shown)) kilos since \(app.display.shortDate(change.since))"
+        }
+        return text
+    }
+
     // MARK: - Body weight
 
     /// Body weight as a status beside the training: the number large, how the
@@ -165,17 +434,26 @@ struct ProgressHomeView: View {
         VStack(alignment: .leading, spacing: SL.Space.s3) {
             sectionHead("Body weight", action: "See all") { open(.lichaam) }
             VStack(alignment: .leading, spacing: SL.Space.s4) {
-                HStack(alignment: .center, spacing: SL.Space.s3) {
+                // Side by side at normal sizes; stacked once the text is large,
+                // where the number and the button together outgrow the screen.
+                let large = typeSize.isAccessibilitySize
+                let head = large
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s3))
+                    : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s3))
+                head {
                     Button { open(.lichaam) } label: { weightBody }
                         .buttonStyle(.plain)
                         .disabled(bodyProgress.entries.isEmpty)
                         .accessibilityHint(bodyProgress.entries.isEmpty ? "" : "Opens all your weigh-ins and the trend")
-                    Spacer(minLength: 0)
+                    if !large { Spacer(minLength: 0) }
                     weighButton
                 }
-                if trend.count >= 2 {
+                if !bodyProgress.entries.isEmpty {
+                    rangeTabs
+                }
+                if windowed.count >= 2 {
                     if let band = goalBand {
-                        GoalBandChart(points: trend, band: band)
+                        GoalBandChart(points: windowed, band: band)
                             .frame(height: 96)
                         HStack(spacing: 6) {
                             RoundedRectangle(cornerRadius: 2).fill(SL.Signal.action.opacity(0.25)).frame(width: 14, height: 8)
@@ -188,10 +466,18 @@ struct ProgressHomeView: View {
                                 .foregroundStyle(SL.Signal.recovery)
                         }
                     } else {
-                        WeightTrendLine(points: trend)
-                            .frame(height: 40)
+                        WeightTrendLine(points: windowed)
+                            .frame(height: 72)
                             .accessibilityHidden(true)
                     }
+                    rangeAxis
+                } else if !bodyProgress.entries.isEmpty {
+                    Text(windowed.isEmpty
+                         ? "No weigh-ins in the last \(weightRange) days."
+                         : "One weigh-in in the last \(weightRange) days — one more draws the line.")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 goalBlock
             }
@@ -301,7 +587,7 @@ struct ProgressHomeView: View {
             if history.calorieTarget != nil { line += " · protein hit \(history.daysProteinHit) of \(history.logged.count) days" }
             return line
         }()
-        let lift = allLifts.first { ($0.deltaKg ?? 0) > 0 }
+        let lift = mainGainer(in: allLifts)
         if food != nil || lift != nil {
             VStack(alignment: .leading, spacing: SL.Space.s2) {
                 if let food { insightRow("fork.knife", "Food, last 2 weeks", food) }
@@ -362,6 +648,12 @@ struct ProgressHomeView: View {
                         .lineLimit(1)
                         .padding(.top, 2)
                 }
+            } else if !lastWeighed.isEmpty {
+                // The span under the tabs says why there is no change.
+                Text(lastWeighed)
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(1)
             } else {
                 Text(movementLine)
                     .slMeta()
@@ -396,7 +688,7 @@ struct ProgressHomeView: View {
         .padding(.horizontal, SL.Space.s2 + 2)
         .padding(.vertical, 5)
         .background(Capsule().fill(movement.moved ? SL.Signal.recoveryTint : SL.Surface.raised2))
-        .fixedSize()
+        .minimumScaleFactor(0.7)
     }
 
     /// "+1.1 kg in 14 days", or how to start.
@@ -452,9 +744,7 @@ struct ProgressHomeView: View {
                     .accessibilityHidden(true)
                 }
 
-                // Shown only when Top lifts below doesn't already carry it.
-                if let leader = day.leader, leader.deltaKg > 0,
-                   !allLifts.prefix(4).contains(where: { $0.exerciseID == leader.exerciseID }) {
+                if let leader = mainGainer(in: day.lifts), let leaderDelta = leader.deltaKg {
                     SLHairline()
                     Button { open(.kracht, exercise: leader.exerciseID) } label: {
                         HStack(spacing: SL.Space.s3) {
@@ -469,7 +759,7 @@ struct ProgressHomeView: View {
                                     .lineLimit(1)
                             }
                             Spacer(minLength: SL.Space.s2)
-                            Text("+\(app.display.number(leader.deltaKg)) kg")
+                            Text("+\(app.display.number(leaderDelta)) kg")
                                 .slBody(SL.Weight.semibold)
                                 .slNumerals()
                                 .foregroundStyle(SL.Signal.action)
@@ -480,7 +770,7 @@ struct ProgressHomeView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Biggest gain: \(leader.name), plus \(app.display.number(leader.deltaKg)) kilos estimated")
+                    .accessibilityLabel("Biggest gain: \(leader.name), plus \(app.display.number(leaderDelta)) kilos estimated")
                     .accessibilityHint("Opens the strength of this exercise")
                 }
 
@@ -682,31 +972,6 @@ struct ProgressHomeView: View {
 
     // MARK: - Lifts
 
-    /// Four lifts, not all of them: the ones that gained most in the window
-    /// (Apple Health's highlights, not its full log). Every lift is one tap
-    /// further, as a list.
-    private var liftsSection: some View {
-        let all = allLifts
-        return VStack(alignment: .leading, spacing: SL.Space.s3) {
-            if all.count > 4 {
-                sectionHead("Top lifts", action: "All \(all.count)") { open(.lifts) }
-            } else {
-                sectionHead("Lifts")
-            }
-            if !all.isEmpty {
-                let columns = typeSize.isAccessibilitySize
-                    ? [GridItem(.flexible())]
-                    : [GridItem(.flexible(), spacing: SL.Space.s3), GridItem(.flexible(), spacing: SL.Space.s3)]
-                LazyVGrid(columns: columns, spacing: SL.Space.s3) {
-                    ForEach(all.prefix(4)) { lift in
-                        liftTile(lift)
-                    }
-                }
-            }
-            volumeLine
-        }
-    }
-
     /// A section's name with its one way further, on the right — the App
     /// Store's and Health's "See All".
     private func sectionHead(_ title: String, action: String? = nil, perform: @escaping () -> Void = {}) -> some View {
@@ -729,6 +994,21 @@ struct ProgressHomeView: View {
             }
         }
         .padding(.horizontal, SL.Space.s1)
+    }
+
+    /// The main lift that gained most, by percent of where it started — the
+    /// rule Quick progress and Strength use (`StrengthHeadline`), so a heavy
+    /// machine or an isolation lift never takes the headline.
+    private func mainGainer(in lifts: [ProgressOverview.DayProgress.Lift]) -> ProgressOverview.DayProgress.Lift? {
+        func percent(_ lift: ProgressOverview.DayProgress.Lift) -> Decimal {
+            guard let delta = lift.deltaKg, delta > 0,
+                  let estimate = Estimates.e1RM(weightKg: lift.weightKg, reps: lift.reps), estimate > delta
+            else { return 0 }
+            return delta / (estimate - delta)
+        }
+        return lifts
+            .filter { ($0.deltaKg ?? 0) > 0 && StrengthHeadline.isMainLift($0.exerciseID, plan: app.plan) }
+            .max { (percent($0), $0.name) < (percent($1), $1.name) }
     }
 
     /// Every lift once, its latest best, biggest gain first.
@@ -846,50 +1126,6 @@ struct ProgressHomeView: View {
         )
     }
 
-    private func liftTile(_ lift: ProgressOverview.DayProgress.Lift) -> some View {
-        let group = ExerciseCatalog.exercise(lift.exerciseID)?.group
-        let gained = (lift.deltaKg ?? 0) > 0
-        return Button { open(.kracht, exercise: lift.exerciseID) } label: {
-            VStack(alignment: .leading, spacing: SL.Space.s3) {
-                HStack(alignment: .top) {
-                    muscleChip(for: lift.exerciseID, lit: gained)
-                    Spacer(minLength: SL.Space.s1)
-                    liftBadge(lift)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(lift.name)
-                        .slMeta(SL.Weight.medium)
-                        .foregroundStyle(SL.Ink.secondary)
-                        .lineLimit(2, reservesSpace: true)
-                        .multilineTextAlignment(.leading)
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(app.display.number(lift.weightKg))
-                            .font(.sl(24, SL.Weight.semibold))
-                            .foregroundStyle(SL.Ink.primary)
-                        Text("kg × \(lift.reps)")
-                            .slMeta()
-                            .foregroundStyle(SL.Ink.secondary)
-                    }
-                    .slNumerals()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .slBorderBox()
-            .slListCard()
-            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
-        }
-        .buttonStyle(SLRowButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "\(lift.name)\(group.map { ", \($0.title)" } ?? ""), best set \(app.display.kg(lift.weightKg)) × \(lift.reps) on \(app.display.shortDate(lift.date))"
-                + (lift.deltaKg.map { $0 == 0 ? ", no change" : ", \(app.display.signedDelta($0)) kilos estimated" } ?? (lift.isNew ? ", new" : ""))
-        )
-        .accessibilityHint("Opens the strength of this exercise")
-    }
-
     /// "+5 kg" in lime, a loss in red, "New" in grey.
     @ViewBuilder
     private func liftBadge(_ lift: ProgressOverview.DayProgress.Lift) -> some View {
@@ -944,15 +1180,66 @@ struct ProgressHomeView: View {
     /// How the 14-day average moved over the last fortnight; where the series
     /// is too short for that, how the weight itself moved over its own weeks.
     private var movement: (value: String, label: String, moved: Bool)? {
-        if let last = trend.last,
-           let earlier = trend.last(where: { $0.date <= last.date.addingTimeInterval(-14 * 86_400) }) {
-            let change = Estimates.round(last.average - earlier.average, toIncrement: 0.1)
-            return (signed(change), "in 14 days", change != 0)
+        // First to last weigh-in inside the chosen span; days without one
+        // are simply not on the line.
+        guard let first = windowed.first, let last = windowed.last, windowed.count >= 2 else { return nil }
+        let change = Estimates.round(last.weightKg - first.weightKg, toIncrement: 0.1)
+        return (signed(change), "in \(weightRange) days", change != 0)
+    }
+
+    /// The weigh-ins inside the chosen span, oldest first, plotted as they
+    /// were weighed.
+    private var windowed: [ProgressOverview.WeightPoint] {
+        let start = Calendar.current.startOfDay(for: Date()).addingTimeInterval(-Double(weightRange - 1) * 86_400)
+        return trend.filter { $0.date >= start }
+            .map { ProgressOverview.WeightPoint(date: $0.date, weightKg: $0.weightKg, average: $0.weightKg) }
+    }
+
+    /// 7D · 30D · 90D, as a small segmented control.
+    private var rangeTabs: some View {
+        HStack(spacing: 2) {
+            ForEach(WeightRange.allCases) { range in
+                let on = weightRange == range.rawValue
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { weightRange = range.rawValue }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                } label: {
+                    Text(range.label)
+                        .font(.sl(SL.TypeSize.meta, on ? SL.Weight.semibold : SL.Weight.medium))
+                        .slNumerals()
+                        .foregroundStyle(on ? SL.Ink.primary : SL.Ink.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 30)
+                        .background(Capsule().fill(on ? SL.Surface.raised : .clear))
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(range.rawValue) days")
+                .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
+            }
         }
-        if let change = bodyProgress.change {
-            return (signed(change.value), change.weeks == 1 ? "in 1 week" : "in \(change.weeks) weeks", change.value != 0)
+        .padding(.horizontal, 3)
+        .background(Capsule().fill(SL.Surface.raised2).frame(height: 36))
+    }
+
+    /// The span's two ends under the chart, and between them the range the
+    /// line covers — so its slope can be read in kilos, not guessed.
+    private var rangeAxis: some View {
+        let weights = windowed.map(\.weightKg)
+        return HStack {
+            Text(windowed.first.map { app.display.shortDate($0.date) } ?? "")
+            Spacer()
+            if let low = weights.min(), let high = weights.max() {
+                Text(low == high ? app.display.kg(low) : "\(app.display.number(low))–\(app.display.number(high)) kg")
+                    .foregroundStyle(SL.Ink.primary)
+            }
+            Spacer()
+            Text(windowed.last.map { app.display.shortDate($0.date) } ?? "")
         }
-        return nil
+        .slNumerals()
+        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+        .foregroundStyle(SL.Ink.secondary)
+        .accessibilityHidden(true)
     }
 
     /// "−0,4 kg", "+0,3 kg", "0 kg".
@@ -967,7 +1254,7 @@ struct ProgressHomeView: View {
     @ViewBuilder
     private var volumeLine: some View {
         if let current = volume.last {
-            let previous = volume.dropLast().last
+            let byNow = volumeLastWeekByNow
             Button { open(.volume) } label: {
                 HStack(spacing: SL.Space.s3) {
                     Image(systemName: "chart.bar.fill")
@@ -979,19 +1266,27 @@ struct ProgressHomeView: View {
                         Text("Volume this week")
                             .slMeta()
                             .foregroundStyle(SL.Ink.secondary)
+                        // Against last week at this same point, not its whole
+                        // total: on a Monday morning "0 t vs 12.6 t" only
+                        // says the week has just begun.
                         HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                            Text(tonnes(current.volumeKg))
-                                .slBody(SL.Weight.semibold)
-                                .slNumerals()
-                                .foregroundStyle(SL.Ink.primary)
-                            if let previous {
-                                Text("last week \(tonnes(previous.volumeKg))")
+                            if current.volumeKg > 0 || byNow > 0 {
+                                Text(tonnes(current.volumeKg))
+                                    .slBody(SL.Weight.semibold)
+                                    .slNumerals()
+                                    .foregroundStyle(SL.Ink.primary)
+                                Text("\(tonnes(byNow)) by now last week")
                                     .slMeta()
                                     .slNumerals()
+                                    .foregroundStyle(SL.Ink.secondary)
+                            } else {
+                                Text("Starts with this week's first workout")
+                                    .slMeta()
                                     .foregroundStyle(SL.Ink.secondary)
                             }
                         }
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     }
                     Spacer(minLength: SL.Space.s2)
                     SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
@@ -1003,7 +1298,7 @@ struct ProgressHomeView: View {
             }
             .buttonStyle(SLPressStyle(scale: 0.98))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Volume this week \(tonnes(current.volumeKg))" + (previous.map { ", last week \(tonnes($0.volumeKg))" } ?? ""))
+            .accessibilityLabel("Volume this week \(tonnes(current.volumeKg)), \(tonnes(byNow)) by this point last week")
             .accessibilityHint("Opens the weekly volume")
         }
     }
@@ -1085,6 +1380,16 @@ struct ProgressHomeView: View {
         return count == 1
             ? "About one \(thing.one) moved \(when)"
             : "About \(count) \(thing.many) moved \(when)"
+    }
+
+    /// What last week had lifted by this same moment of its week.
+    private var volumeLastWeekByNow: Decimal {
+        let weekStart = Schedule.mondayFirstWeek(containing: Date()).first.map { Calendar.current.startOfDay(for: $0) } ?? Date()
+        let lastWeekStart = weekStart.addingTimeInterval(-7 * 86_400)
+        let sameMoment = Date().addingTimeInterval(-7 * 86_400)
+        return app.sessions
+            .filter { $0.kind == .workout && $0.date >= lastWeekStart && $0.date <= sameMoment }
+            .reduce(Decimal(0)) { $0 + RecordsEngine.volumeLoad($1.results.flatMap(\.sets)) }
     }
 
     /// "9.4 t"
@@ -1349,7 +1654,9 @@ struct GoalBandChart: View {
             let size = proxy.size
             let values = points.map { NSDecimalNumber(decimal: $0.average).doubleValue }
             let first = points.first?.date ?? band.start
-            let last = max(points.last?.date ?? Date(), Date())
+            // A young goal gets the week ahead drawn in, so its band is a
+            // stretch to aim for rather than a sliver at the edge.
+            let last = max(points.last?.date ?? Date(), Date(), band.start.addingTimeInterval(7 * 86_400))
             let bandDays = stride(from: max(first, band.start).timeIntervalSince1970, through: last.timeIntervalSince1970, by: 86_400)
                 .map { Date(timeIntervalSince1970: $0) }
             let ranges = bandDays.map { day -> ClosedRange<Double> in
@@ -1439,9 +1746,15 @@ struct WeightTrendLine: View {
         let span = max(high - low, 0.6)
         let mid = (high + low) / 2
         let inset: CGFloat = 6
+        let start = points.first?.date.timeIntervalSince1970 ?? 0
+        let length = (points.last?.date.timeIntervalSince1970 ?? 0) - start
         return values.enumerated().map { index, value in
-            CGPoint(
-                x: inset + (size.width - 2 * inset) * CGFloat(index) / CGFloat(values.count - 1),
+            // On time, so days without a weigh-in keep their width.
+            let fraction = length > 0
+                ? CGFloat((points[index].date.timeIntervalSince1970 - start) / length)
+                : CGFloat(index) / CGFloat(values.count - 1)
+            return CGPoint(
+                x: inset + (size.width - 2 * inset) * fraction,
                 y: size.height / 2 - (size.height - 2 * inset) * CGFloat((value - mid) / span)
             )
         }

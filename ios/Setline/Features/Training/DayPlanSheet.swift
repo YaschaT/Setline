@@ -156,8 +156,15 @@ struct DayPlanSheet: View {
                 eyebrow(sessionsTitle).padding(.top, 22)
             }
 
-            ForEach(plan.options.filter { isSession($0) }) { option in
+            ForEach(plan.options.filter { isSession($0) && !isOwn($0) }) { option in
                 row(option)
+            }
+
+            // The lifter's own workouts, under their own name.
+            let own = plan.options.filter { isOwn($0) }
+            if !own.isEmpty {
+                eyebrow("YOUR WORKOUTS").padding(.top, 18)
+                ForEach(own) { option in row(option) }
             }
 
             SLHairline().padding(.vertical, 10)
@@ -172,6 +179,11 @@ struct DayPlanSheet: View {
         let names = app.plan.map(\.short)
         guard !names.isEmpty else { return "SESSION FROM YOUR PLAN" }
         return "SESSION FROM \(names.prefix(3).joined(separator: " / ").uppercased())"
+    }
+
+    private func isOwn(_ option: DayPlan.Option) -> Bool {
+        if case .session(let id) = option.kind { return CustomWorkout.isCustom(dayID: id) }
+        return false
     }
 
     private func isSession(_ option: DayPlan.Option) -> Bool {

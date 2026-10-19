@@ -120,7 +120,8 @@ final class SessionRunner {
         if date != nil { restTimer = nil }
         // A fresh stretch starts now either way; a resumed session carries its
         // banked time in, rather than recomputing from `startedAt`.
-        clock = WorkoutClock(accumulatedSeconds: snapshot?.activeSeconds ?? 0, segmentStartedAt: Date())
+        // A workout left open (not paused) kept running while it was away.
+        clock = WorkoutClock(accumulatedSeconds: snapshot?.activeSeconds(resumingAt: Date()) ?? 0, segmentStartedAt: Date())
         openingSlots = slots.map(\.model)
         openingRest = restTimer
     }
@@ -199,7 +200,9 @@ final class SessionRunner {
     /// Snapshots written before slots were saved still match rows by id.
     private func restore(from snapshot: ActiveSessionSnapshot) {
         if let saved = snapshot.slots, !saved.isEmpty {
-            slots = saved.sorted { $0.position < $1.position }.map { resolve($0) }
+            // In the order they were saved: exercises can be moved during a
+            // session, and a resume keeps the order they were moved into.
+            slots = saved.map { resolve($0) }
         } else {
             for result in snapshot.results {
                 guard let index = slots.firstIndex(where: { $0.planned.exerciseID == result.exerciseID }) else { continue }
@@ -338,6 +341,13 @@ final class SessionRunner {
         /// equal to `reps` is a set performed paused throughout.
         var pausedReps: Int?
         var partialReps: Int?
+        /// The side of a one-sided exercise. `nil` keeps whatever the set
+        /// already says, so a correction from the sheet never drops it.
+        var side: SetSide? = nil
+        /// A drop set's lighter rounds. `nil` keeps what the set has.
+        var drops: [DropStep]? = nil
+        /// Reps per side: `nil` keeps what the set has, `.some(nil)` clears it.
+        var sideReps: SideReps?? = nil
 
         var isPaused: Bool { (pausedReps ?? 0) > 0 }
     }
@@ -385,6 +395,12 @@ final class SessionRunner {
         // §12.5: the set belongs to the substitute's series, and remembers
         // which exercise it stood in for.
         set.substitutedFrom = slots[slotIndex].substitutedFrom?.id
+        if let side = entry.side { set.side = side }
+        if let drops = entry.drops { set.drops = drops.filter { $0.weightKg > 0 && $0.reps > 0 } }
+        if let sideReps = entry.sideReps { set.sideReps = sideReps }
+        // Per-side reps only mean something on a set done on both sides, and
+        // only while they differ.
+        if set.side != .both || set.sideReps.map({ $0.left == $0.right }) == true { set.sideReps = nil }
         slots[slotIndex].sets[setIndex] = set
 
         // The calibration set is what the rest of the exercise is built on:
@@ -489,6 +505,42 @@ final class SessionRunner {
     /// advances it, nothing resets it, and sitting a session out carries no
     /// penalty. The rest timer keeps running — a swap usually happens *during*
     /// rest.
+    /// An exercise the plan doesn't have, added for this session: three
+    /// working sets of 8–12, pre-filled from its own history, and opened.
+    /// Saved with the session like any other; the plan is not touched.
+    @discardableResult
+    func addExercise(_ exercise: Exercise) -> Int {
+        knownExercises[exercise.id] = exercise
+        let planned = PlannedExercise(
+            exerciseID: exercise.id,
+            role: ExerciseCatalog.roles[exercise.id] ?? .accessory,
+            sets: Array(repeating: SetPrescription(repRange: 8...12), count: 3)
+        )
+        let position = (slots.map(\.model.position).max() ?? -1) + 1
+        var slot = resolve(SessionSlot(position: position, plan: planned, exerciseName: exercise.name))
+        slot.model.prefillOpenSets(weightKg: Self.prefillWeight(slot))
+        slots.append(slot)
+        currentIndex = slots.count - 1
+        return currentIndex
+    }
+
+    /// Moves an exercise to another place in the session; the one on screen
+    /// stays on screen.
+    func moveExercise(from source: Int, to destination: Int) {
+        guard slots.indices.contains(source), slots.indices.contains(destination), source != destination else { return }
+        let onScreen = slots[currentIndex].id
+        let moved = slots.remove(at: source)
+        slots.insert(moved, at: destination)
+        currentIndex = slots.firstIndex { $0.id == onScreen } ?? currentIndex
+    }
+
+    /// Takes back an exercise just added, while nothing is logged on it.
+    func removeAddedExercise(at index: Int) {
+        guard slots.indices.contains(index), slots[index].model.loggedSetCount == 0, slots.count > 1 else { return }
+        slots.remove(at: index)
+        currentIndex = min(currentIndex, slots.count - 1)
+    }
+
     func substitute(slotIndex: Int, with exercise: Exercise, reason: SwapReason) {
         change(slotIndex: slotIndex, to: exercise, temporary: true, reason: reason)
     }
@@ -947,6 +999,10 @@ final class SessionRunner {
     /// logged on — preserved work from swaps included.
     var allResults: [ExerciseResult] { slots.flatMap(\.model.results) }
 
+    /// Minutes set by hand on the finish screen. `nil` keeps the clock's —
+    /// or, for a workout written down afterwards, no duration.
+    var durationMinutes: Int?
+
     func finishedSession(existing: TrainingSession?) -> TrainingSession {
         let models = slots.map(\.model)
         return TrainingSession(
@@ -962,7 +1018,7 @@ final class SessionRunner {
             // A session written down afterwards records no duration rather
             // than the minutes it took to type — `SessionHistory` already says
             // nothing about time for a session that never recorded one.
-            durationSeconds: isLoggedAfterwards ? nil : clock.activeSeconds(at: Date()),
+            durationSeconds: durationMinutes.map { $0 * 60 } ?? (isLoggedAfterwards ? nil : clock.activeSeconds(at: Date())),
             // What history shows as "completed of planned". Added rows are in
             // neither number.
             plannedSetCount: SessionSlot.plannedSetCount(of: models),

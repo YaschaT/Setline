@@ -10,6 +10,7 @@ import SetlineCore
 /// detail screen's own button does.
 struct HistoriekSegmentView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var rows: [SessionHistoryRow] = []
     @State private var opened: Opened?
     @State private var deleting: SessionHistoryRow?
@@ -118,10 +119,19 @@ struct HistoriekSegmentView: View {
                         .slMeta()
                         .slNumerals()
                         .foregroundStyle(SL.Ink.secondary)
-                        .lineLimit(1)
+                        .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                         .minimumScaleFactor(0.85)
+                    // Large text: the volume moves under the name, so the
+                    // date is never the part that gets cut.
+                    if typeSize.isAccessibilitySize {
+                        Text("\(app.display.volumeKg(row.volumeKg)) moved")
+                            .slMeta(SL.Weight.semibold)
+                            .slNumerals()
+                            .foregroundStyle(SL.Ink.primary)
+                    }
                 }
                 Spacer(minLength: SL.Space.s2)
+                if !typeSize.isAccessibilitySize {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(app.display.volumeKg(row.volumeKg))
                         .slBody(SL.Weight.semibold)
@@ -130,6 +140,7 @@ struct HistoriekSegmentView: View {
                     Text("moved")
                         .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
                         .foregroundStyle(SL.Ink.secondary)
+                }
                 }
                 SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
             }

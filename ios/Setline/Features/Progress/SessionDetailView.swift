@@ -41,6 +41,12 @@ struct SessionDetailView: View {
     /// Asked before the last set of the session goes, because that takes the
     /// session with it.
     @State private var confirmsLastSet: Target?
+    /// The workout's name while editing.
+    @State private var titleDraft = ""
+    /// Minutes while editing; `nil` until the duration is touched.
+    @State private var durationDraft: Int?
+    /// The exercise whose identity is being changed.
+    @State private var pickingExercise: Int?
 
     /// Which set the correction sheet is open on.
     private struct Target: Identifiable {
@@ -60,7 +66,30 @@ struct SessionDetailView: View {
     /// The share picture, drawn when the page opens.
     @State private var shareImage: Image?
     private var results: [ExerciseResult] { editing ? draft : (session?.results ?? []) }
-    private var hasChanges: Bool { editing && (draft != session?.results || !removed.isEmpty) }
+    private var hasChanges: Bool {
+        editing && (draft != session?.results || !removed.isEmpty || titleChanged || durationChanged)
+    }
+
+    private var durationChanged: Bool {
+        guard let session, let durationDraft else { return false }
+        return durationDraft * 60 != (session.durationSeconds ?? -1)
+    }
+
+    private var titleChanged: Bool {
+        guard let session else { return false }
+        let typed = titleDraft.trimmingCharacters(in: .whitespaces)
+        return !typed.isEmpty && typed != session.dayLabel
+    }
+
+    /// A different exercise or a new name can't travel as set corrections,
+    /// which find their sets by exercise: then the whole session is written.
+    private var changesStructure: Bool {
+        guard let session else { return false }
+        if titleChanged || durationChanged { return true }
+        return draft.indices.contains { index in
+            !session.results.indices.contains(index) || draft[index].exerciseID != session.results[index].exerciseID
+        }
+    }
 
     /// The sets of one result that are still in the session, each with the
     /// index the stored session knows it by.
@@ -132,6 +161,23 @@ struct SessionDetailView: View {
             }
         }
         .sheet(item: $correcting) { target in correctionSheet(target) }
+        .sheet(isPresented: Binding(get: { pickingExercise != nil }, set: { if !$0 { pickingExercise = nil } })) {
+            ExercisePickerSheet(
+                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises),
+                selected: pickingExercise.flatMap { draft.indices.contains($0) ? draft[$0].exerciseID : nil },
+                onPick: { row in
+                    if let index = pickingExercise, draft.indices.contains(index) {
+                        draft[index].exerciseID = row.exerciseID
+                        draft[index].name = row.name
+                    }
+                    pickingExercise = nil
+                },
+                onStar: { row in
+                    Task { await app.setFavorite(exerciseID: row.exerciseID, isFavorite: !row.isFavorite) }
+                },
+                onClose: { pickingExercise = nil }
+            )
+        }
         .task(id: session?.results) {
             guard let session else { return }
             shareImage = WorkoutShareCard(
@@ -258,11 +304,40 @@ struct SessionDetailView: View {
             // session's own name.
             SLEyebrow(text: "Log · \(WeekPlan.fullWeekday(session.date)) \(app.display.shortDate(session.date))")
 
-            Text(titleLine(session))
-                .slTitle()
-                .slNumerals()
-                .foregroundStyle(SL.Ink.primary)
+            if editing {
+                HStack(spacing: SL.Space.s2) {
+                    TextField(session.dayLabel, text: $titleDraft)
+                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                        .foregroundStyle(SL.Ink.primary)
+                        .tint(SL.Signal.action)
+                        .submitLabel(.done)
+                    Image(systemName: "pencil")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(SL.Signal.action)
+                }
+                .padding(.horizontal, SL.Space.s3)
+                .frame(minHeight: 48)
+                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.raised))
                 .padding(.top, SL.Space.s2)
+                .accessibilityLabel("Workout name")
+
+                // A workout logged afterwards, or with the clock left
+                // running, gets its real length here.
+                DurationRow(
+                    minutes: Binding(
+                        get: { durationDraft ?? max(5, Int((Double(session.durationSeconds ?? 0) / 300).rounded()) * 5) },
+                        set: { durationDraft = $0 }
+                    ),
+                    note: session.durationSeconds == nil ? "Not recorded yet" : nil
+                )
+                .padding(.top, SL.Space.s2)
+            } else {
+                Text(titleLine(session))
+                    .slTitle()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.primary)
+                    .padding(.top, SL.Space.s2)
+            }
 
             SLEyebrow(text: "Volume").padding(.top, SL.Space.s4)
             SLValueRow {
@@ -369,7 +444,7 @@ struct SessionDetailView: View {
     private func exercises(_ session: TrainingSession) -> some View {
         VStack(alignment: .leading, spacing: SL.Space.s4) {
             ForEach(Array(results.enumerated()), id: \.offset) { index, result in
-                if !visibleSets(of: result, at: index).isEmpty {
+                if editing || !visibleSets(of: result, at: index).isEmpty {
                     block(result, at: index, in: session)
                     if index < results.count - 1 { SLHairline() }
                 }
@@ -390,7 +465,22 @@ struct SessionDetailView: View {
         let medal = editing ? nil : medals.first { $0.exerciseID == result.exerciseID }
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: SL.Space.s2) {
-                SLEyebrow(text: result.name)
+                if editing {
+                    Button { pickingExercise = resultIndex } label: {
+                        HStack(spacing: 6) {
+                            SLEyebrow(text: result.name)
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(SL.Signal.action)
+                        }
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Change exercise, now \(result.name)")
+                } else {
+                    SLEyebrow(text: result.name)
+                }
                 if let medal {
                     SLMedal(place: medal.place, size: 18)
                         .accessibilityLabel(medal.place.title)
@@ -418,6 +508,12 @@ struct SessionDetailView: View {
             }
             .padding(.top, SL.Space.s2)
 
+            if editing && visibleSets(of: result, at: resultIndex).isEmpty {
+                Text("No sets. Add one, or this exercise is left out when you save.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.tertiary)
+                    .padding(.top, SL.Space.s2)
+            }
             if editing {
                 Button { addSet(to: resultIndex) } label: {
                     Label("Add set", systemImage: "plus")
@@ -529,13 +625,29 @@ struct SessionDetailView: View {
             if isRecord {
                 Text("PR").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Signal.action)
             }
+            if let side = set.side {
+                Text(set.sideReps?.label ?? side.label).font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).slNumerals().foregroundStyle(SL.Ink.secondary)
+            }
             if let rir = set.rirReported {
-                Text("RIR \(rir)").slMeta().slNumerals().foregroundStyle(SL.Ink.tertiary)
+                if rir == 0 {
+                    Text("to failure").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Signal.attention)
+                } else {
+                    Text("RIR \(rir)").slMeta().slNumerals().foregroundStyle(SL.Ink.tertiary)
+                }
+            }
+            if set.flags.contains(.failed) {
+                Text("failed").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).foregroundStyle(SL.Signal.loss)
+            }
+            if !set.drops.isEmpty {
+                Text("then " + set.drops.map { "\(app.display.number($0.weightKg)) × \($0.reps)" }.joined(separator: ", "))
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                    .slNumerals()
+                    .foregroundStyle(SL.Signal.attention)
             }
             // One mark, never two: the whole set paused, or the reps of it
             // that were. A count is inside the reps, so it never reads "+".
             if let paused = set.pausedReps, paused > 0 {
-                Text("\(paused) paused reps")
+                Text("last \(paused) paused")
                     .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
                     .slNumerals()
                     .foregroundStyle(SL.Signal.attention)
@@ -560,9 +672,18 @@ struct SessionDetailView: View {
     private func label(_ set: LoggedSet, number: Int, isRecord: Bool) -> String {
         var parts = ["Set \(number)", app.display.kg(set.weightKg ?? 0), "\(set.reps) reps"]
         if isRecord { parts.append("personal record") }
-        if let rir = set.rirReported { parts.append("RIR \(rir)") }
+        if let sides = set.sideReps {
+            parts.append("left \(sides.left), right \(sides.right) reps")
+        } else if let side = set.side {
+            parts.append(side == .both ? "both sides" : side == .left ? "left side" : "right side")
+        }
+        if let rir = set.rirReported { parts.append(rir == 0 ? "to failure" : "RIR \(rir)") }
+        if set.flags.contains(.failed) { parts.append("failed") }
+        if !set.drops.isEmpty {
+            parts.append("drop set: then " + set.drops.map { "\(app.display.kg($0.weightKg)) × \($0.reps)" }.joined(separator: ", "))
+        }
         if let paused = set.pausedReps, paused > 0 {
-            parts.append("of which \(paused) paused")
+            parts.append("the last \(paused) paused")
         } else if set.modifiers.pauseEnabled {
             parts.append("paused")
         }
@@ -604,6 +725,8 @@ struct SessionDetailView: View {
 
     private func startEditing() {
         draft = session?.results ?? []
+        titleDraft = session?.dayLabel ?? ""
+        durationDraft = nil
         removed = []
         withAnimation(.easeOut(duration: SL.Motion.base)) { editing = true }
     }
@@ -618,12 +741,61 @@ struct SessionDetailView: View {
         withAnimation(.easeOut(duration: SL.Motion.fast)) { _ = removed.insert(target.id) }
     }
 
+    /// A new name or a different exercise: the session as the screen shows
+    /// it, written whole. Sets taken out are gone, set numbers follow the
+    /// rows, and an exercise left without sets is left out.
+    private func saveWhole(_ session: TrainingSession) {
+        var updated = session
+        let typed = titleDraft.trimmingCharacters(in: .whitespaces)
+        if !typed.isEmpty { updated.dayLabel = String(typed.prefix(60)) }
+        if let durationDraft { updated.durationSeconds = durationDraft * 60 }
+        updated.results = draft.enumerated().compactMap { resultIndex, result in
+            var kept = result
+            kept.sets = result.sets.enumerated()
+                .filter { !removed.contains(Target(resultIndex: resultIndex, setIndex: $0.offset).id) }
+                .enumerated()
+                .map { position, entry in
+                    var set = entry.element
+                    set.index = position
+                    return set
+                }
+            return kept.sets.isEmpty ? nil : kept
+        }
+        // Stored exercises that are no longer there as themselves: swapped for
+        // another, or left without sets. Their sets go, back to front.
+        var removals: [SetRemoval] = []
+        var seen: [String: Int] = [:]
+        for (index, stored) in session.results.enumerated() {
+            let occurrence = seen[stored.exerciseID, default: 0]
+            seen[stored.exerciseID] = occurrence + 1
+            let stays = draft.indices.contains(index)
+                && draft[index].exerciseID == stored.exerciseID
+                && updated.results.contains { $0.exerciseID == stored.exerciseID }
+            guard !stays else { continue }
+            removals += stored.sets.indices.reversed().map {
+                SetRemoval(exerciseID: stored.exerciseID, occurrence: occurrence, setIndex: $0)
+            }
+        }
+        isSaving = true
+        Task {
+            if updated.results.isEmpty {
+                await app.removeSession(id: session.id)
+            } else {
+                await app.replace(session: updated, removing: removals)
+            }
+            isSaving = false
+            stopEditing()
+            if app.sessions.contains(where: { $0.id == session.id }) == false { onClose() }
+        }
+    }
+
     /// Only the sets that actually changed travel, each named by where it sits
     /// in the session: the exercise it was logged under, which result that is
     /// when a session holds the same exercise twice, and its place in that
     /// result. Nothing else about the session is sent.
     private func save() {
         guard let session, hasChanges else { return stopEditing() }
+        if changesStructure { return saveWhole(session) }
         var corrections: [SetCorrection] = []
         var seen: [String: Int] = [:]
 

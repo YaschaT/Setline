@@ -42,6 +42,7 @@ struct AccountView: View {
     @State private var showsBlocked = false
     @State private var confirmsResetWorkouts = false
     @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
+    @AppStorage(WorkoutReminder.minutesKey) private var openWorkoutMinutes = 20
     @AppStorage(SLSound.preferenceKey) private var soundsOn = true
     @AppStorage(AppLock.preferenceKey) private var appLock = false
     @State private var showsPolicy = false
@@ -96,6 +97,7 @@ struct AccountView: View {
                     .tint(SL.Signal.action)
                     .padding(.vertical, SL.Space.s3)
                     .overlay(alignment: .bottom) { SLHairline() }
+                    openWorkoutRow
                     section("Sounds & security")
                     appRows
                     section("Privacy")
@@ -389,6 +391,36 @@ struct AccountView: View {
             .overlay(alignment: .bottom) { SLHairline() }
             .onChange(of: rirEverySet) { _, value in RIRPreference.everySet = value }
         }
+    }
+
+    /// How long a workout may sit open or paused before a nudge.
+    private var openWorkoutRow: some View {
+        HStack(alignment: .center, spacing: SL.Space.s3) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Unfinished workout").slBody()
+                Text("A reminder when you leave a workout open or paused.")
+                    .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: SL.Space.s2)
+            Menu {
+                Picker("Remind me", selection: Binding(get: { openWorkoutMinutes }, set: { picked in
+                    openWorkoutMinutes = picked
+                    // Asks once, the first time a reminder is turned on.
+                    if picked > 0 { Task { _ = await NutritionReminders.requestPermission() } }
+                })) {
+                    ForEach(WorkoutReminder.choices, id: \.self) { Text(WorkoutReminder.label($0)).tag($0) }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(WorkoutReminder.label(openWorkoutMinutes)).slBody(SL.Weight.medium)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
+            }
+        }
+        .padding(.vertical, SL.Space.s2)
+        .overlay(alignment: .bottom) { SLHairline() }
     }
 
     // MARK: - Sounds & security

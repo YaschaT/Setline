@@ -29,10 +29,20 @@ struct SLStepper: View {
     /// the weight opens a number field for a load off the step.
     var onTapValue: (() -> Void)?
     var valueHint: String?
+    /// Typing the value in place: tapping the number turns it into a field
+    /// with the number pad, right where it is — no sheet. Called with what
+    /// was typed when it is confirmed (✓, or tapping elsewhere).
+    var onTyped: ((String) -> Void)?
+    var keyboard: UIKeyboardType = .decimalPad
+    /// Opens with the field already typing — a first set with no weight yet.
+    var startsTyping = false
     let onDecrement: () -> Void
     let onIncrement: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var typing = false
+    @State private var typed = ""
+    @FocusState private var fieldFocused: Bool
 
     private var valueSize: CGFloat { level == .onRaised ? SL.TypeSize.display : SL.TypeSize.title }
     private var ink: Color {
@@ -66,7 +76,41 @@ struct SLStepper: View {
         .frame(maxWidth: .infinity, alignment: fills ? .leading : .center)
         .clipped()
 
-        if let onTapValue {
+        if onTyped != nil, typing {
+            TextField("", text: $typed, prompt: Text(display == "—" ? "kg" : display).foregroundStyle(SL.Ink.tertiary))
+                .keyboardType(keyboard)
+                .font(.sl(valueSize * 0.82, SL.Weight.semibold))
+                .monospacedDigit()
+                .multilineTextAlignment(.center)
+                .foregroundStyle(SL.Signal.action)
+                .tint(SL.Signal.action)
+                .focused($fieldFocused)
+                .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin)
+                // Focused once the field is on screen; asked right away it can
+                // be dropped while the card is still laying out.
+                .task {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    fieldFocused = true
+                }
+                .onChange(of: fieldFocused) { was, focused in if was, !focused { confirm() } }
+                // Applied as it is typed, so Save works without tapping ✓.
+                .onChange(of: typed) { _, now in
+                    let value = now.trimmingCharacters(in: .whitespaces)
+                    if !value.isEmpty, Decimal(string: value.replacingOccurrences(of: ",", with: ".")) != nil { onTyped?(value) }
+                }
+                .onSubmit { confirm() }
+                .accessibilityLabel("\(label), type a value")
+        } else if onTyped != nil {
+            Button {
+                typed = ""
+                typing = true
+            } label: {
+                text
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else if let onTapValue {
             Button(action: onTapValue) {
                 text
                     .frame(minHeight: SL.Space.hitMin)
@@ -76,6 +120,16 @@ struct SLStepper: View {
         } else {
             text
         }
+    }
+
+    /// Takes what was typed — nothing typed keeps the value — and puts the
+    /// number back.
+    private func confirm() {
+        guard typing else { return }
+        typing = false
+        fieldFocused = false
+        let value = typed.trimmingCharacters(in: .whitespaces)
+        if !value.isEmpty { onTyped?(value) }
     }
 
     var body: some View {
@@ -100,14 +154,30 @@ struct SLStepper: View {
             } else {
                 HStack(spacing: 0) {
                     control("−", action: onDecrement)
+                        .opacity(typing ? 0.3 : 1)
+                        .disabled(typing)
                     value(fills: false)
-                    control("+", action: onIncrement)
+                    if typing {
+                        // The number pad has no return key: this is it.
+                        Button { confirm() } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundStyle(SL.Signal.onAction)
+                                .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
+                                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.action))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Done")
+                    } else {
+                        control("+", action: onIncrement)
+                    }
                 }
             }
         }
         .padding(.horizontal, SL.Space.s2)
         .padding(.top, SL.Space.s2)
         .padding(.bottom, 10)
+        .onAppear { if startsTyping, onTyped != nil, !typing { typed = ""; typing = true } }
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
@@ -119,8 +189,8 @@ struct SLStepper: View {
                 .strokeBorder(isChanged ? SL.Signal.action : Color.clear, lineWidth: 1)
         )
         // One adjustable element: swipe up or down to step, and the value's
-        // own destination as a named action.
-        .accessibilityElement(children: .ignore)
+        // own destination as a named action. While typing, the field itself.
+        .accessibilityElement(children: typing ? .contain : .ignore)
         .accessibilityLabel("\(label), \(display)\(isChanged ? ", changed" : "")")
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -130,7 +200,9 @@ struct SLStepper: View {
             }
         }
         .accessibilityActions {
-            if let onTapValue {
+            if onTyped != nil {
+                Button(valueHint ?? "Type a value") { typed = ""; typing = true }
+            } else if let onTapValue {
                 Button(valueHint ?? "Type a value", action: onTapValue)
             }
         }

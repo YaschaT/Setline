@@ -646,14 +646,17 @@ struct VisibilitySheet: View {
 
 // MARK: - Music
 
-/// Songs by hand, or one playlist link from any service. Shown as text and
-/// a link: no artwork, no account connection.
+/// Songs by hand or as a Spotify link, or one playlist link from any
+/// service. A link fills in the title, artist and cover; a preview plays
+/// right here. No account connection.
 struct MusicSheet: View {
     @Binding var tracks: [DraftTrack]
     let onClose: () -> Void
 
     @State private var song = ""
     @State private var link = ""
+    @State private var reading = false
+    @State private var linkNote: String?
 
     private var songs: [DraftTrack] { tracks.filter { $0.kind == "song" } }
     private var playlist: DraftTrack? { tracks.first { $0.kind == "playlist" } }
@@ -664,21 +667,17 @@ struct MusicSheet: View {
                 if !songs.isEmpty {
                     VStack(spacing: 0) {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, track in
-                            HStack(spacing: SL.Space.s3) {
-                                Text("\(index + 1)").slMeta().slNumerals().foregroundStyle(SL.Ink.secondary).frame(width: 18)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(track.title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                                    if let artist = track.artist { Text(artist).slMeta().foregroundStyle(SL.Ink.secondary) }
-                                }
-                                Spacer()
+                            HStack(spacing: SL.Space.s2) {
+                                TrackRow(id: track.id.uuidString, title: track.title, artist: track.artist,
+                                         url: track.url, isPlaylist: false, size: 44, showsLink: false)
                                 Button { tracks.removeAll { $0.id == track.id } } label: {
                                     Image(systemName: "xmark").foregroundStyle(SL.Ink.secondary).frame(width: 44, height: 44)
                                 }
                                 .accessibilityLabel("Remove \(track.title)")
                             }
-                            .padding(.leading, SL.Space.s4)
-                            .frame(minHeight: 56)
-                            .overlay(alignment: .top) { if index > 0 { SLHairline().padding(.leading, 46) } }
+                            .padding(.leading, SL.Space.s3)
+                            .frame(minHeight: 60)
+                            .overlay(alignment: .top) { if index > 0 { SLHairline().padding(.leading, 68) } }
                         }
                     }
                     .slBorderBox()
@@ -688,7 +687,9 @@ struct MusicSheet: View {
                 VStack(alignment: .leading, spacing: SL.Space.s2) {
                     Text("Add a song").slMeta(SL.Weight.semibold).foregroundStyle(SL.Ink.secondary)
                     HStack(spacing: SL.Space.s2) {
-                        TextField("Song – Artist", text: $song)
+                        TextField("Paste a Spotify link, or Song – Artist", text: $song)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                             .font(.sl(SL.TypeSize.body, SL.Weight.medium))
                             .foregroundStyle(SL.Ink.primary)
                             .padding(.horizontal, 14)
@@ -702,6 +703,14 @@ struct MusicSheet: View {
                             .frame(minWidth: 60, minHeight: 48)
                             .overlay(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1))
                             .disabled(!canAddSong)
+                    }
+                    if reading {
+                        HStack(spacing: SL.Space.s2) {
+                            ProgressView().tint(SL.Ink.secondary)
+                            Text("Reading the link…").slMeta().foregroundStyle(SL.Ink.secondary)
+                        }
+                    } else if let linkNote {
+                        Text(linkNote).slMeta().foregroundStyle(SL.Signal.attention)
                     }
                     if songs.count >= PostDraft.maxSongs {
                         Text("That's 5 — the post shows the first ones.").slMeta().foregroundStyle(SL.Ink.secondary)
@@ -722,14 +731,12 @@ struct MusicSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1))
                         .onChange(of: link) { _, value in setPlaylist(value) }
                     if let playlist {
-                        HStack(spacing: SL.Space.s2) {
-                            Image(systemName: "checkmark").foregroundStyle(SL.Signal.action)
-                            Text("\(playlist.title) · friends can open it").slMeta().foregroundStyle(SL.Ink.secondary)
-                        }
+                        TrackRow(id: playlist.id.uuidString, title: playlist.title, artist: nil,
+                                 url: playlist.url, isPlaylist: true, size: 44, showsLink: false)
                     }
                 }
 
-                Text("Shown on your post as text with a link. Setline doesn't connect to your Spotify or Apple Music account.")
+                Text("Friends see the cover and can play a 30-second preview in Setline, or open the song in Spotify. Setline doesn't connect to your Spotify or Apple Music account.")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -745,9 +752,34 @@ struct MusicSheet: View {
         !song.trimmingCharacters(in: .whitespaces).isEmpty && songs.count < PostDraft.maxSongs
     }
 
-    /// "Till I Collapse – Eminem" → title and artist.
+    /// "Till I Collapse – Eminem" → title and artist; a Spotify link is read
+    /// for its title, artist and cover.
     private func addSong() {
         guard canAddSong else { return }
+        let typed = song.trimmingCharacters(in: .whitespaces)
+        if MusicLinks.spotify(typed) != nil {
+            reading = true
+            linkNote = nil
+            Task {
+                let info = await MusicLookup.shared.link(typed)
+                reading = false
+                guard let info else {
+                    linkNote = "Couldn't read that link. Type the song as Song – Artist instead."
+                    return
+                }
+                if info.kind == .playlist || info.kind == .artist {
+                    link = info.url.absoluteString
+                    song = ""
+                    return
+                }
+                let insertAt = tracks.firstIndex { $0.kind == "playlist" } ?? tracks.count
+                tracks.insert(DraftTrack(kind: "song", title: String(info.title.prefix(120)),
+                                         artist: info.artist.map { String($0.prefix(120)) },
+                                         url: info.url.absoluteString), at: insertAt)
+                song = ""
+            }
+            return
+        }
         let parts = song.split(whereSeparator: { $0 == "–" || $0 == "-" }).map { $0.trimmingCharacters(in: .whitespaces) }
         let title = parts.first ?? song
         let artist = parts.count > 1 ? parts.dropFirst().joined(separator: " – ") : nil
@@ -763,6 +795,18 @@ struct MusicSheet: View {
         guard !text.isEmpty else { return }
         if !text.hasPrefix("http") { text = "https://" + text }
         guard text.hasPrefix("https://"), let host = URL(string: text)?.host() else { return }
+        if MusicLinks.spotify(text) != nil {
+            // The playlist's own name, once Spotify says it.
+            let draft = DraftTrack(kind: "playlist", title: "Spotify playlist", artist: nil, url: text)
+            tracks.append(draft)
+            Task {
+                guard let info = await MusicLookup.shared.link(text),
+                      let index = tracks.firstIndex(where: { $0.id == draft.id }) else { return }
+                tracks[index].title = String(info.title.prefix(120))
+                tracks[index].url = info.url.absoluteString
+            }
+            return
+        }
         let service = host.contains("spotify") ? "Spotify playlist"
             : host.contains("music.apple") ? "Apple Music playlist"
             : host.contains("youtube") ? "YouTube playlist"

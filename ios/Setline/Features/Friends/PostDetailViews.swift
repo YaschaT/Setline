@@ -84,7 +84,8 @@ struct PostPhoto: View {
     }
 }
 
-/// Music on a post: text and a link, never artwork.
+/// Music on a post: the cover with a preview to play in Setline, and the
+/// way to the full song.
 struct PostMusic: View {
     let tracks: [PostTrack]
     var full = false
@@ -96,56 +97,32 @@ struct PostMusic: View {
                 VStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                         row(track)
-                            .overlay(alignment: .top) { if index > 0 { SLHairline().padding(.leading, SL.Space.s4) } }
+                            .padding(.leading, SL.Space.s3)
+                            .frame(minHeight: 64)
+                            .overlay(alignment: .top) { if index > 0 { SLHairline().padding(.leading, 68) } }
                     }
                 }
                 .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised2))
             }
         } else if let first = tracks.first {
             HStack(spacing: SL.Space.s2) {
-                Image(systemName: "music.note").font(.system(size: 14, weight: .semibold)).foregroundStyle(SL.Signal.action)
-                (Text(first.title).font(.sl(SL.TypeSize.meta, SL.Weight.semibold)).foregroundColor(SL.Ink.primary)
-                    + Text(caption(first)).font(.sl(SL.TypeSize.meta, SL.Weight.regular)).foregroundColor(SL.Ink.secondary))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
+                row(first, size: 40)
+                if tracks.count > 1 {
+                    Text("+\(tracks.count - 1)")
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .padding(.trailing, SL.Space.s2)
+                }
             }
-            .padding(.horizontal, SL.Space.s3)
-            .frame(minHeight: 40)
+            .padding(.leading, 6)
+            .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.raised2))
-            .accessibilityElement(children: .combine)
         }
     }
 
-    private func caption(_ first: PostTrack) -> String {
-        var text = first.artist.map { " · \($0)" } ?? (first.isPlaylist ? "" : "")
-        if tracks.count > 1 { text += " · +\(tracks.count - 1) more" }
-        return text
-    }
-
-    @ViewBuilder
-    private func row(_ track: PostTrack) -> some View {
-        let label = HStack(spacing: SL.Space.s3) {
-            Image(systemName: track.isPlaylist ? "music.note.list" : "music.note")
-                .foregroundStyle(SL.Ink.secondary)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(track.title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                if let artist = track.artist { Text(artist).slMeta().foregroundStyle(SL.Ink.secondary) }
-            }
-            Spacer(minLength: SL.Space.s2)
-            if track.url != nil {
-                Image(systemName: "arrow.up.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(SL.Ink.secondary)
-            }
-        }
-        .padding(.horizontal, SL.Space.s4)
-        .frame(minHeight: 52)
-        .contentShape(Rectangle())
-
-        if let url = track.url.flatMap(URL.init(string:)) {
-            Link(destination: url) { label }.accessibilityHint("Opens the link")
-        } else {
-            label
-        }
+    private func row(_ track: PostTrack, size: CGFloat = 48) -> some View {
+        TrackRow(id: track.id, title: track.title, artist: track.artist, url: track.url,
+                 isPlaylist: track.isPlaylist, size: size)
     }
 }
 

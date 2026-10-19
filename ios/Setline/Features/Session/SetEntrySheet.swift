@@ -6,7 +6,10 @@ import SetlineCore
 /// The default path never comes here: a set is saved from the card under the
 /// exercise in one tap. This sheet opens from `Meer`, from the weight itself,
 /// or from a row — to correct a set already written, to type a weight off the
-/// step, or to say what the set was: reps in reserve, failed, paused, partial.
+/// step, or to say what the set was: reps in reserve, failed, paused, partial,
+/// to failure, a drop set, and on a one-sided exercise the side. It is also
+/// the whole logger at accessibility text sizes, so nothing the card offers
+/// is missing here.
 struct SetEntrySheet: View {
     let slot: SessionRunner.ExerciseSlot
     let setIndex: Int
@@ -31,6 +34,10 @@ struct SetEntrySheet: View {
     /// opens it on every rep, which is what the pause chip always meant.
     @State private var pausedReps: Int?
     @State private var partialReps: Int?
+    /// One-sided exercises only; always one picked.
+    @State private var side: SetSide
+    /// A drop set's lighter rounds.
+    @State private var drops: [DropStep]
     @State private var showsKeypad = false
     @State private var keypadText = ""
     @State private var showsPlates = false
@@ -84,6 +91,9 @@ struct SetEntrySheet: View {
         // reserve already picked in the card.
         _rir = State(initialValue: draft.isLogged ? draft.rirReported : proposedRIR)
         _failed = State(initialValue: draft.isLogged && draft.flags.contains(.failed))
+        let previousSide = slot.sets.prefix(setIndex).last(where: \.isLogged)?.side
+        _side = State(initialValue: draft.side ?? SetSidePicker.defaultSide(after: previousSide))
+        _drops = State(initialValue: draft.drops)
         if draft.isLogged {
             // A correction changes what it is asked to change. Opening a
             // written set on the plan's defaults would quietly strip the pause
@@ -154,6 +164,7 @@ struct SetEntrySheet: View {
     private static let logControlsID = "log-controls"
     private static let pausedRowID = "paused-row"
     private static let partialRowID = "partial-row"
+    private static let dropsRowID = "drops-row"
 
     /// Brings what a chip just opened into view. At ordinary sizes that is
     /// the commit and its footnote, which take the opened row with them; at
@@ -196,6 +207,21 @@ struct SetEntrySheet: View {
 
             chips.padding(.bottom, SL.Space.s4)
 
+            if slot.exercise.unilateral {
+                HStack {
+                    SLEyebrow(text: "Side")
+                    Spacer()
+                    SetSidePicker(side: $side)
+                }
+                .padding(.bottom, SL.Space.s4)
+            }
+
+            if !drops.isEmpty {
+                DropSetEditor(drops: $drops, step: increment, display: display)
+                    .id(Self.dropsRowID)
+                    .padding(.bottom, SL.Space.s4)
+            }
+
             if let paused = pausedReps { pausedRow(paused).id(Self.pausedRowID).padding(.bottom, SL.Space.s4) }
 
             if partialReps != nil { partialRow.id(Self.partialRowID).padding(.bottom, SL.Space.s4) }
@@ -219,6 +245,7 @@ struct SetEntrySheet: View {
         // it. Bring them back into view: the set stays one tap from saved.
         .onChange(of: pausedReps != nil) { _, opened in if opened { reveal(scroller, row: Self.pausedRowID) } }
         .onChange(of: partialReps != nil) { _, opened in if opened { reveal(scroller, row: Self.partialRowID) } }
+        .onChange(of: drops.count) { before, after in if after > before { reveal(scroller, row: Self.dropsRowID) } }
         }
         .background(SL.Surface.raised)
         .safeAreaInset(edge: .bottom) {
@@ -291,7 +318,9 @@ struct SetEntrySheet: View {
                     rir: rir,
                     failed: failed,
                     pausedReps: pausedReps,
-                    partialReps: partialReps
+                    partialReps: partialReps,
+                    side: slot.exercise.unilateral ? side : nil,
+                    drops: drops
                 ))
             } label: {
                 Text(isCorrection ? "Update set \(setIndex + 1)" : "Save set")
@@ -439,14 +468,23 @@ struct SetEntrySheet: View {
         let partieel = chip("Partial", isOn: partialReps != nil) {
             partialReps = partialReps == nil ? 1 : nil
         }
+        // Where the reserve row shows, its 0 is "to failure"; elsewhere a chip.
+        let falen = chip("To failure", isOn: rir == 0) { rir = rir == 0 ? nil : 0 }
+        let drop = chip("Drop set", isOn: !drops.isEmpty) {
+            drops = drops.isEmpty ? [DropSetEditor.next(after: weight, reps: reps, step: increment)] : []
+        }
         return Group {
             if isAccessibilityLayout {
                 VStack(spacing: 6) {
                     HStack(spacing: 6) { toetsenblok; mislukt }
                     HStack(spacing: 6) { pauze; partieel }
+                    HStack(spacing: 6) { if !asksForRIR { falen }; drop }
                 }
             } else {
-                HStack(spacing: 6) { toetsenblok; mislukt; pauze; partieel }
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) { toetsenblok; mislukt; pauze }
+                    HStack(spacing: 6) { partieel; if !asksForRIR { falen }; drop }
+                }
             }
         }
     }

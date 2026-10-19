@@ -19,6 +19,7 @@ struct SessionView: View {
     @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.scenePhase) private var scenePhase
     @State private var runner: SessionRunner
     @State private var showsComplete = false
     @State private var confirmsEarlyFinish = false
@@ -33,12 +34,28 @@ struct SessionView: View {
     @State private var celebration: Celebration?
     /// The session's full exercise list, folded away until asked for.
     @State private var showsExerciseList = false
+    /// Picking an exercise to add to this session.
+    @State private var addingExercise = false
     @State private var asksAboutNotifications = false
     /// Reps chosen in the input card for a set that is not saved yet. Kept by
     /// set, so the next set opens on its own target again.
     @State private var repsDraft: [UUID: Int] = [:]
     /// Reps in reserve picked in the card, where the set asks for them.
     @State private var rirDraft: [UUID: Int] = [:]
+    /// Of the reps in the card, how many were paused or partial, chosen on
+    /// the card's chips. `0` is turned off by hand; no entry means the set
+    /// takes over what the exercise's previous set had.
+    @State private var pausedDraft: [UUID: Int] = [:]
+    @State private var partialDraft: [UUID: Int] = [:]
+    /// The side a one-sided exercise's open set is done with.
+    @State private var sideDraft: [UUID: SetSide] = [:]
+    /// Taken to failure on purpose — stored as RIR 0.
+    @State private var failureDraft: Set<UUID> = []
+    /// A drop set's lighter rounds, while the set is open.
+    @State private var dropsDraft: [UUID: [DropStep]] = [:]
+    /// Reps per side on a two-sided set of a one-sided exercise; present
+    /// means the reps tile counts the sides apart.
+    @State private var sideRepsDraft: [UUID: SideReps] = [:]
     /// Open sets whose weight or reps were moved by hand: "aangepast".
     @State private var adjusted: Set<UUID> = []
     /// The weight each open set had before it was touched, so "aangepast" can
@@ -121,6 +138,21 @@ struct SessionView: View {
             runner.resumeRestSignals()
         }
         .onChange(of: app.hiddenWarmups) { _, hidden in runner.configureWarmups(hidden: hidden) }
+        // Kept on the phone after every set and whenever the app leaves the
+        // foreground: iOS may close a backgrounded app, and the workout must
+        // be there when it opens again.
+        .onChange(of: runner.completedSetCount) { _, _ in keepOpen() }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                keepOpen()
+                if !runner.isUntouched { WorkoutReminder.schedule(dayLabel: runner.day.short, paused: false) }
+            case .active:
+                WorkoutReminder.cancel()
+            default:
+                break
+            }
+        }
         .slRespondsToTextSize()
         .task {
             #if DEBUG
@@ -202,6 +234,22 @@ struct SessionView: View {
             .environment(app)
         }
         .sheet(isPresented: $showsPlates) { platesForNextSet }
+        .sheet(isPresented: $addingExercise) {
+            ExercisePickerSheet(
+                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises),
+                selected: nil,
+                onPick: { row in
+                    addingExercise = false
+                    let index = runner.addExercise(app.exercise(row.exerciseID))
+                    showsExerciseList = false
+                    show("\(row.name) added. Just for this session.") { runner.removeAddedExercise(at: index) }
+                },
+                onStar: { row in
+                    Task { await app.setFavorite(exerciseID: row.exerciseID, isFavorite: !row.isFavorite) }
+                },
+                onClose: { addingExercise = false }
+            )
+        }
         .alert(
             "Finish the session with \(runner.completedSetCount) of \(runner.plannedSetCount) sets?",
             isPresented: $confirmsEarlyFinish
@@ -426,8 +474,17 @@ struct SessionView: View {
         if runner.isUntouched {
             onClose()
         } else {
+            WorkoutReminder.schedule(dayLabel: runner.day.short, paused: true)
             onPause(runner.snapshot())
         }
+    }
+
+    /// The workout as it stands, kept as still open (not paused).
+    private func keepOpen() {
+        guard !runner.isUntouched else { return }
+        var snapshot = runner.snapshot()
+        snapshot.runningSince = Date()
+        app.keepOpenSession(snapshot)
     }
 
     // MARK: - The exercise
@@ -715,8 +772,14 @@ struct SessionView: View {
         let proposal = runner.current.proposal
         switch proposal.tone {
         case .ready:
-            let weight = runner.proposedWeight(slotIndex: runner.currentIndex).map { app.display.kg($0) }
-            return (weight.map { "↑ \($0) today · you earned it" } ?? proposal.headline, SL.Signal.action)
+            // The engine's own suggestion, never the weight the card now
+            // holds: lowering it by hand must not read as earned.
+            guard let suggested = proposal.weightKg else { return (proposal.headline, SL.Signal.action) }
+            let open = runner.proposedWeight(slotIndex: runner.currentIndex) ?? suggested
+            if open < suggested {
+                return ("\(app.display.kg(suggested)) was suggested · you're on \(app.display.kg(open))", SL.Ink.secondary)
+            }
+            return ("↑ \(app.display.kg(suggested)) today · you earned it", SL.Signal.action)
         case .close:
             return (proposal.headline, SL.Signal.attention)
         case .neutral, .noReference:
@@ -913,7 +976,7 @@ struct SessionView: View {
         let value: String = done
             ? (set.weightKg.map { app.display.setReference(weightKg: $0, reps: set.reps) } ?? "—")
             : (row.weightKind == .awaitingCalibration ? "after set 1" : "× \(reps)")
-        let note = done ? note(for: row) : nil
+        let note = done ? dropped(sided(note(for: row), set.side, set.sideReps), set.drops) : nil
         let last = runner.previousSet(slotIndex: slotIndex, setIndex: row.index).map { "last \($0)" }
         return HStack(spacing: 0) {
             Button {
@@ -948,6 +1011,8 @@ struct SessionView: View {
                     Text(note.text)
                         .slMeta(SL.Weight.semibold)
                         .foregroundStyle(note.tone)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 } else if !done, let last {
                     Text(last)
                         .slMeta()
@@ -993,9 +1058,9 @@ struct SessionView: View {
     @ViewBuilder
     private func activeSet(slotIndex: Int, setIndex: Int) -> some View {
         let set = runner.slots[slotIndex].sets[setIndex]
-        let needsSheet = (setIndex == 0 && runner.needsCalibration(slotIndex: slotIndex))
-            || (set.weightKg ?? 0) <= 0
-            || typeSize.isAccessibilitySize
+        // Only text too large for the card needs the sheet: a first set, or
+        // one without a weight, types its weight right here.
+        let needsSheet = typeSize.isAccessibilitySize
         VStack(spacing: SL.Space.s3) {
             inputHead(setIndex: setIndex, set: set, compact: needsSheet)
             if needsSheet {
@@ -1013,6 +1078,7 @@ struct SessionView: View {
                 .buttonStyle(SLPrimaryButtonStyle(prominent: true))
             } else {
                 steppers(slotIndex: slotIndex, setIndex: setIndex, set: set)
+                attributeRow(slotIndex: slotIndex, setIndex: setIndex, set: set)
                 if showsPlatesButton { plateLine }
                 if asksForRIR(slotIndex: slotIndex, setIndex: setIndex) {
                     reserveRow(set)
@@ -1030,6 +1096,21 @@ struct SessionView: View {
                 exerciseRow(index: index, slot: slot)
                     .overlay(alignment: .top) { if index > 0 { SLHairline() } }
             }
+            // An exercise the plan doesn't have, for today.
+            Button { addingExercise = true } label: {
+                VStack(spacing: 2) {
+                    Label("Add an exercise", systemImage: "plus")
+                        .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                        .foregroundStyle(SL.Signal.action)
+                    if runner.slots.count > 1 {
+                        Text("Hold an exercise to move it").slMeta().foregroundStyle(SL.Ink.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 60)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SLRowButtonStyle())
+            .overlay(alignment: .top) { SLHairline() }
         }
         .slBorderBox()
         .slListCard()
@@ -1046,13 +1127,13 @@ struct SessionView: View {
         case .paused(let reps):
             // "2 pauze-reps" where only some of them were: the count is part
             // of the set, so the row says which reps it describes.
-            return .init(text: reps.map { "\($0) paused reps" } ?? "paused", tone: SL.Signal.attention)
+            return .init(text: reps.map { "last \($0) paused" } ?? "paused", tone: SL.Signal.attention)
         case .partial(let count):
             return .init(text: "partial +\(count)", tone: SL.Signal.attention)
         case .pausedAndPartial(let pausedReps, let count):
             // Two true things about one set; neither hides the other.
             return .init(
-                text: "\(pausedReps.map { "\($0) paused reps" } ?? "paused") · partial +\(count)",
+                text: "\(pausedReps.map { "last \($0) paused" } ?? "paused") · partial +\(count)",
                 tone: SL.Signal.attention
             )
         case .calibration:
@@ -1060,7 +1141,9 @@ struct SessionView: View {
         case .baseline:
             return .init(text: "baseline", tone: SL.Ink.secondary)
         case .reserve(let rir):
-            return .init(text: "RIR \(rir)", tone: SL.Ink.secondary)
+            return rir == 0
+                ? .init(text: "to failure", tone: SL.Signal.attention)
+                : .init(text: "RIR \(rir)", tone: SL.Ink.secondary)
         case .difference(let text):
             guard text != "=" else { return nil }
             return .init(text: "\(text) kg", tone: text.hasPrefix("−") ? SL.Ink.secondary : SL.Signal.action)
@@ -1090,7 +1173,7 @@ struct SessionView: View {
             parts.append("\(pausedReps.map { "\($0) paused reps" } ?? "paused set"), \(count) partial reps")
         case .calibration: parts.append("calibration set")
         case .baseline: parts.append("baseline for this exercise")
-        case .reserve(let rir): parts.append("RIR \(rir)")
+        case .reserve(let rir): parts.append(rir == 0 ? "to failure" : "RIR \(rir)")
         case .difference(let text): parts.append("\(text) kilos compared with last session")
         case .added: parts.append("just for this session")
         case .reference, .none: break
@@ -1163,9 +1246,27 @@ struct SessionView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SLRowButtonStyle())
+        // Hold to change the order: machine taken, or a superset partner.
+        .contextMenu {
+            if !isCurrent, index != runner.currentIndex + 1 {
+                Button("Do next", systemImage: "arrow.turn.down.right") {
+                    runner.moveExercise(from: index, to: index > runner.currentIndex ? runner.currentIndex + 1 : runner.currentIndex)
+                }
+            }
+            if index > 0 {
+                Button("Move up", systemImage: "arrow.up") { runner.moveExercise(from: index, to: index - 1) }
+            }
+            if index < runner.slots.count - 1 {
+                Button("Move down", systemImage: "arrow.down") { runner.moveExercise(from: index, to: index + 1) }
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(slot.exercise.name), \(logged) of \(total) sets\(slot.isComplete ? ", done" : "")")
         .accessibilityAddTraits(isCurrent ? [.isSelected, .isButton] : .isButton)
+        .accessibilityActions {
+            if index > 0 { Button("Move up") { runner.moveExercise(from: index, to: index - 1) } }
+            if index < runner.slots.count - 1 { Button("Move down") { runner.moveExercise(from: index, to: index + 1) } }
+        }
     }
 
     // MARK: - The dock
@@ -1262,11 +1363,8 @@ struct SessionView: View {
     /// each thing is, so nothing has to be guessed from a button's name.
     private func moreMenu(setIndex: Int) -> some View {
         Menu {
-            Button("Type the weight", systemImage: "keyboard") {
-                entryOpensOnKeypad = true
-                runner.editing = (runner.currentIndex, setIndex)
-            }
-            Button("Failed, paused or partial…", systemImage: "slider.horizontal.3") {
+            Button("Add an exercise", systemImage: "plus.circle") { addingExercise = true }
+            Button("Mark as failed…", systemImage: "slider.horizontal.3") {
                 entryOpensOnKeypad = false
                 runner.editing = (runner.currentIndex, setIndex)
             }
@@ -1377,25 +1475,31 @@ struct SessionView: View {
             SLStepper(
                 label: "Weight",
                 display: set.weightKg.map(app.display.number) ?? "—",
-                isChanged: changed && runner.slots[slotIndex].sets[setIndex].weightKg != openingWeight[set.id],
-                onTapValue: {
-                    // A load off the step: the sheet has the number field.
-                    entryOpensOnKeypad = true
-                    runner.editing = (slotIndex, setIndex)
-                },
+                isChanged: changed && (openingWeight[set.id].map { $0 != (runner.slots[slotIndex].sets[setIndex].weightKg ?? 0) } ?? false),
                 valueHint: "Type the weight",
+                // Tap the number and type it, right here.
+                onTyped: { text in typeWeight(text, slotIndex: slotIndex, set: set) },
+                startsTyping: (set.weightKg ?? 0) <= 0,
                 onDecrement: { moveWeight(slotIndex: slotIndex, set: set, by: -step) },
                 onIncrement: { moveWeight(slotIndex: slotIndex, set: set, by: step) }
             )
+            if let sides = sideRepsDraft[set.id] {
+                PerSideRepsTile(reps: Binding(get: { sides }, set: { sideRepsDraft[set.id] = $0 }))
+                    .frame(width: 140)
+            } else {
             SLStepper(
                 label: "Reps",
                 display: "\(reps)",
                 isChanged: repsDraft[set.id] != nil
                     && repsDraft[set.id] != runner.openingReps(slotIndex: slotIndex, setIndex: setIndex),
+                valueHint: "Type the reps",
+                onTyped: { text in if let typed = Int(text), typed > 0 { moveReps(set, to: min(typed, 100)) } },
+                keyboard: .numberPad,
                 onDecrement: { moveReps(set, to: max(1, reps - 1)) },
                 onIncrement: { moveReps(set, to: reps + 1) }
             )
             .frame(width: 140)
+            }
         }
     }
 
@@ -1406,6 +1510,17 @@ struct SessionView: View {
         runner.adjustProposedWeight(slotIndex: slotIndex, by: delta)
         markAdjusted(set, slotIndex: slotIndex)
         UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    /// A typed weight — "82,5" or "82.5" — for this set and every open set
+    /// after it, as stepping does.
+    private func typeWeight(_ text: String, slotIndex: Int, set: LoggedSet) {
+        guard let typed = Decimal(string: text.replacingOccurrences(of: ",", with: ".")), typed >= 0, typed < 1000 else { return }
+        let current = runner.slots[slotIndex].sets.first { $0.id == set.id }?.weightKg ?? 0
+        guard typed != current else { return }
+        if openingWeight[set.id] == nil { openingWeight[set.id] = current }
+        runner.adjustProposedWeight(slotIndex: slotIndex, by: typed - current)
+        markAdjusted(set, slotIndex: slotIndex)
     }
 
     private func moveReps(_ set: LoggedSet, to reps: Int) {
@@ -1427,7 +1542,9 @@ struct SessionView: View {
     /// last prescribed set and on any set added after it; asking on every set
     /// is an Account setting.
     private func asksForRIR(slotIndex: Int, setIndex: Int) -> Bool {
+        // The calibration set's reserve sets the weight of the sets after it.
         RIRPreference.everySet || runner.slots[slotIndex].model.asksForRIR(at: setIndex)
+            || (setIndex == 0 && runner.needsCalibration(slotIndex: slotIndex))
     }
 
     private func reserveRow(_ set: LoggedSet) -> some View {
@@ -1459,11 +1576,205 @@ struct SessionView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Reps in reserve: \(value == 4 ? "4 or more" : "\(value)")")
+                .accessibilityLabel(value == 0 ? "Reps in reserve: 0, to failure" : "Reps in reserve: \(value == 4 ? "4 or more" : "\(value)")")
                 .accessibilityHint("Optional")
                 .accessibilityAddTraits(picked == value ? [.isSelected, .isButton] : .isButton)
             }
         }
+    }
+
+    /// "+1 drop" after whatever else the row says.
+    private func dropped(_ note: SLSetRow.Note?, _ drops: [DropStep]) -> SLSetRow.Note? {
+        guard !drops.isEmpty else { return note }
+        let text = drops.count == 1 ? "+1 drop" : "+\(drops.count) drops"
+        guard let note else { return .init(text: text, tone: SL.Signal.attention) }
+        return .init(text: "\(note.text) · \(text)", tone: note.tone)
+    }
+
+    /// A done row's note with the side in front: "L · last 3 paused".
+    private func sided(_ note: SLSetRow.Note?, _ side: SetSide?, _ sides: SideReps? = nil) -> SLSetRow.Note? {
+        guard let side else { return note }
+        // Sides counted apart say so: "L 8 · R 7".
+        let label = sides?.label ?? side.label
+        guard let note else { return .init(text: label, tone: SL.Ink.secondary) }
+        return .init(text: "\(label) · \(note.text)", tone: note.tone)
+    }
+
+    // MARK: - Paused, partial, side
+
+    /// The set's rarer facts, in plain sight and off by default: two small
+    /// chips, and L / R / Both on a one-sided exercise. A chip turned on
+    /// becomes its own count — "− 3 paused +" — inside the card, so a mixed
+    /// set is logged without leaving it.
+    private func attributeRow(slotIndex: Int, setIndex: Int, set: LoggedSet) -> some View {
+        let slot = runner.slots[slotIndex]
+        let reps = openReps(slotIndex: slotIndex, setIndex: setIndex)
+        let pausable = !slot.planned.modifiers.pauseEnabled
+        let drops = dropsDraft[set.id] ?? []
+        return VStack(alignment: .leading, spacing: SL.Space.s2) {
+            // Chips wrap to a second line rather than hide behind a menu.
+            SLFlow(spacing: SL.Space.s2) {
+                if pausable {
+                    attributeChip("Paused", count: paused(slotIndex: slotIndex, setIndex: setIndex, reps: reps), reps: reps) {
+                        pausedDraft[set.id] = $0 ?? 0
+                    }
+                }
+                attributeChip("Partial", count: partial(slotIndex: slotIndex, setIndex: setIndex, reps: reps), reps: reps) {
+                    partialDraft[set.id] = $0 ?? 0
+                }
+                // Where the set already asks RIR, its 0 is this chip.
+                if !asksForRIR(slotIndex: slotIndex, setIndex: setIndex) {
+                    toggleChip("To failure", isOn: failureDraft.contains(set.id)) {
+                        if failureDraft.contains(set.id) { failureDraft.remove(set.id) } else { failureDraft.insert(set.id) }
+                    }
+                }
+                if drops.isEmpty {
+                    toggleChip("Drop set", isOn: false) {
+                        dropsDraft[set.id] = [DropSetEditor.next(after: set.weightKg ?? 0, reps: reps, step: slot.exercise.incrementKg)]
+                    }
+                }
+                if slot.exercise.unilateral { sidePicker(slotIndex: slotIndex, setIndex: setIndex) }
+                // Both sides in one set, and they didn't match: count them apart.
+                if slot.exercise.unilateral, side(slotIndex: slotIndex, setIndex: setIndex) == .both {
+                    toggleChip("Per side", isOn: sideRepsDraft[set.id] != nil) {
+                        if sideRepsDraft[set.id] != nil {
+                            sideRepsDraft[set.id] = nil
+                        } else {
+                            sideRepsDraft[set.id] = SideReps(left: reps, right: reps)
+                        }
+                    }
+                }
+            }
+            if !drops.isEmpty {
+                DropSetEditor(
+                    drops: Binding(get: { dropsDraft[set.id] ?? [] }, set: { dropsDraft[set.id] = $0 }),
+                    step: slot.exercise.incrementKg,
+                    display: app.display
+                )
+            }
+        }
+    }
+
+    /// An on/off chip: quiet off, amber on, like the counted ones.
+    private func toggleChip(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isOn ? "checkmark" : "plus").font(.system(size: 10, weight: .bold))
+                Text(title).font(.sl(SL.TypeSize.meta, isOn ? SL.Weight.semibold : SL.Weight.medium))
+            }
+            .foregroundStyle(isOn ? SL.Signal.attention : SL.Ink.secondary)
+            .padding(.horizontal, SL.Space.s3)
+            .frame(height: 34)
+            .background(Capsule().fill(isOn ? SL.Signal.attention.opacity(0.14) : SL.Surface.raised2))
+            .overlay(Capsule().strokeBorder(isOn ? SL.Signal.attention.opacity(0.5) : .clear, lineWidth: 1))
+            .frame(minHeight: SL.Space.hitMin)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+    }
+
+    /// The exercise's last logged set before this one.
+    private func previousLogged(slotIndex: Int, setIndex: Int) -> LoggedSet? {
+        runner.slots[slotIndex].sets.prefix(setIndex).last(where: \.isLogged)
+    }
+
+    /// Paused reps as the card shows them: what was chosen here, else what
+    /// the previous set had — a lifter who paused the last two on set 1
+    /// usually does on set 2. Never more than the reps.
+    private func paused(slotIndex: Int, setIndex: Int, reps: Int) -> Int? {
+        let id = runner.slots[slotIndex].sets[setIndex].id
+        let carried: Int? = previousLogged(slotIndex: slotIndex, setIndex: setIndex).flatMap { prior in
+            prior.pausedReps ?? (prior.modifiers.pauseEnabled ? prior.reps : nil)
+        }
+        let count = pausedDraft[id] ?? carried ?? 0
+        return count > 0 ? min(count, reps) : nil
+    }
+
+    private func partial(slotIndex: Int, setIndex: Int, reps: Int) -> Int? {
+        let id = runner.slots[slotIndex].sets[setIndex].id
+        let count = partialDraft[id] ?? previousLogged(slotIndex: slotIndex, setIndex: setIndex)?.partialReps ?? 0
+        return count > 0 ? min(count, reps) : nil
+    }
+
+    /// One side is always picked, so a one-sided set never costs a tap:
+    /// Both by default (one set, both sides, counted once); after a left
+    /// set the right, after a right set the left.
+    private func side(slotIndex: Int, setIndex: Int) -> SetSide {
+        let id = runner.slots[slotIndex].sets[setIndex].id
+        if let chosen = sideDraft[id] { return chosen }
+        return SetSidePicker.defaultSide(after: previousLogged(slotIndex: slotIndex, setIndex: setIndex)?.side)
+    }
+
+    /// Off: a quiet chip. On: the chip holds its own − n + count; stepping
+    /// below one turns it off again.
+    private func attributeChip(_ title: String, count: Int?, reps: Int, set: @escaping (Int?) -> Void) -> some View {
+        let shape = Capsule()
+        return Group {
+            if let count {
+                HStack(spacing: 0) {
+                    Button { set(count > 1 ? count - 1 : nil) } label: {
+                        Image(systemName: count > 1 ? "minus" : "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .frame(width: 36, height: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(count > 1 ? "Fewer \(title.lowercased()) reps" : "Turn off \(title.lowercased())")
+                    Text(title == "Paused" ? "last \(count) paused" : "\(count) partial")
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        .slNumerals()
+                        .lineLimit(1)
+                        .fixedSize()
+                        .contentTransition(.numericText(value: Double(count)))
+                    Button { set(min(count + 1, reps)) } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .bold))
+                            .frame(width: 36, height: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(count >= reps)
+                    .accessibilityLabel("More \(title.lowercased()) reps")
+                }
+                .foregroundStyle(SL.Signal.attention)
+                .background(shape.fill(SL.Signal.attention.opacity(0.14)))
+                .overlay(shape.strokeBorder(SL.Signal.attention.opacity(0.5), lineWidth: 1))
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(title == "Paused" ? "Last \(count) of \(reps) reps paused" : "\(count) partial reps")
+            } else {
+                Button { set(1) } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus").font(.system(size: 10, weight: .bold))
+                        Text(title).font(.sl(SL.TypeSize.meta, SL.Weight.medium))
+                    }
+                    .foregroundStyle(SL.Ink.secondary)
+                    .padding(.horizontal, SL.Space.s3)
+                    .frame(height: 34)
+                    .background(shape.fill(SL.Surface.raised2))
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityLabel(title)
+                .accessibilityHint(title == "Paused" ? "Marks how many of the reps were paused" : "Marks how many reps were partial range")
+            }
+        }
+        .buttonStyle(.plain)
+        .animation(.snappy(duration: 0.2), value: count)
+    }
+
+    /// L / R / Both, for a one-sided exercise only.
+    private func sidePicker(slotIndex: Int, setIndex: Int) -> some View {
+        let id = runner.slots[slotIndex].sets[setIndex].id
+        return SetSidePicker(side: Binding(
+            get: { side(slotIndex: slotIndex, setIndex: setIndex) },
+            set: { picked in
+                sideDraft[id] = picked
+                if picked != .both { sideRepsDraft[id] = nil }
+            }
+        ))
     }
 
     /// The commit: 64 high, and it says what it is about to write.
@@ -1502,7 +1813,9 @@ struct SessionView: View {
         let slot = runner.slots[slotIndex]
         let set = slot.sets[setIndex]
         guard let weight = set.weightKg, weight > 0 else { return }
-        let reps = openReps(slotIndex: slotIndex, setIndex: setIndex)
+        let sides = slot.exercise.unilateral ? sideRepsDraft[set.id] : nil
+        // Sides counted apart: the set is the weaker side.
+        let reps = sides?.weaker ?? openReps(slotIndex: slotIndex, setIndex: setIndex)
         guard reps > 0 else { return }
         runner.log(
             slotIndex: slotIndex,
@@ -1510,12 +1823,19 @@ struct SessionView: View {
             entry: SessionRunner.SetEntry(
                 weightKg: weight,
                 reps: reps,
-                rir: asksForRIR(slotIndex: slotIndex, setIndex: setIndex) ? rirDraft[set.id] : nil,
+                // "To failure" is reserve 0, the field both clients already keep.
+                rir: asksForRIR(slotIndex: slotIndex, setIndex: setIndex)
+                    ? rirDraft[set.id]
+                    : (failureDraft.contains(set.id) ? 0 : nil),
                 failed: false,
                 // A planned paused exercise is performed paused throughout,
-                // which is what the plan prescribes.
-                pausedReps: slot.planned.modifiers.pauseEnabled ? reps : nil,
-                partialReps: nil
+                // which is what the plan prescribes; otherwise the chip's
+                // count, never more than the reps.
+                pausedReps: slot.planned.modifiers.pauseEnabled ? reps : paused(slotIndex: slotIndex, setIndex: setIndex, reps: reps),
+                partialReps: partial(slotIndex: slotIndex, setIndex: setIndex, reps: reps),
+                side: slot.exercise.unilateral ? side(slotIndex: slotIndex, setIndex: setIndex) : nil,
+                drops: dropsDraft[set.id] ?? [],
+                sideReps: .some(sides)
             )
         )
         UIImpactFeedbackGenerator(style: .light).impactOccurred()

@@ -102,7 +102,7 @@ struct AgendaSheet: View {
     private func days(containing date: Date) -> [AgendaDay] {
         Agenda.week(
             containing: date,
-            plan: app.plan,
+            plan: app.schedulePlan,
             overrides: app.scheduleOverrides,
             sessions: app.sessions,
             deload: app.activeDeload
@@ -115,7 +115,7 @@ struct AgendaSheet: View {
     private func dayPlan(for date: Date) -> DayPlan {
         DayPlan.make(
             for: date,
-            plan: app.plan,
+            plan: app.schedulePlan,
             overrides: app.scheduleOverrides,
             sessions: app.sessions,
             deload: app.activeDeload

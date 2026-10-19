@@ -20,6 +20,11 @@ struct SessionCompleteView: View {
     let onSave: (_ createPost: Bool) -> Void
 
     @State private var celebration: Celebration?
+    /// The week this workout secured, as a full-screen moment; the streak it
+    /// makes. `nil` once it has played or when the week isn't secured.
+    @State private var securedWeeks: Int?
+    /// This workout was kept as one of the lifter's own.
+    @State private var savedAsOwn = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// This workout's bar has gone in; until then Tally shows the week before it.
     @State private var tallyFilled = false
@@ -39,6 +44,46 @@ struct SessionCompleteView: View {
     private var medals: [LiftMedal] {
         let pending = runner.finishedSession(existing: nil)
         return Medals.medals(for: pending, in: app.sessions + [pending])
+    }
+
+    /// "Save as my workout": this session's exercises and set counts, kept to
+    /// start again from "Choose a different workout". Not offered for a
+    /// workout that already is one.
+    @ViewBuilder
+    private var saveAsOwnRow: some View {
+        if !CustomWorkout.isCustom(dayID: runner.day.id) {
+            Button {
+                guard !savedAsOwn else { return }
+                let items = runner.slots
+                    .filter { $0.model.setCount > 0 }
+                    .map { CustomWorkout.Item(exerciseID: $0.model.active.exerciseID, sets: $0.model.setCount) }
+                guard !items.isEmpty else { return }
+                let name = app.customWorkouts.contains { $0.name == runner.day.short } ? "\(runner.day.short) (copy)" : runner.day.short
+                Task { await app.saveCustomWorkout(CustomWorkout(name: name, items: items)) }
+                withAnimation(.snappy(duration: 0.2)) { savedAsOwn = true }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } label: {
+                HStack(spacing: SL.Space.s2) {
+                    Image(systemName: savedAsOwn ? "checkmark" : "square.stack.3d.up")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(savedAsOwn ? "Saved to your workouts" : "Save as my workout")
+                        .slBody(SL.Weight.medium)
+                    Spacer()
+                }
+                .foregroundStyle(savedAsOwn ? SL.Signal.action : SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Keeps these exercises to start again later")
+        }
+    }
+
+    /// The clock's minutes, rounded to five; a workout written down
+    /// afterwards starts from what the plan says it takes.
+    private var clockMinutes: Int {
+        if runner.isLoggedAfterwards { return max(5, WeekPlan.minutes(of: runner.day)) }
+        return max(5, Int((Double(runner.elapsedSeconds) / 300).rounded()) * 5)
     }
 
     var body: some View {
@@ -63,14 +108,29 @@ struct SessionCompleteView: View {
                     // The date is the session's own, and a workout written
                     // down afterwards claims no duration: the minutes it took
                     // to type are not the minutes it took to train.
-                    Text(runner.isLoggedAfterwards
-                         ? "\(runner.day.short) · \(app.display.shortDate(runner.startedAt))"
-                         : "\(runner.day.short) · \(app.display.minutes(runner.elapsedSeconds)) · \(app.display.shortDate(runner.startedAt))")
+                    Text("\(runner.day.short) · \(app.display.shortDate(runner.startedAt))")
                         .slTitle()
                         .foregroundStyle(SL.Ink.primary)
                         .padding(.top, SL.Space.s2)
 
+                    // The clock knows a live workout's length; one written
+                    // down afterwards — or typed in at the end — it doesn't,
+                    // so the minutes are the lifter's to set.
+                    DurationRow(
+                        minutes: Binding(
+                            get: { runner.durationMinutes ?? clockMinutes },
+                            set: { runner.durationMinutes = $0 }
+                        ),
+                        note: runner.isLoggedAfterwards ? "Planned length — set what it took"
+                            : runner.durationMinutes != nil ? "Set by you" : "From the session clock"
+                    )
+                    .padding(.top, SL.Space.s4)
+                    .padding(.bottom, SL.Space.s3)
+
                     volumeBlock
+
+                    saveAsOwnRow
+                        .padding(.top, SL.Space.s4)
 
                     if !medals.isEmpty { medalBlock.padding(.top, SL.Space.s5) }
 
@@ -105,11 +165,33 @@ struct SessionCompleteView: View {
         }
         .slCelebration($celebration)
         .task {
-            // The workout done, heard as the screen arrives; then the moment
-            // it earns, once, a beat later: a milestone first, else a
-            // completed week.
+            // Written down afterwards: the planned length is saved unless
+            // changed, never the minutes it took to type.
+            if runner.isLoggedAfterwards, runner.durationMinutes == nil {
+                runner.durationMinutes = clockMinutes
+            }
+            // The workout done, heard as the screen arrives. A secured week
+            // gets the whole screen first — it's the reason to come back —
+            // then the badge or medal it may also have won, as a card.
             SLSound.success.play()
-            try? await Task.sleep(for: .milliseconds(900))
+            let streak = app.streak(adding: runner.startedAt, day: runner.day)
+            var securesWeek = Calendar.current.isDate(runner.startedAt, equalTo: Date(), toGranularity: .weekOfYear)
+                && streak.thisWeekDone == streak.thisWeekGoal
+            #if DEBUG
+            // `-SetlineWeekMoment` (with `-SetlineComplete`) plays it on demand.
+            if ProcessInfo.processInfo.arguments.contains("-SetlineWeekMoment") { securesWeek = true }
+            #endif
+            if securesWeek {
+                try? await Task.sleep(for: .milliseconds(500))
+                withAnimation(.easeOut(duration: 0.25)) { securedWeeks = max(streak.weeks, 1) }
+                // Wait for it to be dismissed (tap or its own timer).
+                while securedWeeks != nil, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+            } else {
+                try? await Task.sleep(for: .milliseconds(900))
+            }
             if let milestone = newMilestones.first {
                 celebration = Celebration(symbol: "rosette", title: "Badge earned", detail: milestone.title, badge: milestone)
             } else if let gold = medals.first(where: { $0.place == .gold }) {
@@ -118,15 +200,6 @@ struct SessionCompleteView: View {
                     title: "Best ever",
                     detail: "\(gold.name) · \(app.display.kg(gold.weightKg)) × \(gold.reps)"
                 )
-            } else if Calendar.current.isDate(runner.startedAt, equalTo: Date(), toGranularity: .weekOfYear) {
-                let streak = app.streak(adding: runner.startedAt, day: runner.day)
-                if streak.thisWeekDone == streak.thisWeekGoal {
-                    celebration = Celebration(
-                        symbol: "flame.fill",
-                        title: "Week goal reached",
-                        detail: streak.weeks == 1 ? "Your streak has started" : "\(streak.weeks)-week streak"
-                    )
-                }
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -151,6 +224,16 @@ struct SessionCompleteView: View {
             // Opaque, like the session's own bottom bar: records scroll
             // underneath it instead of showing through the actions.
             .background(SL.Surface.ground.ignoresSafeArea(edges: .bottom))
+        }
+        // Over everything, the actions included: for these seconds the week
+        // is the only thing on screen.
+        .overlay {
+            if let weeks = securedWeeks {
+                WeekSecuredMoment(weeks: weeks) {
+                    withAnimation(.easeOut(duration: 0.25)) { securedWeeks = nil }
+                }
+                .transition(.opacity)
+            }
         }
     }
 
@@ -286,6 +369,74 @@ struct SessionCompleteView: View {
                 }
                 if index < entries.count - 1 { SLHairline() }
             }
+        }
+    }
+}
+
+
+/// The week secured, given the whole screen for a moment: Tally strikes its
+/// bars through into the full mark, the streak counts up to its new number,
+/// and the phone answers. It leaves by itself after a few seconds, or on a
+/// tap. With Reduce Motion it simply appears, already struck.
+private struct WeekSecuredMoment: View {
+    let weeks: Int
+    let onDone: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var struck = false
+    @State private var shown = 0
+    @State private var jumps = 0
+
+    var body: some View {
+        ZStack {
+            SL.Surface.ground.opacity(0.94).ignoresSafeArea()
+            RadialGradient(colors: [SL.Signal.action.opacity(0.22), .clear], center: .center, startRadius: 0, endRadius: 320)
+                .ignoresSafeArea()
+            VStack(spacing: SL.Space.s5) {
+                TallyMascot(done: 3, goal: 3, mood: struck ? .struck : .proud, unit: 30, jumps: jumps)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.6), value: struck)
+                VStack(spacing: SL.Space.s1) {
+                    Text("\(shown)")
+                        .font(.slCapped(96, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
+                        .monospacedDigit()
+                        .foregroundStyle(SL.Signal.action)
+                        .contentTransition(.numericText(value: Double(shown)))
+                    Text(weeks == 1 ? "Week secured. Your streak has started." : "Week secured. \(weeks) weeks in a row.")
+                        .slLead(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Tap to continue")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .padding(.top, SL.Space.s4)
+            }
+            .padding(.horizontal, SL.Space.gutterSession)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onDone)
+        .sensoryFeedback(.success, trigger: struck)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(weeks == 1 ? "Week secured. Your streak has started." : "Week secured. \(weeks)-week streak.")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Continues")
+        .task {
+            guard !reduceMotion else {
+                struck = true
+                shown = weeks
+                try? await Task.sleep(for: .seconds(3))
+                onDone()
+                return
+            }
+            shown = max(weeks - 1, 0)
+            try? await Task.sleep(for: .milliseconds(350))
+            struck = true
+            jumps += 1
+            try? await Task.sleep(for: .milliseconds(250))
+            withAnimation(.snappy(duration: 0.5)) { shown = weeks }
+            try? await Task.sleep(for: .seconds(2.6))
+            onDone()
         }
     }
 }

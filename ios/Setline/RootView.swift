@@ -112,8 +112,14 @@ struct RootView: View {
         }
         .slCelebration($habitBadge)
         .onChange(of: app.isLoading, initial: true) { _, loading in
-            if !loading { launchLoadDone = true }
+            if !loading {
+                launchLoadDone = true
+                reopenLeftWorkout()
+            }
         }
+        // Resumed, finished or ended anywhere: no reminder about it is left.
+        .onChange(of: app.resumableSession == nil) { _, none in if none { WorkoutReminder.cancel() } }
+        .onChange(of: running?.id) { _, id in if id != nil { WorkoutReminder.cancel() } }
         // Over everything, sheets included: locked, or out of the foreground
         // where the app switcher would show the screen.
         .onChange(of: scenePhase, initial: true) { _, phase in
@@ -153,7 +159,11 @@ struct RootView: View {
             if arguments.contains("-SetlineComposePost") {
                 composing = app.sessions.first { $0.kind == .workout }
             }
-            if ProcessInfo.processInfo.arguments.contains("-SetlineOpenSession") {
+            // `-SetlineOpenDay legs` opens a session of that plan day.
+            if let flag = arguments.firstIndex(of: "-SetlineOpenDay"), arguments.indices.contains(flag + 1),
+               let day = app.plan.first(where: { $0.id == arguments[flag + 1] }) {
+                running = RunningSession(day: programmed(day), snapshot: nil)
+            } else if ProcessInfo.processInfo.arguments.contains("-SetlineOpenSession") {
                 if let paused = app.resumableSession, let day = app.day(for: paused) {
                     running = RunningSession(day: day, snapshot: paused)
                 } else if let day = app.todayDay {
@@ -188,7 +198,8 @@ struct RootView: View {
                         onLogPast: { day, date in
                             running = RunningSession(day: programmed(day), snapshot: nil, loggingFor: date)
                         },
-                        onAccount: { showsAccount = true }
+                        onAccount: { showsAccount = true },
+                        onProgress: { tab = .progressie }
                     )
                 case .voeding:
                     NutritionHomeView(onAccount: { showsAccount = true })
@@ -234,6 +245,7 @@ struct RootView: View {
                 loggingFor: session.loggingFor,
                 onFinish: { finished, createPost in
                     running = nil
+                    WorkoutReminder.cancel()
                     Task {
                         await app.save(session: finished)
                         // The composer opens once the session cover is gone.
@@ -247,8 +259,13 @@ struct RootView: View {
                     running = nil
                     Task { await app.pauseSession(snapshot) }
                 },
-                // Opened and left with nothing done: there is nothing to park.
-                onClose: { running = nil }
+                // Opened and left with nothing done: there is nothing to park,
+                // and nothing an earlier autosave may have kept either.
+                onClose: {
+                    running = nil
+                    WorkoutReminder.cancel()
+                    Task { await app.clearActiveSession() }
+                }
             )
         }
         .onOpenURL { url in
@@ -264,6 +281,15 @@ struct RootView: View {
         .fullScreenCover(item: $composing) { session in
             PostComposerView(mode: .create(session), onClose: { composing = nil })
         }
+    }
+
+    /// A workout left open — the app was closed in the background mid-workout
+    /// — opens again where it was, rather than waiting on the home screen. A
+    /// workout paused by hand stays paused; one left for hours stays too.
+    private func reopenLeftWorkout() {
+        guard running == nil, let left = app.resumableSession, left.reopensOnLaunch(at: Date()),
+              let day = app.day(for: left) else { return }
+        running = RunningSession(day: day, snapshot: left)
     }
 
     /// A food or progress badge reached since the last look gets its moment;

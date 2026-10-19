@@ -77,6 +77,8 @@ final class AppState {
     private(set) var programReplacements: [ProgramReplacement] = []
     /// Exercises the user typed in themselves.
     private(set) var customExercises: [CustomExercise] = []
+    /// Workouts the lifter put together, started like any plan day.
+    private(set) var customWorkouts: [CustomWorkout] = []
 
     private(set) var nutritionEntries: [NutritionEntry] = []
     private(set) var targets: NutritionTargets?
@@ -494,6 +496,7 @@ final class AppState {
         painFlags = LegacyAdapter.painFlags(from: next).active()
         programReplacements = LegacyAdapter.programReplacements(from: next)
         customExercises = LegacyAdapter.customExercises(from: next)
+        customWorkouts = LegacyAdapter.customWorkouts(from: next)
         nutritionEntries = LegacyAdapter.nutritionEntries(from: next)
         targets = LegacyAdapter.targets(from: next)
         plateInventory = LegacyAdapter.plateInventory(from: next)
@@ -545,6 +548,27 @@ final class AppState {
         await commit([StateChange(.setFavoriteExercise(exerciseID: exerciseID, isFavorite: isFavorite))])
     }
 
+    /// The open workout, written to this phone the moment it changes — every
+    /// set logged, and whenever the app leaves the foreground — so iOS closing
+    /// the app in the background never costs a set. Written to disk before
+    /// this returns; the sync follows, with a little background time asked
+    /// for so it can finish. One open workout is one row in the sync queue,
+    /// however often it is kept.
+    func keepOpenSession(_ snapshot: ActiveSessionSnapshot) {
+        guard let session, let current = state else { return }
+        let change = StateChange.activeSession(snapshot)
+        let next = StateMerge.apply([change], to: current)
+        apply(next)
+        pendingChanges.removeAll { if case .setActiveSession = $0.kind { return true } else { return false } }
+        pendingChanges.append(change)
+        store?.save(next, pending: pendingChanges, for: session.email)
+        let background = UIApplication.shared.beginBackgroundTask(withName: "setline.keepSession")
+        Task {
+            await syncNow()
+            UIApplication.shared.endBackgroundTask(background)
+        }
+    }
+
     func clearActiveSession() async {
         guard activeSession != nil else { return }
         await commit([.activeSession(nil)])
@@ -560,7 +584,27 @@ final class AppState {
 
     /// The plan day a paused session belongs to, which need not be today's.
     func day(for snapshot: ActiveSessionSnapshot) -> WorkoutDay? {
-        plan.first { $0.id == snapshot.dayID } ?? todayDay
+        if let day = plan.first(where: { $0.id == snapshot.dayID }) { return day }
+        // A workout of one's own resumes as itself, never as today's plan day;
+        // one deleted meanwhile is rebuilt from what the snapshot carried.
+        if CustomWorkout.isCustom(dayID: snapshot.dayID) {
+            if let custom = customWorkouts.first(where: { $0.id == snapshot.dayID }) { return custom.workoutDay }
+            let rebuilt = CustomWorkout(
+                id: snapshot.dayID,
+                name: snapshot.dayLabel,
+                items: (snapshot.slots ?? []).map { CustomWorkout.Item(exerciseID: $0.active.exerciseID, sets: max(1, $0.setCount)) }
+            )
+            return rebuilt.workoutDay
+        }
+        return todayDay
+    }
+
+    func saveCustomWorkout(_ workout: CustomWorkout) async {
+        await commit([StateChange(.upsertCustomWorkout(workout))])
+    }
+
+    func removeCustomWorkout(id: String) async {
+        await commit([StateChange(.removeCustomWorkout(id: id))])
     }
 
     /// Ends a paused session from the home screen, keeping what was logged.
@@ -630,6 +674,19 @@ final class AppState {
         await commit([.upsert(session.adding(additions))])
     }
 
+    /// A saved workout written again as a whole — a new name, or an exercise
+    /// that turned out to be another one.
+    ///
+    /// The merge keeps stored exercises an incoming copy doesn't mention (so
+    /// a web-only result survives), so an exercise that was swapped out or
+    /// left out goes first, set by set, in the same change.
+    func replace(session: TrainingSession, removing removals: [SetRemoval] = []) async {
+        var changes: [StateChange] = []
+        if !removals.isEmpty { changes.append(StateChange(.removeSessionSets(sessionID: session.id, removals: removals))) }
+        changes.append(.upsert(session))
+        await commit(changes)
+    }
+
     /// Takes one logged workout out of the account, everywhere: the web app
     /// reads the same tombstone and an older copy cannot bring it back.
     func removeSession(id: String) async {
@@ -649,14 +706,14 @@ final class AppState {
 
     /// Weeks in a row with as many workouts as the plan asked for.
     var streak: TrainingStreak {
-        TrainingStreak.make(sessions: sessions, plan: plan, overrides: scheduleOverrides)
+        TrainingStreak.make(sessions: sessions, plan: schedulePlan, overrides: scheduleOverrides)
     }
 
     /// The streak as it will stand once a workout on `date` is saved: what
     /// the finish screen promises before the save button is pressed.
     func streak(adding date: Date, day: WorkoutDay) -> TrainingStreak {
         let pending = TrainingSession(id: "pending", date: date, dayID: day.id, dayLabel: day.short, completion: 100, results: [])
-        return TrainingStreak.make(sessions: sessions + [pending], plan: plan, overrides: scheduleOverrides)
+        return TrainingStreak.make(sessions: sessions + [pending], plan: schedulePlan, overrides: scheduleOverrides)
     }
 
     // MARK: - Missed days
@@ -684,7 +741,7 @@ final class AppState {
     /// were not answered yet, newest first.
     var missedDays: [AgendaDay] {
         Agenda.missed(
-            plan: plan,
+            plan: schedulePlan,
             overrides: scheduleOverrides,
             sessions: sessions,
             deload: activeDeload,
@@ -846,8 +903,13 @@ final class AppState {
     }
 
     var todayDay: WorkoutDay? {
-        Schedule.day(for: todayCanonicalDay, in: plan)
+        Schedule.day(for: todayCanonicalDay, in: schedulePlan)
     }
+
+    /// Every workout a day of the week can hold: the plan's days, then the
+    /// lifter's own — so one can be put on a day in the Agenda like any plan
+    /// day. Plan days come first, so they always win an id lookup.
+    var schedulePlan: [WorkoutDay] { plan + customWorkouts.map(\.workoutDay) }
 
     var isRestDay: Bool { todayDay == nil }
 

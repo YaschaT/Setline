@@ -230,8 +230,8 @@ struct WeekPlanView: View {
     private var dates: [Date] { draft?.dates ?? Schedule.mondayFirstWeek(containing: Date()) }
 
     private var week: [WeekPlan.Day] {
-        draft?.week(plan: app.plan)
-            ?? WeekPlan.week(containing: Date(), overrides: app.scheduleOverrides, plan: app.plan)
+        draft?.week(plan: app.schedulePlan)
+            ?? WeekPlan.week(containing: Date(), overrides: app.scheduleOverrides, plan: app.schedulePlan)
     }
 
     private var hasChanges: Bool { draft?.isChanged ?? false }

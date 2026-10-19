@@ -19,7 +19,7 @@ enum StreakReminder {
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional else { return }
 
-        let week = Agenda.week(containing: now, plan: app.plan, overrides: app.scheduleOverrides,
+        let week = Agenda.week(containing: now, plan: app.schedulePlan, overrides: app.scheduleOverrides,
                                sessions: app.sessions, deload: app.activeDeload)
         guard let today = week.first(where: \.isToday),
               case .planned(let workout) = today.content,

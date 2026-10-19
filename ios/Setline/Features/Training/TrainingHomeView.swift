@@ -1,11 +1,10 @@
 import SwiftUI
 import SetlineCore
 
-/// Training — the streak, the week and today, as one hero card.
-///
-/// The card reads top to bottom: the streak, the week it is built from, and
-/// today's workout that adds to it. A day in the week, or a row in Up next,
-/// opens that day. Looking never writes: a session starts from `Start training`
+/// Training — in the order a lifter looks: the streak and its week as one
+/// slim card, today's workout as its own card, the next session under it,
+/// then the quieter things — every workout, the next badge, and one line of
+/// progress. A day in the week opens that day. Looking never writes: a session starts from `Start training`
 /// on today's card and nowhere else, and `Oefeningen bekijken` opens the
 /// preview, which starts nothing.
 ///
@@ -24,8 +23,12 @@ struct TrainingHomeView: View {
     let onLogPast: (WorkoutDay, Date) -> Void
     /// The avatar's way to Account, which stays a tab of its own.
     let onAccount: () -> Void
+    /// Quick Progress's "See all": the Progress tab.
+    var onProgress: () -> Void = {}
 
     @State private var confirmsEnd = false
+    /// The plan shape, chosen from the workout chooser.
+    @State private var choosingProgram = false
     /// The date the screen is on. `nil` is today, which is where every visit
     /// starts and where `Naar vandaag` returns.
     @State private var selectedDate: Date?
@@ -42,9 +45,6 @@ struct TrainingHomeView: View {
     @State private var dotsIn = TrainingIntro.played
     /// Today's ring breathes, so the eye lands on the next step.
     @State private var breathes = false
-    /// What Tally is saying, if anything, and how often it was tapped.
-    @State private var mascotLine: String?
-    @State private var mascotTaps = 0
     /// The date key of the last week-secured moment played, so it plays once.
     @AppStorage("setline.training.celebratedWeek") private var celebratedWeek = ""
     /// The date column of `Rest van de week`, growing with the text.
@@ -61,6 +61,8 @@ struct TrainingHomeView: View {
         case badge(Milestone)
         case preview(AgendaDay)
         case plan(Date)
+        case history
+        case chooser
 
         var id: String {
             switch self {
@@ -71,6 +73,8 @@ struct TrainingHomeView: View {
             case .badge(let item): return "badge-\(item.id)"
             case .preview(let day): return "preview-\(day.key)"
             case .plan(let date): return "plan-\(Schedule.dateKey(date))"
+            case .history: return "history"
+            case .chooser: return "chooser"
             }
         }
     }
@@ -81,18 +85,10 @@ struct TrainingHomeView: View {
     /// picking a date in the agenda brings its week back with it.
     private var week: [AgendaDay] { days(containing: selectedDate ?? Date()) }
 
-    /// The seven days after today, across the end of the week: what is
-    /// coming, never empty on a Sunday.
-    private var upcoming: [AgendaDay] {
-        let next = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
-        let all = days(containing: Date()) + days(containing: next)
-        return Array(all.filter { !$0.isPast && !$0.isToday }.prefix(7))
-    }
-
     private func days(containing date: Date) -> [AgendaDay] {
         Agenda.week(
             containing: date,
-            plan: app.plan,
+            plan: app.schedulePlan,
             overrides: app.scheduleOverrides,
             sessions: app.sessions,
             deload: app.activeDeload
@@ -112,24 +108,29 @@ struct TrainingHomeView: View {
 
     var body: some View {
         ScrollView {
-                VStack(alignment: .leading, spacing: SL.Space.s4) {
+                // Three topics, each its own block: what to do now, what
+                // you're working toward, how it's going. 12 inside a block,
+                // 32 between blocks, so the gaps say what belongs together.
+                VStack(alignment: .leading, spacing: Self.betweenTopics) {
                     if isOffline { offlineCard }
                     if let today = days(containing: Date()).first(where: \.isToday) {
-                        hero(today)
-                        underHero(today)
-                    }
-                    if let status = recoveryStatus {
-                        recoverySection(status)
-                            .padding(.top, Self.afterCard)
-                    }
-                    if !upcoming.isEmpty {
-                        upNext
-                            .padding(.top, recoveryStatus == nil ? Self.afterCard : Self.betweenSections)
+                        VStack(alignment: .leading, spacing: Self.insideTopic) {
+                            streakCard(today)
+                            todayCard(today)
+                            planCard(after: today)
+                            if let status = recoveryStatus { recoverySection(status) }
+                        }
+                        badgeSection(today)
+                        // Day one has nothing to chart: no empty card.
+                        if app.sessions.contains(where: { $0.kind == .workout }) {
+                            QuickProgressCard(onSeeAll: onProgress)
+                        }
                     }
                     if isOffline, !queue.isEmpty { queueSection }
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
-                .padding(.top, SL.Metric.tabContentTop)
+                // The streak card's own edge does the separating.
+                .padding(.top, SL.Space.s2)
                 .padding(.bottom, SL.Space.s6)
         }
         .slTabHeader { header }
@@ -161,6 +162,14 @@ struct TrainingHomeView: View {
                     .presentationDetents([.medium])
             case .preview(let day):
                 preview(day)
+            case .history:
+                HistorySheet(onClose: { sheet = nil })
+            case .chooser:
+                WorkoutChooserSheet(
+                    onStart: { day in after(closing: { onStart(day) }) },
+                    onChangePlan: { after(closing: { choosingProgram = true }) },
+                    onClose: { sheet = nil }
+                )
             case .plan(let date):
                 DayPlanSheet(
                     plan: dayPlan(for: date),
@@ -180,13 +189,26 @@ struct TrainingHomeView: View {
         .fullScreenCover(item: $openedSession) { opened in
             SessionDetailView(sessionID: opened.id, onClose: { openedSession = nil })
         }
+        .fullScreenCover(isPresented: $choosingProgram) {
+            ProgramSheet(
+                programs: ProgramCatalog.all(personalPlan: app.plan),
+                current: ProgramCatalog.current(in: app.state ?? LegacyState(raw: [:]), plan: app.plan),
+                onSave: { program in
+                    choosingProgram = false
+                    Task { await app.record([StateChange(.setProgram(mode: program.mode, sciencePlanID: program.sciencePlanID))]) }
+                },
+                onClose: { choosingProgram = false }
+            )
+        }
         #if DEBUG
         // `-SetlineAgenda` and `-SetlinePreview` open the two sheets, so they
         // can be looked at on any simulator without driving taps.
         .task {
             let arguments = ProcessInfo.processInfo.arguments
             try? await Task.sleep(for: .milliseconds(600))
-            if arguments.contains("-SetlineAgenda") {
+            if arguments.contains("-SetlineChooser") {
+                sheet = .chooser
+            } else if arguments.contains("-SetlineAgenda") {
                 sheet = .agenda
             } else if arguments.contains("-SetlinePreview"),
                       let today = days(containing: Date()).first(where: \.isToday), today.plannedDay != nil {
@@ -240,7 +262,7 @@ struct TrainingHomeView: View {
     private func dayPlan(for date: Date) -> DayPlan {
         DayPlan.make(
             for: date,
-            plan: app.plan,
+            plan: app.schedulePlan,
             overrides: app.scheduleOverrides,
             sessions: app.sessions,
             deload: app.activeDeload
@@ -254,21 +276,20 @@ struct TrainingHomeView: View {
     /// own. 1a's spacing — 14 beside the avatar, 4 above and 8 below — so the
     /// week starts as far under it as 1a has it.
     private var header: some View {
-        SLTabHeader(title: greeting, subtitle: longDate, ring: tierRing, onAccount: onAccount) {
-            agendaButton
+        // One line: the day is already in the week's ringed dot and TODAY.
+        SLTabHeader(title: greeting, ring: tierRing, onAccount: onAccount) {
             alertsBell
         }
     }
 
-    /// The way to planning and results, beside the bell where a calendar is
-    /// looked for.
+    /// The one way to planning and results: a small calendar in the streak
+    /// card, beside the week it plans.
     private var agendaButton: some View {
         Button { sheet = .agenda } label: {
-            SLGlyph(name: .calendar, size: 16)
-                .foregroundStyle(SL.Ink.primary)
-                .frame(width: 38, height: 38)
-                .background(Circle().fill(SL.Surface.raised))
-                .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
+            SLGlyph(name: .calendar, size: 15)
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(SL.Surface.raised2))
                 .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
                 .contentShape(Circle())
         }
@@ -326,79 +347,235 @@ struct TrainingHomeView: View {
         }
     }
 
-    /// "Hoi Yascha", or just "Hoi" until a name is given in Account.
+    /// "Good evening, Yascha", or the greeting alone until a name is given
+    /// in Account — never a bare "Hi".
     private var greeting: String {
-        app.greetingName.map { "Hi \($0)" } ?? "Hi"
+        let hour = Calendar.current.component(.hour, from: Date())
+        let part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
+        return app.greetingName.map { "\(part), \($0)" } ?? part
     }
 
-    /// "Woensdag 9 september" — the date the card is on.
-    private var longDate: String { SLDateText.long(Date()) }
 
     // MARK: - The hero
 
-    /// One card for the one story the screen tells: the streak, the week it
-    /// is built from, and today's workout that adds to it — top to bottom,
-    /// the number first because it is the reason, the button last because it
-    /// is the act.
-    private func hero(_ today: AgendaDay) -> some View {
+    /// The streak as one slim card: Tally, the count of weeks in a row, this
+    /// week's workouts as a fraction, the seven days, and the Agenda. Two
+    /// numbers that mean two things — weeks in a row, workouts this week —
+    /// so each says its own unit.
+    private func streakCard(_ today: AgendaDay) -> some View {
         let streak = app.streak
         let secured = securedToday(today, streak)
-        let earned = earnedToday
+        // Two halves with room between them: the streak (weeks in a row),
+        // then under a hairline this week (its days and its count).
         return VStack(alignment: .leading, spacing: 0) {
-            // One layout at every streak, zero included, so the card never
-            // changes shape when a streak starts or lapses. Tally stands
-            // beside the number it is the face of.
-            HStack(alignment: .bottom, spacing: SL.Space.s2) {
-                streakRow(streak, secured: secured)
+            HStack(alignment: .center, spacing: SL.Space.s4) {
                 mascot(today, streak)
+                streakRow(streak, secured: secured, risk: streakRisk(streak))
+                agendaButton
             }
-            .overlay(alignment: .bottomTrailing) { mascotBubble }
-            .zIndex(1)
+            Rectangle()
+                .fill(secured ? SL.Signal.action.opacity(0.18) : SL.Surface.hairline)
+                .frame(height: SL.Metric.border)
+                .padding(.horizontal, -SL.Space.s5)
+                .padding(.vertical, SL.Space.s5)
+            weekHeader(streak)
+                .padding(.bottom, SL.Space.s2)
             weekDots
-                .padding(.top, SL.Space.s5)
-            heroDivider(lit: secured)
-            if let badge = earned.first {
-                Button { sheet = .badge(badge) } label: {
-                    EarnedBadgeRow(milestone: badge, next: nextMilestone(after: badge)).contentShape(Rectangle())
-                }
-                .buttonStyle(SLPressStyle())
-                .padding(.bottom, SL.Space.s5)
+            if let missed = lastMissed {
+                missedLine(missed)
+                    .padding(.top, SL.Space.s2)
             }
-            todayBlock(selectedDay ?? today)
-                .id(selectedDay?.key ?? today.key)
-                .transition(.opacity)
         }
-        .animation(.easeOut(duration: SL.Motion.base), value: selectedDate)
         .padding(.horizontal, SL.Space.s5)
         .padding(.top, SL.Space.s5)
-        .padding(.bottom, SL.Space.s5)
+        .padding(.bottom, SL.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(heroBackground(lit: secured, streak: streak))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(secured ? SL.Signal.action.opacity(0.45) : SL.Surface.hairlineStrong.opacity(0.6),
+            RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                .strokeBorder(secured ? SL.Signal.action.opacity(0.45) : SL.Surface.hairline,
                               lineWidth: SL.Metric.border)
         )
-        .shadow(color: secured ? SL.Signal.action.opacity(0.14) : .clear, radius: 24)
+        .shadow(color: secured ? SL.Signal.action.opacity(0.12) : .clear, radius: 18)
         .accessibilityElement(children: .contain)
         .onAppear {
             celebrateIfSecured(today, streak)
             playIntro(streak)
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-SetlineBadges") { sheet = .milestones }
-            // `-SetlinePickDay 3` shows the week's Wednesday in the card.
+            // `-SetlinePickDay 3` opens the week's Wednesday.
             let arguments = ProcessInfo.processInfo.arguments
             if let flag = arguments.firstIndex(of: "-SetlinePickDay"), arguments.indices.contains(flag + 1),
                let index = Int(arguments[flag + 1]), days(containing: Date()).indices.contains(index - 1) {
-                selectedDate = days(containing: Date())[index - 1].date
+                open(days(containing: Date())[index - 1])
             }
-            // `-SetlineMascotTalk` opens with Tally's first line showing.
-            if ProcessInfo.processInfo.arguments.contains("-SetlineMascotTalk") {
-                mascotLine = mascotLines(today, streak).first
-            }
+            if arguments.contains("-SetlineHistory") { sheet = .history }
             #endif
         }
+    }
+
+    /// Today's workout, on its own card: the workout as it was, one action.
+    private func todayCard(_ today: AgendaDay) -> some View {
+        todayBlock(today)
+            .padding(SL.Space.s5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SL.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(SL.Surface.hairlineStrong.opacity(0.6), lineWidth: SL.Metric.border)
+            )
+            .accessibilityElement(children: .contain)
+    }
+
+    private static let insideTopic = SL.Space.s3
+    private static let betweenTopics = SL.Space.s8
+
+    /// What's next and what's been: one card, two rows. The next workout
+    /// after today (only that one — the schedule is the Agenda's), and under
+    /// a hairline the way into every logged workout.
+    private func planCard(after today: AgendaDay) -> some View {
+        VStack(spacing: 0) {
+            if let next = nextTraining(after: today.date), next.plannedDay != nil {
+                nextSessionRow(next)
+                SLHairline().padding(.leading, SL.Space.s4 + 44 + SL.Space.s3)
+            }
+            allWorkoutsRow
+        }
+        .background(
+            RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
+    }
+
+    private func nextSessionRow(_ day: AgendaDay) -> some View {
+        let workout = day.plannedDay!
+        return Button { open(day) } label: {
+            HStack(spacing: SL.Space.s3) {
+                SLWorkoutSymbol(dayName: workout.short, size: 20)
+                    .foregroundStyle(SL.Signal.action)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                            .fill(SL.Signal.actionTint)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("NEXT · \(whenLabel(day).uppercased())")
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                    Text(workout.short)
+                        .font(.sl(SL.TypeSize.title, SL.Weight.bold))
+                        .foregroundStyle(SL.Ink.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text("\(WeekPlan.sets(of: workout)) sets · ~\(WeekPlan.minutes(of: workout)) min")
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: SL.Space.s2)
+                SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Next session: \(workout.short), \(whenLabel(day)), \(WeekPlan.sets(of: workout)) sets, about \(WeekPlan.minutes(of: workout)) minutes")
+        .accessibilityHint("Shows the exercises. Nothing starts.")
+    }
+
+    /// Every logged workout: the card's quiet second row.
+    private var allWorkoutsRow: some View {
+        let count = app.sessions.filter { $0.kind == .workout }.count
+        return Button { sheet = .history } label: {
+            HStack(spacing: SL.Space.s3) {
+                SLGlyph(name: .list, size: 16)
+                    .foregroundStyle(SL.Ink.secondary)
+                    .frame(width: 44)
+                Text("All workouts")
+                    .slBody(SL.Weight.medium)
+                    .foregroundStyle(SL.Ink.primary)
+                Spacer(minLength: SL.Space.s2)
+                Text("\(count)")
+                    .slBody()
+                    .slNumerals()
+                    .foregroundStyle(SL.Ink.secondary)
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("All workouts, \(count)")
+        .accessibilityHint("Opens every logged session")
+    }
+
+    /// A badge won today, or the next one to win: compact and secondary.
+    @ViewBuilder
+    private func badgeSection(_ today: AgendaDay) -> some View {
+        let isDone = today.session != nil && app.resumableSession == nil
+        if let badge = earnedToday.first {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+            topicHead("New badge", link: "All badges") { sheet = .milestones }
+            Button { sheet = .badge(badge) } label: {
+                EarnedBadgeRow(milestone: badge, next: nextMilestone(after: badge))
+                    .padding(SL.Space.s4)
+                    .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                            .strokeBorder(SL.Signal.action.opacity(0.35), lineWidth: SL.Metric.border)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(SLPressStyle())
+            }
+        } else if let goal = badgeGoal(for: today, isDone: isDone) {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                topicHead(goal.unlocks ? "Unlocks today" : "Next badge", link: "All badges", lit: goal.unlocks) {
+                    sheet = .milestones
+                }
+                NextBadgeCard(
+                    milestone: goal.milestone,
+                    unlocks: goal.unlocks,
+                    onOpen: { sheet = .badge(goal.milestone) }
+                )
+            }
+        }
+    }
+
+    /// A topic's name over its card, with its one way further — the same
+    /// head Quick progress wears.
+    private func topicHead(_ title: String, link: String, lit: Bool = false, action: @escaping () -> Void) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            SLOverline(text: title, color: lit ? SL.Signal.action : SL.Ink.secondary)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            Button(action: action) {
+                HStack(spacing: 4) {
+                    Text(link).slMeta(SL.Weight.semibold)
+                    SLGlyph(name: .chevronRight, size: 12)
+                }
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, SL.Space.s1)
     }
 
     private func heroBackground(lit: Bool, streak: TrainingStreak) -> some View {
@@ -412,14 +589,6 @@ struct TrainingHomeView: View {
                                center: .topTrailing, startRadius: 0, endRadius: 300)
             }
         }
-    }
-
-    private func heroDivider(lit: Bool) -> some View {
-        Rectangle()
-            .fill(lit ? SL.Signal.action.opacity(0.18) : SL.Surface.hairline)
-            .frame(height: SL.Metric.border)
-            .padding(.horizontal, -SL.Space.s5)
-            .padding(.vertical, SL.Space.s5)
     }
 
     /// The paused session's quieter way out, off the card's face.
@@ -437,60 +606,126 @@ struct TrainingHomeView: View {
         .accessibilityLabel("More")
     }
 
-    /// The streak as the number, and what this week still asks under its
-    /// label. Opens the streak sheet, where the best, the freeze and the
-    /// badges are.
-    private func streakRow(_ streak: TrainingStreak, secured: Bool) -> some View {
+    /// The streak — weeks in a row — beside this week's own count, each
+    /// with its unit, so the two are never read as one number. Opens the
+    /// streak sheet, where the best, the freeze and the badges are.
+    private func streakRow(_ streak: TrainingStreak, secured: Bool, risk: TrainingStreak.Risk) -> some View {
         let left = max(streak.thisWeekGoal - streak.thisWeekDone, 0)
         let lit = streak.weeks > 0
-        let nudge = streak.thisWeekMet ? "Week secured"
-            : !lit ? (left == 1 ? "1 workout starts your streak" : "\(left) workouts start your streak")
-            : left == 1 ? "1 to go this week" : "\(left) to go this week"
+        let done = min(streak.thisWeekDone, streak.thisWeekGoal)
+        let nudge: String = {
+            if streak.thisWeekMet { return "Week secured" }
+            switch risk {
+            case .breaks: return "Out of reach this week · streak resets Monday"
+            case .freezeCovers: return "Out of reach · your freeze keeps the streak"
+            case .tight: return left == 1 ? "Last chance: 1 more this week" : "Every day left counts: \(left) to go"
+            case .none: break
+            }
+            return !lit ? (left == 1 ? "1 more workout this week does it" : "\(left) workouts this week do it")
+                : left == 1 ? "1 more keeps it going" : "\(left) more keep it going"
+        }()
+        // Lime is earned; amber says the streak needs you now.
+        let nudgeInk: Color = streak.thisWeekMet ? SL.Signal.action
+            : risk == .tight || risk == .breaks ? SL.Signal.attention : SL.Ink.secondary
         let shown = rolledWeeks ?? streak.weeks
         return Button { sheet = .streak } label: {
-            HStack(alignment: .bottom, spacing: SL.Space.s3) {
-                Text("\(shown)")
-                    .font(.slCapped(96, SL.Weight.bold, maxScale: 1.2, relativeTo: .largeTitle))
-                    .tracking(-5)
-                    .monospacedDigit()
-                    .foregroundStyle(lit ? SL.Signal.action : SL.Ink.primary)
-                    .contentTransition(.numericText(value: Double(shown)))
-                    .lineLimit(1)
-                    .padding(.vertical, -13)
-                    .overlay(alignment: .topTrailing) {
-                        if secured {
-                            Text("+1")
-                                .font(.slFixed(11, SL.Weight.bold))
-                                .foregroundStyle(SL.Signal.onAction)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(SL.Signal.action))
-                                .offset(x: 16, y: -8)
-                        }
-                    }
-                VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if streak.weeks == 0 && rolledWeeks == nil {
+                        // A zero isn't a streak; it's an invitation.
+                        Text(streak.best == 0 ? "Start your streak" : "Start a new streak")
+                            .font(.sl(SL.TypeSize.title, SL.Weight.bold))
+                            .foregroundStyle(SL.Ink.primary)
+                            .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+                            .minimumScaleFactor(0.8)
+                    } else {
+                    Text("\(shown)")
+                        .font(.slCapped(34, SL.Weight.bold, maxScale: 1.3, relativeTo: .title1))
+                        .tracking(-1)
+                        .monospacedDigit()
+                        .foregroundStyle(risk == .breaks ? SL.Signal.attention : lit ? SL.Signal.action : SL.Ink.primary)
+                        .contentTransition(.numericText(value: Double(shown)))
+                        .lineLimit(1)
                     Text("week streak")
-                        .slLead(SL.Weight.semibold)
+                        .slBody(SL.Weight.semibold)
                         .foregroundStyle(SL.Ink.primary)
-                    HStack(spacing: 4) {
-                        if streak.thisWeekMet { SLGlyph(name: .check, size: 12) }
-                        Text(nudge).slMeta(SL.Weight.semibold).slNumerals()
+                        .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                     }
-                    // Lime is for what is earned: "Week secured", not the
-                    // count still to go.
-                    .foregroundStyle(streak.thisWeekMet ? SL.Signal.action : SL.Ink.secondary)
+                    if secured {
+                        Text("+1")
+                            .font(.slFixed(11, SL.Weight.bold))
+                            .foregroundStyle(SL.Signal.onAction)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(SL.Signal.action))
+                    }
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 2)
-                .padding(.leading, secured ? SL.Space.s3 : 0)
-                Spacer(minLength: 0)
+                HStack(spacing: 4) {
+                    if streak.thisWeekMet { SLGlyph(name: .check, size: 11) }
+                    Text(nudge)
+                        .slMeta(SL.Weight.medium)
+                        .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                        .minimumScaleFactor(0.85)
+                }
+                .foregroundStyle(nudgeInk)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(SLPressStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(streak.weeks == 1 ? "1-week streak" : "\(streak.weeks)-week streak"). \(nudge).")
+        .accessibilityLabel("\(streak.weeks == 1 ? "1-week streak" : "\(streak.weeks)-week streak"). \(done) of \(streak.thisWeekGoal) workouts this week. \(nudge).")
         .accessibilityHint("Shows your streak and badges")
+    }
+
+    /// Days still open for a workout this week: today while nothing is
+    /// logged, and every day after it.
+    private func streakRisk(_ streak: TrainingStreak) -> TrainingStreak.Risk {
+        let open = days(containing: Date()).filter { ($0.isToday && !$0.isLogged) || (!$0.isToday && !$0.isPast) }
+        return streak.risk(daysLeft: open.count)
+    }
+
+    /// The latest planned day this week that went by unlogged.
+    private var lastMissed: (day: AgendaDay, workout: WorkoutDay)? {
+        days(containing: Date()).reversed().lazy.compactMap { day -> (AgendaDay, WorkoutDay)? in
+            if case .missed(let workout) = day.content, !day.isToday { return (day, workout) }
+            return nil
+        }.first
+    }
+
+    /// "Monday wasn't logged · Log it": the missed day, answered where it
+    /// shows, rather than only behind the bell.
+    private func missedLine(_ missed: (day: AgendaDay, workout: WorkoutDay)) -> some View {
+        Button { onLogPast(missed.workout, missed.day.date) } label: {
+            HStack(spacing: SL.Space.s2) {
+                Circle().fill(SL.Signal.attention).frame(width: 6, height: 6)
+                Text("\(WeekPlan.fullWeekday(missed.day.date)) wasn't logged")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                Spacer(minLength: SL.Space.s2)
+                Text("Log it").slMeta(SL.Weight.semibold).foregroundStyle(SL.Signal.attention)
+                SLGlyph(name: .chevronRight, size: 11).foregroundStyle(SL.Signal.attention)
+            }
+            .frame(minHeight: SL.Space.hitMin)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(WeekPlan.fullWeekday(missed.day.date)) wasn't logged. Log \(missed.workout.short)")
+    }
+
+    /// "THIS WEEK · 2 of 4 workouts", over its seven days.
+    private func weekHeader(_ streak: TrainingStreak) -> some View {
+        let done = min(streak.thisWeekDone, streak.thisWeekGoal)
+        return HStack(alignment: .firstTextBaseline) {
+            SLOverline(text: "This week")
+            Spacer(minLength: SL.Space.s2)
+            Text("\(done) of \(streak.thisWeekGoal) workouts")
+                .slMeta(SL.Weight.semibold)
+                .slNumerals()
+                .foregroundStyle(streak.thisWeekMet ? SL.Signal.action : SL.Ink.primary)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// This week as seven marks: trained days filled, today ringed, rest
@@ -521,7 +756,7 @@ struct TrainingHomeView: View {
                 .buttonStyle(SLPressStyle(scale: 0.82, bounces: true))
                 .accessibilityLabel(StripDay.spokenLabel(day))
                 .accessibilityAddTraits(isPicked(day) ? .isSelected : [])
-                .accessibilityHint(isPicked(day) && !day.isToday ? "Opens this day" : "Shows this day in the card")
+                .accessibilityHint("Opens this day")
             }
         }
         .padding(.horizontal, -SL.Space.s1)
@@ -551,6 +786,12 @@ struct TrainingHomeView: View {
             Circle().strokeBorder(SL.Signal.recovery.opacity(0.25), lineWidth: 1.5)
                 .overlay(Circle().fill(SL.Signal.recovery).frame(width: 5, height: 5))
                 .frame(width: size, height: size)
+        } else if day.isPast, case .missed = day.content {
+            // A planned day that went by: amber, so it reads apart from the
+            // days still to come.
+            Circle().strokeBorder(SL.Signal.attention.opacity(0.7), lineWidth: 1.5)
+                .overlay(Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(SL.Signal.attention))
+                .frame(width: size, height: size)
         } else if day.isPast {
             Circle().strokeBorder(SL.Surface.mute, lineWidth: 1.5)
                 .frame(width: size, height: size)
@@ -577,7 +818,24 @@ struct TrainingHomeView: View {
                     .tracking(1)
                 Spacer(minLength: 0)
                 if day.isToday {
-                    if app.resumableSession != nil { moreMenu }
+                    if app.resumableSession != nil {
+                        moreMenu
+                    } else if workout != nil, !isDone, !content.isRest {
+                        // Looking first is its own, named way in; the title
+                        // is only a title, and the button only starts.
+                        Button { sheet = .preview(day) } label: {
+                            HStack(spacing: 4) {
+                                Text("Exercises").slMeta(SL.Weight.semibold)
+                                SLGlyph(name: .chevronRight, size: 11)
+                            }
+                            .foregroundStyle(SL.Ink.secondary)
+                            .frame(minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, -SL.Space.s3)
+                        .accessibilityHint("Shows today's exercises. Nothing starts.")
+                    }
                 } else {
                     Button { withAnimation(.easeOut(duration: SL.Motion.base)) { selectedDate = nil } } label: {
                         Text("Today")
@@ -594,25 +852,14 @@ struct TrainingHomeView: View {
                 }
             }
             .foregroundStyle(content.isRest ? SL.Signal.recovery : isDone || day.isToday ? SL.Signal.action : SL.Ink.secondary)
-            Button {
-                if workout != nil, !isDone { sheet = .preview(day) } else { open(day) }
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
-                    Text(isDone ? (day.session?.dayLabel ?? content.title) : content.title)
-                        .font(.sl(SL.TypeSize.display, SL.Weight.bold))
-                        .tracking(-0.02 * SL.TypeSize.display)
-                        .foregroundStyle(content.isRest ? SL.Signal.recovery : SL.Ink.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    SLGlyph(name: .chevronRight, size: 16)
-                        .foregroundStyle(SL.Ink.tertiary)
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(SLPressStyle())
-            .padding(.top, 2)
-            .accessibilityHint(isDone ? "Shows the results" : workout != nil ? "Shows today's exercises. Nothing starts." : "Opens this day")
+            Text(isDone ? (day.session?.dayLabel ?? content.title) : content.title)
+                .font(.sl(SL.TypeSize.display, SL.Weight.bold))
+                .tracking(-0.02 * SL.TypeSize.display)
+                .foregroundStyle(content.isRest ? SL.Signal.recovery : SL.Ink.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.top, 2)
+                .accessibilityAddTraits(.isHeader)
 
             if let focus = isDone ? nil : content.focus {
                 Text(Self.sentenceCase(focus).slUnbroken)
@@ -633,33 +880,37 @@ struct TrainingHomeView: View {
                     .padding(.top, SL.Space.s2)
             }
 
-            if day.isToday, isDone || content.isRest {
-                nextUp(after: day)
-                    .padding(.top, SL.Space.s4)
-            } else {
+            if day.isToday, !isDone, let workout, !content.isRest {
+                let lifts = app.liftsReady(in: workout)
+                if !lifts.isEmpty { readyLine(lifts).padding(.top, SL.Space.s4) }
+            }
+            // A rest day holds no start: the next session is the card below.
+            if !(day.isToday && content.isRest && !isDone) {
                 cardActions(day)
                     .padding(.top, SL.Space.s5)
             }
-        }
-    }
-
-    /// Under the hero, in the order a lifter reads them: how to make today
-    /// count, then what it all adds up to.
-    @ViewBuilder
-    private func underHero(_ today: AgendaDay) -> some View {
-        let isDone = today.session != nil && app.resumableSession == nil
-        let workout = today.plannedDay ?? app.resumableSession.flatMap { app.day(for: $0) }
-        let lifts = (isDone ? nil : workout).map { app.liftsReady(in: $0) } ?? []
-        if !lifts.isEmpty {
-            ReadyLiftsCard(lifts: lifts, display: app.display)
-        }
-        if earnedToday.isEmpty, let goal = badgeGoal(for: today, isDone: isDone) {
-            NextBadgeCard(
-                milestone: goal.milestone,
-                unlocks: goal.unlocks,
-                onOpen: { sheet = .badge(goal.milestone) },
-                onAll: { sheet = .milestones }
-            )
+            // Another plan day, a workout of your own, or a new plan shape —
+            // quiet under the start, and the card's one action on a rest day.
+            if day.isToday, !isDone, app.resumableSession == nil {
+                if content.isRest {
+                    Button { sheet = .chooser } label: { chevroned("Train anyway") }
+                        .buttonStyle(SLOutlineButtonStyle())
+                        .padding(.top, SL.Space.s5)
+                        .accessibilityHint("Pick a workout from your plan or your own")
+                } else {
+                    Button { sheet = .chooser } label: {
+                        Text("or choose a different workout")
+                            .slMeta(SL.Weight.medium)
+                            .foregroundStyle(SL.Ink.secondary)
+                            .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, SL.Space.s1)
+                    .padding(.bottom, -SL.Space.s3)
+                    .accessibilityHint("Any day of your plan, your own workouts, or a new plan shape")
+                }
+            }
         }
     }
 
@@ -677,7 +928,10 @@ struct TrainingHomeView: View {
         }
         if isDone, let session = day.session,
            let planned = session.plannedSetCount, let completed = session.completedSetCount, planned > 0 {
-            return [("\(completed)/\(planned)", "sets"), ("\(session.completion)%", "done")]
+            // The sets already say how much was done; the time is the new fact.
+            var items = [("\(completed)/\(planned)", "sets")]
+            if let seconds = session.durationSeconds, seconds >= 60 { items.append(("\(seconds / 60)", "min")) }
+            return items
         }
         guard !isDone, let workout, day.plannedDay != nil else { return nil }
         return [
@@ -707,6 +961,7 @@ struct TrainingHomeView: View {
                             .slMeta()
                             .foregroundStyle(SL.Ink.secondary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                     }
                     Spacer(minLength: SL.Space.s2)
                 }
@@ -716,35 +971,26 @@ struct TrainingHomeView: View {
         .accessibilityLabel(items.map { "\($0.value) \($0.label)" }.joined(separator: ", "))
     }
 
-    /// After today's work, or on a rest day: the next workout, one tap away.
-    @ViewBuilder
-    private func nextUp(after day: AgendaDay, lead: String? = nil) -> some View {
-        if let next = nextTraining(after: day.date), let workout = next.plannedDay {
-            Button { open(next) } label: {
-                HStack(spacing: SL.Space.s2) {
-                    Text(lead ?? (day.isRest ? "Rest today." : "Recover well."))
-                        .slBody(SL.Weight.semibold)
-                        .foregroundStyle(lead == nil ? SL.Signal.recovery : SL.Ink.primary)
-                    Text(lead == nil
-                         ? "Next: \(workout.short) \(Agenda.when(next.date))"
-                         : "\(workout.short) · \(Agenda.when(next.date)) · \(WeekPlan.sets(of: workout)) sets")
-                        .slBody()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Spacer(minLength: 0)
-                    SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
-                }
-                .padding(.horizontal, SL.Space.s3)
-                .frame(minHeight: 48)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(SL.Surface.hairlineStrong.opacity(0.7), lineWidth: 1)
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(SLPressStyle())
+    /// One line, not a card: the lifts the engine says can go up today.
+    /// The reason to start, right above Start: a lime pill, not a grey
+    /// footnote — "↑ 7 lifts can go up today · Flat bench 102.5 kg".
+    private func readyLine(_ lifts: [ReadyLift]) -> some View {
+        HStack(spacing: SL.Space.s2) {
+            SLGlyph(name: .trendUp, size: 14, fixed: true)
+            (Text(lifts.count == 1 ? "1 lift can go up today" : "\(lifts.count) lifts can go up today")
+                .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+             + Text(" · \(lifts[0].name) \(app.display.kg(lifts[0].toKg))")
+                .font(.sl(SL.TypeSize.meta, SL.Weight.regular)))
+                .slNumerals()
+                .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
         }
+        .foregroundStyle(SL.Signal.action)
+        .padding(.horizontal, SL.Space.s3)
+        .padding(.vertical, SL.Space.s2)
+        .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Tally
@@ -757,86 +1003,12 @@ struct TrainingHomeView: View {
         return .ready
     }
 
+    /// Tally shows how the day feels, not how many: the dots and "n/g this
+    /// week" already count. Its three bars are the mark itself; the crossbar
+    /// strikes through only when the week is secured — the whole logo, earned.
     private func mascot(_ today: AgendaDay, _ streak: TrainingStreak) -> some View {
-        Button {
-            mascotTaps += 1
-            let lines = mascotLines(today, streak)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                mascotLine = lines[(mascotTaps - 1) % lines.count]
-            }
-            let shown = mascotLine
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(3.5))
-                if mascotLine == shown { withAnimation(.easeOut(duration: 0.2)) { mascotLine = nil } }
-            }
-        } label: {
-            TallyMascot(
-                done: streak.thisWeekDone,
-                goal: streak.thisWeekGoal,
-                mood: mascotMood(today, streak),
-                jumps: mascotTaps
-            )
-            .padding(SL.Space.s1)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.8), trigger: mascotTaps)
-        .accessibilityLabel("Tally, \(min(streak.thisWeekDone, streak.thisWeekGoal)) of \(streak.thisWeekGoal) workouts this week")
-        .accessibilityHint("Says how your week is going")
-    }
-
-    /// What Tally says, always from the account's own numbers. A tap moves
-    /// to the next line.
-    private func mascotLines(_ today: AgendaDay, _ streak: TrainingStreak) -> [String] {
-        let left = max(streak.thisWeekGoal - streak.thisWeekDone, 0)
-        let next = nextTraining(after: today.date).flatMap { day in day.plannedDay.map { "\($0.short) \(Agenda.when(day.date))" } }
-        switch mascotMood(today, streak) {
-        case .struck:
-            return [streak.weeks == 1 ? "Week struck. Your streak has started." : "Week struck. That's \(streak.weeks) in a row.",
-                    "Nothing left to prove this week. Rest well."]
-        case .proud:
-            return [left == 0 ? "Logged. That's the week." : left == 1 ? "Logged. One more strikes the week." : "Logged. \(left) to go this week.",
-                    "Good session. Eat, sleep, come back stronger."]
-        case .resting:
-            return ["Rest counts too. My bars need it.", next.map { "Next up: \($0)." } ?? "See you next session."]
-        case .focused:
-            let lifts = today.plannedDay.map { app.liftsReady(in: $0) } ?? []
-            return [lifts.count == 1 ? "\(lifts[0].name) can go up today." : "\(lifts.count) lifts can go up today. \(lifts.first?.name ?? "Bench") first?",
-                    left == 1 ? "One more and the week is struck." : "\(left) to go this week. Today's the next one."]
-        case .ready:
-            if streak.weeks == 0 {
-                return ["Every bar is a workout. Fill them all to start a streak.",
-                        left == 1 ? "One more and the week is struck." : "\(left) to go. Today's the next one."]
-            }
-            return [left == 1 ? "One more and the week is struck." : "\(left) to go this week. Today's the next one.",
-                    "Keep the \(streak.weeks)-week streak alive."]
-        }
-    }
-
-    @ViewBuilder
-    private var mascotBubble: some View {
-        if let mascotLine {
-            Text(mascotLine)
-                .slMeta(SL.Weight.medium)
-                .foregroundStyle(SL.Ink.primary)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, SL.Space.s3)
-                .padding(.vertical, SL.Space.s2)
-                .background(
-                    UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 4, style: .continuous)
-                        .fill(SL.Surface.raised2)
-                )
-                .overlay(
-                    UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 4, style: .continuous)
-                        .strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border)
-                )
-                .frame(maxWidth: 220, alignment: .trailing)
-                .offset(y: 44)
-                .transition(.scale(scale: 0.6, anchor: .topTrailing).combined(with: .opacity))
-                .allowsHitTesting(false)
-                .accessibilityAddTraits(.updatesFrequently)
-        }
+        TallyMascot(done: 3, goal: 3, mood: mascotMood(today, streak), unit: 9, jumps: celebrates)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Small motion
@@ -987,8 +1159,9 @@ struct TrainingHomeView: View {
             return Card(title: "Done", focus: session.dayLabel, meta: .init(text: doneLine(session)))
 
         case .rest:
-            var card = Card(title: "Rest", focus: "No training planned", isRest: true)
-            if let next = nextTraining(after: day.date), let workout = next.plannedDay {
+            var card = Card(title: "Rest", focus: "Recovery is part of the plan", isRest: true)
+            // Today's next session has its own card right below.
+            if !day.isToday, let next = nextTraining(after: day.date), let workout = next.plannedDay {
                 card.meta = .init(text: "\(Agenda.restLine(next: next)) · \(workout.short)")
             }
             return card
@@ -1009,7 +1182,7 @@ struct TrainingHomeView: View {
     private func nextTraining(after date: Date) -> AgendaDay? {
         Agenda.nextTraining(
             after: date,
-            plan: app.plan,
+            plan: app.schedulePlan,
             overrides: app.scheduleOverrides,
             sessions: app.sessions,
             deload: app.activeDeload
@@ -1033,7 +1206,7 @@ struct TrainingHomeView: View {
                     .buttonStyle(SLPrimaryButtonStyle())
             }
         } else if let session = day.session {
-            Button { openedSession = OpenedSession(id: session.id) } label: { chevroned("View results") }
+            Button { openedSession = OpenedSession(id: session.id) } label: { chevroned("View workout") }
                 .buttonStyle(SLOutlineButtonStyle())
         } else if day.isPast, let workout = day.plannedDay {
             // A day that has gone by with nothing logged. The work may well
@@ -1089,25 +1262,11 @@ struct TrainingHomeView: View {
 
     // MARK: - Opening a day
 
-    /// Added to the page's 16 between blocks.
-    private static let afterCard = SL.Space.s5
-    private static let betweenSections = SL.Space.s4
+    /// A day in the week opens that day — its results, its workout's
+    /// preview, or what a rest day can become. Today's card stays today's.
+    private func pick(_ day: AgendaDay) { open(day) }
 
-    /// A day in the card's week: the first tap shows it in the card, a
-    /// second opens it; today always brings the card back to today.
-    private func pick(_ day: AgendaDay) {
-        if day.isToday {
-            withAnimation(.easeOut(duration: SL.Motion.base)) { selectedDate = nil }
-        } else if isPicked(day) {
-            open(day)
-        } else {
-            withAnimation(.easeOut(duration: SL.Motion.base)) { selectedDate = day.date }
-        }
-    }
-
-    private func isPicked(_ day: AgendaDay) -> Bool {
-        selectedDate.map { Schedule.dateKey($0) == day.key } ?? day.isToday
-    }
+    private func isPicked(_ day: AgendaDay) -> Bool { day.isToday }
 
     /// Remembered for the agenda, so it opens where it was left.
     private func select(_ day: AgendaDay) {
@@ -1165,152 +1324,10 @@ struct TrainingHomeView: View {
         }
     }
 
-    // MARK: - Up next
-
-    /// What the week still holds after today: one slim row a day, the
-    /// agenda one tap away for the rest.
-    // MARK: - Up next
-
-    /// What is coming, as a row of cards rather than a list: the week marks
-    /// in the card say how the week went, these say what the next days hold.
-    /// A workout gets its symbol, its name and its size; a rest day folds to
-    /// a slim mint card, so the training days stand out at a glance.
-    private var upNext: some View {
-        let firstWorkout = upcoming.first { $0.plannedDay != nil }?.key
-        return VStack(alignment: .leading, spacing: SL.Space.s2) {
-            HStack(alignment: .center) {
-                SLOverline(text: "Up next")
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button { sheet = .agenda } label: {
-                    HStack(spacing: 4) {
-                        Text("Agenda").slMeta(SL.Weight.semibold)
-                        SLGlyph(name: .chevronRight, size: 12)
-                    }
-                    .foregroundStyle(SL.Ink.secondary)
-                    .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens planning and results")
-            }
-            .padding(.leading, SL.Space.s1)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: SL.Space.s2) {
-                    ForEach(upcoming) { day in
-                        if day.plannedDay != nil {
-                            upNextCard(day, isNext: day.key == firstWorkout)
-                        } else {
-                            restCard(day)
-                        }
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.viewAligned)
-            .contentMargins(.horizontal, SL.Space.gutterSession, for: .scrollContent)
-            .padding(.horizontal, -SL.Space.gutterSession)
-        }
-    }
-
     /// "Tomorrow", "Tue 13".
     private func whenLabel(_ day: AgendaDay) -> String {
         if Calendar.current.isDateInTomorrow(day.date) { return "Tomorrow" }
         return "\(String(WeekPlan.fullWeekday(day.date).prefix(3))) \(day.date.formatted(.dateTime.day()))"
-    }
-
-    private func upNextCard(_ day: AgendaDay, isNext: Bool) -> some View {
-        let workout = day.plannedDay!
-        return Button { open(day) } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    SLWorkoutSymbol(dayName: workout.short, size: 20)
-                        .foregroundStyle(isNext ? SL.Signal.onAction : SL.Signal.action)
-                        .frame(width: 40, height: 40)
-                        .background(
-                            RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                                .fill(isNext ? SL.Signal.action : SL.Signal.actionTint)
-                        )
-                    Spacer(minLength: SL.Space.s2)
-                    Text(whenLabel(day).uppercased())
-                        .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
-                        .tracking(0.8)
-                        .foregroundStyle(isNext ? SL.Signal.action : SL.Ink.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: SL.Space.s4)
-                Text(workout.short)
-                    .font(.sl(SL.TypeSize.title, SL.Weight.bold))
-                    .foregroundStyle(SL.Ink.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if !workout.focus.isEmpty {
-                    Text(Self.sentenceCase(workout.focus))
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .lineLimit(1)
-                        .padding(.top, 1)
-                }
-                HStack(spacing: SL.Space.s2) {
-                    Label("\(WeekPlan.sets(of: workout)) sets", systemImage: "square.stack.3d.up")
-                    Label("~\(WeekPlan.minutes(of: workout)) min", systemImage: "clock")
-                }
-                .labelStyle(CompactLabel())
-                .padding(.top, SL.Space.s3)
-            }
-            .padding(SL.Space.s4)
-            .frame(width: 172, height: 168, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                    .fill(SL.Surface.raised)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                    .strokeBorder(isNext ? SL.Signal.action.opacity(0.45) : SL.Surface.hairline, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(SLPressStyle(scale: 0.96))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(whenLabel(day)), \(workout.short), \(WeekPlan.sets(of: workout)) sets, about \(WeekPlan.minutes(of: workout)) minutes")
-        .accessibilityHint("Shows the exercises. Nothing starts.")
-    }
-
-    private func restCard(_ day: AgendaDay) -> some View {
-        Button { open(day) } label: {
-            VStack(spacing: SL.Space.s2) {
-                Text(whenLabel(day).uppercased())
-                    .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
-                    .tracking(0.8)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 0)
-                SLGlyph(name: .moon, size: 18, fixed: true)
-                    .foregroundStyle(SL.Signal.recovery)
-                Text("Rest")
-                    .slBody(SL.Weight.semibold)
-                    .foregroundStyle(SL.Signal.recovery)
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, SL.Space.s4)
-            .padding(.horizontal, SL.Space.s2)
-            .frame(width: 84, height: 168)
-            .background(
-                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                    .fill(SL.Signal.recoveryTint.opacity(0.5))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                    .strokeBorder(SL.Signal.recovery.opacity(0.2), lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(SLPressStyle(scale: 0.96))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(whenLabel(day)), rest day")
-        .accessibilityHint("Opens this day")
     }
 
     // MARK: - Offline

@@ -107,31 +107,13 @@ struct NextBadgeCard: View {
     /// Finishing today's workout wins it.
     let unlocks: Bool
     let onOpen: () -> Void
-    let onAll: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s3) {
-            HStack {
-                Text(unlocks ? "UNLOCKS TODAY" : "NEXT BADGE")
-                    .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
-                    .tracking(1)
-                    .foregroundStyle(unlocks ? SL.Signal.action : SL.Ink.secondary)
-                Spacer()
-                Button(action: onAll) {
-                    HStack(spacing: 4) {
-                        Text("All badges").slMeta(SL.Weight.semibold)
-                        SLGlyph(name: .chevronRight, size: 12)
-                    }
-                    .foregroundStyle(SL.Ink.secondary)
-                    .frame(minHeight: SL.Space.hitMin)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(SLPressStyle())
-            }
+        VStack(alignment: .leading, spacing: 0) {
             Button(action: onOpen) {
-                HStack(spacing: SL.Space.s4) {
-                    SLBadge(milestone: milestone, size: 58)
-                    VStack(alignment: .leading, spacing: SL.Space.s2) {
+                HStack(spacing: SL.Space.s3) {
+                    SLBadge(milestone: milestone, size: 44)
+                    VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(milestone.title)
                                 .slLead(SL.Weight.semibold)
@@ -145,7 +127,7 @@ struct NextBadgeCard: View {
                                 .foregroundStyle(SL.Ink.secondary)
                         }
                         SLBar(fraction: milestone.fraction, height: 5, fill: SL.Signal.action)
-                        Text(unlocks ? "Finish today's workout to win it" : milestone.howTo)
+                        Text(unlocks ? "Finish today's workout to win it" : nextStep)
                             .slMeta()
                             .foregroundStyle(SL.Ink.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -166,6 +148,21 @@ struct NextBadgeCard: View {
             RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
                 .strokeBorder(unlocks ? SL.Signal.action.opacity(0.35) : SL.Surface.hairline, lineWidth: SL.Metric.border)
         )
+    }
+
+    /// What is left, where the title already says the goal: "25 sessions"
+    /// needs "4 more workouts", not "Log 25 workouts". A rule the title can't
+    /// carry — weeks in a row, a band to stay in — is still explained.
+    private var nextStep: String {
+        let left = max(0, milestone.target - milestone.current)
+        let whole = Int(left.rounded(.up))
+        switch milestone.kind {
+        case .sessions: return whole == 1 ? "1 more workout" : "\(whole) more workouts"
+        case .heaviest: return "\(whole) kg to go, in any working set"
+        case .volume: return "\(String(format: "%.1f", left)) t to go"
+        case .logging: return whole == 1 ? "1 more day of logging" : "\(whole) more days of logging"
+        default: return milestone.howTo
+        }
     }
 
     private var progressLabel: String {
