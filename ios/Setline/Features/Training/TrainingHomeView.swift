@@ -25,6 +25,8 @@ struct TrainingHomeView: View {
     let onAccount: () -> Void
     /// Quick Progress's "See all": the Progress tab.
     var onProgress: () -> Void = {}
+    /// The alerts' "Log food": the Nutrition tab.
+    var onNutrition: () -> Void = {}
 
     @State private var confirmsEnd = false
     /// The plan shape, chosen from the workout chooser.
@@ -150,6 +152,12 @@ struct TrainingHomeView: View {
             case .alerts:
                 AlertCenterSheet(
                     onLogPast: { workout, date in after(closing: { onLogPast(workout, date) }) },
+                    onResume: {
+                        guard let paused = app.resumableSession, let day = app.day(for: paused) else { return }
+                        after(closing: { onResume(day, paused) })
+                    },
+                    onNutrition: { after(closing: onNutrition) },
+                    onProgress: { after(closing: onProgress) },
                     onClose: { sheet = nil }
                 )
             case .streak:
@@ -303,7 +311,8 @@ struct TrainingHomeView: View {
     /// unlogged on it. Amber, the app's colour for "this needs you", and only
     /// while there is something to answer.
     private var alertsBell: some View {
-        let count = app.missedDays.count
+        let count = Alerts.todos(app).count
+        let newWins = count == 0 && Alerts.hasNewWins(app)
         return Button { sheet = .alerts } label: {
             SLGlyph(name: .bell, size: 18, fixed: true)
                 .foregroundStyle(SL.Ink.primary)
@@ -318,6 +327,10 @@ struct TrainingHomeView: View {
                             .frame(minWidth: 18, minHeight: 18)
                             .background(Circle().fill(SL.Signal.attention))
                             .offset(x: 4, y: -4)
+                    } else if newWins {
+                        // Good news waiting: a lime dot, never a number.
+                        Circle().fill(SL.Signal.action).frame(width: 10, height: 10)
+                            .offset(x: 1, y: -1)
                     }
                 }
                 .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
@@ -325,8 +338,8 @@ struct TrainingHomeView: View {
         }
         .buttonStyle(.plain)
         .slFocusRing(Circle())
-        .accessibilityLabel(count == 0 ? "Alerts" : "Alerts, \(count) not logged")
-        .accessibilityHint("Shows workouts you haven't logged yet")
+        .accessibilityLabel(count == 0 ? (newWins ? "Alerts, new wins" : "Alerts") : "Alerts, \(count) to do")
+        .accessibilityHint("Things to do and this week's wins")
     }
 
     /// Every badge, earned or not, as Training and its sheets read them.

@@ -199,7 +199,8 @@ struct RootView: View {
                             running = RunningSession(day: programmed(day), snapshot: nil, loggingFor: date)
                         },
                         onAccount: { showsAccount = true },
-                        onProgress: { tab = .progressie }
+                        onProgress: { tab = .progressie },
+                        onNutrition: { tab = .voeding }
                     )
                 case .voeding:
                     NutritionHomeView(onAccount: { showsAccount = true })

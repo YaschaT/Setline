@@ -323,8 +323,8 @@ struct SLTabHeader<Trailing: View>: View {
             }
             .buttonStyle(SLPressStyle(scale: 0.92))
             .slFocusRing(Circle())
-            .accessibilityLabel("Account")
-            .accessibilityHint("Opens your account")
+            .accessibilityLabel("Profile and settings")
+            .accessibilityHint("Opens your profile and settings")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -342,7 +342,23 @@ struct SLTabHeader<Trailing: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: SL.Space.s1) { trailing }
+            HStack(spacing: SL.Space.s1) {
+                trailing
+                // Settings, where people look for them, on every tab.
+                Button(action: onAccount) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SL.Ink.primary)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(SL.Surface.raised))
+                        .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
+                .slFocusRing(Circle())
+                .accessibilityLabel("Settings")
+            }
         }
         .frame(height: SL.Metric.tabHeaderHeight)
     }

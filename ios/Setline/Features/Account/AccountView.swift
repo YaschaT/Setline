@@ -57,7 +57,7 @@ struct AccountView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // The same head, at the same place, as every other tab.
-                SLScreenTitle(title: "Account") {
+                SLScreenTitle(title: "Settings") {
                     if let onClose {
                         Button("Done", action: onClose)
                             .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
