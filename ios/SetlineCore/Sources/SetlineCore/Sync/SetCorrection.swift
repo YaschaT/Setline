@@ -114,6 +114,13 @@ public struct SetCorrection: Codable, Hashable, Sendable {
         } else {
             object.removeValue(forKey: "partialReps")
         }
+        // Reps per side that no longer match the corrected reps would say two
+        // different things about one set: the correction wins.
+        if let left = object["repsLeft"]?.intValue, let right = object["repsRight"]?.intValue,
+           min(left, right) != reps {
+            object.removeValue(forKey: "repsLeft")
+            object.removeValue(forKey: "repsRight")
+        }
         return object
     }
 }

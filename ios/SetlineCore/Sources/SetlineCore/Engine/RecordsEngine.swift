@@ -154,7 +154,14 @@ public enum RecordsEngine {
     /// though they stay out of progression (addendum 16R). Warm-ups never do.
     public static func volumeLoad(_ sets: [LoggedSet]) -> Decimal {
         sets.filter(\.countsTowardVolume)
-            .reduce(Decimal(0)) { $0 + ($1.weightKg ?? 0) * Decimal($1.reps) }
+            .reduce(Decimal(0)) { total, set in
+                // A drop set's lighter rounds are work done, so they count here
+                // — and only here.
+                // Sides that differ count as their average: equal sides are
+                // exactly the set's own reps, so nothing counts twice.
+                total + (set.weightKg ?? 0) * (set.sideReps.map { Decimal($0.left + $0.right) / 2 } ?? Decimal(set.reps))
+                    + set.drops.reduce(Decimal(0)) { $0 + $1.weightKg * Decimal($1.reps) }
+            }
     }
 
     /// Whether this specific set, at the moment it is written, is a load PR.

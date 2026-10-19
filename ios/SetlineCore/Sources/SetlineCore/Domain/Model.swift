@@ -137,6 +137,49 @@ public struct WorkoutDay: Codable, Hashable, Identifiable, Sendable {
 
 // MARK: - Logged data
 
+/// Which side a set of a one-sided exercise was done with, stored as the
+/// web app would read it: "L", "R" or "both".
+public enum SetSide: String, Codable, Hashable, Sendable, CaseIterable {
+    case left = "L"
+    case right = "R"
+    case both
+
+    public var label: String {
+        switch self {
+        case .left: return "L"
+        case .right: return "R"
+        case .both: return "Both"
+        }
+    }
+}
+
+/// Left and right reps of one two-sided set of a one-sided exercise.
+public struct SideReps: Codable, Hashable, Sendable {
+    public var left: Int
+    public var right: Int
+
+    public init(left: Int, right: Int) {
+        self.left = left
+        self.right = right
+    }
+
+    /// The weaker side: what the set counts as for progression and records.
+    public var weaker: Int { min(left, right) }
+    /// "L 8 · R 7"
+    public var label: String { "L \(left) · R \(right)" }
+}
+
+/// One lighter round of a drop set.
+public struct DropStep: Codable, Hashable, Sendable {
+    public var weightKg: Decimal
+    public var reps: Int
+
+    public init(weightKg: Decimal, reps: Int) {
+        self.weightKg = weightKg
+        self.reps = reps
+    }
+}
+
 public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var index: Int
@@ -177,6 +220,21 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
     /// counts toward volume, history and records like any working set, but
     /// never fills a prescribed slot when progression is judged.
     public var origin: SetOrigin
+    /// The side a set of a one-sided exercise was done with. `nil` on a
+    /// two-sided exercise, or where no side was said. `.both` is one set —
+    /// both sides done for the reps shown — and is never counted twice in
+    /// volume: the weight and reps are stored once, like any other set.
+    public var side: SetSide?
+    /// A drop set's lighter rounds, done straight after the set without rest:
+    /// "102,5 × 8, then 80 × 6". Part of this set, never sets of their own —
+    /// they add volume, and nothing else: progression, estimates and records
+    /// read the set's own weight and reps only.
+    public var drops: [DropStep]
+    /// Reps per side, when a one-sided exercise is done on both sides in one
+    /// set and the sides differ: "L 8 · R 7". `reps` is then the weaker
+    /// side — progression and records ask both sides to make the target —
+    /// and volume takes the average, so equal sides count exactly once.
+    public var sideReps: SideReps?
 
     public init(
         id: UUID = UUID(),
@@ -190,7 +248,10 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
         substitutedFrom: String? = nil,
         partialReps: Int? = nil,
         pausedReps: Int? = nil,
-        origin: SetOrigin = .prescribed
+        origin: SetOrigin = .prescribed,
+        side: SetSide? = nil,
+        drops: [DropStep] = [],
+        sideReps: SideReps? = nil
     ) {
         self.id = id
         self.index = index
@@ -204,11 +265,14 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
         self.partialReps = partialReps
         self.pausedReps = pausedReps
         self.origin = origin
+        self.side = side
+        self.drops = drops
+        self.sideReps = sideReps
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, index, weightKg, reps, rirReported, isWarmup, modifiers, flags
-        case substitutedFrom, partialReps, pausedReps, origin
+        case substitutedFrom, partialReps, pausedReps, origin, side, drops, sideReps
     }
 
     /// Tolerates sets saved before `origin` existed — every one of those was a
@@ -228,6 +292,9 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
         partialReps = try container.decodeIfPresent(Int.self, forKey: .partialReps)
         pausedReps = try container.decodeIfPresent(Int.self, forKey: .pausedReps)
         origin = try container.decodeIfPresent(SetOrigin.self, forKey: .origin) ?? .prescribed
+        side = try container.decodeIfPresent(SetSide.self, forKey: .side)
+        drops = try container.decodeIfPresent([DropStep].self, forKey: .drops) ?? []
+        sideReps = try container.decodeIfPresent(SideReps.self, forKey: .sideReps)
     }
 
     /// A set with weight and reps is a complete set. RIR is the optional

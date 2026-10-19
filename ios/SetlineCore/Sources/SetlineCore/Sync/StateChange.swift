@@ -32,6 +32,9 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case addProgramReplacement(ProgramReplacement)
         case removeProgramReplacement(id: String)
         case addCustomExercise(CustomExercise)
+        /// A workout put together by the lifter, added or changed by its id.
+        case upsertCustomWorkout(CustomWorkout)
+        case removeCustomWorkout(id: String)
         case hideWarmup(exerciseID: String)
         /// One exercise starred, or unstarred, in Progressie's picker (40b).
         case setFavoriteExercise(exerciseID: String, isFavorite: Bool)
@@ -94,12 +97,13 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
         case scheduleKey, dayID, entry, metric, field, value, mode, sciencePlanID, experience, plates, barKg, deload
-        case sessionID, corrections, isFavorite, removals
+        case sessionID, corrections, isFavorite, removals, workout
     }
 
     private enum KindName: String, Codable {
         case upsertSession, correctSessionSets, removeSessionSets, removeSession, setActiveSession, addPainFlag, removePainFlag
         case addProgramReplacement, removeProgramReplacement, addCustomExercise, hideWarmup
+        case upsertCustomWorkout, removeCustomWorkout
         case setFavoriteExercise
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry
         case upsertMetric, setTarget
@@ -137,6 +141,10 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             kind = .removeProgramReplacement(id: try container.decode(String.self, forKey: .targetID))
         case .addCustomExercise:
             kind = .addCustomExercise(try container.decode(CustomExercise.self, forKey: .exercise))
+        case .upsertCustomWorkout:
+            kind = .upsertCustomWorkout(try container.decode(CustomWorkout.self, forKey: .workout))
+        case .removeCustomWorkout:
+            kind = .removeCustomWorkout(id: try container.decode(String.self, forKey: .targetID))
         case .hideWarmup:
             kind = .hideWarmup(exerciseID: try container.decode(String.self, forKey: .exerciseID))
         case .setFavoriteExercise:
@@ -213,6 +221,12 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case .addCustomExercise(let exercise):
             try container.encode(KindName.addCustomExercise, forKey: .kind)
             try container.encode(exercise, forKey: .exercise)
+        case .upsertCustomWorkout(let workout):
+            try container.encode(KindName.upsertCustomWorkout, forKey: .kind)
+            try container.encode(workout, forKey: .workout)
+        case .removeCustomWorkout(let id):
+            try container.encode(KindName.removeCustomWorkout, forKey: .kind)
+            try container.encode(id, forKey: .targetID)
         case .hideWarmup(let exerciseID):
             try container.encode(KindName.hideWarmup, forKey: .kind)
             try container.encode(exerciseID, forKey: .exerciseID)

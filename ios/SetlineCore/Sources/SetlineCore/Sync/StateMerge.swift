@@ -27,7 +27,7 @@ public enum StateMerge {
     static let resultFields: Set<String> = ["exerciseId", "name", "sets"]
     static let setFields: Set<String> = [
         "weight", "reps", "pausedReps", "pauseSeconds", "pauseEnabled",
-        "rir", "isWarmup", "partialReps", "substitutedFrom", "origin",
+        "rir", "isWarmup", "partialReps", "substitutedFrom", "origin", "side", "failed", "drops", "repsLeft", "repsRight",
     ]
     /// Counts derived from a session's results. They stop describing the
     /// session once it holds results iOS did not write.
@@ -91,6 +91,20 @@ public enum StateMerge {
         case .addCustomExercise(let exercise):
             updateList(&raw, key: LegacyAdapter.customExercisesKey, as: CustomExercise.self) { list in
                 if !list.contains(where: { $0.id == exercise.id }) { list.append(exercise) }
+            }
+
+        case .upsertCustomWorkout(let workout):
+            updateList(&raw, key: LegacyAdapter.customWorkoutsKey, as: CustomWorkout.self) { list in
+                if let index = list.firstIndex(where: { $0.id == workout.id }) {
+                    list[index] = workout
+                } else {
+                    list.append(workout)
+                }
+            }
+
+        case .removeCustomWorkout(let id):
+            updateList(&raw, key: LegacyAdapter.customWorkoutsKey, as: CustomWorkout.self) { list in
+                list.removeAll { $0.id == id }
             }
 
         case .hideWarmup(let exerciseID):

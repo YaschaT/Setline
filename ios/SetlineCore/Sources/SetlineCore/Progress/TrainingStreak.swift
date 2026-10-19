@@ -40,6 +40,26 @@ public struct TrainingStreak: Equatable, Sendable {
     /// Weeks a freeze needs between uses.
     public static let freezeEvery = 4
 
+    /// How the running week stands against the streak, given how many days
+    /// are still open for a workout (today counts while nothing is logged).
+    public enum Risk: Equatable, Sendable {
+        /// Met, no streak to lose, or room to spare.
+        case none
+        /// Every day left needs a workout.
+        case tight
+        /// The week can no longer be met; the freeze will forgive it.
+        case freezeCovers
+        /// The week can no longer be met, and the streak ends with it.
+        case breaks
+    }
+
+    public func risk(daysLeft: Int) -> Risk {
+        guard weeks > 0, !thisWeekMet else { return .none }
+        let left = thisWeekGoal - thisWeekDone
+        if left > daysLeft { return freezeAvailable ? .freezeCovers : .breaks }
+        return left == daysLeft ? .tight : .none
+    }
+
     /// The streak over a run of finished weeks, oldest first: where it stands
     /// after the last one, the best it reached, and how the freeze stands.
     static func run(_ met: [Bool]) -> (streak: Int, best: Int, sinceFreeze: Int, lastFrozen: Bool) {

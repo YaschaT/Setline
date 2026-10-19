@@ -303,7 +303,16 @@ public enum ProgressOverview {
     /// history before it, its first session inside the window, so a young
     /// account still sees where it is going. A lift trained once and never
     /// before has nothing to compare and takes no part.
-    public static func progressByDay(in sessions: [TrainingSession], since: Date) -> [DayProgress] {
+    ///
+    /// `counts` picks the lifts the day's headline percent and its line are
+    /// made of — the main lifts, so a machine fly's big kilos don't speak for
+    /// the day. A day with none of them falls back to all its lifts. Every
+    /// lift is still listed in `lifts`.
+    public static func progressByDay(
+        in sessions: [TrainingSession],
+        since: Date,
+        counts: ((String) -> Bool)? = nil
+    ) -> [DayProgress] {
         struct Scored {
             let estimate: Decimal
             let execution: SetExecution
@@ -349,7 +358,7 @@ public enum ProgressOverview {
                 }
             }
 
-            var percents: [Decimal] = []
+            var percents: [String: Decimal] = [:]
             var leader: DayProgress.Leader?
             // Per lift, what it is measured from and how it was performed.
             var references: [String: Scored] = [:]
@@ -393,14 +402,19 @@ public enum ProgressOverview {
                     continue
                 }
                 references[id] = Scored(estimate: baseline, execution: best.execution)
-                percents.append((current - baseline) / baseline * 100)
+                percents[id] = (current - baseline) / baseline * 100
                 let delta = Estimates.round(current - baseline, toIncrement: 0.5)
                 keep(delta)
                 if delta > 0, delta > (leader?.deltaKg ?? 0) {
                     leader = .init(exerciseID: id, name: lift.name, deltaKg: delta)
                 }
             }
-            let mean = percents.isEmpty ? nil : percents.reduce(0, +) / Decimal(percents.count)
+            // The lifts that speak for the day: the main ones where there are any.
+            let main = counts.map { keep in Set(percents.keys.filter(keep)) } ?? []
+            let speaking = main.isEmpty ? Set(percents.keys) : main
+            references = references.filter { speaking.contains($0.key) }
+            let pool = percents.filter { speaking.contains($0.key) }.map(\.value)
+            let mean = pool.isEmpty ? nil : pool.reduce(0, +) / Decimal(pool.count)
             let strengthSeries: [(date: Date, value: Decimal)] = {
                     var bestSoFar: [String: Decimal] = [:]
                     return days.compactMap { session -> (date: Date, value: Decimal)? in

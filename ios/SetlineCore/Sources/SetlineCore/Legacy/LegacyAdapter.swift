@@ -128,7 +128,7 @@ public enum LegacyAdapter {
             rirReported: object["rir"]?.intValue,
             isWarmup: object["isWarmup"]?.boolValue ?? false,
             modifiers: modifiers,
-            flags: [],
+            flags: object["failed"]?.boolValue == true ? [.failed] : [],
             substitutedFrom: object["substitutedFrom"]?.stringValue,
             partialReps: object["partialReps"]?.intValue,
             // The count is kept exactly as stored, because both clients read
@@ -136,7 +136,19 @@ public enum LegacyAdapter {
             // Whether a set is *mixed* is a reading of that number, not a
             // rewriting of it: see `countsTowardProgression`.
             pausedReps: pausedReps > 0 ? pausedReps : nil,
-            origin: origin
+            origin: origin,
+            side: object["side"]?.stringValue.flatMap(SetSide.init(rawValue:)),
+            drops: (object["drops"]?.arrayValue ?? []).compactMap { value -> DropStep? in
+                guard let drop = value.objectValue,
+                      let weight = drop["weight"]?.decimalValue, weight > 0,
+                      let reps = drop["reps"]?.intValue, reps > 0 else { return nil }
+                return DropStep(weightKg: weight, reps: reps)
+            },
+            sideReps: {
+                guard let left = object["repsLeft"]?.intValue, let right = object["repsRight"]?.intValue,
+                      left > 0, right > 0 else { return nil }
+                return SideReps(left: left, right: right)
+            }()
         )
     }
 
@@ -356,6 +368,12 @@ public enum LegacyAdapter {
     public static let favoriteExercisesKey = "iosFavoriteExercises"
     public static let replacementsKey = "iosProgramReplacements"
     public static let customExercisesKey = "iosCustomExercises"
+    public static let customWorkoutsKey = "iosCustomWorkouts"
+
+    /// The lifter's own workouts, oldest first.
+    public static func customWorkouts(from state: LegacyState) -> [CustomWorkout] {
+        decodeList(state[customWorkoutsKey]) ?? []
+    }
 
     /// The exercises this account starred in Progressie's picker (40b).
     public static func favoriteExercises(from state: LegacyState) -> Set<String> {
@@ -501,6 +519,19 @@ extension JSONValue {
         // Written only for added sets, so a prescribed set keeps the web app's
         // exact shape.
         if set.origin == .sessionAdded { object["origin"] = .string(SetOrigin.sessionAdded.rawValue) }
+        if let side = set.side { object["side"] = .string(side.rawValue) }
+        // Failed was kept on the phone only and lost on save; it is a fact
+        // about the set, so it is stored with it now.
+        if set.flags.contains(.failed) { object["failed"] = .bool(true) }
+        if let sides = set.sideReps {
+            object["repsLeft"] = .string("\(sides.left)")
+            object["repsRight"] = .string("\(sides.right)")
+        }
+        if !set.drops.isEmpty {
+            object["drops"] = .array(set.drops.map { drop in
+                .object(["weight": .string("\(drop.weightKg)"), "reps": .string("\(drop.reps)")])
+            })
+        }
         self = .object(object)
     }
 }

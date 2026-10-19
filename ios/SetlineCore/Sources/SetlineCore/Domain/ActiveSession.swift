@@ -31,6 +31,32 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
     /// a session paused between rests, and in snapshots written before rests
     /// were kept.
     public var rest: PausedRest?
+    /// Set when the workout was saved while still open — the app left the
+    /// foreground mid-workout, or a set was just logged — rather than paused
+    /// by hand. Time away then still counts as training (a locked phone
+    /// between sets is a workout, not a pause), and a relaunch reopens the
+    /// workout instead of parking it on the home screen. `nil` for a pause.
+    public var runningSince: Date?
+
+    /// The longest stretch away that is still taken as training time; longer,
+    /// and the clock stops where the workout was left.
+    public static let maxAwaySeconds = 2 * 60 * 60
+
+    /// Active seconds on reopening: what was banked, plus the time away when
+    /// the workout was left running — capped, so a workout forgotten for a
+    /// day never claims a day of training.
+    public func activeSeconds(resumingAt now: Date) -> Int {
+        guard let runningSince else { return activeSeconds }
+        let away = max(0, Int(now.timeIntervalSince(runningSince)))
+        return activeSeconds + min(away, Self.maxAwaySeconds)
+    }
+
+    /// Left open (not paused) recently enough that reopening it is what the
+    /// lifter expects.
+    public func reopensOnLaunch(at now: Date) -> Bool {
+        guard let runningSince else { return false }
+        return now.timeIntervalSince(runningSince) < Double(Self.maxAwaySeconds)
+    }
 
     /// A rest timer as it stood at the pause: its absolute start, its target
     /// and any ± adjustment, and the label it was started with.
@@ -60,7 +86,8 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         proposedReps: [String: Int] = [:],
         activeSeconds: Int = 0,
         slots: [SessionSlot]? = nil,
-        rest: PausedRest? = nil
+        rest: PausedRest? = nil,
+        runningSince: Date? = nil
     ) {
         self.dayID = dayID
         self.dayLabel = dayLabel
@@ -71,10 +98,11 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         self.activeSeconds = max(0, activeSeconds)
         self.slots = slots
         self.rest = rest
+        self.runningSince = runningSince
     }
 
     private enum CodingKeys: String, CodingKey {
-        case dayID, dayLabel, startedAt, currentIndex, results, proposedReps, activeSeconds, slots, rest
+        case dayID, dayLabel, startedAt, currentIndex, results, proposedReps, activeSeconds, slots, rest, runningSince
     }
 
     /// Tolerates a snapshot written before duration, slots or rests were kept.
@@ -89,6 +117,7 @@ public struct ActiveSessionSnapshot: Codable, Hashable, Sendable {
         activeSeconds = try container.decodeIfPresent(Int.self, forKey: .activeSeconds) ?? 0
         slots = try container.decodeIfPresent([SessionSlot].self, forKey: .slots)
         rest = try container.decodeIfPresent(PausedRest.self, forKey: .rest)
+        runningSince = try container.decodeIfPresent(Date.self, forKey: .runningSince)
     }
 
     /// The rest a resumed session takes back. Rest is wall-clock time — it

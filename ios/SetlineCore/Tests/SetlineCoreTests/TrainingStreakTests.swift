@@ -102,3 +102,20 @@ final class StreakFreezeTests: XCTestCase {
         XCTAssertFalse(TrainingStreak.run([false]).lastFrozen)
     }
 }
+
+final class StreakRiskTests: XCTestCase {
+    func testRoomToSpareIsNoRisk() {
+        XCTAssertEqual(TrainingStreak(weeks: 4, thisWeekDone: 1, thisWeekGoal: 3).risk(daysLeft: 4), .none)
+    }
+    func testEveryDayLeftNeededIsTight() {
+        XCTAssertEqual(TrainingStreak(weeks: 4, thisWeekDone: 1, thisWeekGoal: 3).risk(daysLeft: 2), .tight)
+    }
+    func testOutOfDaysUsesTheFreezeOrBreaks() {
+        XCTAssertEqual(TrainingStreak(weeks: 4, thisWeekDone: 0, thisWeekGoal: 5).risk(daysLeft: 3), .freezeCovers)
+        XCTAssertEqual(TrainingStreak(weeks: 4, thisWeekDone: 0, thisWeekGoal: 5, freezeAvailable: false).risk(daysLeft: 3), .breaks)
+    }
+    func testNothingToLoseOrAlreadyMetIsNoRisk() {
+        XCTAssertEqual(TrainingStreak(weeks: 0, thisWeekDone: 0, thisWeekGoal: 5).risk(daysLeft: 1), .none)
+        XCTAssertEqual(TrainingStreak(weeks: 3, thisWeekDone: 3, thisWeekGoal: 3).risk(daysLeft: 0), .none)
+    }
+}
