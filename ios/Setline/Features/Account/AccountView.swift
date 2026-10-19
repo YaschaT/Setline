@@ -43,6 +43,7 @@ struct AccountView: View {
     @State private var confirmsResetWorkouts = false
     @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
     @AppStorage(WorkoutReminder.minutesKey) private var openWorkoutMinutes = 20
+    @State private var managingWorkouts = false
     @AppStorage(SLSound.preferenceKey) private var soundsOn = true
     @AppStorage(AppLock.preferenceKey) private var appLock = false
     @State private var showsPolicy = false
@@ -128,6 +129,19 @@ struct AccountView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Turn them on in Settings › Setline › Notifications, then switch meal reminders on here.")
+        }
+        .sheet(isPresented: $managingWorkouts) {
+            WorkoutChooserSheet(
+                onStart: nil,
+                onChangePlan: {
+                    managingWorkouts = false
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        choosingProgram = true
+                    }
+                },
+                onClose: { managingWorkouts = false }
+            )
         }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })
@@ -370,6 +384,7 @@ struct AccountView: View {
     private var planRows: some View {
         VStack(spacing: 0) {
             row("Plan", value: summary.planName) { choosingProgram = true }
+            row("Your workouts", value: app.customWorkouts.isEmpty ? "Create one" : "\(app.customWorkouts.count)") { managingWorkouts = true }
             if !summary.trainingDays.isEmpty {
                 row("Training days", value: summary.trainingDays.joined(separator: " ")) { planningWeek = true }
             }

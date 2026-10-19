@@ -1,56 +1,48 @@
 import SwiftUI
 import SetlineCore
 
-/// "Choose a workout": any day of the plan, a workout of your own, a new one,
-/// or a different plan shape — one sheet, reached from Training. Starting
-/// from here logs the workout on today like any other.
+/// "Plan & workouts": the one place to build workouts of your own, change
+/// the plan, and start any of them. Reached from Training (the plan card's
+/// row and "or choose a different workout") and from Account › Plan.
+/// Without `onStart` (from Account) nothing starts here: it is for building.
 struct WorkoutChooserSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dynamicTypeSize) private var typeSize
-    let onStart: (WorkoutDay) -> Void
+    var onStart: ((WorkoutDay) -> Void)?
     let onChangePlan: () -> Void
     let onClose: () -> Void
 
     /// A paused workout is finished or ended before another starts, so its
     /// sets are never overwritten.
     private var blocked: Bool { app.resumableSession != nil }
+    private var canStart: Bool { onStart != nil && !blocked }
 
     @State private var editing: CustomWorkout?
     @State private var creating = false
 
     var body: some View {
-        SLSheet(title: "Choose a workout", subtitle: "Today's plan, another day, or your own", onClose: onClose) {
+        SLSheet(title: "Plan & workouts",
+                subtitle: onStart == nil ? "Build your own workouts or change your plan" : "Start any workout, build your own, or change your plan",
+                onClose: onClose) {
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                if blocked {
+                if blocked, onStart != nil {
                     Text("You have a paused workout. Resume or end it on Training before starting another.")
                         .slMeta()
                         .foregroundStyle(SL.Signal.attention)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                group("Your plan") {
-                    ForEach(app.plan) { day in
-                        row(symbol: { SLWorkoutSymbol(dayName: day.short, size: 18) },
-                            title: day.short,
-                            detail: detail(day),
-                            isToday: day.id == app.todayDay?.id) { onStart(day) }
-                    }
-                }
 
-                group("Your workouts") {
-                    ForEach(app.customWorkouts) { workout in
-                        row(symbol: { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 16, weight: .semibold)) },
-                            title: workout.name,
-                            detail: detail(workout.workoutDay),
-                            isToday: false,
-                            onEdit: { editing = workout }) { onStart(workout.workoutDay) }
-                    }
+                // Your own first: it is what this sheet is opened to build.
+                group("Your workouts", note: app.customWorkouts.isEmpty
+                      ? "Pick exercises and sets once; start it any time, or put it on a day in the Agenda."
+                      : "Put one on a day: open that day in the Agenda.") {
                     Button { creating = true } label: {
                         HStack(spacing: SL.Space.s3) {
                             Image(systemName: "plus")
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(SL.Signal.action)
+                                .foregroundStyle(SL.Signal.onAction)
                                 .frame(width: 40, height: 40)
-                                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
+                                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.action))
                             Text("Create a workout").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
                             Spacer()
                         }
@@ -59,15 +51,24 @@ struct WorkoutChooserSheet: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(SLRowButtonStyle())
+                    ForEach(app.customWorkouts) { workout in
+                        row(symbol: { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 16, weight: .semibold)) },
+                            title: workout.name,
+                            detail: detail(workout.workoutDay),
+                            isToday: false,
+                            onEdit: { editing = workout }) {
+                            if canStart { onStart?(workout.workoutDay) } else { editing = workout }
+                        }
+                    }
                 }
 
-                group("Plan shape") {
+                group("Your plan", trailing: ("Change", onChangePlan)) {
                     Button(action: onChangePlan) {
                         HStack(spacing: SL.Space.s3) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(ProgramCatalog.current(in: app.state ?? LegacyState(raw: [:]), plan: app.plan).name)
                                     .slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
-                                Text("Change how your week is built").slMeta().foregroundStyle(SL.Ink.secondary)
+                                Text("Plan shape · how your week is built").slMeta().foregroundStyle(SL.Ink.secondary)
                             }
                             Spacer()
                             SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
@@ -77,6 +78,14 @@ struct WorkoutChooserSheet: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(SLRowButtonStyle())
+                    if onStart != nil {
+                        ForEach(app.plan) { day in
+                            row(symbol: { SLWorkoutSymbol(dayName: day.short, size: 18) },
+                                title: day.short,
+                                detail: detail(day),
+                                isToday: day.id == app.todayDay?.id) { onStart?(day) }
+                        }
+                    }
                 }
             }
             .padding(.top, SL.Space.s2)
@@ -86,7 +95,7 @@ struct WorkoutChooserSheet: View {
                 creating = false
                 Task {
                     await app.saveCustomWorkout(saved)
-                    if start, !blocked { onStart(saved.workoutDay) }
+                    if start, canStart { onStart?(saved.workoutDay) }
                 }
             }, onDelete: nil, onClose: { creating = false })
         }
@@ -95,7 +104,7 @@ struct WorkoutChooserSheet: View {
                 editing = nil
                 Task {
                     await app.saveCustomWorkout(saved)
-                    if start, !blocked { onStart(saved.workoutDay) }
+                    if start, canStart { onStart?(saved.workoutDay) }
                 }
             }, onDelete: {
                 editing = nil
@@ -109,12 +118,28 @@ struct WorkoutChooserSheet: View {
         return "\(count) · \(WeekPlan.sets(of: day)) sets · ~\(WeekPlan.minutes(of: day)) min"
     }
 
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func group<Content: View>(_ title: String, note: String? = nil, trailing: (String, () -> Void)? = nil,
+                                      @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
-            SLOverline(text: title).padding(.leading, SL.Space.s1).accessibilityAddTraits(.isHeader)
+            HStack(alignment: .firstTextBaseline) {
+                SLOverline(text: title).accessibilityAddTraits(.isHeader)
+                Spacer()
+                if let trailing {
+                    Button(trailing.0, action: trailing.1)
+                        .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(minHeight: SL.Space.hitMin)
+                }
+            }
+            .padding(.leading, SL.Space.s1)
             VStack(spacing: 0) { content() }
                 .slBorderBox()
                 .slListCard()
+            if let note {
+                Text(note).slMeta().foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, SL.Space.s1)
+            }
         }
     }
 
@@ -138,8 +163,10 @@ struct WorkoutChooserSheet: View {
                             .lineLimit(typeSize.isAccessibilitySize ? 3 : 1).minimumScaleFactor(0.85)
                     }
                     Spacer(minLength: SL.Space.s2)
-                    Image(systemName: "play.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(SL.Ink.secondary)
-                        .opacity(blocked ? 0.3 : 1)
+                    if onStart != nil {
+                        Image(systemName: "play.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(SL.Ink.secondary)
+                            .opacity(blocked ? 0.3 : 1)
+                    }
                 }
                 .padding(.leading, SL.Space.s4)
                 .padding(.trailing, onEdit == nil ? SL.Space.s4 : SL.Space.s2)
@@ -147,8 +174,8 @@ struct WorkoutChooserSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(SLRowButtonStyle())
-            .disabled(blocked)
-            .accessibilityLabel("Start \(title). \(detail)")
+            .disabled(blocked && onEdit == nil)
+            .accessibilityLabel(onStart == nil ? "\(title). \(detail)" : "Start \(title). \(detail)")
             if let onEdit {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")

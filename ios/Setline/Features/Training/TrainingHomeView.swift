@@ -442,6 +442,8 @@ struct TrainingHomeView: View {
                 nextSessionRow(next)
                 SLHairline().padding(.leading, SL.Space.s4 + 44 + SL.Space.s3)
             }
+            plansRow
+            SLHairline().padding(.leading, SL.Space.s4 + 44 + SL.Space.s3)
             allWorkoutsRow
         }
         .background(
@@ -494,6 +496,31 @@ struct TrainingHomeView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Next session: \(workout.short), \(whenLabel(day)), \(WeekPlan.sets(of: workout)) sets, about \(WeekPlan.minutes(of: workout)) minutes")
         .accessibilityHint("Shows the exercises. Nothing starts.")
+    }
+
+    /// The way to your own workouts and your plan, named for what it is.
+    private var plansRow: some View {
+        let own = app.customWorkouts.count
+        return Button { sheet = .chooser } label: {
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SL.Ink.secondary)
+                    .frame(width: 44)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Plan & workouts").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                    Text(own == 0 ? "Create your own workout" : own == 1 ? "1 of your own" : "\(own) of your own")
+                        .slMeta().foregroundStyle(SL.Ink.secondary)
+                }
+                Spacer(minLength: SL.Space.s2)
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .frame(minHeight: 60)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityHint("Build your own workouts, change your plan, or start any workout")
     }
 
     /// Every logged workout: the card's quiet second row.
