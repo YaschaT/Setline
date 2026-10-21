@@ -14,7 +14,7 @@ final class WeightGoalTests: XCTestCase {
 
     func testTooEarlyWithFewWeighIns() {
         let check = GoalCheck.evaluate(goal: .leanBulk, weighIns: [(day(-2), 80), (day(0), 80.1)], now: now)
-        XCTAssertEqual(check.verdict, .tooEarly(weighInsNeeded: 2, daysNeeded: 8))
+        XCTAssertEqual(check.verdict, .tooEarly(weighInsNeeded: 2, daysNeeded: 12))
         XCTAssertNil(check.weeklyKg)
     }
 
@@ -49,6 +49,31 @@ final class WeightGoalTests: XCTestCase {
         var weighIns = series(from: 80, perWeek: 0.15)
         weighIns[weighIns.count / 2].kg += 1.5
         XCTAssertEqual(GoalCheck.evaluate(goal: .leanBulk, weighIns: weighIns, now: now).verdict, .onTrack)
+    }
+
+    /// Four scattered weigh-ins whose line reads +0.6 kg a week on a bulk
+    /// (goal +0.2 … +0.4): over the range, but by less than mornings swing.
+    func testSparseNoisyWeighInsAreUnclearNotTooFast() {
+        let weighIns = [(day(-14), 80.0), (day(-10), 81.0), (day(-5), 80.4), (day(0), 81.6)]
+        let check = GoalCheck.evaluate(goal: .bulk, weighIns: weighIns, now: now)
+        XCTAssertEqual(check.verdict, .unclear)
+        XCTAssertEqual(check.weeklyKg ?? 0, 0.62, accuracy: 0.01)
+        XCTAssertNil(check.dailyKcalAdjustment)
+        XCTAssertFalse(check.isOffTrack)
+    }
+
+    /// The same pace, weighed every other day without the scatter, is
+    /// clearly too fast.
+    func testSteadyWeighInsAtTheSamePaceAreTooFast() {
+        let check = GoalCheck.evaluate(goal: .bulk, weighIns: series(from: 80, perWeek: 0.62), now: now)
+        XCTAssertEqual(check.verdict, .tooFast)
+    }
+
+    /// A goal set five days ago: the weigh-ins before it and its first week
+    /// don't count, so it waits two more days, then two weeks.
+    func testWeighInsBeforeTheGoalAndItsFirstWeekDoNotCount() {
+        let check = GoalCheck.evaluate(goal: .bulk, weighIns: series(from: 80, perWeek: 1.0), startedAt: day(-5), now: now)
+        XCTAssertEqual(check.verdict, .tooEarly(weighInsNeeded: 4, daysNeeded: 16))
     }
 
     func testMealWindowsRemindOnlyForWhatIsNotLogged() {

@@ -63,6 +63,9 @@ public struct GoalCheck: Equatable, Sendable {
         case tooFast
         /// Moving the wrong way.
         case wrongWay
+        /// Outside the goal's range, but by less than the weigh-ins swing
+        /// from day to day: it could still be water. No advice yet.
+        case unclear
     }
 
     public let goal: WeightGoal
@@ -88,27 +91,51 @@ public struct GoalCheck: Equatable, Sendable {
     public static let kcalPerKg = 7_700.0
     /// The trend is read over the last three weeks of weigh-ins.
     public static let window = 21
-    /// At least this many weigh-ins, spread over at least this many days.
+    /// At least this many weigh-ins, spread over at least two weeks, so a
+    /// weekend's food and salt is in the line twice rather than once.
     public static let minimumWeighIns = 4
-    public static let minimumDays = 10
+    public static let minimumDays = 14
+    /// The first week of a new goal is mostly water and glycogen — up a
+    /// kilo or more when the food goes up, down as much on a cut — so it
+    /// is left out of the trend. Weigh-ins from before the goal belong to
+    /// the old diet and are left out too.
+    public static let settlingDays = 7
+    /// How much one morning's weight wanders around its trend before the
+    /// weigh-ins say otherwise: about 0.6 % of body weight (water, salt,
+    /// glycogen, what is still being digested), counted as two weigh-ins'
+    /// worth of evidence. With few weigh-ins this keeps the line honest;
+    /// with many, their own scatter decides.
+    public static let typicalSwing = 0.006
+    static let swingWeight = 2.0
+    /// How sure the trend must be before it is called off track: the gap
+    /// to the range has to be at least one standard error (about 84 %
+    /// confident that the real pace is outside it).
+    static let confidence = 1.0
 
     /// Reads the trend from weigh-ins (date, kilos) with a least-squares
-    /// line over the last three weeks — one heavy morning doesn't move it.
+    /// line over the last three weeks — one heavy morning doesn't move it —
+    /// and only calls it off track when it is off by more than the
+    /// weigh-ins' own uncertainty. `startedAt` is when the goal was set.
     public static func evaluate(
         goal: WeightGoal,
         weighIns: [(date: Date, kg: Double)],
+        startedAt: Date? = nil,
         now: Date = Date()
     ) -> GoalCheck {
-        let since = now.addingTimeInterval(-Double(window) * 86_400)
+        let settled = startedAt.map { $0.addingTimeInterval(Double(settlingDays) * 86_400) } ?? .distantPast
+        let since = max(now.addingTimeInterval(-Double(window) * 86_400), settled)
         let recent = weighIns.filter { $0.date >= since && $0.date <= now }.sorted { $0.date < $1.date }
         let latest = recent.last?.kg ?? weighIns.max { $0.date < $1.date }?.kg ?? 0
         let target = (goal.weeklyRange.lowerBound * latest)...(goal.weeklyRange.upperBound * latest)
 
         let span = recent.count >= 2 ? Int(((recent.last!.date.timeIntervalSince(recent.first!.date)) / 86_400).rounded()) : 0
         guard recent.count >= minimumWeighIns, span >= minimumDays, latest > 0 else {
+            // Still settling: the days left of the first week come first.
+            let settling = max(0, Int((settled.timeIntervalSince(now) / 86_400).rounded(.up)))
             return GoalCheck(
                 goal: goal,
-                verdict: .tooEarly(weighInsNeeded: max(0, minimumWeighIns - recent.count), daysNeeded: max(0, minimumDays - span)),
+                verdict: .tooEarly(weighInsNeeded: max(0, minimumWeighIns - recent.count),
+                                   daysNeeded: settling + max(0, minimumDays - span)),
                 weeklyKg: nil, targetKg: target, dailyKcalAdjustment: nil, days: span
             )
         }
@@ -120,11 +147,24 @@ public struct GoalCheck: Equatable, Sendable {
         let mx = xs.reduce(0, +) / Double(xs.count), my = ys.reduce(0, +) / Double(ys.count)
         let sxx = zip(xs, xs).map { ($0 - mx) * ($1 - mx) }.reduce(0, +)
         let sxy = zip(xs, ys).map { ($0 - mx) * ($1 - my) }.reduce(0, +)
-        let weekly = sxx > 0 ? sxy / sxx * 7 : 0
+        let slope = sxx > 0 ? sxy / sxx : 0
+        let weekly = slope * 7
+
+        // Its standard error, from the scatter around the line pooled with
+        // the typical day-to-day swing.
+        let residuals = zip(xs, ys).map { x, y in y - (my + slope * (x - mx)) }
+        let swing = typicalSwing * latest
+        let variance = (residuals.map { $0 * $0 }.reduce(0, +) + swingWeight * swing * swing)
+            / (Double(recent.count) - 2 + swingWeight)
+        let weeklyError = sxx > 0 ? (variance / sxx).squareRoot() * 7 : .infinity
+        let gap = weekly < target.lowerBound ? target.lowerBound - weekly
+            : weekly > target.upperBound ? weekly - target.upperBound : 0
 
         let verdict: Verdict
         if target.contains(weekly) {
             verdict = .onTrack
+        } else if gap < confidence * weeklyError {
+            verdict = .unclear
         } else {
             let wantsGain = target.lowerBound > 0, wantsLoss = target.upperBound < 0
             if (wantsGain && weekly < 0) || (wantsLoss && weekly > 0) {
@@ -138,7 +178,7 @@ public struct GoalCheck: Equatable, Sendable {
         }
 
         var adjustment: Int?
-        if verdict != .onTrack {
+        if verdict != .onTrack, verdict != .unclear {
             let middle = (target.lowerBound + target.upperBound) / 2
             let kcal = (middle - weekly) * kcalPerKg / 7
             adjustment = Int((kcal / 50).rounded()) * 50

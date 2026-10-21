@@ -179,7 +179,8 @@ struct NutritionHomeView: View {
     @ViewBuilder
     private var goalNudge: some View {
         if let goal = GoalPreference.goal {
-            let check = GoalCheck.evaluate(goal: goal, weighIns: GoalCheck.weighIns(BodyProgress.make(metrics: app.metrics)))
+            let check = GoalCheck.evaluate(goal: goal, weighIns: GoalCheck.weighIns(BodyProgress.make(metrics: app.metrics)),
+                                           startedAt: GoalPreference.since)
             if check.isOffTrack {
                 GoalCheckCard(check: check, weeksOnTrack: 0)
             }

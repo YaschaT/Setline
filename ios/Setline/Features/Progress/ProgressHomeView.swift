@@ -492,7 +492,7 @@ struct ProgressHomeView: View {
     private var goalBlock: some View {
         if let goal {
             let weighIns = GoalCheck.weighIns(bodyProgress)
-            let check = GoalCheck.evaluate(goal: goal, weighIns: weighIns)
+            let check = GoalCheck.evaluate(goal: goal, weighIns: weighIns, startedAt: GoalPreference.since)
             let weeks = GoalCheck.weeksOnTrack(goal: goal, weighIns: weighIns)
             if !check.needsAction {
                 goalLine(check, weeksOnTrack: weeks)

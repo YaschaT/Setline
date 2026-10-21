@@ -51,7 +51,7 @@ extension GoalCheck {
     /// Off track: there is something to change.
     var needsAction: Bool {
         switch verdict {
-        case .onTrack, .tooEarly: return false
+        case .onTrack, .tooEarly, .unclear: return false
         default: return true
         }
     }
@@ -67,7 +67,7 @@ extension GoalCheck {
         for back in 0..<26 {
             let moment = now.addingTimeInterval(-Double(back) * 7 * 86_400)
             if let since = GoalPreference.since, moment < since.addingTimeInterval(-Double(window) * 86_400) { break }
-            guard evaluate(goal: goal, weighIns: weighIns, now: moment).verdict == .onTrack else { break }
+            guard evaluate(goal: goal, weighIns: weighIns, startedAt: GoalPreference.since, now: moment).verdict == .onTrack else { break }
             weeks += 1
         }
         return weeks
@@ -76,6 +76,7 @@ extension GoalCheck {
     var headline: String {
         switch verdict {
         case .tooEarly: return "Checking your trend"
+        case .unclear: return "Not clear yet"
         case .onTrack: return "On track"
         case .tooSlow: return goal == .cut ? "Losing too slowly" : "Gaining too slowly"
         case .tooFast: return goal == .cut ? "Losing too fast" : "Gaining too fast"
@@ -100,6 +101,8 @@ extension GoalCheck {
             return "\(parts.joined(separator: " and ")) and Setline can tell you if you're on track. Goal: \(target)."
         case .onTrack:
             return "\(kg(weeklyKg ?? 0)) a week, right in your \(goal.title.lowercased()) range (\(target))."
+        case .unclear:
+            return "About \(kg(weeklyKg ?? 0)) a week so far, but your weigh-ins swing more than that from day to day. A few more mornings will tell. Goal: \(target)."
         default:
             let pace = "\(kg(weeklyKg ?? 0)) a week over \(days) days; goal \(target)."
             guard let kcal = dailyKcalAdjustment, kcal != 0 else { return pace }
@@ -291,7 +294,7 @@ extension GoalCheck {
     var verdictInk: Color {
         switch verdict {
         case .onTrack: return SL.Signal.recovery
-        case .tooEarly: return SL.Ink.secondary
+        case .tooEarly, .unclear: return SL.Ink.secondary
         default: return SL.Signal.attention
         }
     }
@@ -300,6 +303,7 @@ extension GoalCheck {
         switch verdict {
         case .onTrack: return "checkmark.seal.fill"
         case .tooEarly: return "hourglass"
+        case .unclear: return "chart.dots.scatter"
         case .tooFast: return "hare.fill"
         default: return "exclamationmark.triangle.fill"
         }
@@ -350,7 +354,8 @@ enum NutritionReminders {
 
         // Off track: one check-in at most every seven days, next morning at 9.
         guard let goal = GoalPreference.goal else { return }
-        let check = GoalCheck.evaluate(goal: goal, weighIns: GoalCheck.weighIns(BodyProgress.make(metrics: app.metrics)), now: now)
+        let check = GoalCheck.evaluate(goal: goal, weighIns: GoalCheck.weighIns(BodyProgress.make(metrics: app.metrics)),
+                                       startedAt: GoalPreference.since, now: now)
         let last = UserDefaults.standard.object(forKey: goalNotifiedKey) as? Date ?? .distantPast
         guard check.isOffTrack, now.timeIntervalSince(last) > 7 * 86_400,
               let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now),
