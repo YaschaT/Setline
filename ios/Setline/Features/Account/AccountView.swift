@@ -2,22 +2,26 @@ import PhotosUI
 import SwiftUI
 import SetlineCore
 
-/// Artboard 23 · Account.
+/// Artboard 23 · Account, opened from the gear as Settings.
 ///
 /// States what the account holds, and hands it back. Three rules from the
 /// approved decisions shape what is drawn:
 ///
 /// - every value comes from stored data, so the mock's `2.250 kcal · 165 g`
 ///   only appears when this account really has targets;
-/// - a chevron is drawn only where there is somewhere to go (the mock's
-///   `Wijzig`, quieter: each row already reads label then value);
+/// - a chevron is drawn only where there is somewhere to go;
 /// - `Account verwijderen` waits for the server action that performs it.
 ///
-/// `Uitloggen` is the one addition: leaving the account on this device keeps
-/// its local copy and anything still waiting to sync. Above everything, the
-/// name and picture Training greets you with, kept on this phone only.
+/// Laid out to be read at a glance: who you are and how the account stands
+/// in one card on top, then one card per topic — Training, Food, App,
+/// Privacy, Your data — each row led by an icon tinted by its topic, so the
+/// eye finds a group before it reads a word. Training and Food are the
+/// coloured ones; the rest is housekeeping and stays grey. `Uitloggen`
+/// leaves the account on this device and keeps its local copy and anything
+/// still waiting to sync.
 struct AccountView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Account opens as a sheet from the avatar; this closes it.
     var onClose: (() -> Void)? = nil
     @State private var exports: [URL] = []
@@ -27,7 +31,6 @@ struct AccountView: View {
     @State private var editingTargets = false
     @State private var choosingProgram = false
     @State private var rirEverySet = RIRPreference.everySet
-    @State private var editingProfile = false
     @State private var namingProfile = false
     @State private var draftName = ""
     @State private var pickingPhoto = false
@@ -68,53 +71,19 @@ struct AccountView: View {
                     .padding(.horizontal, SL.Space.gutterSession)
                     .padding(.top, SL.Space.s5)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    profileBlock
-                    syncBlock
-                    section("Plan")
-                    planRows
-                    section("Reminders")
-                    Toggle(isOn: Binding(get: { mealReminders }, set: { on in
-                        if on {
-                            Task {
-                                if await NutritionReminders.requestPermission() {
-                                    mealReminders = true
-                                    await NutritionReminders.update(app: app)
-                                } else {
-                                    remindersDenied = true
-                                }
-                            }
-                        } else {
-                            mealReminders = false
-                            Task { await NutritionReminders.update(app: app) }
-                        }
-                    })) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Meal reminders").slBody()
-                            Text("Breakfast 8–11, lunch 12–15, dinner after. Only when nothing is logged yet.")
-                                .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .tint(SL.Signal.action)
-                    .padding(.vertical, SL.Space.s3)
-                    .overlay(alignment: .bottom) { SLHairline() }
-                    openWorkoutRow
-                    section("Sounds & security")
-                    appRows
-                    section("Privacy")
-                    // Only once there is a social profile to post from.
-                    if social.me != nil {
-                        privacyRows
-                    }
-                    row("Privacy policy", detail: "What Setline keeps, where, and your rights") { showsPolicy = true }
-                    section("Data")
-                    exportRow
-                    resetWorkoutsRow
-                    row("Photo credits") { showsCredits = true }
-                    signOutRow
+                VStack(alignment: .leading, spacing: SL.Space.s6) {
+                    profileCard
+                    trainingGroup
+                    foodGroup
+                    appGroup
+                    privacyGroup
+                    dataGroup
+                    signOutButton
+                    footer
                 }
                 .padding(.horizontal, SL.Space.s5)
-                .padding(.top, SL.Space.s5)
+                .padding(.top, SL.Space.s4)
+                .padding(.bottom, SL.Space.s10)
             }
         }
         .slRespondsToTextSize()
@@ -123,8 +92,27 @@ struct AccountView: View {
             await addPostsToExport()
         }
         .onChange(of: app.sessions.count) { _, _ in buildExports() }
+        .onChange(of: rirEverySet) { _, value in RIRPreference.everySet = value }
+        .onChange(of: soundsOn) { _, on in if on { SLSound.tick.play() } }
+        .onChange(of: defaultVisibility) { _, value in PostVisibility.defaultForNewPosts = value }
+        #if DEBUG
+        .onAppear {
+            // `-SetlinePrivacyPolicy` opens the policy straight away.
+            if ProcessInfo.processInfo.arguments.contains("-SetlinePrivacyPolicy") { showsPolicy = true }
+        }
+        #endif
         .sheet(isPresented: $reauthenticating) { reauthentication }
         .sheet(isPresented: $showsCredits) { credits }
+        .sheet(isPresented: $showsPolicy) {
+            PrivacyPolicyView(onClose: { showsPolicy = false })
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showsBlocked) {
+            BlockedPeopleSheet(onClose: { showsBlocked = false })
+        }
+        .sheet(isPresented: $choosingVisibility) {
+            VisibilitySheet(selection: $defaultVisibility, friendCount: social.friends.count, onClose: { choosingVisibility = false })
+        }
         .alert("Notifications are off for Setline", isPresented: $remindersDenied) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -175,57 +163,106 @@ struct AccountView: View {
         } message: {
             Text("\(changes(app.pendingChanges.count)) \(verb(app.pendingChanges.count, "is", "are")) only on this phone. \(verb(app.pendingChanges.count, "It's", "They're")) kept and will sync when you sign in again.")
         }
+        .alert(app.sessions.count == 1 ? "Delete your workout?" : "Delete all \(app.sessions.count) workouts?", isPresented: $confirmsResetWorkouts) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete all", role: .destructive) {
+                Task { await app.removeAllSessions() }
+            }
+        } message: {
+            Text("Your log, records, streak and progress start from zero, here and on the web. This can't be undone, so export first if you want a copy. Your plan, food log, weigh-ins, photos and posts stay.")
+        }
+        .alert(social.myPostCount == 1 ? "Delete your post?" : "Delete all \(social.myPostCount) posts?", isPresented: $confirmsDeleteAll) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete all", role: .destructive) {
+                Task {
+                    do { try await social.deleteAllMyPosts() } catch { deleteAllFailed = true }
+                }
+            }
+        } message: {
+            Text("Their photos, comments and kudos are removed for everyone, right away. Your workouts, records and streak stay in your log.")
+        }
+        .alert("Couldn't delete your posts", isPresented: $deleteAllFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Check your connection and try again.")
+        }
     }
 
     // MARK: - Profile
 
-    /// Who this is: the picture and name Training greets you with, and the
-    /// address the account signs in with. One tap target, as the plan rows
-    /// are, ending in the same chevron.
-    private var profileBlock: some View {
-        Button { editingProfile = true } label: {
-            HStack(alignment: .center, spacing: SL.Space.s4) {
-                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 64)
-                    .overlay(alignment: .bottomTrailing) { cameraBadge }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(app.profileName ?? "Add your name")
-                        .slLead(SL.Weight.semibold)
-                        .foregroundStyle(app.profileName == nil ? SL.Signal.action : SL.Ink.primary)
-                    if let email = app.session?.email {
-                        Text(email)
-                            .slMeta()
-                            .foregroundStyle(SL.Ink.secondary)
+    /// Who this is and how the account stands: the picture and name Training
+    /// greets you with, the address it signs in with, whether it is synced,
+    /// and three numbers for what it holds. Only an expired session asks for
+    /// anything, and then the button says what.
+    private var profileCard: some View {
+        VStack(spacing: 0) {
+            // A menu rather than a dialog: it opens where it was tapped.
+            Menu {
+                Section("Your name and photo stay on this phone") {
+                    Button(app.profileName == nil ? "Add name" : "Change name", systemImage: "character.cursor.ibeam") {
+                        afterDialog {
+                            draftName = app.profileName ?? ""
+                            namingProfile = true
+                        }
+                    }
+                    Button(app.profilePhoto == nil ? "Choose a photo" : "Choose another photo", systemImage: "photo") {
+                        afterDialog { pickingPhoto = true }
+                    }
+                    if app.profilePhoto != nil {
+                        Button("Remove photo", systemImage: "trash", role: .destructive) { app.removeProfilePhoto() }
                     }
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Self.chevron
-            }
-            .padding(.bottom, SL.Space.s6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .bottom) { SLHairline() }
-        .padding(.bottom, SL.Space.s6)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Change your name or photo")
-        .confirmationDialog("Profile", isPresented: $editingProfile, titleVisibility: .hidden) {
-            Button(app.profileName == nil ? "Add name" : "Change name") {
-                afterDialog {
-                    draftName = app.profileName ?? ""
-                    namingProfile = true
+            } label: {
+                // At the largest sizes the picture sits above the name, so
+                // neither the name nor the address is cut short.
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s3))
+                    : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s4))
+                layout {
+                    SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 60)
+                        .overlay(alignment: .bottomTrailing) { cameraBadge }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(app.profileName ?? "Add your name")
+                            .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                            .foregroundStyle(app.profileName == nil ? SL.Signal.action : SL.Ink.primary)
+                            .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                        if let email = app.session?.email {
+                            Text(email)
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                                .truncationMode(.middle)
+                        }
+                        syncLine
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Edit")
+                        .slMeta(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                        .padding(.horizontal, SL.Space.s3)
+                        .frame(minHeight: 30)
+                        .background(Capsule().fill(SL.Surface.raised2))
+                        .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border))
                 }
+                .padding(SL.Space.s4)
+                .contentShape(Rectangle())
             }
-            Button(app.profilePhoto == nil ? "Choose a photo" : "Choose another photo") {
-                afterDialog { pickingPhoto = true }
+            .buttonStyle(SLPressStyle(scale: 0.98))
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Change your name or photo")
+
+            SLHairline().padding(.horizontal, SL.Space.s4)
+            statsRow
+                .padding(.horizontal, SL.Space.s4)
+                .padding(.vertical, SL.Space.s3)
+
+            if standing == .expired {
+                Button("Sign in again") { reauthenticating = true }
+                    .buttonStyle(SLPrimaryButtonStyle())
+                    .padding([.horizontal, .bottom], SL.Space.s4)
             }
-            if app.profilePhoto != nil {
-                Button("Remove photo", role: .destructive) { app.removeProfilePhoto() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your name and photo stay on this phone.")
         }
+        .slHeroCard()
         .alert("Your name", isPresented: $namingProfile) {
             TextField("Name", text: $draftName)
                 .textContentType(.name)
@@ -252,6 +289,45 @@ struct AccountView: View {
         }
     }
 
+    /// What the account holds, in three numbers. Side by side; stacked at
+    /// the largest text sizes so no label is cut.
+    private var statsRow: some View {
+        let streak = app.streak
+        // Before there is a streak, this week's count instead of a zero.
+        let run: (value: String, label: String) = streak.weeks > 0
+            ? ("\(streak.weeks)", streak.weeks == 1 ? "week in a row" : "weeks in a row")
+            : ("\(streak.thisWeekDone)/\(streak.thisWeekGoal)", "this week")
+        let stats: [(value: String, label: String)] = [
+            ("\(summary.sessionCount)", summary.sessionCount == 1 ? "workout" : "workouts"),
+            run,
+            ("\(summary.loggedExerciseCount)", summary.loggedExerciseCount == 1 ? "exercise" : "exercises"),
+        ]
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: SL.Space.s3))
+        return layout {
+            ForEach(stats.indices, id: \.self) { index in
+                let stat = stats[index]
+                let pair = typeSize.isAccessibilitySize
+                    ? AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s2))
+                    : AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+                pair {
+                    Text(stat.value)
+                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.primary)
+                    Text(stat.label)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
     /// The options have to be gone before the next thing can be shown, or
     /// it is never shown.
     private func afterDialog(_ action: @escaping @MainActor () -> Void) {
@@ -263,9 +339,9 @@ struct AccountView: View {
 
     /// Says the picture can be changed: the camera, small, on the avatar's edge.
     private var cameraBadge: some View {
-        SLGlyph(name: .camera, size: 13)
+        SLGlyph(name: .camera, size: 12)
             .foregroundStyle(SL.Signal.action)
-            .frame(width: 24, height: 24)
+            .frame(width: 22, height: 22)
             .background(Circle().fill(SL.Surface.raised))
             .overlay(Circle().strokeBorder(SL.Surface.hairlineStrong, lineWidth: SL.Metric.border))
             .offset(x: 2, y: 2)
@@ -273,38 +349,24 @@ struct AccountView: View {
 
     // MARK: - Sync
 
-    /// How this account stands right now: one quiet row, since it is
-    /// reassurance rather than something to act on. Only an expired session
-    /// asks for anything, and then the button says what.
-    private var syncBlock: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s4) {
-            HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                Circle().fill(syncTone).frame(width: 10, height: 10)
-                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(syncHeadline).slBody(SL.Weight.semibold)
-                    Text(syncDetail)
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if standing == .expired {
-                Button("Sign in again") { reauthenticating = true }
-                    .buttonStyle(SLPrimaryButtonStyle())
-            }
+    /// How this account stands right now: one quiet line under the address,
+    /// since it is reassurance rather than something to act on.
+    private var syncLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Circle().fill(syncTone).frame(width: 7, height: 7)
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+            Text(syncText)
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(SL.Space.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .slCard(radius: SL.Radius.lg)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Sync: \(syncHeadline). \(syncDetail)")
+        .padding(.top, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Sync: \(syncText)")
     }
 
-    /// One reading of where this account stands, so the dot, the headline and
-    /// the line beneath them can never disagree.
+    /// One reading of where this account stands, so the dot and the line
+    /// beside it can never disagree.
     private enum Standing: Equatable {
         case synced(Date)
         case waiting(Int)
@@ -332,30 +394,18 @@ struct AccountView: View {
         }
     }
 
-    private var syncHeadline: String {
-        switch standing {
-        case .synced: return "Up to date"
-        case .waiting: return "Waiting to sync"
-        case .offline: return "Offline"
-        case .expired: return "Session expired"
-        case .never: return "Not synced yet"
-        }
-    }
-
-    private var syncDetail: String {
+    private var syncText: String {
         switch standing {
         case .synced(let date):
-            return "\(Self.relative.localizedString(for: date, relativeTo: Date())) · \(sessionsSafe)"
+            return "Synced \(Self.relative.localizedString(for: date, relativeTo: Date()))"
         case .waiting(let count):
-            return "\(changes(count)) on this phone"
+            return "Waiting to sync · \(changes(count))"
         case .offline(let count):
-            return count > 0
-                ? "Saved on this phone · \(changes(count)) waiting"
-                : "Saved on this phone"
+            return count > 0 ? "Offline · \(changes(count)) waiting" : "Offline · saved on this phone"
         case .expired:
-            return "Your work stays on this phone"
+            return "Session expired · your work stays here"
         case .never:
-            return "Your work is on this phone"
+            return "Not synced yet"
         }
     }
 
@@ -369,7 +419,7 @@ struct AccountView: View {
     }
 
     private var sessionsSafe: String {
-        summary.sessionCount == 1 ? "1 session" : "\(summary.sessionCount) sessions"
+        summary.sessionCount == 1 ? "1 workout" : "\(summary.sessionCount) workouts"
     }
 
     private static let relative: RelativeDateTimeFormatter = {
@@ -379,44 +429,80 @@ struct AccountView: View {
         return formatter
     }()
 
-    // MARK: - Plan
+    // MARK: - Training
 
-    private var planRows: some View {
-        VStack(spacing: 0) {
-            row("Plan", value: summary.planName) { choosingProgram = true }
-            row("Your workouts", value: app.customWorkouts.isEmpty ? "Create one" : "\(app.customWorkouts.count)") { managingWorkouts = true }
-            if !summary.trainingDays.isEmpty {
-                row("Training days", value: summary.trainingDays.joined(separator: " ")) { planningWeek = true }
+    private var trainingGroup: some View {
+        group("Training") {
+            row("dumbbell.fill", tint: SL.Signal.action, title: "Plan", action: { choosingProgram = true }) {
+                value(summary.planName)
             }
-            if let targets = summary.targets {
-                row("Daily targets", value: "\(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g") {
-                    editingTargets = true
-                }
+            if !summary.trainingDays.isEmpty {
+                weekRow
+            }
+            row("square.stack.3d.up.fill", tint: SL.Signal.action, title: "Your workouts", action: { managingWorkouts = true }) {
+                value(app.customWorkouts.isEmpty ? "Create one" : "\(app.customWorkouts.count)")
             }
             // The three rests by role read as a sentence for VoiceOver; on
-            // screen the order (primair, samengesteld, isolatie) is enough.
-            row("Rest timer", value: summary.rest.map(\.label).joined(separator: " · "))
-                .accessibilityLabel("Rest timer: \(summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: ", "))")
-            // 12R: "Per set vragen zet je aan in Account." This is where.
-            Toggle(isOn: $rirEverySet) {
-                Text("RIR on every set").slBody()
+            // screen the detail names them in the same order as the times.
+            row("timer", tint: SL.Signal.action, title: "Rest timer",
+                detail: summary.rest.map(\.roleLabel).joined(separator: ", ").capitalizedFirst) {
+                value(summary.rest.map(\.label).joined(separator: " · "))
             }
-            .tint(SL.Signal.action)
-            .padding(.vertical, SL.Space.s3)
-            .overlay(alignment: .bottom) { SLHairline() }
-            .onChange(of: rirEverySet) { _, value in RIRPreference.everySet = value }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Rest timer: \(summary.rest.map { "\($0.label) \($0.roleLabel)" }.joined(separator: ", "))")
+            // 12R: "Per set vragen zet je aan in Account." This is where.
+            toggleRow("gauge.with.dots.needle.33percent", tint: SL.Signal.action, title: "RIR on every set",
+                      detail: "Reps in reserve, after each set", isOn: $rirEverySet)
+            openWorkoutRow
         }
+    }
+
+    /// This week at a glance: the seven days, the training ones lit. Tapping
+    /// it moves them.
+    private var weekRow: some View {
+        let days = Schedule.mondayFirstWeek(containing: Date()).map(Schedule.weekdayLabel)
+        let count = summary.trainingDays.count
+        return Button { planningWeek = true } label: {
+            VStack(alignment: .leading, spacing: SL.Space.s3) {
+                HStack(alignment: .center, spacing: SL.Space.s3) {
+                    icon("calendar", tint: SL.Signal.action)
+                    Text("Training days").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                    Spacer(minLength: SL.Space.s2)
+                    if !typeSize.isAccessibilitySize {
+                        value(count == 1 ? "1 this week" : "\(count) this week")
+                    }
+                    Self.chevron
+                }
+                HStack(spacing: SL.Space.s1) {
+                    ForEach(days, id: \.self) { day in
+                        let on = summary.trainingDays.contains(day)
+                        Text(day)
+                            .font(.sl(SL.TypeSize.micro, on ? SL.Weight.semibold : SL.Weight.medium))
+                            .foregroundStyle(on ? SL.Signal.action : SL.Ink.tertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity, minHeight: 30)
+                            .background(Capsule().fill(on ? SL.Signal.actionTint : SL.Surface.raised2))
+                            .overlay(Capsule().strokeBorder(on ? SL.Signal.action.opacity(0.35) : .clear, lineWidth: SL.Metric.border))
+                    }
+                }
+                .padding(.leading, Self.iconSize + SL.Space.s3)
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Training days: \(summary.trainingDays.joined(separator: ", "))")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Double-tap to move them")
     }
 
     /// How long a workout may sit open or paused before a nudge.
     private var openWorkoutRow: some View {
-        HStack(alignment: .center, spacing: SL.Space.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Unfinished workout").slBody()
-                Text("A reminder when you leave a workout open or paused.")
-                    .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: SL.Space.s2)
+        row("bell.badge.fill", tint: SL.Signal.action, title: "Unfinished workout",
+            detail: "A nudge if it's left open") {
             Menu {
                 Picker("Remind me", selection: Binding(get: { openWorkoutMinutes }, set: { picked in
                     openWorkoutMinutes = picked
@@ -434,145 +520,134 @@ struct AccountView: View {
                 .frame(minHeight: SL.Space.hitMin)
             }
         }
-        .padding(.vertical, SL.Space.s2)
-        .overlay(alignment: .bottom) { SLHairline() }
     }
 
-    // MARK: - Sounds & security
+    // MARK: - Food
 
-    private var appRows: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Toggle(isOn: $soundsOn) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sounds").slBody()
-                    Text("A quiet click for a saved set, a chime for a record. Muted by the silent switch.")
-                        .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
+    private var foodGroup: some View {
+        group("Food") {
+            if let targets = summary.targets {
+                row("fork.knife", tint: SL.Signal.recovery, title: "Daily targets", action: { editingTargets = true }) {
+                    value("\(app.display.number(Decimal(targets.calories))) kcal · \(targets.protein) g")
                 }
             }
-            .tint(SL.Signal.action)
-            .padding(.vertical, SL.Space.s3)
-            .overlay(alignment: .bottom) { SLHairline() }
-            .onChange(of: soundsOn) { _, on in if on { SLSound.tick.play() } }
-            #if DEBUG
-            .onAppear {
-                // `-SetlinePrivacyPolicy` opens the policy straight away.
-                if ProcessInfo.processInfo.arguments.contains("-SetlinePrivacyPolicy") { showsPolicy = true }
-            }
-            #endif
+            toggleRow("bell.fill", tint: SL.Signal.recovery, title: "Meal reminders",
+                      detail: "Only when a meal isn't logged yet", isOn: mealRemindersBinding)
+        }
+    }
 
+    private var mealRemindersBinding: Binding<Bool> {
+        Binding(get: { mealReminders }, set: { on in
+            if on {
+                Task {
+                    if await NutritionReminders.requestPermission() {
+                        mealReminders = true
+                        await NutritionReminders.update(app: app)
+                    } else {
+                        remindersDenied = true
+                    }
+                }
+            } else {
+                mealReminders = false
+                Task { await NutritionReminders.update(app: app) }
+            }
+        })
+    }
+
+    // MARK: - App
+
+    private var appGroup: some View {
+        group("App") {
+            toggleRow("speaker.wave.2.fill", tint: SL.Ink.secondary, title: "Sounds",
+                      detail: "A click for a set, a chime for a record", isOn: $soundsOn)
             if AppLock.isAvailable {
-                Toggle(isOn: Binding(get: { appLock }, set: { on in
-                    // Proving it is you before the lock goes on or off.
-                    Task {
-                        if await AppLock.authenticate(reason: on ? "Turn on the app lock" : "Turn off the app lock") {
-                            appLock = on
-                        }
-                    }
-                })) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Lock with \(AppLock.methodName)").slBody()
-                        Text("Asks for \(AppLock.methodName) when you come back to Setline, and hides it in the app switcher.")
-                            .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .tint(SL.Signal.action)
-                .padding(.vertical, SL.Space.s3)
-                .overlay(alignment: .bottom) { SLHairline() }
+                toggleRow(lockSymbol, tint: SL.Ink.secondary, title: "Lock with \(AppLock.methodName)",
+                          detail: "Asked each time you come back", isOn: appLockBinding)
             }
         }
-        .sheet(isPresented: $showsPolicy) {
-            PrivacyPolicyView(onClose: { showsPolicy = false })
-                .presentationDragIndicator(.visible)
+    }
+
+    private var lockSymbol: String {
+        switch AppLock.methodName {
+        case "Face ID": return "faceid"
+        case "Touch ID": return "touchid"
+        case "Optic ID": return "opticid"
+        default: return "lock.fill"
         }
+    }
+
+    /// Proving it is you before the lock goes on or off.
+    private var appLockBinding: Binding<Bool> {
+        Binding(get: { appLock }, set: { on in
+            Task {
+                if await AppLock.authenticate(reason: on ? "Turn on the app lock" : "Turn off the app lock") {
+                    appLock = on
+                }
+            }
+        })
     }
 
     // MARK: - Privacy
 
-    private var privacyRows: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            row("New posts are seen by", value: defaultVisibility.label, detail: "You can change it on every post") {
-                choosingVisibility = true
-            }
-            HStack(alignment: .top, spacing: SL.Space.s3) {
-                Image(systemName: "mappin.and.ellipse")
-                    .foregroundStyle(SL.Signal.recovery)
-                Text("Location is never shared unless you add a place to a post. Photo location data is always removed.")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.meta)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, SL.Space.s3)
-            .overlay(alignment: .bottom) { SLHairline() }
-            row("Blocked people") { showsBlocked = true }
-            Button { confirmsDeleteAll = true } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Delete all my posts").slBody().foregroundStyle(SL.Signal.loss)
-                        Text("Your workouts stay in your log").slMeta().foregroundStyle(SL.Ink.secondary)
-                    }
-                    Spacer()
+    private var privacyGroup: some View {
+        // Posts settings only once there is a social profile to post from.
+        group("Privacy", footer: social.me == nil ? nil
+              : "Location is never shared unless you add a place to a post. Photo location data is always removed.") {
+            if social.me != nil {
+                row("eye.fill", tint: SL.Ink.secondary, title: "New posts are seen by",
+                    detail: "Change it on any post", action: { choosingVisibility = true }) {
+                    value(defaultVisibility.label)
                 }
-                .padding(.vertical, SL.Space.s3)
-                .contentShape(Rectangle())
+                row("hand.raised.fill", tint: SL.Ink.secondary, title: "Blocked people", action: { showsBlocked = true })
             }
-            .buttonStyle(.plain)
-            .overlay(alignment: .bottom) { SLHairline() }
-            .disabled(social.myPostCount == 0)
-            .opacity(social.myPostCount == 0 ? 0.5 : 1)
-        }
-        .sheet(isPresented: $showsBlocked) {
-            BlockedPeopleSheet(onClose: { showsBlocked = false })
-        }
-        .sheet(isPresented: $choosingVisibility) {
-            VisibilitySheet(selection: $defaultVisibility, friendCount: social.friends.count, onClose: { choosingVisibility = false })
-        }
-        .onChange(of: defaultVisibility) { _, value in PostVisibility.defaultForNewPosts = value }
-        .alert(social.myPostCount == 1 ? "Delete your post?" : "Delete all \(social.myPostCount) posts?", isPresented: $confirmsDeleteAll) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete all", role: .destructive) {
-                Task {
-                    do { try await social.deleteAllMyPosts() } catch { deleteAllFailed = true }
-                }
-            }
-        } message: {
-            Text("Their photos, comments and kudos are removed for everyone, right away. Your workouts, records and streak stay in your log.")
-        }
-        .alert("Couldn't delete your posts", isPresented: $deleteAllFailed) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Check your connection and try again.")
+            row("lock.shield.fill", tint: SL.Ink.secondary, title: "Privacy policy",
+                detail: "What's kept, where, and your rights", action: { showsPolicy = true })
         }
     }
 
     // MARK: - Data
 
-    private var exportRow: some View {
-        Group {
-            if exports.isEmpty {
-                row("Export everything", detail: "No data to export yet")
-            } else {
-                ShareLink(items: exports) {
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Export everything").slBody()
-                            Text(social.me == nil ? "CSV and JSON" : "CSV and JSON · with your posts").slMeta().foregroundStyle(SL.Ink.secondary)
-                        }
-                        Spacer(minLength: SL.Space.s4)
-                        // 23: the design's `download` glyph at 18 beside
-                        // "Export", both lime — the screen's one action.
-                        HStack(spacing: 6) {
-                            SLGlyph(name: .download, size: 18)
-                            Text("Export").slBody()
-                        }
-                        .foregroundStyle(SL.Signal.action)
-                    }
-                    .padding(.vertical, SL.Space.s4)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .overlay(alignment: .bottom) { SLHairline() }
-                .accessibilityLabel("Export everything. \(exportDetail)")
+    /// Taking everything out, and starting over. The two deletes sit under
+    /// the export, so the way to keep a copy is the first thing read.
+    private var dataGroup: some View {
+        let workouts = app.sessions.count
+        return group("Your data", footer: "Deleting can't be undone. Export first if you want a copy.") {
+            exportRow
+            row("trash.fill", tint: SL.Signal.loss, title: "Delete all workouts", titleColor: SL.Signal.loss,
+                detail: workouts == 0 ? "No workouts logged"
+                    : "\(workouts == 1 ? "1 workout" : "\(workouts) workouts") · everything else stays",
+                action: { confirmsResetWorkouts = true })
+                .disabled(workouts == 0)
+                .opacity(workouts == 0 ? 0.5 : 1)
+            if social.me != nil {
+                row("trash.fill", tint: SL.Signal.loss, title: "Delete all my posts", titleColor: SL.Signal.loss,
+                    detail: "Your workouts stay in your log", action: { confirmsDeleteAll = true })
+                    .disabled(social.myPostCount == 0)
+                    .opacity(social.myPostCount == 0 ? 0.5 : 1)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var exportRow: some View {
+        if exports.isEmpty {
+            row("square.and.arrow.up", tint: SL.Ink.secondary, title: "Export everything", detail: "No data to export yet")
+        } else {
+            ShareLink(items: exports) {
+                // 23: the design's `download` glyph beside "Export", both
+                // lime — the screen's one action.
+                rowContent("square.and.arrow.up", tint: SL.Ink.secondary, title: "Export everything",
+                           detail: social.me == nil ? "CSV and JSON" : "CSV, JSON and posts",
+                           titleColor: SL.Ink.primary, chevron: false) {
+                    HStack(spacing: 6) {
+                        SLGlyph(name: .download, size: 16)
+                        Text("Export").slBody(SL.Weight.semibold)
+                    }
+                    .foregroundStyle(SL.Signal.action)
+                }
+            }
+            .buttonStyle(SLRowButtonStyle())
+            .accessibilityLabel("Export everything. \(exportDetail)")
         }
     }
 
@@ -585,93 +660,180 @@ struct AccountView: View {
         return parts.joined(separator: " · ")
     }
 
-    /// Starting over: every logged workout goes, the plan stays.
-    private var resetWorkoutsRow: some View {
-        let count = app.sessions.count
-        return Button { confirmsResetWorkouts = true } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Delete all workouts").slBody().foregroundStyle(SL.Signal.loss)
-                    Text(count == 0 ? "No workouts logged"
-                         : "\(count == 1 ? "1 workout" : "\(count) workouts") · your plan, food and weigh-ins stay")
-                        .slMeta().foregroundStyle(SL.Ink.secondary)
-                }
-                Spacer()
-            }
-            .padding(.vertical, SL.Space.s3)
-            .contentShape(Rectangle())
+    private var signOutButton: some View {
+        Button("Sign out") {
+            if app.hasPendingChanges { confirmSignOut = true } else { app.signOut() }
         }
-        .buttonStyle(.plain)
-        .overlay(alignment: .bottom) { SLHairline() }
-        .disabled(count == 0)
-        .opacity(count == 0 ? 0.5 : 1)
-        .alert(count == 1 ? "Delete your workout?" : "Delete all \(count) workouts?", isPresented: $confirmsResetWorkouts) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete all", role: .destructive) {
-                Task { await app.removeAllSessions() }
-            }
-        } message: {
-            Text("Your log, records, streak and progress start from zero, here and on the web. This can't be undone, so export first if you want a copy. Your plan, food log, weigh-ins, photos and posts stay.")
-        }
+        .buttonStyle(SLOutlineButtonStyle(emphasis: .tertiary))
+        .padding(.top, SL.Space.s2)
     }
 
-    private var signOutRow: some View {
-        Button {
-            if app.hasPendingChanges { confirmSignOut = true } else { app.signOut() }
-        } label: {
-            HStack {
-                Text("Sign out").slBody()
-                Spacer()
-            }
-            .padding(.vertical, SL.Space.s4)
-            .contentShape(Rectangle())
+    /// The version, and the credits the food photos' licences ask for.
+    private var footer: some View {
+        HStack(spacing: 6) {
+            Text(versionLine)
+            Text("·").accessibilityHidden(true)
+            Button("Photo credits") { showsCredits = true }
+                .foregroundStyle(SL.Ink.secondary)
+                .frame(minHeight: SL.Space.hitMin)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(SL.Ink.secondary)
-        .padding(.top, SL.Space.s8)
-        .slHitTarget()
+        .font(.sl(SL.TypeSize.meta, SL.Weight.regular))
+        .foregroundStyle(SL.Ink.tertiary)
+        .frame(maxWidth: .infinity)
+        .padding(.top, -SL.Space.s2)
+    }
+
+    private var versionLine: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        guard let build = info?["CFBundleVersion"] as? String else { return "Setline \(version)" }
+        return "Setline \(version) (\(build))"
     }
 
     // MARK: - Pieces
 
-    /// The section head every tab uses, so Account reads as part of the app
-    /// rather than a settings page of its own.
-    private func section(_ title: String) -> some View {
-        SLSectionHead(title: title)
-            .padding(.horizontal, -SL.Space.s1)
-            .padding(.top, SL.Space.s8)
-            .padding(.bottom, SL.Space.s1)
-    }
+    private static let iconSize: CGFloat = 30
 
-    /// A settings row: the label, its current value on the right, and a
-    /// chevron when tapping it leads somewhere.
-    private func row(_ title: String, value: String? = nil, detail: String? = nil, change: (() -> Void)? = nil) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).slBody()
-                if let detail {
-                    Text(detail).slMeta().foregroundStyle(SL.Ink.secondary)
+    /// A topic: its overline, its rows in one card with a hairline between
+    /// them that starts where the text does, and an optional note beneath.
+    private func group<Rows: View>(_ title: String, footer: String? = nil, @ViewBuilder rows: () -> Rows) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            SLOverline(text: title)
+                .padding(.leading, SL.Space.s1)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                Group(subviews: rows()) { subviews in
+                    ForEach(subviews) { subview in
+                        subview
+                        if subview.id != subviews.last?.id {
+                            SLHairline().padding(.leading, SL.Space.s4 + Self.iconSize + SL.Space.s3)
+                        }
+                    }
                 }
             }
-            .layoutPriority(1)
-            Spacer(minLength: SL.Space.s2)
-            if let value {
-                Text(value)
-                    .slBody()
+            .slListCard()
+            if let footer {
+                Text(footer)
+                    .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
-                    .multilineTextAlignment(.trailing)
-            }
-            if change != nil {
-                Self.chevron
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, SL.Space.s1)
             }
         }
-        .padding(.vertical, SL.Space.s4)
-        .overlay(alignment: .bottom) { SLHairline() }
+    }
+
+    /// The tinted square that leads a row.
+    private func icon(_ symbol: String, tint: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: Self.iconSize, height: Self.iconSize)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.sm, style: .continuous).fill(tint.opacity(0.14)))
+            .accessibilityHidden(true)
+    }
+
+    private func value(_ text: String) -> some View {
+        Text(text)
+            .slBody()
+            .slNumerals()
+            .foregroundStyle(SL.Ink.secondary)
+            .multilineTextAlignment(typeSize.isAccessibilitySize ? .leading : .trailing)
+    }
+
+    /// A settings row: icon, label (and a line about it), its current value
+    /// on the right, and a chevron when tapping it leads somewhere.
+    @ViewBuilder
+    private func row<Trailing: View>(
+        _ symbol: String,
+        tint: Color,
+        title: String,
+        titleColor: Color = SL.Ink.primary,
+        detail: String? = nil,
+        action: (() -> Void)? = nil,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        // A destructive row asks first; it doesn't lead anywhere, so no chevron.
+        let content = rowContent(symbol, tint: tint, title: title, detail: detail, titleColor: titleColor,
+                                 chevron: action != nil && titleColor != SL.Signal.loss, trailing: trailing)
+        if let action {
+            Button(action: action) { content }
+                .buttonStyle(SLRowButtonStyle())
+                .accessibilityHint("Double-tap to change")
+        } else {
+            content
+        }
+    }
+
+    /// A row with nothing on the right but, when it leads somewhere, the chevron.
+    private func row(
+        _ symbol: String,
+        tint: Color,
+        title: String,
+        titleColor: Color = SL.Ink.primary,
+        detail: String? = nil,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        row(symbol, tint: tint, title: title, titleColor: titleColor, detail: detail, action: action) { EmptyView() }
+    }
+
+    private func rowContent<Trailing: View>(
+        _ symbol: String,
+        tint: Color,
+        title: String,
+        detail: String?,
+        titleColor: Color,
+        chevron: Bool,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        // At the largest sizes the value goes under the label, so neither is
+        // broken off mid-word to make room for the other.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s1))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s2))
+        return HStack(alignment: .center, spacing: SL.Space.s3) {
+            icon(symbol, tint: tint)
+            layout {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).slBody(SL.Weight.medium).foregroundStyle(titleColor)
+                    if let detail {
+                        Text(detail)
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
+                trailing()
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                    .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: false)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if chevron { Self.chevron }
+        }
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
+        .frame(minHeight: 56)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(change == nil ? [] : .isButton)
-        .accessibilityHint(change == nil ? "" : "Double-tap to change")
-        .onTapGesture { change?() }
+    }
+
+    private func toggleRow(_ symbol: String, tint: Color, title: String, detail: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(alignment: .center, spacing: SL.Space.s3) {
+                icon(symbol, tint: tint)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                    Text(detail)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .tint(SL.Signal.action)
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
+        .frame(minHeight: 56)
     }
 
     /// Who made the food photos, as their licences ask.
@@ -764,4 +926,9 @@ struct AccountView: View {
             exports = []
         }
     }
+}
+
+private extension String {
+    /// "main lift, compound" → "Main lift, compound".
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
