@@ -1,0 +1,11 @@
+{
+  "name": "Setline",
+  "short_name": "Setline",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060908",
+  "theme_color": "#060908",
+  "icons": [{ "src": "./app-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }]
+}

@@ -1,0 +1,27 @@
+/* What the design components need beyond inline styles: child rules for the
+   custom layouts, placeholder and caret colours, and the few keyframes. */
+
+/* SLAnchoredScroll: the content takes at least the scroll's height. */
+.sl-anchored > * { flex: 1 0 auto; }
+
+/* SLFlow: every item at its own size. */
+.sl-flow > * { flex: 0 0 auto; }
+
+/* SLWeightedRow: weight 1 unless `slWeight` says otherwise. */
+.sl-weighted > * { flex: 1 1 0; min-width: 0; }
+
+/* SLStepper's field: lime caret, the proposed value as a tertiary prompt. */
+.sl-stepper-field { caret-color: #c8ff66; }
+.sl-stepper-field::placeholder { color: rgba(242, 245, 243, 0.55); opacity: 1; }
+.sl-stepper-field:focus { outline: none; }
+
+/* `.symbolEffect(.bounce)`. */
+@keyframes sl-symbol-bounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.84); }
+  65% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* Segmented picker (MilestonesView). */
+.sl-segment:focus-visible { outline: 2px solid #c8ff66; outline-offset: 2px; }

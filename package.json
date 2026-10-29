@@ -15,7 +15,11 @@
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
     "db:migrate:local": "node scripts/migrate-local.mjs",
     "build:web": "vite build --config deploy/web/vite.config.ts",
-    "deploy:web": "npx vercel@latest deploy --prod --yes"
+    "deploy:web": "npx vercel@latest deploy --prod --yes",
+    "app:dev": "vite --config setline-web/vite.config.ts",
+    "app:build": "vite build --config setline-web/vite.config.ts",
+    "app:typecheck": "tsc -p setline-web/tsconfig.json",
+    "app:test": "TZ=Europe/Brussels tsx --test 'setline-web/tests/**/*.test.ts'"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

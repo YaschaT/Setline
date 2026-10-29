@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     ".claude/**",
     ".agents/**",
     "deploy/*/dist/**",
+    // The web copy of the iOS app has its own tsconfig and checks.
+    "setline-web/**",
   ]),
   {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],

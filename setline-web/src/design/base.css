@@ -1,0 +1,52 @@
+/* The iOS app's ground: dark only, Archivo, no tap flash, no rubber-band. */
+@font-face {
+  font-family: "Archivo";
+  src: url("/fonts/Archivo-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: #060908;
+  color: #f2f5f3;
+  color-scheme: dark;
+  font-family: Archivo, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+body { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+input, textarea { -webkit-user-select: text; user-select: text; font-family: inherit; }
+
+.sl-zstack > * { grid-area: 1 / 1; }
+
+.sl-pressable {
+  appearance: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sl-pressable:disabled { cursor: default; }
+.sl-pressable:focus { outline: none; }
+.sl-pressable:focus-visible { outline: 2px solid #c8ff66; outline-offset: 2px; }
+.sl-menu-item:active { background: rgba(255, 255, 255, 0.08) !important; }
+
+.sl-scroll { scrollbar-width: none; }
+.sl-scroll::-webkit-scrollbar { display: none; }
+
+@keyframes sl-menu-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.001s !important; animation-duration: 0.001s !important; }
+}
