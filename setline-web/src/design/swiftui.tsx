@@ -252,6 +252,20 @@ export function Toggle(p: { isOn: boolean; onChange: (on: boolean) => void; labe
 
 const Portal = ({ children }: { children: ReactNode }) => createPortal(children, document.body);
 
+/**
+ * Presentations stack in the order they open, as on iOS: a sheet opened from
+ * a full-screen cover (the workout, the post composer) sits above it, an
+ * alert above that. Each one takes the next level when it appears.
+ */
+let stackCounter = 0;
+function useStackLevel(active: boolean): number {
+  const [level, setLevel] = useState(0);
+  useLayoutEffect(() => {
+    if (active) setLevel(++stackCounter);
+  }, [active]);
+  return 100 + level;
+}
+
 /** Keeps a presentation mounted through its exit animation. */
 function usePresence(isPresented: boolean, exitMs: number) {
   const [mounted, setMounted] = useState(isPresented);
@@ -272,13 +286,14 @@ function usePresence(isPresented: boolean, exitMs: number) {
 /** `.sheet(isPresented:)` — the large detent: slides up, the screen behind dims. */
 export function Sheet(p: { isPresented: boolean; onDismiss: () => void; children?: ReactNode; dragIndicator?: boolean; background?: string; interactiveDismissDisabled?: boolean }) {
   const { mounted, shown } = usePresence(p.isPresented, SL.Motion.sheetOut * 1000 + 60);
+  const zIndex = useStackLevel(mounted);
   const drag = useRef<{ y: number; dy: number } | null>(null);
   const [dy, setDy] = useState(0);
   if (!mounted) return null;
   const close = () => !p.interactiveDismissDisabled && p.onDismiss();
   return (
     <Portal>
-      <div className="sl-overlay" style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+      <div className="sl-overlay" style={{ position: "fixed", inset: 0, zIndex }}>
         <div onClick={close} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", opacity: shown ? 1 : 0, transition: `opacity ${SL.Motion.sheetIn}s` }} />
         <div
           role="dialog"
@@ -336,6 +351,7 @@ export function Sheet(p: { isPresented: boolean; onDismiss: () => void; children
 /** `.fullScreenCover(isPresented:)`. */
 export function FullScreenCover(p: { isPresented: boolean; children?: ReactNode; background?: string }) {
   const { mounted, shown } = usePresence(p.isPresented, SL.Motion.sheetOut * 1000 + 60);
+  const zIndex = useStackLevel(mounted);
   if (!mounted) return null;
   return (
     <Portal>
@@ -346,7 +362,7 @@ export function FullScreenCover(p: { isPresented: boolean; children?: ReactNode;
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: 60,
+          zIndex,
           background: p.background ?? SL.Surface.ground,
           transform: shown ? "translateY(0)" : "translateY(100%)",
           transition: `transform ${shown ? SL.Motion.sheetIn : SL.Motion.sheetOut}s cubic-bezier(0,0,.2,1)`,
@@ -377,12 +393,13 @@ export function Alert(p: {
   textField?: { value: string; onChange: (v: string) => void; placeholder?: string; autoCapitalize?: "words" | "none"; inputMode?: "text" | "decimal" | "numeric" };
 }) {
   const { mounted, shown } = usePresence(p.isPresented, 150);
+  const zIndex = useStackLevel(mounted);
   if (!mounted) return null;
   const actions = p.actions.length ? p.actions : [{ title: "OK", role: "cancel" as const }];
   const row = actions.length === 2;
   return (
     <Portal>
-      <div className="sl-overlay" style={{ position: "fixed", inset: 0, zIndex: 80, display: "grid", placeItems: "center", background: shown ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0)", transition: "background 0.15s" }}>
+      <div className="sl-overlay" style={{ position: "fixed", inset: 0, zIndex, display: "grid", placeItems: "center", background: shown ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0)", transition: "background 0.15s" }}>
         <div role="alertdialog" aria-modal="true" style={{ width: 300, maxWidth: "calc(100vw - 48px)", background: "rgba(38,40,40,0.98)", borderRadius: 30, padding: "22px 18px 18px", transform: shown ? "scale(1)" : "scale(1.08)", opacity: shown ? 1 : 0, transition: "transform 0.15s, opacity 0.15s", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
           <Text size={17} weight={600} style={{ display: "block", padding: "0 6px" }}>{p.title}</Text>
           {p.message && <Text size={15} color="rgba(235,235,245,0.75)" style={{ display: "block", marginTop: 8, padding: "0 6px" }}>{p.message}</Text>}
@@ -431,6 +448,7 @@ export function Alert(p: {
 /** `.confirmationDialog(title, isPresented:titleVisibility:) { buttons } message: { … }` — the action sheet. */
 export function ConfirmationDialog(p: { isPresented: boolean; onDismiss: () => void; title?: string; message?: string; actions: DialogAction[] }) {
   const { mounted, shown } = usePresence(p.isPresented, 200);
+  const zIndex = useStackLevel(mounted);
   if (!mounted) return null;
   const main = p.actions.filter((a) => a.role !== "cancel");
   const cancel = p.actions.find((a) => a.role === "cancel") ?? { title: "Cancel", role: "cancel" as const };
@@ -459,7 +477,7 @@ export function ConfirmationDialog(p: { isPresented: boolean; onDismiss: () => v
   );
   return (
     <Portal>
-      <div className="sl-overlay" onClick={p.onDismiss} style={{ position: "fixed", inset: 0, zIndex: 80, background: shown ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0)", transition: "background 0.2s", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div className="sl-overlay" onClick={p.onDismiss} style={{ position: "fixed", inset: 0, zIndex, background: shown ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0)", transition: "background 0.2s", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
         <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, padding: "0 8px calc(8px + env(safe-area-inset-bottom))", transform: shown ? "translateY(0)" : "translateY(110%)", transition: "transform 0.2s cubic-bezier(0,0,.2,1)" }}>
           <div style={{ background: "rgba(44,44,46,0.98)", borderRadius: 14, overflow: "hidden" }}>
             {(p.title || p.message) && (
@@ -485,6 +503,7 @@ export type MenuEntry =
 /** `Menu { … } label: { … }` — opens a list next to its label. `Picker` in a menu = buttons with `checked`. */
 export function Menu(p: { label: ReactNode; entries: MenuEntry[]; style?: CSSProperties; "aria-label"?: string; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
+  const zIndex = useStackLevel(open);
   const anchor = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left?: number; right?: number }>({});
   useLayoutEffect(() => {
@@ -533,7 +552,7 @@ export function Menu(p: { label: ReactNode; entries: MenuEntry[]; style?: CSSPro
       </button>
       {open && (
         <Portal>
-          <div className="sl-overlay" onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 90 }}>
+          <div className="sl-overlay" onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex }}>
             <div role="menu" onClick={(e) => e.stopPropagation()} style={{ position: "fixed", ...pos, minWidth: 250, maxWidth: "calc(100vw - 16px)", maxHeight: "70vh", overflowY: "auto", background: "rgba(44,44,46,0.97)", backdropFilter: "blur(20px)", borderRadius: 14, boxShadow: "0 10px 40px rgba(0,0,0,0.5)", animation: "sl-menu-in 0.18s cubic-bezier(0,0,.2,1)" }}>
               {render(p.entries)}
             </div>
