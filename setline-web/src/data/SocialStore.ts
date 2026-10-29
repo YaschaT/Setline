@@ -12,7 +12,7 @@ import { LoggedSet } from "../core/Domain/Model";
 import type { LiftMedal } from "../core/Progress/Medals";
 import { RecordsEngine } from "../core/Engine/RecordsEngine";
 import { Schedule } from "../core/Engine/Schedule";
-import { iso8601, parseISO8601 } from "../core/Support/calendar";
+import { addDays, iso8601, parseISO8601, startOfDay } from "../core/Support/calendar";
 import { rounded, uuid } from "../core/Support/swift";
 import {
   graphemes, isLetterChar, isNumberChar, prefixChars, trimmingWhitespaces, trimmingWhitespacesAndNewlines,
@@ -215,6 +215,42 @@ export interface FeedPost {
   comments?: CommentCount[];
   kind?: string;
   rest_reason?: string;
+  exercises?: PostExercise[];
+  post_participants?: PostParticipant[];
+}
+
+/**
+ * One exercise of a posted workout, as friends see it: how many sets and the
+ * best one. The weight is shown only when the post doesn't hide weights.
+ */
+export interface PostExercise {
+  name: string;
+  sets: number;
+  weight_kg?: number;
+  reps?: number;
+}
+
+export const PostExercise = {
+  /** The workout's exercises with logged working sets, in order. */
+  list(session: TrainingSession): PostExercise[] {
+    const out: PostExercise[] = [];
+    for (const result of session.results) {
+      const working = result.sets.filter(LoggedSet.countsTowardVolume);
+      if (working.length === 0) continue;
+      let best = working[0];
+      for (const set of working) {
+        if ((set.weightKg ?? 0) > (best.weightKg ?? 0) || ((set.weightKg ?? 0) === (best.weightKg ?? 0) && set.reps > best.reps)) best = set;
+      }
+      out.push({ name: prefixChars(result.name, 80), sets: working.length, weight_kg: best.weightKg, reps: best.reps });
+    }
+    return out.slice(0, 40);
+  },
+};
+
+/** A friend named on a post: trained together. */
+export interface PostParticipant {
+  user_id: string;
+  participant?: SocialProfile;
 }
 
 const opt = <T,>(v: unknown, map: (x: unknown) => T): T | undefined => (v === null || v === undefined ? undefined : map(v));
@@ -224,6 +260,11 @@ const optNumber = (v: unknown) => opt(v, Number);
 export const FeedPost = {
   isRest(self: FeedPost): boolean {
     return self.kind === "rest";
+  },
+
+  /** The friends named on the post, as far as their profiles are known. */
+  trainedWith(self: FeedPost): SocialProfile[] {
+    return (self.post_participants ?? []).map((p) => p.participant).filter((p): p is SocialProfile => p !== undefined);
   },
 
   /** Where it happened, when the lifter said. */
@@ -303,6 +344,18 @@ export const FeedPost = {
       comments: opt(o.comments, (v) => arr(v).map((c) => ({ count: Number((c as Record<string, unknown>).count ?? 0) }))),
       kind: optString(o.kind),
       rest_reason: optString(o.rest_reason),
+      exercises: opt(o.exercises, (v) =>
+        arr(v).map((e) => {
+          const x = e as Record<string, unknown>;
+          return { name: String(x.name ?? ""), sets: Number(x.sets ?? 0), weight_kg: optNumber(x.weight_kg), reps: optNumber(x.reps) };
+        }),
+      ),
+      post_participants: opt(o.post_participants, (v) =>
+        arr(v).map((p) => {
+          const x = p as Record<string, unknown>;
+          return { user_id: String(x.user_id ?? ""), participant: x.participant ? SocialProfile.decode(x.participant) : undefined };
+        }),
+      ),
     };
   },
 };
@@ -318,6 +371,11 @@ export interface PostDraft {
   photos: DraftPhoto[];
   /** A rest day's why ("Sore", "Travel"); undefined on a workout. */
   restReason?: string;
+  /**
+   * The friends trained with, by user id. Undefined in drafts saved before
+   * friends could be named, which then leave the post's names as they are.
+   */
+  participants?: string[];
 }
 
 export const PostDraft = {
@@ -340,6 +398,7 @@ export const PostDraft = {
       tracks: FeedPost.tracks(post).map((t) => DraftTrack.make({ kind: t.kind, title: t.title, artist: t.artist, url: t.url })),
       photos: FeedPost.photos(post).map((m) => DraftPhoto.make({ existing: m })),
       restReason: post.rest_reason,
+      participants: (post.post_participants ?? []).map((p) => p.user_id),
     };
   },
 };
@@ -433,6 +492,7 @@ interface PostWrite {
   medals: PostMedal[];
   streak_weeks: number;
   kind: string;
+  exercises?: PostExercise[];
   draft: PostDraftFields;
 }
 
@@ -448,6 +508,7 @@ function encodePostWrite(w: PostWrite): string {
     medals: w.medals,
     streak_weeks: w.streak_weeks,
     kind: w.kind,
+    ...(w.exercises !== undefined ? { exercises: w.exercises.map((e) => ({ name: e.name, sets: e.sets, weight_kg: e.weight_kg ?? null, reps: e.reps ?? null })) } : {}),
     ...encodeDraftFields(w.draft),
   });
 }
@@ -778,7 +839,7 @@ export class SocialStore {
 
   private static readonly profileFields = "user_id,username,display_name";
   private static readonly friendshipsQuery = `friendships?select=*,requester:profiles!friendships_requester_id_fkey(${SocialStore.profileFields}),addressee:profiles!friendships_addressee_id_fkey(${SocialStore.profileFields})`;
-  private static readonly feedQuery = `posts?select=*,author:profiles!posts_user_id_fkey(${SocialStore.profileFields}),kudos(user_id,giver:profiles!kudos_user_id_fkey(${SocialStore.profileFields})),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&order=workout_date.desc&limit=50`;
+  private static readonly feedQuery = `posts?select=*,author:profiles!posts_user_id_fkey(${SocialStore.profileFields}),kudos(user_id,giver:profiles!kudos_user_id_fkey(${SocialStore.profileFields})),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count),post_participants(user_id,participant:profiles!post_participants_user_id_fkey(${SocialStore.profileFields}))&order=workout_date.desc&limit=50`;
 
   /** A missing table reads as "not set up"; anything else as a failure in words. */
   private static phaseFor(error: unknown): SocialStore_Phase {
@@ -894,7 +955,7 @@ export class SocialStore {
     let mine: FeedPost[];
     try {
       mine = ((await this.get(
-        `posts?select=*,kudos(user_id),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&user_id=eq.${this.myID}&order=workout_date.desc`,
+        `posts?select=*,kudos(user_id),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count),post_participants(user_id,participant:profiles!post_participants_user_id_fkey(${SocialStore.profileFields}))&user_id=eq.${this.myID}&order=workout_date.desc`,
       )) as unknown[]).map(FeedPost.decode);
     } catch {
       return undefined;
@@ -1004,6 +1065,28 @@ export class SocialStore {
     await this.load();
   }
 
+  /**
+   * The posts the friends named on `post` made of that same day — their half
+   * of a workout done together. A friend who hasn't posted it yet has none.
+   */
+  async togetherPosts(post: FeedPost): Promise<FeedPost[]> {
+    const ids = FeedPost.trainedWith(post).map((p) => p.user_id).filter((id) => id !== post.user_id);
+    if (ids.length === 0) return [];
+    const start = startOfDay(FeedPost.date(post));
+    const end = addDays(start, 1);
+    const path =
+      `posts?select=*,author:profiles!posts_user_id_fkey(${SocialStore.profileFields}),kudos(user_id)` +
+      `&user_id=in.(${ids.join(",")})` +
+      `&workout_date=gte.${encodeURIComponent(SocialStore.isoString(start))}` +
+      `&workout_date=lt.${encodeURIComponent(SocialStore.isoString(end))}` +
+      `&order=workout_date.asc`;
+    try {
+      return ((await this.get(path)) as unknown[]).map((row) => FeedPost.decode(row));
+    } catch {
+      return [];
+    }
+  }
+
   /** Whether this account already posted the given workout or rest day. */
   hasPost(a: { sessionID: string }): boolean {
     return this.feed.some((p) => p.session_id === a.sessionID && p.user_id === this.myID) || this.pending.some((p) => p.session.id === a.sessionID);
@@ -1057,6 +1140,7 @@ export class SocialStore {
       medals: a.medals,
       streak_weeks: a.streakWeeks,
       kind: "workout",
+      exercises: PostExercise.list(session),
       draft: postDraftFields(a.draft),
     };
     const data = await this.send("posts?on_conflict=user_id,session_id&select=id", {
@@ -1092,6 +1176,14 @@ export class SocialStore {
 
   /** Music is rewritten whole; photos keep what stayed, lose what was taken off (files included) and upload what is new. */
   private async syncAttachments(postID: string, existing: FeedPost | undefined, draft: PostDraft): Promise<void> {
+    // The friends trained with, rewritten whole like the music.
+    if (draft.participants !== undefined) {
+      await this.send(`post_participants?post_id=eq.${postID}`, { method: "DELETE" });
+      const named = [...new Set(draft.participants)].filter((id) => id !== this.myID);
+      if (named.length > 0) {
+        await this.send("post_participants", { method: "POST", body: JSON.stringify(named.map((id) => ({ post_id: postID, user_id: id }))) });
+      }
+    }
     await this.send(`post_tracks?post_id=eq.${postID}`, { method: "DELETE" });
     if (draft.tracks.length > 0) {
       const rows = draft.tracks.slice(0, PostDraft.maxSongs + 1).map((track, index) => {

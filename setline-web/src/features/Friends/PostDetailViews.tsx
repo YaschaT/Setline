@@ -1,6 +1,7 @@
 // PostDetailViews.swift — the small pieces of a post, the full post with its
 // comments, and someone's profile.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { TogetherSection } from "./TrainedTogetherViews";
 import { Medals, LiftMedal_Place } from "../../core/Progress/Medals";
 import { Milestones, Milestone } from "../../core/Progress/Milestones";
 import { trimmingWhitespacesAndNewlines } from "../../core/Support/nutrition";
@@ -355,6 +356,7 @@ export function PostDetailView({ postID, onClose }: { postID: string; onClose: (
           <ScrollView style={{ flex: "1 1 0" }}>
             <VStack alignment="leading" spacing={SL.Space.s6} style={{ paddingLeft: SL.Space.gutterSession, paddingRight: SL.Space.gutterSession, paddingTop: SL.Space.s2, paddingBottom: SL.Space.s6 }}>
               <PostCard post={post} isDetail />
+              {FeedPost.trainedWith(post).length > 0 && <TogetherSection post={post} />}
               {commentsSection(post)}
             </VStack>
           </ScrollView>

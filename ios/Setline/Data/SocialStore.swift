@@ -86,6 +86,38 @@ struct PostTrack: Codable, Hashable, Identifiable, Sendable {
     var isPlaylist: Bool { kind == "playlist" }
 }
 
+/// One exercise of a posted workout, as friends see it: how many sets and
+/// the best one. The weight is shown only when the post doesn't hide weights.
+struct PostExercise: Codable, Hashable, Sendable {
+    let name: String
+    let sets: Int
+    var weight_kg: Double?
+    var reps: Int?
+
+    /// The workout's exercises with logged working sets, in order.
+    static func list(from session: TrainingSession) -> [PostExercise] {
+        session.results.compactMap { result in
+            let working = result.sets.filter(\.countsTowardVolume)
+            guard !working.isEmpty else { return nil }
+            let best = working.max { ($0.weightKg ?? 0, $0.reps) < ($1.weightKg ?? 0, $1.reps) }
+            return PostExercise(
+                name: String(result.name.prefix(80)),
+                sets: working.count,
+                weight_kg: best?.weightKg.map { NSDecimalNumber(decimal: $0).doubleValue },
+                reps: best?.reps
+            )
+        }
+        .prefix(40)
+        .map { $0 }
+    }
+}
+
+/// A friend named on a post: trained together.
+struct PostParticipant: Codable, Hashable, Sendable {
+    let user_id: String
+    var participant: SocialProfile?
+}
+
 struct CommentCount: Codable, Hashable, Sendable { let count: Int }
 
 struct PostComment: Codable, Hashable, Identifiable, Sendable {
@@ -126,8 +158,12 @@ struct FeedPost: Codable, Hashable, Identifiable, Sendable {
     var comments: [CommentCount]? = nil
     var kind: String? = nil
     var rest_reason: String? = nil
+    var exercises: [PostExercise]? = nil
+    var post_participants: [PostParticipant]? = nil
 
     var isRest: Bool { kind == "rest" }
+    /// The friends named on the post, as far as their profiles are known.
+    var trainedWith: [SocialProfile] { (post_participants ?? []).compactMap(\.participant) }
 
     /// Where it happened, when the lifter said.
     var place: WorkoutPlace? {
@@ -157,11 +193,14 @@ struct PostDraft: Codable {
     var photos: [DraftPhoto] = []
     /// A rest day's why ("Sore", "Travel"); nil on a workout.
     var restReason: String?
+    /// The friends trained with, by user id. Nil in drafts saved before
+    /// friends could be named, which then leave the post's names as they are.
+    var participants: [String]?
 
     static let maxPhotos = 4
     static let maxSongs = 5
 
-    private enum CodingKeys: String, CodingKey { case title, notes, visibility, hidden, place, tracks, photos, restReason }
+    private enum CodingKeys: String, CodingKey { case title, notes, visibility, hidden, place, tracks, photos, restReason, participants }
 
     init() {}
 
@@ -175,6 +214,7 @@ struct PostDraft: Codable {
         tracks = post.tracks.map { DraftTrack(kind: $0.kind, title: $0.title, artist: $0.artist, url: $0.url) }
         photos = post.photos.map { DraftPhoto(existing: $0) }
         restReason = post.rest_reason
+        participants = post.post_participants?.map(\.user_id) ?? []
     }
 }
 
@@ -208,10 +248,11 @@ private struct PostWrite: Encodable {
     let medals: [PostMedal]
     let streak_weeks: Int
     var kind = "workout"
+    var exercises: [PostExercise]? = nil
     let draft: PostDraftFields
 
     private enum CodingKeys: String, CodingKey {
-        case user_id, session_id, workout_date, title, volume_kg, duration_seconds, set_count, medals, streak_weeks, kind
+        case user_id, session_id, workout_date, title, volume_kg, duration_seconds, set_count, medals, streak_weeks, kind, exercises
     }
 
     func encode(to encoder: Encoder) throws {
@@ -226,6 +267,7 @@ private struct PostWrite: Encodable {
         try c.encode(medals, forKey: .medals)
         try c.encode(streak_weeks, forKey: .streak_weeks)
         try c.encode(kind, forKey: .kind)
+        try c.encodeIfPresent(exercises, forKey: .exercises)
         try draft.encode(to: encoder)
     }
 }
@@ -469,7 +511,7 @@ final class SocialStore {
     private static let friendshipsQuery =
         "friendships?select=*,requester:profiles!friendships_requester_id_fkey(\(profileFields)),addressee:profiles!friendships_addressee_id_fkey(\(profileFields))"
     private static let feedQuery =
-        "posts?select=*,author:profiles!posts_user_id_fkey(\(profileFields)),kudos(user_id,giver:profiles!kudos_user_id_fkey(\(profileFields))),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&order=workout_date.desc&limit=50"
+        "posts?select=*,author:profiles!posts_user_id_fkey(\(profileFields)),kudos(user_id,giver:profiles!kudos_user_id_fkey(\(profileFields))),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count),post_participants(user_id,participant:profiles!post_participants_user_id_fkey(\(profileFields)))&order=workout_date.desc&limit=50"
 
     /// A missing table reads as "not set up"; anything else as a failure in
     /// words.
@@ -601,7 +643,7 @@ final class SocialStore {
             mine = feed.filter { $0.user_id == myID }
         } else {
             guard let rows: [FeedPost] = try? await get(
-                "posts?select=*,kudos(user_id),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count)&user_id=eq.\(myID)&order=workout_date.desc"
+                "posts?select=*,kudos(user_id),post_media(id,path,width,height,position),post_tracks(id,kind,title,artist,url,position),comments(count),post_participants(user_id,participant:profiles!post_participants_user_id_fkey(\(Self.profileFields)))&user_id=eq.\(myID)&order=workout_date.desc"
             ) else { return nil }
             mine = rows
         }
@@ -717,6 +759,23 @@ final class SocialStore {
         await load()
     }
 
+    /// The posts the friends named on `post` made of that same day — their
+    /// half of a workout done together. A friend who hasn't posted it yet
+    /// simply has none.
+    func togetherPosts(for post: FeedPost) async -> [FeedPost] {
+        let ids = post.trainedWith.map(\.user_id).filter { $0 != post.user_id }
+        guard !ids.isEmpty else { return [] }
+        let start = Calendar.current.startOfDay(for: post.date)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+        if isDemo { return feed.filter { ids.contains($0.user_id) && $0.date >= start && $0.date < end } }
+        let path = "posts?select=*,author:profiles!posts_user_id_fkey(\(Self.profileFields)),kudos(user_id)"
+            + "&user_id=in.(\(ids.joined(separator: ",")))"
+            + "&workout_date=gte.\(SupabaseClient.queryValue(Self.isoString(start)))"
+            + "&workout_date=lt.\(SupabaseClient.queryValue(Self.isoString(end)))"
+            + "&order=workout_date.asc"
+        return (try? await get(path)) ?? []
+    }
+
     /// Whether this account already posted the given workout or rest day.
     func hasPost(sessionID: String) -> Bool {
         feed.contains { $0.session_id == sessionID && $0.user_id == myID } || pending.contains { $0.session.id == sessionID }
@@ -770,6 +829,7 @@ final class SocialStore {
             set_count: session.results.flatMap(\.sets).filter(\.countsTowardVolume).count,
             medals: medals,
             streak_weeks: streakWeeks,
+            exercises: PostExercise.list(from: session),
             draft: PostDraftFields(draft)
         )
         if isDemo {
@@ -780,6 +840,7 @@ final class SocialStore {
                                 title: write.title, volume_kg: write.volume_kg, duration_seconds: write.duration_seconds,
                                 set_count: write.set_count, medals: write.medals, streak_weeks: write.streak_weeks,
                                 author: me, kudos: [])
+            post.exercises = write.exercises
             demoApply(draft, to: &post)
             feed.insert(post, at: 0)
             return
@@ -821,6 +882,15 @@ final class SocialStore {
     /// Music is rewritten whole; photos keep what stayed, lose what was
     /// taken off (files included) and upload what is new.
     private func syncAttachments(of postID: String, existing: FeedPost?, draft: PostDraft) async throws {
+        // The friends trained with, rewritten whole like the music.
+        if let participants = draft.participants {
+            _ = try await send("post_participants?post_id=eq.\(postID)", method: "DELETE")
+            let named = Array(Set(participants)).filter { $0 != myID }
+            if !named.isEmpty {
+                let rows: [[String: Any]] = named.map { ["post_id": postID, "user_id": $0] }
+                _ = try await send("post_participants", method: "POST", body: try JSONSerialization.data(withJSONObject: rows))
+            }
+        }
         _ = try await send("post_tracks?post_id=eq.\(postID)", method: "DELETE")
         if !draft.tracks.isEmpty {
             let rows: [[String: Any]] = draft.tracks.prefix(PostDraft.maxSongs + 1).enumerated().map { index, track in
@@ -994,6 +1064,11 @@ final class SocialStore {
         post.notes = fields.notes
         post.hidden_stats = fields.hidden
         post.rest_reason = fields.restReason
+        if let ids = draft.participants {
+            post.post_participants = ids.filter { $0 != myID }.map { id in
+                PostParticipant(user_id: id, participant: friends.first { $0.user_id == id })
+            }
+        }
         let shared = draft.place?.shared
         post.place_kind = shared?.kind.rawValue
         post.place_name = shared?.name

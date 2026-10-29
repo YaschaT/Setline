@@ -56,6 +56,7 @@ struct PostComposerView: View {
                     if isRest { restSummary } else {
                         summary
                         WorkoutPlaceCard(place: $draft.place)
+                        TrainedWithCard(participants: $draft.participants)
                     }
                     field("Title") {
                         TextField(defaultTitle, text: $draft.title)

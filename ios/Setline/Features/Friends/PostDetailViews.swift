@@ -167,6 +167,7 @@ struct PostDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: SL.Space.s6) {
                         PostCard(post: post, isDetail: true)
+                        if !post.trainedWith.isEmpty { TogetherSection(post: post) }
                         commentsSection(post)
                     }
                     .padding(.horizontal, SL.Space.gutterSession)

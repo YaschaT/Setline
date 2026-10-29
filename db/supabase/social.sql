@@ -437,3 +437,46 @@ alter table public.posts add column if not exists rest_reason text;
 alter table public.posts drop constraint if exists posts_rest_reason_check;
 alter table public.posts add constraint posts_rest_reason_check
   check (rest_reason is null or (kind = 'rest' and char_length(rest_reason) between 1 and 40));
+
+-- ------------------------------------------------------------------ training together
+
+-- What was trained, for whoever sees the post: one entry per exercise,
+-- [{ "name": "Flat bench press", "sets": 3, "weight_kg": 100, "reps": 5 }],
+-- the best set; weight and reps are left out when the lifter hides weights.
+alter table public.posts add column if not exists exercises jsonb;
+alter table public.posts drop constraint if exists posts_exercises_check;
+alter table public.posts add constraint posts_exercises_check
+  check (exercises is null or (jsonb_typeof(exercises) = 'array' and jsonb_array_length(exercises) <= 40));
+
+-- Friends the lifter trained with, named on the post.
+create table if not exists public.post_participants (
+  post_id    uuid not null references public.posts (id) on delete cascade,
+  user_id    uuid not null references public.profiles (user_id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+
+alter table public.post_participants enable row level security;
+
+-- As visible as the post; and the friend named can always see that they were.
+drop policy if exists "see participants on visible posts" on public.post_participants;
+create policy "see participants on visible posts" on public.post_participants
+  for select to authenticated using (
+    public.can_see_post(post_id, auth.uid()) or user_id = auth.uid()
+  );
+
+-- Only the post's author names people, and only their friends.
+drop policy if exists "name friends on own posts" on public.post_participants;
+create policy "name friends on own posts" on public.post_participants
+  for insert to authenticated with check (
+    exists (select 1 from public.posts p where p.id = post_id and p.user_id = auth.uid())
+    and public.are_friends(auth.uid(), user_id)
+  );
+
+-- The author takes a name off; the friend named can take themselves off.
+drop policy if exists "remove a name" on public.post_participants;
+create policy "remove a name" on public.post_participants
+  for delete to authenticated using (
+    user_id = auth.uid()
+    or exists (select 1 from public.posts p where p.id = post_id and p.user_id = auth.uid())
+  );

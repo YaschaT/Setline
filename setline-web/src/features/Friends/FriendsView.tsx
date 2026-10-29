@@ -8,6 +8,7 @@
 // swipe actions are a sideways drag on the row; `ShareLink` is
 // `navigator.share`, else the text is copied.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { TrainedWithLine } from "./TrainedTogetherViews";
 import type { TrainingSession } from "../../core/Domain/Model";
 import { LoggedSet } from "../../core/Domain/Model";
 import { Medals, LiftMedal_Place } from "../../core/Progress/Medals";
@@ -461,6 +462,9 @@ export function PostCard({ post, isDetail = false }: { post: FeedPost; isDetail?
       <Text size={SL.TypeSize.display} weight={SL.Weight.bold} tracking={-0.02 * SL.TypeSize.display} color={SL.Ink.primary} lineHeight={1.1}>
         {FeedPost.displayTitle(post)}
       </Text>
+      {TrainedWithLine.text(FeedPost.trainedWith(post)) !== undefined && (
+        <Text {...slBody(SL.Weight.medium)} color={SL.Signal.action}>{TrainedWithLine.text(FeedPost.trainedWith(post))}</Text>
+      )}
       {post.notes !== undefined && post.notes !== "" && (
         <Text {...slBody()} color={colorOpacity(SL.Ink.primary, 0.82)} lineLimit={isDetail ? undefined : 3} style={{ whiteSpace: "pre-wrap" }}>
           {post.notes}

@@ -6,6 +6,7 @@
 // resized and re-encoded in the browser (`SocialStore.preparePhoto`), which
 // drops its location data as on iOS.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { TrainedWithCard } from "./TrainedTogetherViews";
 import type { TrainingSession } from "../../core/Domain/Model";
 import { LoggedSet } from "../../core/Domain/Model";
 import { Medals, LiftMedal_Place } from "../../core/Progress/Medals";
@@ -467,6 +468,7 @@ export function PostComposerView({ mode, onClose }: { mode: PostComposerView_Mod
             <>
               {summary}
               <WorkoutPlaceCard place={{ value: draft.place, set: (place) => update((d) => ({ ...d, place })) }} />
+              <TrainedWithCard participants={{ value: draft.participants, set: (participants) => update((d) => ({ ...d, participants })) }} />
             </>
           )}
           {field(

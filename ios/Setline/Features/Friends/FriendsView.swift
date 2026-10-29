@@ -625,6 +625,9 @@ struct PostCard: View {
                 .foregroundStyle(SL.Ink.primary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
+            if let with = TrainedWithLine.text(post.trainedWith) {
+                Text(with).slBody(SL.Weight.medium).foregroundStyle(SL.Signal.action)
+            }
             if let notes = post.notes, !notes.isEmpty {
                 Text(notes)
                     .slBody()
