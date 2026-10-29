@@ -9,7 +9,7 @@
 // map on a post is drawn from CARTO's dark OpenStreetMap tiles, with their
 // required credit where Apple's Maps mark sits. "Open in Maps" opens Google
 // Maps at the place.
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { trimmingWhitespaces, charCount } from "../../core/Support/nutrition";
 import { compare, deepEqual, rounded } from "../../core/Support/swift";
 import { HStack, Sheet, Spacer, Text, VStack, type Binding } from "../../design/swiftui";
@@ -578,44 +578,22 @@ function WorkoutPlace_norm(p: WorkoutPlace) {
 
 // MARK: - In the feed
 
-const TILE = 256;
-const tileURL = (z: number, x: number, y: number) => `https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`;
+/** The map under a post's place, fetched only when one is shown. */
+const LiveMap = lazy(() => import("./LiveMap"));
 
-/** A dark, quiet street map centred on a point, `spanMeters` tall over `height`, drawn from tiles. */
+/** A dark, quiet street map centred on a point, `spanMeters` tall over `height`. */
 function StaticMap({ center, spanMeters, height, children }: { center: Coordinate; spanMeters: number; height: number; children?: (metersPerPixel: number) => ReactNode }) {
   const cosLat = Math.cos((center.latitude * Math.PI) / 180);
   const metersPerPixel = spanMeters / height;
-  const zoomExact = Math.log2((156_543.03392 * cosLat) / metersPerPixel);
-  const zoom = Math.max(0, Math.min(19, Math.floor(zoomExact)));
-  const scale = 2 ** (zoomExact - zoom);
-  const worldTiles = 2 ** zoom;
-  const latRad = (center.latitude * Math.PI) / 180;
-  const cx = ((center.longitude + 180) / 360) * worldTiles * TILE;
-  const cy = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * worldTiles * TILE;
-  const halfW = 400 / scale;
-  const halfH = height / 2 / scale;
-  const tiles: { x: number; y: number; left: number; top: number }[] = [];
-  for (let tx = Math.floor((cx - halfW) / TILE); tx <= Math.floor((cx + halfW) / TILE); tx++) {
-    for (let ty = Math.floor((cy - halfH) / TILE); ty <= Math.floor((cy + halfH) / TILE); ty++) {
-      if (ty < 0 || ty >= worldTiles) continue;
-      tiles.push({ x: ((tx % worldTiles) + worldTiles) % worldTiles, y: ty, left: (tx * TILE - cx) * scale, top: (ty * TILE - cy) * scale });
-    }
-  }
+  // MapLibre counts zoom in 512-pixel tiles: one level below the 256-pixel count.
+  const zoom = Math.max(0, Math.min(19, Math.log2((156_543.03392 * cosLat) / metersPerPixel) - 1));
   return (
     <div style={{ position: "relative", height, overflow: "hidden", background: "#1b1d1f" }}>
-      <div style={{ position: "absolute", left: "50%", top: "50%" }}>
-        {tiles.map((t) => (
-          <img
-            key={`${t.x}/${t.y}/${t.left}`}
-            src={tileURL(zoom, t.x, t.y)}
-            alt=""
-            draggable={false}
-            style={{ position: "absolute", left: t.left, top: t.top, width: TILE * scale + 0.5, height: TILE * scale + 0.5, maxWidth: "none" }}
-          />
-        ))}
-        {children?.(metersPerPixel)}
-      </div>
-      <span style={{ position: "absolute", right: 4, bottom: 2, ...slFont(9), color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>© OpenStreetMap © CARTO</span>
+      <Suspense fallback={null}>
+        <LiveMap latitude={center.latitude} longitude={center.longitude} zoom={zoom} />
+      </Suspense>
+      <div style={{ position: "absolute", left: "50%", top: "50%", pointerEvents: "none" }}>{children?.(metersPerPixel)}</div>
+      <span style={{ position: "absolute", right: 4, bottom: 2, ...slFont(9), color: "rgba(255,255,255,0.55)", pointerEvents: "none" }}>© OpenFreeMap © OpenStreetMap</span>
     </div>
   );
 }

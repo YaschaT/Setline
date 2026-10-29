@@ -75,7 +75,7 @@ public enum ExercisePicker {
             }
         }
 
-        return offered(catalog: catalog).compactMap { exercise in
+        let all: [Row] = offered(catalog: catalog).compactMap { exercise in
             guard let group = exercise.group else { return nil }
             let history = last[exercise.id]
             return Row(
@@ -87,6 +87,34 @@ public enum ExercisePicker {
                 topSetReps: history?.reps,
                 isFavorite: favorites.contains(exercise.id)
             )
+        }
+        return mergingAliases(all)
+    }
+
+    /// One row per physical exercise. The catalogue keys some exercises per
+    /// training day (`push-shoulder` and `upper-shoulder` are the same
+    /// machine), which listed them twice. The row kept is the one trained
+    /// most recently — its history is what the account means by that
+    /// exercise — else the canonical id; it is starred if any of them is.
+    static func mergingAliases(_ rows: [Row]) -> [Row] {
+        let groups = Dictionary(grouping: rows) { ExerciseMetadata.canonicalID[$0.exerciseID] ?? $0.exerciseID }
+        var kept: [String: Row] = [:]
+        for (canonical, members) in groups {
+            let trained = members.filter { $0.lastTrained != nil }.max { $0.lastTrained! < $1.lastTrained! }
+            var row = trained ?? members.first { $0.exerciseID == canonical } ?? members[0]
+            row = Row(
+                exerciseID: row.exerciseID, name: row.name, group: row.group,
+                lastTrained: row.lastTrained, topSetKg: row.topSetKg, topSetReps: row.topSetReps,
+                isFavorite: members.contains(where: \.isFavorite)
+            )
+            kept[canonical] = row
+        }
+        // The catalogue's order, as before.
+        var seen: Set<String> = []
+        return rows.compactMap { row in
+            let canonical = ExerciseMetadata.canonicalID[row.exerciseID] ?? row.exerciseID
+            guard seen.insert(canonical).inserted else { return nil }
+            return kept[canonical]
         }
     }
 

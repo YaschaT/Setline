@@ -60,7 +60,9 @@ final class ExercisePickerTests: XCTestCase {
 
     func testTheCatalogueIsOfferedWholeAndTheGroupsAddUpToIt() {
         let rows = ExercisePicker.rows(sessions: [])
-        XCTAssertEqual(rows.count, ExercisePicker.offered().count)
+        // Every physical exercise once: ids that name the same one are merged.
+        let physical = Set(ExercisePicker.offered().map { ExerciseMetadata.canonicalID[$0.id] ?? $0.id })
+        XCTAssertEqual(rows.count, physical.count)
         XCTAssertEqual(
             ExercisePicker.groups(in: rows).reduce(0) { $0 + $1.count },
             rows.count,
@@ -250,5 +252,20 @@ final class ExercisePickerTests: XCTestCase {
         _ = ExercisePicker.search("bench", in: rows)
 
         XCTAssertEqual(state.raw, before, "looking for an exercise is reading")
+    }
+
+    /// The catalogue keys some exercises per training day; the picker lists
+    /// each physical exercise once.
+    func testTheSameExerciseUnderTwoIdsIsOfferedOnce() {
+        let names = ExercisePicker.rows(sessions: []).map { $0.name.lowercased() }
+        XCTAssertEqual(names.count, Set(names).count)
+    }
+
+    func testTheIdTrainedMostRecentlyStandsForTheExercise() {
+        let session = Fixtures.session(id: "s", daysAgo: 1, exerciseID: "upper-shoulder", sets: [(weight: 40, reps: 10, rir: nil)])
+        let shoulder = ExercisePicker.rows(sessions: [session]).filter { $0.name.lowercased() == "machine shoulder press" }
+        XCTAssertEqual(shoulder.count, 1)
+        XCTAssertEqual(shoulder.first?.exerciseID, "upper-shoulder")
+        XCTAssertEqual(shoulder.first?.topSetKg, 40)
     }
 }

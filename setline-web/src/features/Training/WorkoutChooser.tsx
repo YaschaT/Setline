@@ -249,7 +249,7 @@ export function WorkoutChooserSheet({
 
 /**
  * Putting a workout together: a name, the exercises in order, and sets for
- * each. Saved to the account; "Save & start" begins it right away.
+ * each. Saved to the account; started from the list like any plan day.
  */
 export function CustomWorkoutBuilder({
   workout,
@@ -397,12 +397,10 @@ export function CustomWorkoutBuilder({
           </VStack>
 
           <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", alignItems: "stretch" }}>
-            <SLPrimaryButton onPress={() => onSave(built(), true)} disabled={!canSave}>
-              Save &amp; start
-            </SLPrimaryButton>
-            <SLOutlineButton onPress={() => onSave(built(), false)} disabled={!canSave} style={{ opacity: canSave ? 1 : 0.4 }}>
+            <SLPrimaryButton onPress={() => onSave(built(), false)} disabled={!canSave}>
               Save
-            </SLOutlineButton>
+            </SLPrimaryButton>
+            <SLOutlineButton onPress={onClose}>Cancel</SLOutlineButton>
             {!canSave && (
               <Text {...slMeta()} color={SL.Ink.secondary} align="center">
                 {trimmed === "" ? "Give it a name and add an exercise." : "Add at least one exercise."}

@@ -1,4 +1,5 @@
 import { ExerciseCatalog } from "../Catalog/ExerciseCatalog";
+import { ExerciseMetadata } from "../Catalog/ExerciseMetadata";
 import { Exercise, type TrainingSession } from "../Domain/Model";
 import { MuscleGroup } from "../Domain/MuscleGroup";
 import {
@@ -113,7 +114,7 @@ export const ExercisePicker = {
       }
     }
 
-    return ExercisePicker.offered({ catalog }).flatMap((exercise) => {
+    const all = ExercisePicker.offered({ catalog }).flatMap((exercise) => {
       const group = Exercise.group(exercise);
       if (group === undefined) return [];
       const history = last.get(exercise.id);
@@ -129,6 +130,42 @@ export const ExercisePicker = {
         }),
       ];
     });
+    return ExercisePicker.mergingAliases(all);
+  },
+
+  /**
+   * One row per physical exercise. The catalogue keys some exercises per
+   * training day (`push-shoulder` and `upper-shoulder` are the same
+   * machine), which listed them twice. The row kept is the one trained most
+   * recently — its history is what the account means by that exercise —
+   * else the canonical id; it is starred if any of them is.
+   */
+  mergingAliases(rows: ExercisePicker_Row[]): ExercisePicker_Row[] {
+    const canonicalOf = (id: string) => ExerciseMetadata.canonicalID[id] ?? id;
+    const groups = new Map<string, ExercisePicker_Row[]>();
+    for (const row of rows) {
+      const key = canonicalOf(row.exerciseID);
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    const kept = new Map<string, ExercisePicker_Row>();
+    for (const [canonical, members] of groups) {
+      const trained = maxBy(
+        members.filter((m) => m.lastTrained !== undefined),
+        (x, y) => x.lastTrained!.getTime() < y.lastTrained!.getTime(),
+      );
+      const row = trained ?? members.find((m) => m.exerciseID === canonical) ?? members[0];
+      kept.set(canonical, { ...row, isFavorite: members.some((m) => m.isFavorite) });
+    }
+    // The catalogue's order, as before.
+    const seen = new Set<string>();
+    const out: ExercisePicker_Row[] = [];
+    for (const row of rows) {
+      const canonical = canonicalOf(row.exerciseID);
+      if (seen.has(canonical)) continue;
+      seen.add(canonical);
+      out.push(kept.get(canonical)!);
+    }
+    return out;
   },
 
   /**

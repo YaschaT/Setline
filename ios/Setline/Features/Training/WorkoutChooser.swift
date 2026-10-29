@@ -194,7 +194,7 @@ struct WorkoutChooserSheet: View {
 }
 
 /// Putting a workout together: a name, the exercises in order, and sets for
-/// each. Saved to the account; "Save & start" begins it right away.
+/// each. Saved to the account; started from the list like any plan day.
 struct CustomWorkoutBuilder: View {
     @Environment(AppState.self) private var app
     let workout: CustomWorkout?
@@ -255,13 +255,11 @@ struct CustomWorkoutBuilder: View {
                 .slListCard()
 
                 VStack(spacing: SL.Space.s2) {
-                    Button { onSave(built, true) } label: { Text("Save & start") }
+                    Button { onSave(built, false) } label: { Text("Save") }
                         .buttonStyle(SLPrimaryButtonStyle())
                         .disabled(!canSave)
-                    Button { onSave(built, false) } label: { Text("Save") }
+                    Button { onClose() } label: { Text("Cancel") }
                         .buttonStyle(SLOutlineButtonStyle())
-                        .disabled(!canSave)
-                        .opacity(canSave ? 1 : 0.4)
                     if !canSave {
                         Text(trimmed.isEmpty ? "Give it a name and add an exercise." : "Add at least one exercise.")
                             .slMeta().foregroundStyle(SL.Ink.secondary)
