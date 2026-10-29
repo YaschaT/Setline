@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "npm install",
-  "buildCommand": "npm run build:web",
-  "outputDirectory": "deploy/web/dist",
+  "buildCommand": "npm run app:build",
+  "outputDirectory": "setline-web/dist",
   "rewrites": [
     {
       "source": "/api/auth/supabase",
