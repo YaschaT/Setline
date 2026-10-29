@@ -19,7 +19,7 @@ import { useApp } from "./data/AppState";
 import { useSocial } from "./data/SocialStore";
 import { LoadingView } from "./features/Auth/LoadingView";
 import { ColdOpenView } from "./features/Auth/ColdOpenView";
-import { SignInView } from "./features/Auth/SignInView";
+import { NewPasswordView, SignInView } from "./features/Auth/SignInView";
 import { OnboardingFlow } from "./features/Onboarding/OnboardingFlow";
 import { AccountView } from "./features/Account/AccountView";
 import { TrainingHomeView } from "./features/Training/TrainingHomeView";
@@ -230,6 +230,13 @@ export function RootView() {
         <LoadingView />
       </Fade>
     );
+  } else if (app.isSignedIn && app.needsNewPassword) {
+    // Web only: opened from a password-reset email.
+    content = (
+      <Fade key="newPassword" duration={0.3}>
+        <NewPasswordView />
+      </Fade>
+    );
   } else if (app.isSignedIn && (app.isNewAccount || showsOnboarding)) {
     content = (
       <Fade key="onboarding" duration={0.3}>
@@ -272,7 +279,7 @@ export function RootView() {
   const shownRunning = useLastItem(running);
   const shownComposing = useLastItem(composing);
   const shownInvite = useLastItem(invite);
-  const signedInShell = app.isSignedIn && !app.isLoading && !(app.isNewAccount || showsOnboarding) && !showsColdOpen;
+  const signedInShell = app.isSignedIn && !app.isLoading && !app.needsNewPassword && !(app.isNewAccount || showsOnboarding) && !showsColdOpen;
 
   return (
     <div style={{ height: "100%", background: SL.Surface.ground, color: SL.Ink.primary }}>

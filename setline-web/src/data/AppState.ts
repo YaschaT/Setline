@@ -197,6 +197,8 @@ export class AppState {
       this.changed();
       return;
     }
+    // Opened from a link in an account email (confirm sign-up, reset password).
+    if (await this.signInFromEmailLink()) return;
     const text = Keychain.get(AppState.sessionKey);
     let saved: AuthSession | undefined;
     if (text) {
@@ -212,6 +214,57 @@ export class AppState {
     }
     this.isLoading = false;
     this.changed();
+  }
+
+  // MARK: - Links from account emails (web only)
+
+  /** Set after a password-reset link: the account is signed in and asks for a new password. */
+  needsNewPassword = false;
+
+  /**
+   * A confirmation or reset link lands here with the session in the address.
+   * It signs that account in: a confirmed new account starts its onboarding,
+   * a reset asks for the new password. `true` when it handled a link.
+   */
+  private async signInFromEmailLink(): Promise<boolean> {
+    const link = SupabaseClient.linkFromAddress(location.hash);
+    if (!link) return false;
+    // The tokens leave the address bar at once.
+    history.replaceState(null, "", "/");
+    if (link.kind === "error") {
+      this.authError = `That link didn't work (${link.message}). Sign in, or tap Forgot password for a new one.`;
+      return false;
+    }
+    try {
+      const user = await this.client.user(link.accessToken);
+      const session: AuthSession = { accessToken: link.accessToken, refreshToken: link.refreshToken, userID: user.id, email: user.email, expiresAt: link.expiresAt };
+      this.clearData();
+      this.begin(session);
+      this.persist(session);
+      this.isNewAccount = link.type === "signup";
+      this.needsNewPassword = link.type === "recovery";
+      await this.loadState();
+      this.isLoading = false;
+      this.changed();
+      return true;
+    } catch {
+      this.authError = "That link has expired. Sign in, or tap Forgot password for a new one.";
+      return false;
+    }
+  }
+
+  /** Saves the new password after a reset link. Returns an error message, or undefined when it worked. */
+  async setNewPassword(password: string): Promise<string | undefined> {
+    if (password.length < 6) return "Use at least 6 characters.";
+    if (!this.auth) return "Sign in again to change your password.";
+    try {
+      await this.auth.perform((session) => this.client.updatePassword(session, password));
+      this.needsNewPassword = false;
+      this.changed();
+      return undefined;
+    } catch (error) {
+      return (error as Error).message || "That didn't work. Try again in a moment.";
+    }
   }
 
   // MARK: - Auth

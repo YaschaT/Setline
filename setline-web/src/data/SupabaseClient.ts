@@ -45,12 +45,55 @@ export class SupabaseClient implements TokenRefresher {
     return this.authenticate("/auth/v1/token?grant_type=password", { email, password });
   }
 
+  /**
+   * Where the links in the account emails (confirm, reset) bring people back:
+   * this site. Without it Supabase sends them to the project's Site URL,
+   * which is localhost until someone changes it by hand.
+   */
+  static redirectQuery(): string {
+    return `redirect_to=${encodeURIComponent(`${location.origin}/login`)}`;
+  }
+
   signUp(email: string, password: string): Promise<AuthSession> {
-    return this.authenticate("/auth/v1/signup", { email, password });
+    return this.authenticate(`/auth/v1/signup?${SupabaseClient.redirectQuery()}`, { email, password });
   }
 
   async sendPasswordReset(email: string): Promise<void> {
-    await this.send(this.jsonRequest("/auth/v1/recover", "POST", { email }, undefined));
+    await this.send(this.jsonRequest(`/auth/v1/recover?${SupabaseClient.redirectQuery()}`, "POST", { email }, undefined));
+  }
+
+  /** The account behind an access token: who a link from an email signed in. */
+  async user(accessToken: string): Promise<{ id: string; email: string }> {
+    const data = await this.send(this.makeRequest("/auth/v1/user", "GET", accessToken), true);
+    const user = JSON.parse(data) as { id?: string; email?: string };
+    if (typeof user.id !== "string") throw new SupabaseFailure("network");
+    return { id: user.id, email: user.email ?? "" };
+  }
+
+  /** A new password for the signed-in account (after a reset link). */
+  async updatePassword(session: AuthSession, password: string): Promise<void> {
+    await this.send(this.makeRequest("/auth/v1/user", "PUT", session.accessToken, JSON.stringify({ password })), true);
+  }
+
+  /**
+   * What a link from an account email brought back in the address:
+   * `#access_token=…&refresh_token=…&expires_in=…&type=signup|recovery`, or
+   * `#error=…&error_description=…` when the link was used or expired.
+   */
+  static linkFromAddress(hash: string):
+    | { kind: "session"; accessToken: string; refreshToken: string; expiresAt?: Date; type: string }
+    | { kind: "error"; message: string }
+    | undefined {
+    const params = new URLSearchParams(hash.replace(/^#/, ""));
+    const error = params.get("error_description") ?? params.get("error");
+    if (error) return { kind: "error", message: error.replaceAll("+", " ") };
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    if (!accessToken || !refreshToken) return undefined;
+    const at = Number(params.get("expires_at"));
+    const inSeconds = Number(params.get("expires_in"));
+    const expiresAt = at > 0 ? new Date(at * 1000) : inSeconds > 0 ? new Date(Date.now() + inSeconds * 1000) : undefined;
+    return { kind: "session", accessToken, refreshToken, expiresAt, type: params.get("type") ?? "" };
   }
 
   /**
@@ -231,6 +274,9 @@ export class SupabaseClient implements TokenRefresher {
         const text = object[key];
         if (typeof text === "string" && text !== "") {
           if (text.toLowerCase().includes("invalid login credentials")) return "Email or password is incorrect.";
+          if (text.toLowerCase().includes("email not confirmed")) {
+            return "Confirm your email address first: open the link we sent you (check your spam folder too). No email? Tap Forgot password.";
+          }
           return text;
         }
       }

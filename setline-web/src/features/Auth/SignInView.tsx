@@ -78,7 +78,7 @@ export function SignInView({ registering = false, onBack }: { registering?: bool
         <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "row", paddingTop: 14, paddingLeft: 2, paddingRight: 2 }}>
           <Spacer />
           <PressButton
-            onPress={() => void app.sendPasswordReset({ email })}
+            onPress={() => void app.sendPasswordReset({ email: trimmed(email) })}
             style={{ minHeight: SL.Space.hitMin, display: "flex", alignItems: "center", justifyContent: "flex-end" }}
           >
             <Text {...slMeta()} color={SL.Ink.secondary}>Forgot password</Text>
@@ -208,6 +208,68 @@ function FieldRow(p: {
           lineHeight: 1.25,
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Web only: after a password-reset link the account is signed in and asks
+ * for its new password here, on the sign-in screen's own layout.
+ */
+export function NewPasswordView() {
+  const app = useApp();
+  const [password, setPassword] = useState("");
+  const [focused, setFocused] = useState<Field | undefined>(undefined);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [working, setWorking] = useState(false);
+  return (
+    <div style={{ height: "100%", background: SL.Surface.ground, paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          height: "100%",
+          paddingLeft: `calc(env(safe-area-inset-left) + ${SL.Space.gutterEntry}px)`,
+          paddingRight: `calc(env(safe-area-inset-right) + ${SL.Space.gutterEntry}px)`,
+          paddingTop: SL.Space.s10,
+          paddingBottom: SL.Space.entryBlockBottom,
+        }}
+      >
+        <Text as="h1" {...slDisplay()} color={SL.Ink.primary} style={slLineHeight(SL.LineHeight.display, { size: SL.TypeSize.display })}>
+          Choose a new password
+        </Text>
+        <Text
+          {...slBody()}
+          color={SL.Ink.secondary}
+          style={{ ...slLineHeight(SL.LineHeight.body, { size: SL.TypeSize.body }), ...slMeasure(32, { fontSize: SL.TypeSize.body }), paddingTop: 10, paddingBottom: 28 }}
+        >
+          {`For ${app.session?.email ?? "your account"}. At least 6 characters.`}
+        </Text>
+        <FieldGroup>
+          <FieldRow label="New password" text={password} setText={setPassword} isSecure field="password" focused={focused} setFocused={setFocused} isRegistering />
+        </FieldGroup>
+        {error !== undefined && (
+          <Text {...slMeta()} color={SL.Signal.attention} style={{ paddingTop: SL.Space.s3 }}>
+            {error}
+          </Text>
+        )}
+        <Spacer />
+        <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
+          <SLPrimaryButton
+            disabled={working || password.length < 6}
+            onPress={() => {
+              setWorking(true);
+              void app.setNewPassword(password).then((message) => {
+                setWorking(false);
+                setError(message);
+              });
+            }}
+          >
+            Save password
+          </SLPrimaryButton>
+        </div>
+      </div>
     </div>
   );
 }
