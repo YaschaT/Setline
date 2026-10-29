@@ -75,6 +75,9 @@ struct SessionView: View {
     let onPause: (ActiveSessionSnapshot) -> Void
     /// Leaves a session nothing was done in, without parking it.
     let onClose: () -> Void
+    /// Opened from a paused or left-open workout. Leaving it again, even
+    /// untouched, parks it again: it holds the sets logged before.
+    private let resumed: Bool
 
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private static let topAnchor = "session-top"
@@ -92,7 +95,12 @@ struct SessionView: View {
         self.onFinish = onFinish
         self.onPause = onPause
         self.onClose = onClose
+        self.resumed = snapshot != nil
     }
+
+    /// Nothing to keep: a fresh session left as it opened. A resumed one
+    /// always has something — closing it would throw away its earlier sets.
+    private var leavesWithNothing: Bool { runner.isUntouched && !resumed }
 
     var body: some View {
         ZStack {
@@ -408,7 +416,7 @@ struct SessionView: View {
                 Button(action: leave) {
                     HStack(spacing: 2) {
                         SLGlyph(name: .chevronLeft, size: 18)
-                        Text(runner.isUntouched ? "Training" : "Pause").slBody()
+                        Text(leavesWithNothing ? "Training" : "Pause").slBody()
                     }
                     .foregroundStyle(SL.Ink.secondary)
                     .lineLimit(1)
@@ -417,8 +425,8 @@ struct SessionView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(runner.isUntouched ? "Back to Training" : "Pause the session")
-                .accessibilityHint(runner.isUntouched ? "" : "Saves where you are. Resume from Training.")
+                .accessibilityLabel(leavesWithNothing ? "Back to Training" : "Pause the session")
+                .accessibilityHint(leavesWithNothing ? "" : "Saves where you are. Resume from Training.")
 
                 Spacer(minLength: 0)
 
@@ -471,7 +479,7 @@ struct SessionView: View {
     /// nothing was done has nothing to keep, and simply closes.
     private func leave() {
         runner.stopRestSignals()
-        if runner.isUntouched {
+        if leavesWithNothing {
             onClose()
         } else {
             WorkoutReminder.schedule(dayLabel: runner.day.short, paused: true)

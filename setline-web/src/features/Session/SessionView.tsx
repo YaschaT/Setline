@@ -411,12 +411,18 @@ export function SessionView(p: {
   // MARK: - Top bar
 
   /**
+   * Nothing to keep: a fresh session left as it opened. A resumed one always
+   * has something — closing it would throw away its earlier sets.
+   */
+  const leavesWithNothing = runner.isUntouched && p.resuming === undefined;
+
+  /**
    * Pausing keeps the session exactly as it stands. A session in which
    * nothing was done has nothing to keep, and simply closes.
    */
   const leave = () => {
     runner.stopRestSignals();
-    if (runner.isUntouched) {
+    if (leavesWithNothing) {
       p.onClose();
     } else {
       WorkoutReminder.schedule({ dayLabel: runner.day.short, paused: true });
@@ -460,11 +466,11 @@ export function SessionView(p: {
       <HStack spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
         <Pressable
           onPress={leave}
-          aria-label={runner.isUntouched ? "Back to Training" : "Pause the session"}
+          aria-label={leavesWithNothing ? "Back to Training" : "Pause the session"}
           style={{ background: "transparent", minHeight: SL.Space.hitMin, display: "flex", alignItems: "center", gap: 2, color: SL.Ink.secondary, flexShrink: 0, whiteSpace: "nowrap" }}
         >
           <SLGlyph name="chevronLeft" size={18} />
-          <Text {...slBody()} color={SL.Ink.secondary} lineLimit={1}>{runner.isUntouched ? "Training" : "Pause"}</Text>
+          <Text {...slBody()} color={SL.Ink.secondary} lineLimit={1}>{leavesWithNothing ? "Training" : "Pause"}</Text>
         </Pressable>
         <Spacer minLength={0} />
         {clockLine}
