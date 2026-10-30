@@ -133,10 +133,13 @@ struct RootView: View {
             offerUpdates()
         }
         .onChange(of: updates.hasUnseen) { _, _ in offerUpdates() }
-        .sheet(isPresented: $showsUpdates) {
-            PatchNotesView(onClose: { showsUpdates = false })
-                .presentationDragIndicator(.visible)
+        .overlay {
+            if showsUpdates {
+                PatchNotesDialog(onClose: { withAnimation(.easeOut(duration: 0.2)) { showsUpdates = false } })
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: showsUpdates)
+        .onChange(of: tab) { _, _ in offerUpdates() }
         // Resumed, finished or ended anywhere: no reminder about it is left.
         .onChange(of: app.resumableSession == nil) { _, none in if none { WorkoutReminder.cancel() } }
         .onChange(of: running?.id) { _, id in if id != nil { WorkoutReminder.cancel() } }
@@ -322,7 +325,8 @@ struct RootView: View {
     /// over a workout, a shared link or an invite. Someone who hasn't trained
     /// yet has nothing it changed for them, so it is simply marked read.
     private func offerUpdates() {
-        guard !updatesOffered, updates.hasUnseen, app.isSignedIn, !app.isLoading,
+        // On Training only: the first screen, and never in the middle of something.
+        guard !updatesOffered, updates.hasUnseen, tab == .training, app.isSignedIn, !app.isLoading,
               !app.isNewAccount, !showsOnboarding, !showsColdOpen,
               running == nil, sharedWorkout == nil, invite == nil else { return }
         updatesOffered = true

@@ -31,7 +31,7 @@ import { SessionView } from "./features/Session/SessionView";
 import { InviteLandingSheet } from "./features/Friends/InviteViews";
 import { SharedWorkoutInbox, SharedWorkoutSheet } from "./features/Training/SharedWorkoutSheet";
 import { PatchNotes, usePatchNotes } from "./features/Account/PatchNotes";
-import { PatchNotesView } from "./features/Account/PatchNotesView";
+import { PatchNotesDialog } from "./features/Account/PatchNotesView";
 import type { CustomWorkoutLink_Received } from "./core/Domain/CustomWorkoutLink";
 import { PostComposerView } from "./features/Friends/PostComposerView";
 import { StreakReminder } from "./features/Training/StreakReminder";
@@ -303,7 +303,8 @@ export function RootView() {
   // nothing it changed for them, so it is simply marked read.
   const hasUnseenUpdate = updates.hasUnseen;
   useEffect(() => {
-    if (updatesOffered.current || !hasUnseenUpdate || !signedInShell) return;
+    // On Training only: the first screen, and never in the middle of something.
+    if (updatesOffered.current || !hasUnseenUpdate || !signedInShell || tab !== "training") return;
     if (running !== undefined || sharedWorkout !== undefined || invite !== undefined) return;
     updatesOffered.current = true;
     if (app.sessions.length === 0) {
@@ -311,7 +312,7 @@ export function RootView() {
       return;
     }
     setShowsUpdates(true);
-  }, [hasUnseenUpdate, signedInShell, running, sharedWorkout, invite, app.sessions.length]);
+  }, [hasUnseenUpdate, signedInShell, tab, running, sharedWorkout, invite, app.sessions.length]);
 
   return (
     <div style={{ height: "100%", background: SL.Surface.ground, color: SL.Ink.primary }}>
@@ -368,13 +369,7 @@ export function RootView() {
             )}
           </FullScreenCover>
 
-          <Sheet isPresented={showsUpdates} onDismiss={() => setShowsUpdates(false)}>
-            {showsUpdates && (
-              <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" }}>
-                <PatchNotesView onClose={() => setShowsUpdates(false)} />
-              </div>
-            )}
-          </Sheet>
+          {showsUpdates && <PatchNotesDialog onClose={() => setShowsUpdates(false)} />}
 
           <Sheet isPresented={sharedWorkout !== undefined} onDismiss={() => setSharedWorkout(undefined)}>
             {shownSharedWorkout !== undefined && (

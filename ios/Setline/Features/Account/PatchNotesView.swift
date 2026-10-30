@@ -141,3 +141,77 @@ struct PatchNotesView: View {
         }
     }
 }
+
+/// The newest update as a dialog over Training, with the screen dimmed behind
+/// it: read once as the app opens, then out of the way. Every update stays in
+/// Settings › What's new.
+struct PatchNotesDialog: View {
+    let onClose: () -> Void
+    private let store = PatchNotes.shared
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.62)
+                .background(.ultraThinMaterial.opacity(0.4))
+                .ignoresSafeArea()
+                .onTapGesture(perform: onClose)
+                .accessibilityHidden(true)
+            if let note = store.notes.first {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: SL.Space.s2) {
+                        SLOverline(text: "What's new · \(PatchNotes.dateLabel(note.date))", color: SL.Signal.action)
+                        Text(note.title)
+                            .slLead(SL.Weight.semibold)
+                            .foregroundStyle(SL.Ink.primary)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                    .padding([.horizontal, .top], SL.Space.s5)
+                    .padding(.bottom, SL.Space.s3)
+                    // Its own height when it fits; scrolls only when it doesn't.
+                    ViewThatFits(in: .vertical) {
+                        bullets(note)
+                        ScrollView { bullets(note) }.scrollBounceBehavior(.basedOnSize)
+                    }
+                    VStack(spacing: SL.Space.s2) {
+                        Button("Got it", action: onClose).buttonStyle(SLPrimaryButtonStyle())
+                        Text("Every update stays in Settings › What's new.")
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.tertiary)
+                    }
+                    .padding(SL.Space.s5)
+                    .padding(.top, -SL.Space.s1)
+                }
+                .frame(maxWidth: 400)
+                .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised))
+                .overlay(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).strokeBorder(SL.Surface.hairline, lineWidth: 1))
+                .shadow(color: .black.opacity(0.55), radius: 30, y: 12)
+                .padding(SL.Space.s4)
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isModal)
+                .onAppear { store.markSeen() }
+            }
+        }
+        .transition(.opacity)
+    }
+
+    private func bullets(_ note: PatchNote) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s3) {
+            ForEach(note.items, id: \.self) { item in
+                HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
+                    Circle()
+                        .fill(SL.Signal.action)
+                        .frame(width: 6, height: 6)
+                        .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 4 }
+                        .accessibilityHidden(true)
+                    Text(item)
+                        .slBody()
+                        .foregroundStyle(SL.Ink.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(.horizontal, SL.Space.s5)
+        .padding(.bottom, SL.Space.s2)
+    }
+}

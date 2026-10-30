@@ -68,3 +68,64 @@ export function PatchNotesView({ onClose }: { onClose: () => void }) {
     </SLSheet>
   );
 }
+
+/**
+ * The newest update as a dialog over Training, with the screen dimmed
+ * behind it: read once as the app opens, then out of the way. Every update
+ * stays in Settings › What's new.
+ */
+export function PatchNotesDialog({ onClose }: { onClose: () => void }) {
+  const store = usePatchNotes();
+  const note = store.notes[0];
+  useEffect(() => {
+    if (note) PatchNotes.markSeen();
+  }, [note]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!note) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 900, background: "rgba(0, 0, 0, 0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: SL.Space.s4, animation: "slRootFade 0.2s ease-out" }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`What's new: ${note.title}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: 400, maxHeight: "82vh", display: "flex", flexDirection: "column", background: SL.Surface.raised, borderRadius: SL.Radius.xl, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}, 0 24px 60px rgba(0, 0, 0, 0.55)`, overflow: "hidden" }}
+      >
+        <VStack alignment="leading" spacing={SL.Space.s2} style={{ padding: `${SL.Space.s5}px ${SL.Space.s5}px ${SL.Space.s3}px` }}>
+          <HStack spacing={SL.Space.s2}>
+            <SLOverline text={`What's new · ${PatchNotes.dateLabel(note.date)}`} color={SL.Signal.action} />
+          </HStack>
+          <Text as="h2" {...slLead(SL.Weight.semibold)} color={SL.Ink.primary}>
+            {note.title}
+          </Text>
+        </VStack>
+        <div style={{ overflowY: "auto", padding: `0 ${SL.Space.s5}px` }}>
+          <VStack alignment="leading" spacing={SL.Space.s3} style={{ alignSelf: "stretch", paddingBottom: SL.Space.s2 }}>
+            {note.items.map((item, i) => (
+              <HStack key={i} alignment="top" spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
+                <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: SL.Signal.action, marginTop: 8, flexShrink: 0 }} />
+                <Text {...slBody()} lineHeight={1.45} color={SL.Ink.primary} style={{ flex: "1 1 0", minWidth: 0 }}>
+                  {item}
+                </Text>
+              </HStack>
+            ))}
+          </VStack>
+        </div>
+        <VStack spacing={SL.Space.s2} style={{ alignItems: "stretch", padding: SL.Space.s5, paddingTop: SL.Space.s4 }}>
+          <SLPrimaryButton onPress={onClose}>Got it</SLPrimaryButton>
+          <Text {...slMeta()} color={SL.Ink.tertiary} align="center">
+            Every update stays in Settings › What's new.
+          </Text>
+        </VStack>
+      </div>
+    </div>
+  );
+}
