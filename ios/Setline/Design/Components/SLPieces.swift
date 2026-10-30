@@ -354,10 +354,21 @@ struct SLTabHeader<Trailing: View>: View {
                         .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
                         .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
                         .contentShape(Circle())
+                        // A new update to read: "What's new" is in Settings.
+                        .overlay(alignment: .topTrailing) {
+                            if PatchNotes.shared.hasUnseen {
+                                Circle()
+                                    .fill(SL.Signal.action)
+                                    .frame(width: 9, height: 9)
+                                    .overlay(Circle().strokeBorder(SL.Surface.ground, lineWidth: 2).padding(-2))
+                                    .padding(5)
+                            }
+                        }
                 }
                 .buttonStyle(SLPressStyle(scale: 0.9, bounces: true))
                 .slFocusRing(Circle())
-                .accessibilityLabel("Settings")
+                .accessibilityLabel(PatchNotes.shared.hasUnseen ? "Settings, new update" : "Settings")
+                .task { await PatchNotes.shared.load() }
             }
         }
         .frame(height: SL.Metric.tabHeaderHeight)

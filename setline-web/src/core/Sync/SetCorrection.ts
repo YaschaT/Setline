@@ -132,7 +132,7 @@ export const SetCorrection = {
    * Removing a set is a deletion, which this operation deliberately is not.
    */
   isLogged(self: SetCorrection): boolean {
-    return self.weightKg > 0 && self.reps > 0;
+    return self.weightKg >= 0 && self.reps > 0;
   },
 
   /**

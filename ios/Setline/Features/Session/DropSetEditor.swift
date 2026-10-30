@@ -12,10 +12,11 @@ struct DropSetEditor: View {
 
     static let maxDrops = 3
 
-    /// About a fifth lighter than `weight`, on the step, never below it.
+    /// About a fifth lighter than `weight`, on the step, never below it (or none).
     static func next(after weight: Decimal, reps: Int, step: Decimal) -> DropStep {
         let lighter = Estimates.round(weight * Decimal(0.8), toIncrement: step)
-        return DropStep(weightKg: max(lighter, step), reps: max(1, reps))
+        // A set without weight drops to none.
+        return DropStep(weightKg: weight > 0 ? max(lighter, step) : 0, reps: max(1, reps))
     }
 
     var body: some View {
@@ -27,7 +28,7 @@ struct DropSetEditor: View {
                         .foregroundStyle(SL.Ink.secondary)
                         .frame(width: 36, alignment: .leading)
                     stepper(value: display.number(drop.weightKg), unit: "kg", label: "drop \(index + 1) weight",
-                            minus: { change(index) { $0.weightKg = max(step, $0.weightKg - step) } },
+                            minus: { change(index) { $0.weightKg = max(0, $0.weightKg - step) } },
                             plus: { change(index) { $0.weightKg += step } })
                     Text("×").slMeta().foregroundStyle(SL.Ink.secondary).padding(.horizontal, 4)
                     stepper(value: "\(drop.reps)", unit: nil, label: "drop \(index + 1) reps",

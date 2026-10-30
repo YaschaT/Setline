@@ -19,6 +19,7 @@ struct WorkoutChooserSheet: View {
 
     @State private var editing: CustomWorkout?
     @State private var creating = false
+    @State private var planningWeek = false
 
     var body: some View {
         SLSheet(title: "Plan & workouts",
@@ -34,8 +35,8 @@ struct WorkoutChooserSheet: View {
 
                 // Your own first: it is what this sheet is opened to build.
                 group("Your workouts", note: app.customWorkouts.isEmpty
-                      ? "Pick exercises and sets once; start it any time, or put it on a day in the Agenda."
-                      : "Put one on a day: open that day in the Agenda.") {
+                      ? "Pick exercises and sets once; start it any time, or put it in your week below."
+                      : "Send one to a friend with the share button, or put them on days in your week below.") {
                     Button { creating = true } label: {
                         HStack(spacing: SL.Space.s3) {
                             Image(systemName: "plus")
@@ -56,10 +57,41 @@ struct WorkoutChooserSheet: View {
                             title: workout.name,
                             detail: detail(workout.workoutDay),
                             isToday: false,
-                            onEdit: { editing = workout }) {
+                            onEdit: { editing = workout },
+                            sharing: workout) {
                             if canStart { onStart?(workout.workoutDay) } else { editing = workout }
                         }
                     }
+                }
+
+                // A whole week of your own, not one day at a time.
+                group("Your week") {
+                    Button { planningWeek = true } label: {
+                        HStack(spacing: SL.Space.s3) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(app.ownWeek != nil ? SL.Signal.onAction : SL.Signal.action)
+                                .frame(width: 40, height: 40)
+                                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
+                                    .fill(app.ownWeek != nil ? SL.Signal.action : SL.Signal.actionTint))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.ownWeek != nil ? "Your own week" : "Make your own week")
+                                    .slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                                Text(app.ownWeek.map { ownWeekSummary($0, workouts: app.schedulePlan) }
+                                     ?? "A workout for each day, repeating every week")
+                                    .slMeta().foregroundStyle(SL.Ink.secondary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer(minLength: SL.Space.s2)
+                            SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+                        }
+                        .padding(.horizontal, SL.Space.s4)
+                        .frame(minHeight: 64)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(SLRowButtonStyle())
+                    .accessibilityLabel(app.ownWeek != nil ? "Edit your own week" : "Make your own week")
                 }
 
                 group("Your plan", trailing: ("Change", onChangePlan)) {
@@ -89,6 +121,9 @@ struct WorkoutChooserSheet: View {
                 }
             }
             .padding(.top, SL.Space.s2)
+        }
+        .sheet(isPresented: $planningWeek) {
+            OwnWeekSheet(onClose: { planningWeek = false })
         }
         .sheet(isPresented: $creating) {
             CustomWorkoutBuilder(workout: nil, onSave: { saved, start in
@@ -144,7 +179,8 @@ struct WorkoutChooserSheet: View {
     }
 
     private func row<Symbol: View>(@ViewBuilder symbol: () -> Symbol, title: String, detail: String, isToday: Bool,
-                                   onEdit: (() -> Void)? = nil, action: @escaping () -> Void) -> some View {
+                                   onEdit: (() -> Void)? = nil, sharing: CustomWorkout? = nil,
+                                   action: @escaping () -> Void) -> some View {
         HStack(spacing: 0) {
             Button(action: action) {
                 HStack(spacing: SL.Space.s3) {
@@ -176,6 +212,19 @@ struct WorkoutChooserSheet: View {
             .buttonStyle(SLRowButtonStyle())
             .disabled(blocked && onEdit == nil)
             .accessibilityLabel(onStart == nil ? "\(title). \(detail)" : "Start \(title). \(detail)")
+            // Into any chat, through the share sheet: the link opens on any
+            // phone and offers a copy to save.
+            if let sharing {
+                ShareLink(item: CustomWorkoutLink.url(sharing), message: Text(CustomWorkoutLink.message(sharing))) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Send \(title) to a friend")
+            }
             if let onEdit {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
@@ -359,5 +408,126 @@ struct CustomWorkoutBuilder: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+}
+
+// MARK: - Your week
+
+private let weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+/// "Mo Push · We Legs · Fr Upper": the training days of a week, Monday first.
+func ownWeekSummary(_ days: [String], workouts: [WorkoutDay]) -> String {
+    let trained = days.enumerated().compactMap { index, id -> String? in
+        guard let workout = workouts.first(where: { $0.id == id }) else { return nil }
+        return "\(weekdayNames[index].prefix(2)) \(workout.short)"
+    }
+    return trained.isEmpty ? "Every day a rest day" : trained.joined(separator: " · ")
+}
+
+/// A week of your own: for each weekday a workout — one of yours or one of
+/// the plan's — or rest. It repeats every week until it's handed back to the
+/// plan; a day moved by date in the Agenda still wins for that date.
+struct OwnWeekSheet: View {
+    @Environment(AppState.self) private var app
+    let onClose: () -> Void
+    @State private var days: [String] = []
+
+    private var workouts: [WorkoutDay] { app.schedulePlan }
+    private var count: Int { days.filter { id in workouts.contains { $0.id == id } }.count }
+
+    private func label(_ id: String) -> String { workouts.first { $0.id == id }?.short ?? "Rest" }
+
+    var body: some View {
+        SLSheet(title: "Your week", subtitle: "Pick a workout for each day. It repeats every week.", onClose: onClose) {
+            VStack(alignment: .leading, spacing: SL.Space.s5) {
+                VStack(spacing: 0) {
+                    ForEach(days.indices, id: \.self) { index in
+                        if index > 0 { Divider().overlay(SL.Surface.hairline).padding(.leading, SL.Space.s4) }
+                        dayRow(index)
+                    }
+                }
+                .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised2))
+
+                Text("\(count == 1 ? "1 workout" : "\(count) workouts") a week. A day you move in the Agenda still changes just that date.")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, SL.Space.s1)
+
+                VStack(spacing: SL.Space.s2) {
+                    Button("Save week") {
+                        let chosen = days
+                        Task { await app.saveOwnWeek(chosen) }
+                        onClose()
+                    }
+                    .buttonStyle(SLPrimaryButtonStyle())
+                    if app.ownWeek != nil {
+                        Button("Back to my plan's week") {
+                            Task { await app.saveOwnWeek(nil) }
+                            onClose()
+                        }
+                        .buttonStyle(SLOutlineButtonStyle())
+                    } else {
+                        Button("Cancel", action: onClose).buttonStyle(SLOutlineButtonStyle())
+                    }
+                }
+            }
+            .padding(.top, SL.Space.s2)
+        }
+        .onAppear {
+            guard days.isEmpty else { return }
+            // Opens on the week as it stands, so changing one day is one change.
+            days = app.ownWeek ?? AppState.weekdaysMondayFirst.map { index in
+                Schedule.day(for: Schedule.defaultWeek[index] ?? "rest", in: app.plan)?.id ?? "rest"
+            }
+        }
+    }
+
+    private func dayRow(_ index: Int) -> some View {
+        let id = days[index]
+        let isRest = !workouts.contains { $0.id == id }
+        return HStack(spacing: SL.Space.s3) {
+            Text(weekdayNames[index])
+                .slBody(SL.Weight.semibold)
+                .foregroundStyle(SL.Ink.primary)
+            Spacer()
+            Menu {
+                if !app.customWorkouts.isEmpty {
+                    Section("Your workouts") {
+                        ForEach(app.customWorkouts) { custom in option(custom.workoutDay, index: index) }
+                    }
+                }
+                Section("Your plan") {
+                    ForEach(app.plan) { day in option(day, index: index) }
+                }
+                Divider()
+                Button { days[index] = "rest" } label: {
+                    if isRest { Label("Rest", systemImage: "checkmark") } else { Text("Rest") }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(label(id))
+                        .slBody(SL.Weight.semibold)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(isRest ? SL.Ink.secondary : SL.Signal.action)
+                .padding(.horizontal, SL.Space.s3)
+                .frame(minHeight: SL.Space.hitMin)
+                .background(Capsule().fill(isRest ? Color.clear : SL.Signal.actionTint))
+                .overlay(Capsule().strokeBorder(isRest ? SL.Surface.hairlineStrong : .clear, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+            }
+            .accessibilityLabel("\(weekdayNames[index]): \(label(id)). Change")
+        }
+        .padding(.leading, SL.Space.s4)
+        .padding(.trailing, SL.Space.s2)
+        .frame(minHeight: 56)
+    }
+
+    private func option(_ day: WorkoutDay, index: Int) -> some View {
+        Button { days[index] = day.id } label: {
+            if days[index] == day.id { Label(day.short, systemImage: "checkmark") } else { Text(day.short) }
+        }
     }
 }

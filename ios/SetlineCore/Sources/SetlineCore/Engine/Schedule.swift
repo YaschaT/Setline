@@ -29,14 +29,37 @@ public enum Schedule {
         return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
+    /// A week of your own, kept beside the dated changes: `week-1` is what
+    /// every Monday holds (0 = Sunday, as in `defaultWeek`). It is scoped per
+    /// program like every other change (`personal:week-1`), so it travels
+    /// between phones and the web the way a moved day already does.
+    public static func weekKey(_ index: Int) -> String { "week-\(index)" }
+
+    /// The first date your own week holds for (`yyyy-MM-dd`): days before it
+    /// keep the week they had, so nothing already past turns into a missed
+    /// workout.
+    public static let weekFromKey = "week-from"
+
+    /// The weekday your own week puts on `date`, if it has one and it holds there.
+    public static func ownWeekDay(for date: Date, overrides: [String: String], calendar: Calendar = .current) -> String? {
+        if let from = overrides[weekFromKey], dateKey(date, calendar: calendar) < from { return nil }
+        return overrides[weekKey(calendar.component(.weekday, from: date) - 1)]
+    }
+
+    /// The weekly plan's own entries only, without any dated change.
+    public static func weekOnly(_ overrides: [String: String]) -> [String: String] {
+        overrides.filter { $0.key.hasPrefix("week-") }
+    }
+
+    /// A date's change first, then your own week, then the program's.
     public static func canonicalDay(
         for date: Date,
         overrides: [String: String],
         calendar: Calendar = .current
     ) -> String {
         if let override = overrides[dateKey(date, calendar: calendar)] { return override }
-        let weekday = calendar.component(.weekday, from: date) - 1
-        return defaultWeek[weekday] ?? "rest"
+        return ownWeekDay(for: date, overrides: overrides, calendar: calendar)
+            ?? defaultWeek[calendar.component(.weekday, from: date) - 1] ?? "rest"
     }
 
     /// Resolves a canonical id onto the active plan, whose day ids are

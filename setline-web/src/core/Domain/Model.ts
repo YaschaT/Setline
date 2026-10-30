@@ -431,11 +431,12 @@ export const LoggedSet = {
   },
 
   /**
-   * A set with weight and reps is a complete set. RIR is the optional
-   * third tap (addendum 11R) and never gates anything.
+   * A set with weight and reps is a complete set — 0 kg included, which is
+   * a set without weight. RIR is the optional third tap (addendum 11R) and
+   * never gates anything.
    */
   isLogged(self: LoggedSet): boolean {
-    return (self.weightKg ?? 0) > 0 && self.reps > 0;
+    return self.weightKg !== undefined && self.weightKg >= 0 && self.reps > 0;
   },
 
   /**

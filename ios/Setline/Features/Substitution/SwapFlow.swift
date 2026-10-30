@@ -214,7 +214,7 @@ struct SwapSheet: View {
                 .buttonStyle(.plain)
             }
 
-            Text("Keep sets, reps and RIR — reset the weight.")
+            Text("Tap one to swap. Sets, reps and RIR stay — the weight starts fresh.")
                 .slMeta()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                 .foregroundStyle(SL.Ink.secondary)
@@ -379,37 +379,8 @@ struct SwapSheet: View {
             ).reason
             onOutcome(.substitute(alternative.exercise, reason))
         } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                // At accessibility sizes the fit label takes its own line, so
-                // it never squeezes the name into one word per line.
-                fitLayout {
-                    Text(alternative.exercise.name)
-                        .slLead()
-                        .foregroundStyle(SL.Ink.primary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
-                    Text(SubstitutionCopy.fit(alternative))
-                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
-                        .foregroundStyle(leads ? SL.Ink.primary : SL.Ink.secondary)
-                        .lineLimit(1)
-                }
-                Text(SubstitutionCopy.why(alternative, origin: exercise, alongside: peers))
-                    .slMeta()
-                    .slLineHeight(1.4, size: SL.TypeSize.meta)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 3)
-                Text(SubstitutionCopy.carryOver)
-                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                    .foregroundStyle(SL.Ink.tertiary)
-                    .padding(.top, SL.Space.s1)
-            }
-            .padding(.vertical, SL.Space.s3)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+            alternativeFace(alternative, among: peers, leads: leads)
+                .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
         .slFocusRing(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
@@ -417,10 +388,66 @@ struct SwapSheet: View {
         .accessibilityHint(SubstitutionCopy.carryOver)
     }
 
-    private var fitLayout: AnyLayout {
-        typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SL.Space.s3))
+    /// One result, readable at a glance: the muscle it works (as on Progress ›
+    /// Strength), the name, the setup, and how close it is as a three-bar
+    /// meter. The reasoning sits under the best match only; one tap swaps.
+    private func alternativeFace(
+        _ alternative: RankedAlternative, among peers: [RankedAlternative], leads: Bool
+    ) -> some View {
+        let strength = SubstitutionCopy.strength(alternative)
+        let tone = strength == 3 ? SL.Signal.action : strength == 2 ? SL.Ink.primary : SL.Ink.secondary
+        let group = alternative.exercise.group
+        return HStack(alignment: .center, spacing: SL.Space.s3) {
+            MuscleFigure(group: group, highlight: strength == 3 ? SL.Signal.action : SL.Ink.primary,
+                         outline: SL.Ink.secondary.opacity(0.8))
+                .padding(6)
+                .frame(width: 44, height: 44)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(strength == 3 ? SL.Signal.actionTint : SL.Surface.raised))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(alternative.exercise.name)
+                    .slLead()
+                    .foregroundStyle(SL.Ink.primary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text([SubstitutionCopy.equipmentLabel(alternative.exercise.equipment), group?.title]
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(1)
+                if leads {
+                    Text(SubstitutionCopy.why(alternative, origin: exercise, alongside: peers))
+                        .slMeta()
+                        .slLineHeight(1.4, size: SL.TypeSize.meta)
+                        .foregroundStyle(SL.Ink.tertiary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(alignment: .bottom, spacing: 3) {
+                    ForEach(1...3, id: \.self) { bar in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(bar <= strength ? tone : SL.Surface.hairlineStrong)
+                            .frame(width: 5, height: CGFloat(5 + bar * 3))
+                    }
+                }
+                .frame(height: 14, alignment: .bottom)
+                .accessibilityHidden(true)
+                Text(SubstitutionCopy.fit(alternative))
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                    .foregroundStyle(tone)
+                    .lineLimit(1)
+            }
+            .fixedSize()
+        }
+        .padding(.vertical, SL.Space.s3)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Zero results is a real answer, not a failure. Say what is true and
@@ -660,8 +687,8 @@ struct SwapSheet: View {
     private var equipmentChips: some View {
         let options: [(Equipment, String)] = [
             (.barbell, "Barbell"), (.dumbbell, "Dumbbell"),
-            (.machineSelectorised, "Machine"), (.cable, "Kabel"),
-            (.bodyweight, "Lichaamsgewicht"),
+            (.machineSelectorised, "Machine"), (.cable, "Cable"),
+            (.bodyweight, "Bodyweight"),
         ]
         return FlowRow(spacing: SL.Space.s2) {
             ForEach(options, id: \.0) { option in
@@ -707,17 +734,7 @@ struct SwapSheet: View {
                         scope = .thisDay
                         step = .scope(alternative.exercise.id)
                     } label: {
-                        fitLayout {
-                            Text(alternative.exercise.name).slBody(SL.Weight.medium)
-                                .foregroundStyle(SL.Ink.primary)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if !typeSize.isAccessibilitySize { Spacer(minLength: SL.Space.s2) }
-                            Text(SubstitutionCopy.fit(alternative)).slMeta()
-                                .foregroundStyle(SL.Ink.tertiary)
-                        }
-                        .padding(SL.Space.s4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        alternativeFace(alternative, among: alternatives, leads: alternative.id == alternatives.first?.id)
                         .slCard(radius: SL.Radius.md)
                         .contentShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
                     }

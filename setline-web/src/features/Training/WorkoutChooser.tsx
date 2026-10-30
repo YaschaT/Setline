@@ -19,8 +19,13 @@ import { ProgramCatalog } from "../../core/Catalog/Program";
 import { ExerciseCatalog } from "../../core/Catalog/ExerciseCatalog";
 import { ExercisePicker, type ExercisePicker_Row } from "../../core/Progress/ExercisePicker";
 import { CustomWorkout, CustomWorkout_Item } from "../../core/Domain/CustomWorkout";
+import { CustomWorkoutLink } from "../../core/Domain/CustomWorkoutLink";
 import type { WorkoutDay } from "../../core/Domain/Model";
 import { ExercisePickerSheet } from "../Progress/ExercisePickerSheet";
+import { AppState } from "../../data/AppState";
+import { Schedule } from "../../core/Engine/Schedule";
+
+const AppStateWeekdays = AppState.weekdaysMondayFirst;
 
 const sheetBody = { flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" } as const;
 
@@ -40,6 +45,7 @@ export function WorkoutChooserSheet({
 
   const [editing, setEditing] = useState<CustomWorkout | undefined>(undefined);
   const [creating, setCreating] = useState(false);
+  const [planningWeek, setPlanningWeek] = useState(false);
   const lastEditing = useRef<CustomWorkout | undefined>(undefined);
   if (editing !== undefined) lastEditing.current = editing;
 
@@ -75,7 +81,7 @@ export function WorkoutChooserSheet({
     </VStack>
   );
 
-  const row = (key: string, symbol: ReactNode, title: string, rowDetail: string, isToday: boolean, action: () => void, onEdit?: () => void) => (
+  const row = (key: string, symbol: ReactNode, title: string, rowDetail: string, isToday: boolean, action: () => void, onEdit?: () => void, onShare?: () => void) => (
     <div key={key} style={{ position: "relative", display: "flex", flexDirection: "row", alignItems: "stretch" }}>
       <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column" }}>
         <SLRowButton
@@ -107,6 +113,17 @@ export function WorkoutChooserSheet({
           </HStack>
         </SLRowButton>
       </div>
+      {onShare !== undefined && (
+        <button
+          type="button"
+          className="sl-pressable"
+          onClick={onShare}
+          aria-label={`Send ${title} to a friend`}
+          style={{ width: SL.Space.hitMin, height: SL.Space.hitMin, alignSelf: "center", display: "grid", placeItems: "center", background: "transparent", flexShrink: 0 }}
+        >
+          <SFSymbol name="square.and.arrow.up" size={15} weight={600} color={SL.Ink.secondary} />
+        </button>
+      )}
       {onEdit !== undefined && (
         <button
           type="button"
@@ -123,6 +140,33 @@ export function WorkoutChooserSheet({
       </div>
     </div>
   );
+
+  /** "Link copied" after a share without a share sheet, for a moment. */
+  const [copied, setCopied] = useState<string | undefined>(undefined);
+
+  /**
+   * Into any chat: the phone's own share sheet where there is one, else the
+   * link is copied to paste wherever the friend is.
+   */
+  const share = async (workout: CustomWorkout) => {
+    const url = CustomWorkoutLink.url(workout, { origin: location.origin });
+    const text = CustomWorkoutLink.message(workout, url);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: workout.name, text });
+        return;
+      }
+    } catch {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(workout.name);
+      window.setTimeout(() => setCopied(undefined), 4000);
+    } catch {
+      /* nothing to hand over */
+    }
+  };
 
   const save = async (saved: CustomWorkout, start: boolean) => {
     await app.saveCustomWorkout(saved);
@@ -170,15 +214,39 @@ export function WorkoutChooserSheet({
                     else setEditing(workout);
                   },
                   () => setEditing(workout),
+                  () => void share(workout),
                 ),
               )}
             </>,
             {
               note:
-                app.customWorkouts.length === 0
-                  ? "Pick exercises and sets once; start it any time, or put it on a day in the Agenda."
-                  : "Put one on a day: open that day in the Agenda.",
+                copied !== undefined
+                  ? `Link to “${copied}” copied. Paste it in any chat.`
+                  : app.customWorkouts.length === 0
+                    ? "Pick exercises and sets once; start it any time, or put it in your week below."
+                    : "Send one to a friend with the share button, or put them on days in your week below.",
             },
+          )}
+
+          {/* A whole week of your own, not one day at a time. */}
+          {group(
+            "Your week",
+            <SLRowButton onPress={() => setPlanningWeek(true)} aria-label={app.ownWeek ? "Edit your own week" : "Make your own week"}>
+              <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, minHeight: 64 }}>
+                <div style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: app.ownWeek ? SL.Signal.action : SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <SFSymbol name="calendar" size={16} weight={600} color={app.ownWeek ? SL.Signal.onAction : SL.Signal.action} />
+                </div>
+                <VStack alignment="leading" spacing={2} style={{ minWidth: 0, flex: "1 1 0" }}>
+                  <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>
+                    {app.ownWeek ? "Your own week" : "Make your own week"}
+                  </Text>
+                  <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={2} style={{ maxWidth: "100%" }}>
+                    {app.ownWeek ? ownWeekSummary(app.ownWeek, app.schedulePlan) : "A workout for each day, repeating every week"}
+                  </Text>
+                </VStack>
+                <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
+              </HStack>
+            </SLRowButton>,
           )}
 
           {group(
@@ -207,6 +275,14 @@ export function WorkoutChooserSheet({
           )}
         </VStack>
       </SLSheet>
+
+      <Sheet isPresented={planningWeek} onDismiss={() => setPlanningWeek(false)}>
+        {planningWeek && (
+          <div style={sheetBody}>
+            <OwnWeekSheet onClose={() => setPlanningWeek(false)} />
+          </div>
+        )}
+      </Sheet>
 
       <Sheet isPresented={creating} onDismiss={() => setCreating(false)}>
         {creating && (
@@ -457,3 +533,125 @@ CustomWorkoutBuilder.repRanges = [
   [10, 15],
   [12, 20],
 ] as [number, number][];
+
+// MARK: - Your week
+
+const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+/** "Mo Push · We Legs · Fr Upper": the training days of a week, Monday first. */
+export function ownWeekSummary(days: string[], workouts: WorkoutDay[]): string {
+  const trained = days.flatMap((id, index) => {
+    const workout = workouts.find((w) => w.id === id);
+    return workout ? [`${weekdayNames[index].slice(0, 2)} ${workout.short}`] : [];
+  });
+  return trained.length === 0 ? "Every day a rest day" : trained.join(" · ");
+}
+
+/**
+ * A week of your own: for each weekday a workout — one of yours or one of
+ * the plan's — or rest. It repeats every week until it's handed back to the
+ * plan; a day moved by date in the Agenda still wins for that date.
+ */
+export function OwnWeekSheet({ onClose }: { onClose: () => void }) {
+  const app = useApp();
+  // Opens on the week as it stands, so changing one day is one change.
+  const [days, setDays] = useState<string[]>(
+    () =>
+      app.ownWeek ??
+      AppStateWeekdays.map((index) => {
+        const canonical = Schedule.defaultWeek[index] ?? "rest";
+        return Schedule.day({ for: canonical, in: app.plan })?.id ?? "rest";
+      }),
+  );
+  const workouts = app.schedulePlan;
+  const count = days.filter((id) => workouts.some((w) => w.id === id)).length;
+
+  const label = (id: string) => workouts.find((w) => w.id === id)?.short ?? "Rest";
+
+  const dayRow = (index: number) => {
+    const id = days[index];
+    const isRest = !workouts.some((w) => w.id === id);
+    const pick = (value: string) => setDays(days.map((d, i) => (i === index ? value : d)));
+    const entry = (w: WorkoutDay) => ({ kind: "button" as const, title: w.short, checked: w.id === id, action: () => pick(w.id) });
+    return (
+      <div key={index} style={{ position: "relative", display: "flex" }}>
+        <HStack spacing={SL.Space.s3} style={{ flex: "1 1 0", minWidth: 0, minHeight: 56, paddingLeft: SL.Space.s4, paddingRight: SL.Space.s2 }}>
+          <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} style={{ width: 104, flexShrink: 0 }}>
+            {weekdayNames[index]}
+          </Text>
+          <Spacer />
+          <Menu
+            aria-label={`${weekdayNames[index]}: ${label(id)}. Change`}
+            entries={[
+              ...(app.customWorkouts.length > 0
+                ? [{ kind: "section" as const, title: "Your workouts", entries: app.customWorkouts.map((c) => entry(CustomWorkout.workoutDay(c))) }]
+                : []),
+              { kind: "section" as const, title: "Your plan", entries: app.plan.map(entry) },
+              { kind: "divider" as const },
+              { kind: "button" as const, title: "Rest", checked: isRest, action: () => pick("rest") },
+            ]}
+            label={
+              <HStack
+                spacing={6}
+                style={{
+                  minHeight: SL.Space.hitMin,
+                  paddingLeft: SL.Space.s3,
+                  paddingRight: SL.Space.s3,
+                  borderRadius: 999,
+                  background: isRest ? "transparent" : SL.Signal.actionTint,
+                  border: isRest ? `1px dashed ${SL.Surface.hairlineStrong}` : "none",
+                  maxWidth: 200,
+                }}
+              >
+                <Text {...slBody(SL.Weight.semibold)} color={isRest ? SL.Ink.secondary : SL.Signal.action} lineLimit={1}>
+                  {label(id)}
+                </Text>
+                <SFSymbol name="chevron.up.chevron.down" size={11} weight={600} color={isRest ? SL.Ink.tertiary : SL.Signal.action} />
+              </HStack>
+            }
+          />
+        </HStack>
+        {index > 0 && (
+          <div style={{ position: "absolute", top: 0, left: SL.Space.s4, right: 0, pointerEvents: "none" }}>
+            <SLHairline />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <SLSheet title="Your week" subtitle="Pick a workout for each day. It repeats every week." onClose={onClose}>
+      <VStack alignment="leading" spacing={SL.Space.s5} style={{ paddingTop: SL.Space.s2, paddingBottom: SL.Space.s6 }}>
+        <VStack spacing={0} style={{ alignSelf: "stretch", alignItems: "stretch", background: SL.Surface.raised2, borderRadius: SL.Radius.lg, overflow: "hidden" }}>
+          {days.map((_, index) => dayRow(index))}
+        </VStack>
+        <Text {...slMeta()} numerals color={SL.Ink.secondary} style={{ paddingLeft: SL.Space.s1, paddingRight: SL.Space.s1 }}>
+          {`${count === 1 ? "1 workout" : `${count} workouts`} a week. A day you move in the Agenda still changes just that date.`}
+        </Text>
+        <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", alignItems: "stretch" }}>
+          <SLPrimaryButton
+            onPress={() => {
+              void app.saveOwnWeek(days);
+              onClose();
+            }}
+          >
+            Save week
+          </SLPrimaryButton>
+          {app.ownWeek !== undefined ? (
+            <SLOutlineButton
+              onPress={() => {
+                void app.saveOwnWeek(undefined);
+                onClose();
+              }}
+            >
+              Back to my plan's week
+            </SLOutlineButton>
+          ) : (
+            <SLOutlineButton onPress={onClose}>Cancel</SLOutlineButton>
+          )}
+        </VStack>
+      </VStack>
+    </SLSheet>
+  );
+}

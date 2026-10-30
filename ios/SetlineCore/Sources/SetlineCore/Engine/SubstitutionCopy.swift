@@ -13,6 +13,29 @@ public enum SubstitutionCopy {
     static let strongScore = 0.75
     static let strongOverlap = 0.80
 
+    /// How close a result is, as the meter beside it shows: 3 a strong match,
+    /// 2 a good one, 1 everything that changes the movement or the setup.
+    public static func strength(_ alternative: RankedAlternative) -> Int {
+        if alternative.match == .broader || alternative.match == .related { return 1 }
+        if alternative.score >= strongScore && alternative.muscleOverlap >= strongOverlap { return 3 }
+        if alternative.muscleOverlap >= 0.65 { return 2 }
+        return 1
+    }
+
+    /// "Dumbbells", for the line under a result's name.
+    public static func equipmentLabel(_ equipment: Equipment) -> String {
+        switch equipment {
+        case .barbell: "Barbell"
+        case .dumbbell: "Dumbbells"
+        case .machinePlate: "Plate machine"
+        case .machineSelectorised: "Machine"
+        case .cable: "Cable"
+        case .smith: "Smith machine"
+        case .bodyweight: "Bodyweight"
+        case .band: "Band"
+        }
+    }
+
     public static func fit(_ alternative: RankedAlternative) -> String {
         if let curated = alternative.curatedFit { return curated }
         if alternative.match == .broader { return "Different setup" }

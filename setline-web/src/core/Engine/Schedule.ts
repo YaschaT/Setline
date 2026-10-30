@@ -39,11 +39,42 @@ export const Schedule = {
     return Schedule.date(a);
   },
 
+  /**
+   * A week of your own, kept beside the dated changes: `week-1` is what
+   * every Monday holds (0 = Sunday, as in `defaultWeek`). It is scoped per
+   * program like every other change (`personal:week-1`), so it travels
+   * between phones and the web the way a moved day already does.
+   */
+  weekKey(index: number): string {
+    return `week-${index}`;
+  },
+
+  /**
+   * The first date your own week holds for (`yyyy-MM-dd`): days before it
+   * keep the week they had, so nothing already past turns into a missed
+   * workout.
+   */
+  weekFromKey: "week-from",
+
+  /** The weekday your own week puts on `date`, if it has one and it holds there. */
+  ownWeekDay(a: { for: Date; overrides: Record<string, string> }): string | undefined {
+    const from = a.overrides[Schedule.weekFromKey];
+    if (from !== undefined && Schedule.dateKey(a.for) < from) return undefined;
+    return a.overrides[Schedule.weekKey(weekday(a.for) - 1)];
+  },
+
+  /** The weekly plan's own entries only, without any dated change. */
+  weekOnly(overrides: Record<string, string>): Record<string, string> {
+    const week: Record<string, string> = {};
+    for (const [key, value] of Object.entries(overrides)) if (key.startsWith("week-")) week[key] = value;
+    return week;
+  },
+
+  /** A date's change first, then your own week, then the program's. */
   canonicalDay(a: { for: Date; overrides: Record<string, string> }): string {
     const override = a.overrides[Schedule.dateKey(a.for)];
     if (override !== undefined) return override;
-    const index = weekday(a.for) - 1;
-    return Schedule.defaultWeek[index] ?? "rest";
+    return Schedule.ownWeekDay(a) ?? Schedule.defaultWeek[weekday(a.for) - 1] ?? "rest";
   },
 
   /**

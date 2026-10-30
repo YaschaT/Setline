@@ -92,7 +92,8 @@ struct SetEntrySheet: View {
         _rir = State(initialValue: draft.isLogged ? draft.rirReported : proposedRIR)
         _failed = State(initialValue: draft.isLogged && draft.flags.contains(.failed))
         let previousSide = slot.sets.prefix(setIndex).last(where: \.isLogged)?.side
-        _side = State(initialValue: draft.side ?? SetSidePicker.defaultSide(after: previousSide))
+        // A two-sided exercise is both sides until one is picked.
+        _side = State(initialValue: draft.side ?? (slot.exercise.unilateral ? SetSidePicker.defaultSide(after: previousSide) : .both))
         _drops = State(initialValue: draft.drops)
         if draft.isLogged {
             // A correction changes what it is asked to change. Opening a
@@ -101,10 +102,8 @@ struct SetEntrySheet: View {
             _pausedReps = State(initialValue: draft.modifiers.pauseEnabled ? (draft.pausedReps ?? draft.reps) : nil)
             _partialReps = State(initialValue: (draft.partialReps ?? 0) > 0 ? draft.partialReps : nil)
         } else {
-            // A planned paused exercise opens with every rep paused, because
-            // that is what the plan prescribes; anywhere else it is off until
-            // asked for.
-            _pausedReps = State(initialValue: slot.planned.modifiers.pauseEnabled ? openingReps : nil)
+            // Off until asked for, on every exercise alike.
+            _pausedReps = State(initialValue: nil)
             // The pain flow's "Beperk de beweging" opens the set with partial
             // on, because that is what it promised.
             _partialReps = State(initialValue: startsPartial ? 1 : nil)
@@ -153,6 +152,7 @@ struct SetEntrySheet: View {
     /// chip. Anything that appears later scrolls instead.
     private var sheetHeight: CGFloat {
         var height: CGFloat = 391        // grabber, head, steppers, chips, pill, footnote
+        height += 52                      // the side row, on every exercise
         if asksForRIR { height += 86 }
         if showsKeypad { height += 56 }   // the keypad it opens on
         if canRemove { height += 52 }     // the quiet way back out
@@ -207,14 +207,13 @@ struct SetEntrySheet: View {
 
             chips.padding(.bottom, SL.Space.s4)
 
-            if slot.exercise.unilateral {
-                HStack {
-                    SLEyebrow(text: "Side")
-                    Spacer()
-                    SetSidePicker(side: $side)
-                }
-                .padding(.bottom, SL.Space.s4)
+            // Every exercise can be done one side at a time.
+            HStack {
+                SLEyebrow(text: "Side")
+                Spacer()
+                SetSidePicker(side: $side)
             }
+            .padding(.bottom, SL.Space.s4)
 
             if !drops.isEmpty {
                 DropSetEditor(drops: $drops, step: increment, display: display)
@@ -319,14 +318,14 @@ struct SetEntrySheet: View {
                     failed: failed,
                     pausedReps: pausedReps,
                     partialReps: partialReps,
-                    side: slot.exercise.unilateral ? side : nil,
+                    side: slot.exercise.unilateral || side != .both ? side : nil,
                     drops: drops
                 ))
             } label: {
                 Text(isCorrection ? "Update set \(setIndex + 1)" : "Save set")
             }
             .buttonStyle(SLPrimaryButtonStyle())
-            .disabled(weight <= 0 || reps <= 0)
+            .disabled(weight < 0 || reps <= 0)
 
             Text(footnote)
                 .slMeta()

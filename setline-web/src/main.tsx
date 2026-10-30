@@ -5,6 +5,14 @@ import { App } from "./App";
 import { app } from "./data/AppState";
 import { LocalStore } from "./data/LocalStore";
 import { social } from "./data/SocialStore";
+import { RestNotifier } from "./features/Session/RestNotifier";
+import { SharedWorkoutInbox } from "./features/Training/SharedWorkoutSheet";
+
+// A workout a friend sent as a link: kept until the account is open.
+SharedWorkoutInbox.capture();
+
+// The service worker shows the rest timer's notifications (Android needs it).
+RestNotifier.register();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

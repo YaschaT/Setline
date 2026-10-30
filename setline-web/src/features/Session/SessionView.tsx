@@ -22,7 +22,7 @@ import {
   Alert, ConfirmationDialog, FullScreenCover, HStack, Menu, Pressable, ScrollView, Sheet, Spacer, Text, VStack,
   UserDefaults, useScenePhase, type DialogAction,
 } from "../../design/swiftui";
-import { SL, slListCard, slNumerals } from "../../design/tokens";
+import { SL, slFont, slListCard, slNumerals } from "../../design/tokens";
 import { SLPrimaryButton, colorOpacity } from "../../design/SetlineTokens";
 import { DashedBorder, useReduceMotion } from "../../design/support";
 import { SFSymbol } from "../../design/SFSymbol";
@@ -181,6 +181,8 @@ export function SessionView(p: {
   const [sideDraft, setSideDraft] = useState<Record<string, SetSide>>({});
   /** Taken to failure on purpose — stored as RIR 0. */
   const [failureDraft, setFailureDraft] = useState<Set<string>>(new Set());
+  /** The rest's clock, turned into a field to type a length of its own. */
+  const [typingRest, setTypingRest] = useState<string | undefined>(undefined);
   /** A drop set's lighter rounds, while the set is open. */
   const [dropsDraft, setDropsDraft] = useState<Record<string, DropStep[]>>({});
   /**
@@ -219,8 +221,16 @@ export function SessionView(p: {
     return () => window.clearInterval(id);
   }, [runner]);
 
-  // Rest is over: the haptic and the VoiceOver announcement have no web
-  // equivalent; the countdown itself disappears from the dock.
+  // Rest is over. The notification covers the background; this is the
+  // foreground's equivalent, felt without looking where the phone can.
+  useOnChange(runner.restCompletions, () => {
+    try {
+      navigator.vibrate?.([250, 120, 250]);
+    } catch {
+      /* no vibration on this device */
+    }
+    SLSound.play("chime");
+  });
 
   useEffect(() => {
     const id = toast?.id;
@@ -786,23 +796,29 @@ export function SessionView(p: {
     S.sets(runner.slots[slotIndex]).slice(0, setIndex).findLast(LoggedSetNS.isLogged);
 
   /**
-   * Paused reps as the card shows them: what was chosen here, else what
-   * the previous set had — a lifter who paused the last two on set 1
-   * usually does on set 2. Never more than the reps.
+   * Paused reps as the card shows them: only what was chosen on this set.
+   * Every set starts plain — nothing is carried over from the set before or
+   * read off the plan, so a tag is always one the lifter put there. Never
+   * more than the reps.
    */
   const paused = (slotIndex: number, setIndex: number, reps: number): number | undefined => {
     const id = S.sets(runner.slots[slotIndex])[setIndex].id;
-    const prior = previousLogged(slotIndex, setIndex);
-    const carried: number | undefined = prior ? (prior.pausedReps ?? (prior.modifiers.pauseEnabled ? prior.reps : undefined)) : undefined;
-    const count = pausedDraft[id] ?? carried ?? 0;
+    const count = pausedDraft[id] ?? 0;
     return count > 0 ? Math.min(count, reps) : undefined;
   };
 
   const partial = (slotIndex: number, setIndex: number, reps: number): number | undefined => {
     const id = S.sets(runner.slots[slotIndex])[setIndex].id;
-    const count = partialDraft[id] ?? previousLogged(slotIndex, setIndex)?.partialReps ?? 0;
+    const count = partialDraft[id] ?? 0;
     return count > 0 ? Math.min(count, reps) : undefined;
   };
+
+  /**
+   * The side of a set on an exercise that is not one-sided by nature: none
+   * until "One side" is tapped, which picks the side the last set didn't.
+   */
+  const oneSide = (slotIndex: number, setIndex: number): SetSide | undefined =>
+    sideDraft[S.sets(runner.slots[slotIndex])[setIndex].id];
 
   /**
    * One side is always picked, so a one-sided set never costs a tap:
@@ -834,8 +850,9 @@ export function SessionView(p: {
   const save = (slotIndex: number, setIndex: number) => {
     const slot = runner.slots[slotIndex];
     const set = S.sets(slot)[setIndex];
+    // 0 is a set without weight — bodyweight, or a drop to nothing.
     const weight = set.weightKg;
-    if (weight === undefined || !(weight > 0)) return;
+    if (weight === undefined || !(weight >= 0)) return;
     const sides = slot.exercise.unilateral ? sideRepsDraft[set.id] : undefined;
     // Sides counted apart: the set is the weaker side.
     const reps = sides ? SideReps.weaker(sides) : openReps(slotIndex, setIndex);
@@ -846,15 +863,12 @@ export function SessionView(p: {
       entry: {
         weightKg: weight,
         reps,
-        // "To failure" is reserve 0, the field both clients already keep.
-        rir: asksForRIR(slotIndex, setIndex) ? rirDraft[set.id] : failureDraft.has(set.id) ? 0 : undefined,
-        failed: false,
-        // A planned paused exercise is performed paused throughout,
-        // which is what the plan prescribes; otherwise the chip's
-        // count, never more than the reps.
-        pausedReps: S.planned(slot).modifiers.pauseEnabled ? reps : paused(slotIndex, setIndex, reps),
+        rir: asksForRIR(slotIndex, setIndex) ? rirDraft[set.id] : undefined,
+        failed: failureDraft.has(set.id),
+        // Only what the chip says, on every exercise alike.
+        pausedReps: paused(slotIndex, setIndex, reps),
         partialReps: partial(slotIndex, setIndex, reps),
-        side: slot.exercise.unilateral ? side(slotIndex, setIndex) : undefined,
+        side: slot.exercise.unilateral ? side(slotIndex, setIndex) : oneSide(slotIndex, setIndex),
         drops: dropsDraft[set.id] ?? [],
         sideReps: { value: sides },
       },
@@ -871,7 +885,7 @@ export function SessionView(p: {
   const quickCheck = (slotIndex: number, setIndex: number) => {
     const set = S.sets(runner.slots[slotIndex])[setIndex];
     const calibrating = setIndex === 0 && runner.needsCalibration({ slotIndex });
-    if (calibrating || set.weightKg === undefined || !(set.weightKg > 0)) {
+    if (calibrating || set.weightKg === undefined || !(set.weightKg >= 0)) {
       setEntryOpensOnKeypad((set.weightKg ?? 0) <= 0);
       runner.editing = { slot: slotIndex, set: setIndex };
       return;
@@ -1063,7 +1077,8 @@ export function SessionView(p: {
     if (adjusted.has(set.id)) return "adjusted";
     if (setIndex === 0 && runner.needsCalibration({ slotIndex })) return "calibration set";
     const weight = set.weightKg;
-    if (weight === undefined || !(weight > 0)) return "no weight yet";
+    if (weight === undefined) return "no weight yet";
+    if (weight === 0) return "no weight";
     const slot = runner.current;
     const reference = ExerciseHistory.mostRecent(slot.history);
     const prior = reference?.sets.find((s) => s.index === set.index);
@@ -1139,7 +1154,7 @@ export function SessionView(p: {
     return (
       <HStack alignment="top" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
         <SLStepper
-          label="Weight"
+          label={set.weightKg === 0 ? "No weight" : "Weight"}
           display={set.weightKg !== undefined ? NumberDisplay.number(app.display, set.weightKg) : "—"}
           isChanged={changed && (opening !== undefined ? opening !== (S.sets(runner.slots[slotIndex])[setIndex].weightKg ?? 0) : false)}
           valueHint="Type the weight"
@@ -1245,7 +1260,9 @@ export function SessionView(p: {
         side={{
           value: side(slotIndex, setIndex),
           set: (picked) => {
-            setDraft(setSideDraft, id, picked);
+            // On a two-sided exercise, Both is simply the ordinary set again.
+            const plain = picked === "both" && !runner.slots[slotIndex].exercise.unilateral;
+            setDraft(setSideDraft, id, plain ? undefined : picked);
             if (picked !== "both") setDraft(setSideRepsDraft, id, undefined);
           },
         }}
@@ -1254,38 +1271,45 @@ export function SessionView(p: {
   };
 
   /**
-   * The set's rarer facts, in plain sight and off by default: two small
-   * chips, and L / R / Both on a one-sided exercise. A chip turned on
-   * becomes its own count — "− 3 paused +" — inside the card, so a mixed
-   * set is logged without leaving it.
+   * The set's rarer facts, in plain sight and off by default: the same four
+   * chips on every set of every exercise — Paused, Partial, Failed, Drop
+   * set — then the side. A count chip turned on becomes its own
+   * "− 3 paused +" inside the card, so a mixed set is logged without
+   * leaving it.
    */
   const attributeRow = (slotIndex: number, setIndex: number, set: LoggedSet) => {
     const slot = runner.slots[slotIndex];
     const reps = openReps(slotIndex, setIndex);
-    const pausable = !S.planned(slot).modifiers.pauseEnabled;
     const drops = dropsDraft[set.id] ?? [];
     const step = Exercise.incrementKg(slot.exercise);
+    const unilateral = slot.exercise.unilateral;
+    const picked = oneSide(slotIndex, setIndex);
     return (
       <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
         {/* Chips wrap to a second line rather than hide behind a menu. */}
         <SLFlow spacing={SL.Space.s2}>
-          {pausable && attributeChip("Paused", paused(slotIndex, setIndex, reps), reps, (v) => setDraft(setPausedDraft, set.id, v ?? 0))}
+          {attributeChip("Paused", paused(slotIndex, setIndex, reps), reps, (v) => setDraft(setPausedDraft, set.id, v ?? 0))}
           {attributeChip("Partial", partial(slotIndex, setIndex, reps), reps, (v) => setDraft(setPartialDraft, set.id, v ?? 0))}
-          {/* Where the set already asks RIR, its 0 is this chip. */}
-          {!asksForRIR(slotIndex, setIndex) &&
-            toggleChip("To failure", failureDraft.has(set.id), () =>
-              setFailureDraft((f) => {
-                const next = new Set(f);
-                if (next.has(set.id)) next.delete(set.id);
-                else next.add(set.id);
-                return next;
-              }),
-            )}
+          {toggleChip("Failed", failureDraft.has(set.id), () =>
+            setFailureDraft((f) => {
+              const next = new Set(f);
+              if (next.has(set.id)) next.delete(set.id);
+              else next.add(set.id);
+              return next;
+            }),
+          )}
           {drops.length === 0 &&
             toggleChip("Drop set", false, () => setDraft(setDropsDraft, set.id, [DropSetEditor.next(set.weightKg ?? 0, { reps, step })]))}
-          {slot.exercise.unilateral && sidePicker(slotIndex, setIndex)}
+          {unilateral && sidePicker(slotIndex, setIndex)}
+          {/* Any exercise can be done one side at a time: off until asked. */}
+          {!unilateral &&
+            (picked === undefined
+              ? toggleChip("One side", false, () =>
+                  setDraft(setSideDraft, set.id, previousLogged(slotIndex, setIndex)?.side === "L" ? "R" : "L"),
+                )
+              : sidePicker(slotIndex, setIndex))}
           {/* Both sides in one set, and they didn't match: count them apart. */}
-          {slot.exercise.unilateral &&
+          {unilateral &&
             side(slotIndex, setIndex) === "both" &&
             toggleChip("Per side", sideRepsDraft[set.id] !== undefined, () =>
               setDraft(setSideRepsDraft, set.id, sideRepsDraft[set.id] !== undefined ? undefined : SideReps.make({ left: reps, right: reps })),
@@ -1388,7 +1412,7 @@ export function SessionView(p: {
         { kind: "button", title: "Add an exercise", systemImage: "plus.circle", action: () => setAddingExercise(true) },
         {
           kind: "button",
-          title: "Mark as failed…",
+          title: "Edit set…",
           systemImage: "slider.horizontal.3",
           action: () => {
             setEntryOpensOnKeypad(false);
@@ -1421,7 +1445,7 @@ export function SessionView(p: {
     const reps = openReps(slotIndex, setIndex);
     const weight = set.weightKg ?? 0;
     return (
-      <SLPrimaryButton prominent disabled={weight <= 0 || reps <= 0} aria-label={`Save set, ${NumberDisplay.kg(app.display, weight)} × ${reps}`} onPress={() => save(slotIndex, setIndex)}>
+      <SLPrimaryButton prominent disabled={set.weightKg === undefined || reps <= 0} aria-label={`Save set, ${NumberDisplay.kg(app.display, weight)} × ${reps}`} onPress={() => save(slotIndex, setIndex)}>
         {/* The numbers are right above, in the steppers; the button only has to say what it does. */}
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
           <SFSymbol name="checkmark" size={SL.TypeSize.title} weight={700} />
@@ -1630,16 +1654,57 @@ export function SessionView(p: {
           <circle cx={15} cy={15} r={r} fill="none" stroke={SL.Surface.hairlineStrong} strokeWidth={3} />
           <circle cx={15} cy={15} r={r} fill="none" stroke={SL.Signal.recovery} strokeWidth={3} strokeLinecap="round" strokeDasharray={`${circumference * fraction} ${circumference}`} />
         </svg>
-        <VStack alignment="leading" spacing={0} style={{ flex: "1 1 0", minWidth: 0 }} aria-label={`Rest, ${Math.trunc(remaining / 60)} minutes ${remaining % 60} seconds left`}>
-          <Text size={SL.TypeSize.title} weight={SL.Weight.semibold} numerals color={SL.Ink.primary}>{SLRestPill.clockLabel(remaining)}</Text>
-          <Text {...slMeta()} color={SL.Ink.secondary}>{next !== undefined ? `Rest · then set ${next + 1}` : "Rest"}</Text>
-        </VStack>
+        {typingRest !== undefined ? (
+          // Type a length of its own: "2:30", "90", "2".
+          <VStack alignment="leading" spacing={0} style={{ flex: "1 1 0", minWidth: 0 }}>
+            <input
+              autoFocus
+              value={typingRest}
+              inputMode="decimal"
+              enterKeyHint="done"
+              placeholder={RestTimerState.clockLabel(RestTimerState.length(timer)).replace(/^0(?=\d:)/, "")}
+              aria-label="Rest length, minutes and seconds"
+              onChange={(e) => setTypingRest(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") setTypingRest(undefined);
+              }}
+              onBlur={() => {
+                const seconds = RestTimerState.parseLength(typingRest);
+                if (seconds !== undefined) runner.setRestLength({ seconds });
+                setTypingRest(undefined);
+              }}
+              style={{ ...slFont(SL.TypeSize.title, SL.Weight.semibold), ...slNumerals, color: SL.Ink.primary, caretColor: SL.Signal.action, background: SL.Surface.raised2, border: "none", outline: "none", borderRadius: SL.Radius.sm, padding: "2px 8px", width: 96 }}
+            />
+            <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={1}>Rest length</Text>
+          </VStack>
+        ) : (
+          <Pressable
+            onPress={() => setTypingRest("")}
+            aria-label={`Rest, ${Math.trunc(remaining / 60)} minutes ${remaining % 60} seconds left. Change the rest length`}
+            style={{ flex: "1 1 0", minWidth: 0, background: "transparent", display: "flex", flexDirection: "column", alignItems: "flex-start" }}
+          >
+            <HStack spacing={6}>
+              <Text size={SL.TypeSize.title} weight={SL.Weight.semibold} numerals color={SL.Ink.primary}>{SLRestPill.clockLabel(remaining)}</Text>
+              <SFSymbol name="pencil" size={12} weight={600} color={SL.Ink.tertiary} />
+            </HStack>
+            <Text {...slMeta()} color={SL.Ink.secondary}>{next !== undefined ? `Rest · then set ${next + 1}` : "Rest"}</Text>
+          </Pressable>
+        )}
+        <Pressable
+          onPress={() => runner.adjustRest({ by: -SL.Metric.restAdjustStep })}
+          aria-label="Rest 30 seconds shorter"
+          style={{ paddingLeft: SL.Space.s3, paddingRight: SL.Space.s3, minHeight: SL.Space.hitMin, borderRadius: 999, background: SL.Surface.raised2, display: "flex", alignItems: "center", flexShrink: 0 }}
+        >
+          <Text {...slMeta(SL.Weight.semibold)} numerals color={SL.Ink.primary}>−30</Text>
+        </Pressable>
         <Pressable
           onPress={() => runner.adjustRest({ by: SL.Metric.restAdjustStep })}
           aria-label="Rest 30 seconds longer"
           style={{ paddingLeft: SL.Space.s3, paddingRight: SL.Space.s3, minHeight: SL.Space.hitMin, borderRadius: 999, background: SL.Surface.raised2, display: "flex", alignItems: "center", flexShrink: 0 }}
         >
-          <Text {...slMeta(SL.Weight.semibold)} numerals color={SL.Ink.primary}>+30s</Text>
+          <Text {...slMeta(SL.Weight.semibold)} numerals color={SL.Ink.primary}>+30</Text>
         </Pressable>
         <Pressable
           onPress={() => runner.endRest()}

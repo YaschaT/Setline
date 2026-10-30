@@ -603,6 +603,36 @@ final class AppState {
         await commit([StateChange(.upsertCustomWorkout(workout))])
     }
 
+    /// Monday first, as the week sheet lists it; `Schedule.weekKey` counts from Sunday.
+    static let weekdaysMondayFirst = [1, 2, 3, 4, 5, 6, 0]
+
+    /// Your own week, Monday first (a day id or "rest" each), when you made one.
+    var ownWeek: [String]? {
+        let week = Schedule.weekOnly(scheduleOverrides)
+        guard !week.isEmpty else { return nil }
+        return Self.weekdaysMondayFirst.map { week[Schedule.weekKey($0)] ?? Schedule.defaultWeek[$0] ?? "rest" }
+    }
+
+    /// Writes your own week, Monday first, for the plan you're on — every
+    /// weekday, so the week is wholly yours — or with `nil` hands the week
+    /// back to the plan. Days you moved by date keep their change.
+    func saveOwnWeek(_ days: [String]?) async {
+        var changes = Self.weekdaysMondayFirst.enumerated().map { position, index in
+            let key = "\(programKey):\(Schedule.weekKey(index))"
+            if let days {
+                return StateChange(.setScheduleDay(key: key, dayID: days.indices.contains(position) ? days[position] : "rest"))
+            }
+            return StateChange(.removeScheduleOverride(key: key))
+        }
+        // It holds from the day it was first made; an edit keeps that start.
+        let fromKey = "\(programKey):\(Schedule.weekFromKey)"
+        let from = scheduleOverrides[Schedule.weekFromKey] ?? Schedule.dateKey(Date())
+        changes.append(days == nil
+            ? StateChange(.removeScheduleOverride(key: fromKey))
+            : StateChange(.setScheduleDay(key: fromKey, dayID: from)))
+        await record(changes)
+    }
+
     func removeCustomWorkout(id: String) async {
         await commit([StateChange(.removeCustomWorkout(id: id))])
     }

@@ -194,10 +194,12 @@ describe("SessionCorrectionTests", () => {
 
   test("testACorrectionNeverUnlogsASet", () => {
     const before = account();
-    for (const attempt of [correction({ weight: 0 }), correction({ reps: 0 })]) {
+    for (const attempt of [correction({ weight: -1 }), correction({ reps: 0 })]) {
       const after = apply([attempt], before);
       assertEqual(after.raw, before.raw, "a set may be corrected, never emptied");
     }
+    // 0 kg is a set without weight (2026-10-30), not an empty one.
+    assertNotEqual(apply([correction({ weight: 0 })], before).raw, before.raw, "a set may become one without weight");
   });
 
   test("testACorrectionSkipsWhatIsNoLongerThere", () => {

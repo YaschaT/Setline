@@ -96,4 +96,53 @@ export const RestTimerState = {
   clockLabel(seconds: number): string {
     return `${pad2(Math.trunc(seconds / 60))}:${pad2(seconds % 60)}`;
   },
+
+  /** The rest's whole length, as typed or prescribed, adjustments included. */
+  length(self: RestTimerState): number {
+    return self.targetSeconds + self.adjustmentSeconds;
+  },
+
+  /**
+   * The rest set to a length of its own, still counted from when it began.
+   * `mutating` in Swift: returns the new state.
+   */
+  withLength(self: RestTimerState, a: { seconds: number }): RestTimerState {
+    return { ...self, targetSeconds: a.seconds, adjustmentSeconds: 0 };
+  },
+
+  /**
+   * A rest length typed by hand. "1:30" is minutes and seconds, and so are
+   * "1.30" and "1,30"; "1.5" is one and a half minutes. One or two digits
+   * are minutes up to 10 and seconds above ("2", "90"); three or four read
+   * like a microwave timer ("130" is 1:30). Between 10 seconds and 15
+   * minutes, or nothing.
+   */
+  parseLength(text: string): number | undefined {
+    const typed = text.trim();
+    let seconds: number;
+    const colon = /^(\d{1,2}):(\d{2})$/.exec(typed);
+    const decimal = /^(\d{1,2})[.,](\d{1,2})$/.exec(typed);
+    if (colon) {
+      if (Number(colon[2]) >= 60) return undefined;
+      seconds = Number(colon[1]) * 60 + Number(colon[2]);
+    } else if (decimal) {
+      const fraction = decimal[2];
+      if (fraction.length === 1) {
+        seconds = Number(decimal[1]) * 60 + Number(fraction) * 6;
+      } else {
+        if (Number(fraction) >= 60) return undefined;
+        seconds = Number(decimal[1]) * 60 + Number(fraction);
+      }
+    } else if (/^\d{1,2}$/.test(typed)) {
+      const number = Number(typed);
+      seconds = number <= 10 ? number * 60 : number;
+    } else if (/^\d{3,4}$/.test(typed)) {
+      const rest = Number(typed.slice(-2));
+      if (rest >= 60) return undefined;
+      seconds = Number(typed.slice(0, -2)) * 60 + rest;
+    } else {
+      return undefined;
+    }
+    return seconds >= 10 && seconds <= 900 ? seconds : undefined;
+  },
 };

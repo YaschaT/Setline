@@ -91,7 +91,7 @@ public struct SetCorrection: Codable, Hashable, Sendable {
     /// A stored set is a logged set: history holds what was performed, so a
     /// correction may change what a set says and never whether it happened.
     /// Removing a set is a deletion, which this operation deliberately is not.
-    public var isLogged: Bool { weightKg > 0 && reps > 0 }
+    public var isLogged: Bool { weightKg >= 0 && reps > 0 }
 
     /// The corrected values laid over the set as stored, in the same shapes
     /// the app writes a set with. Keys neither client's set model owns are

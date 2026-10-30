@@ -38,6 +38,12 @@ struct RootView: View {
     /// An invite link opened: setline://add/<username>.
     @State private var invite: InviteLink?
     private struct InviteLink: Identifiable { let id: String }
+    /// A workout a friend sent as a link: setline://workout?workout=<code>.
+    @State private var sharedWorkout: SharedWorkoutOffer?
+    private struct SharedWorkoutOffer: Identifiable {
+        let id = UUID()
+        let received: CustomWorkoutLink.Received
+    }
 
     private enum Entry { case beginning, returning }
 
@@ -270,10 +276,21 @@ struct RootView: View {
             )
         }
         .onOpenURL { url in
+            // A shared workout, from the web page's "Open in the iPhone app".
+            if let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == CustomWorkoutLink.parameter })?.value {
+                if let received = CustomWorkoutLink.received(code) {
+                    sharedWorkout = SharedWorkoutOffer(received: received)
+                }
+                return
+            }
             guard url.scheme == "setline", url.host() == "add",
                   let name = url.pathComponents.dropFirst().first, !name.isEmpty else { return }
             tab = .friends
             invite = InviteLink(id: name.lowercased())
+        }
+        .sheet(item: $sharedWorkout) { offer in
+            SharedWorkoutSheet(received: offer.received, onClose: { sharedWorkout = nil })
         }
         .sheet(item: $invite) { link in
             InviteLandingSheet(username: link.id, onClose: { invite = nil })

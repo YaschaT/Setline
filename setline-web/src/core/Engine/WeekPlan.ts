@@ -65,10 +65,10 @@ function movedFrom(a: {
   overrides: Record<string, string>;
 }): string | undefined {
   const { canonical, dates, keys, overrides } = a;
-  const home = dates.findIndex((d) => WeekPlan.defaultDay({ for: d }) === canonical);
+  const home = dates.findIndex((d) => WeekPlan.defaultDay({ for: d, overrides }) === canonical);
   if (home === -1) return undefined;
   if (keys[home] === a.on) return undefined;
-  const atHome = overrides[keys[home]] ?? WeekPlan.defaultDay({ for: dates[home] });
+  const atHome = overrides[keys[home]] ?? WeekPlan.defaultDay({ for: dates[home], overrides });
   if (atHome === canonical) return undefined;
   return WeekPlan.fullWeekday(dates[home]);
 }
@@ -91,7 +91,7 @@ export const WeekPlan = {
     return dates.map((date, index) => {
       const key = keys[index];
       const assignment = overrides[key];
-      const canonical = assignment ?? WeekPlan.defaultDay({ for: date });
+      const canonical = assignment ?? WeekPlan.defaultDay({ for: date, overrides });
       const workout = Schedule.day({ for: canonical, in: plan });
 
       let kind: WeekPlan_Kind;
@@ -112,8 +112,10 @@ export const WeekPlan = {
     });
   },
 
-  defaultDay(a: { for: Date }): string {
-    return Schedule.defaultWeek[weekday(a.for) - 1] ?? "rest";
+  /** What a weekday holds without a change of its own: your week, else the program's. */
+  defaultDay(a: { for: Date; overrides?: Record<string, string> }): string {
+    const own = a.overrides ? Schedule.ownWeekDay({ for: a.for, overrides: a.overrides }) : undefined;
+    return own ?? Schedule.defaultWeek[weekday(a.for) - 1] ?? "rest";
   },
 
   // MARK: - What a session costs
@@ -185,6 +187,8 @@ export interface WeekDraft {
   readonly keys: string[];
   readonly stored: Record<string, string>;
   readonly overrides: Record<string, string>;
+  /** Your own week, which the dates fall back to; never edited here. */
+  readonly week: Record<string, string>;
 }
 export const WeekDraft = {
   make(a: { dates: Date[]; overrides: Record<string, string> }): WeekDraft {
@@ -193,7 +197,7 @@ export const WeekDraft = {
     for (const [key, value] of Object.entries(a.overrides)) {
       if (keys.includes(key)) mine[key] = value;
     }
-    return { dates: a.dates, keys, stored: mine, overrides: { ...mine } };
+    return { dates: a.dates, keys, stored: mine, overrides: { ...mine }, week: Schedule.weekOnly(a.overrides) };
   },
 
   assignments(self: WeekDraft): Record<string, string> {
@@ -210,7 +214,7 @@ export const WeekDraft = {
     if (named !== undefined) return named;
     const index = self.keys.indexOf(a.on);
     if (index === -1) return "rest";
-    return WeekPlan.defaultDay({ for: self.dates[index] });
+    return WeekPlan.defaultDay({ for: self.dates[index], overrides: self.week });
   },
 
   /**
@@ -242,7 +246,7 @@ export const WeekDraft = {
     const index = self.keys.indexOf(key);
     if (index === -1) return self;
     const overrides = { ...self.overrides };
-    if (canonical === WeekPlan.defaultDay({ for: self.dates[index] })) {
+    if (canonical === WeekPlan.defaultDay({ for: self.dates[index], overrides: self.week })) {
       delete overrides[key];
     } else {
       overrides[key] = canonical;

@@ -10,7 +10,10 @@ import { slMeasure } from "../../design/SLDynamicType";
 import { SLChip } from "../../design/components/SLChip";
 import { SLGlyph, type SLGlyph_NameCase } from "../../design/components/SLGlyph";
 import { SLEyebrow, SLHairline, slBody, slCardStrong, slDisplay, slHitTarget, slLead, slMeta, slTitle } from "../../design/components/SLText";
-import type { Exercise } from "../../core/Domain/Model";
+import { Exercise as ExerciseModel, type Exercise } from "../../core/Domain/Model";
+import { MuscleGroup } from "../../core/Domain/MuscleGroup";
+import { MuscleFigure } from "../../design/components/MuscleFigure";
+import { colorOpacity } from "../../design/SetlineTokens";
 import { CustomExercise, ReplacementScope } from "../../core/Domain/Substitution";
 import type { Equipment } from "../../core/Domain/Vocabulary";
 import { PainFlag, PainRegion, PainTiming } from "../../core/Domain/PainFlag";
@@ -272,6 +275,11 @@ export function SwapSheet(p: {
     </Pressable>
   );
 
+  /**
+   * One result, readable at a glance: the muscle it works (as on Progress ›
+   * Strength), the name, the setup, and how close it is as a three-bar
+   * meter. The reasoning sits under the best match only; one tap swaps.
+   */
   const alternativeRow = (alternative: RankedAlternative, peers: RankedAlternative[], leads = false) => (
     <Pressable
       key={RankedAlternative.id(alternative)}
@@ -284,23 +292,43 @@ export function SwapSheet(p: {
       }}
       style={{ alignSelf: "stretch", textAlign: "left", background: "transparent", borderRadius: SL.Radius.md }}
     >
-      <VStack alignment="leading" spacing={0} style={{ paddingTop: SL.Space.s3, paddingBottom: SL.Space.s3, paddingLeft: 14, paddingRight: 14 }}>
-        <HStack alignment="firstTextBaseline" spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
-          <Text {...slLead()} color={SL.Ink.primary}>{alternative.exercise.name}</Text>
-          <Spacer minLength={SL.Space.s2} />
-          <Text size={SL.TypeSize.micro} weight={SL.Weight.semibold} color={leads ? SL.Ink.primary : SL.Ink.secondary} lineLimit={1} style={{ flexShrink: 0 }}>
-            {SubstitutionCopy.fit(alternative)}
-          </Text>
-        </HStack>
-        <Text {...slMeta()} lineHeight={1.4} color={SL.Ink.secondary} style={{ paddingTop: 3 }}>
-          {SubstitutionCopy.why(alternative, { origin: exercise, alongside: peers })}
-        </Text>
-        <Text size={SL.TypeSize.micro} weight={SL.Weight.regular} color={SL.Ink.tertiary} style={{ paddingTop: SL.Space.s1 }}>
-          {SubstitutionCopy.carryOver}
-        </Text>
-      </VStack>
+      {alternativeFace(alternative, peers, leads)}
     </Pressable>
   );
+
+  const alternativeFace = (alternative: RankedAlternative, peers: RankedAlternative[], leads: boolean) => {
+    const strength = SubstitutionCopy.strength(alternative);
+    const tone = strength === 3 ? SL.Signal.action : strength === 2 ? SL.Ink.primary : SL.Ink.secondary;
+    const group = ExerciseModel.group(alternative.exercise);
+    return (
+      <HStack alignment="center" spacing={SL.Space.s3} style={{ paddingTop: SL.Space.s3, paddingBottom: SL.Space.s3, paddingLeft: 10, paddingRight: 10 }}>
+        <div aria-hidden style={{ width: 44, height: 44, flexShrink: 0, padding: 6, boxSizing: "border-box", borderRadius: 12, background: strength === 3 ? SL.Signal.actionTint : SL.Surface.raised, display: "grid", placeItems: "center" }}>
+          <MuscleFigure group={group} highlight={strength === 3 ? SL.Signal.action : SL.Ink.primary} outline={colorOpacity(SL.Ink.secondary, 0.8)} style={{ width: "100%", height: "100%" }} />
+        </div>
+        <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+          <Text {...slLead()} color={SL.Ink.primary} lineLimit={2}>{alternative.exercise.name}</Text>
+          <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={1} style={{ maxWidth: "100%" }}>
+            {[SubstitutionCopy.equipmentLabel(alternative.exercise.equipment), group ? MuscleGroup.title(group) : undefined].filter(Boolean).join(" · ")}
+          </Text>
+          {leads && (
+            <Text {...slMeta()} lineHeight={1.4} color={SL.Ink.tertiary} style={{ paddingTop: 2 }}>
+              {SubstitutionCopy.why(alternative, { origin: exercise, alongside: peers })}
+            </Text>
+          )}
+        </VStack>
+        <VStack alignment="trailing" spacing={4} style={{ flexShrink: 0 }}>
+          <HStack spacing={3} aria-hidden style={{ alignItems: "flex-end", height: 14 }}>
+            {[1, 2, 3].map((bar) => (
+              <span key={bar} style={{ width: 5, height: 5 + bar * 3, borderRadius: 2, background: bar <= strength ? tone : SL.Surface.hairlineStrong }} />
+            ))}
+          </HStack>
+          <Text size={SL.TypeSize.micro} weight={SL.Weight.semibold} color={tone} lineLimit={1}>
+            {SubstitutionCopy.fit(alternative)}
+          </Text>
+        </VStack>
+      </HStack>
+    );
+  };
 
   /**
    * Zero results is a real answer, not a failure. Say what is true and
@@ -398,7 +426,7 @@ export function SwapSheet(p: {
       </HStack>
 
       <Text {...slMeta()} lineHeight={SL.LineHeight.body} color={SL.Ink.secondary} style={{ paddingTop: SL.Space.s1 }}>
-        Keep sets, reps and RIR — reset the weight.
+        Tap one to swap. Sets, reps and RIR stay — the weight starts fresh.
       </Text>
 
       {/* Both contexts, always. "The machine is taken" is the reason this sheet exists, and a pain flag never switches it off. */}
@@ -474,8 +502,8 @@ export function SwapSheet(p: {
       ["barbell", "Barbell"],
       ["dumbbell", "Dumbbell"],
       ["machineSelectorised", "Machine"],
-      ["cable", "Kabel"],
-      ["bodyweight", "Lichaamsgewicht"],
+      ["cable", "Cable"],
+      ["bodyweight", "Bodyweight"],
     ];
     return (
       <FlowRow spacing={SL.Space.s2}>
@@ -572,20 +600,17 @@ export function SwapSheet(p: {
         {`This changes your plan, not just today. Pick what replaces ${exercise.name.toLowerCase()}.`}
       </Text>
       <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", paddingTop: SL.Space.s5 }}>
-        {alternatives.map((alternative) => (
+        {alternatives.map((alternative, index) => (
           <Pressable
             key={RankedAlternative.id(alternative)}
+            aria-label={`${alternative.exercise.name}, ${SubstitutionCopy.fit(alternative)}`}
             onPress={() => {
               setScope("thisDay");
               setStep({ kind: "scope", value: alternative.exercise.id });
             }}
             style={{ alignSelf: "stretch", textAlign: "left", ...slCard({ radius: SL.Radius.md }) }}
           >
-            <HStack alignment="firstTextBaseline" spacing={SL.Space.s3} style={{ padding: SL.Space.s4 }}>
-              <Text {...slBody(SL.Weight.medium)} color={SL.Ink.primary}>{alternative.exercise.name}</Text>
-              <Spacer minLength={SL.Space.s2} />
-              <Text {...slMeta()} color={SL.Ink.tertiary} style={{ flexShrink: 0 }}>{SubstitutionCopy.fit(alternative)}</Text>
-            </HStack>
+            {alternativeFace(alternative, alternatives, index === 0)}
           </Pressable>
         ))}
         {alternatives.length === 0 && (

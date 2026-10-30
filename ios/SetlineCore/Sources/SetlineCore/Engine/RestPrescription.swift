@@ -79,4 +79,43 @@ public struct RestTimerState: Codable, Hashable, Sendable {
     public static func clockLabel(_ seconds: Int) -> String {
         String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
+
+    /// The rest's whole length, as typed or prescribed, adjustments included.
+    public var length: Int { targetSeconds + adjustmentSeconds }
+
+    /// The rest set to a length of its own, still counted from when it began.
+    public mutating func setLength(_ seconds: Int) {
+        targetSeconds = seconds
+        adjustmentSeconds = 0
+    }
+
+    /// A rest length typed by hand. "1:30" is minutes and seconds, and so are
+    /// "1.30" and "1,30"; "1.5" is one and a half minutes. One or two digits
+    /// are minutes up to 10 and seconds above ("2", "90"); three or four read
+    /// like a microwave timer ("130" is 1:30). Between 10 seconds and 15
+    /// minutes, or nothing.
+    public static func parseLength(_ text: String) -> Int? {
+        let typed = text.trimmingCharacters(in: .whitespaces)
+        let seconds: Int
+        if let colon = typed.wholeMatch(of: /(\d{1,2}):(\d{2})/) {
+            guard let minutes = Int(colon.1), let rest = Int(colon.2), rest < 60 else { return nil }
+            seconds = minutes * 60 + rest
+        } else if let decimal = typed.wholeMatch(of: /(\d{1,2})[.,](\d{1,2})/) {
+            guard let minutes = Int(decimal.1), let fraction = Int(decimal.2) else { return nil }
+            if decimal.2.count == 1 {
+                seconds = minutes * 60 + fraction * 6
+            } else {
+                guard fraction < 60 else { return nil }
+                seconds = minutes * 60 + fraction
+            }
+        } else if typed.wholeMatch(of: /\d{1,2}/) != nil, let number = Int(typed) {
+            seconds = number <= 10 ? number * 60 : number
+        } else if typed.wholeMatch(of: /\d{3,4}/) != nil, let number = Int(typed) {
+            guard number % 100 < 60 else { return nil }
+            seconds = number / 100 * 60 + number % 100
+        } else {
+            return nil
+        }
+        return (10...900).contains(seconds) ? seconds : nil
+    }
 }

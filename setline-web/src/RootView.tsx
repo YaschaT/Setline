@@ -29,6 +29,8 @@ import { FriendsView } from "./features/Friends/FriendsView";
 import { PhotosHomeView } from "./features/Photos/PhotosHomeView";
 import { SessionView } from "./features/Session/SessionView";
 import { InviteLandingSheet } from "./features/Friends/InviteViews";
+import { SharedWorkoutInbox, SharedWorkoutSheet } from "./features/Training/SharedWorkoutSheet";
+import type { CustomWorkoutLink_Received } from "./core/Domain/CustomWorkoutLink";
 import { PostComposerView } from "./features/Friends/PostComposerView";
 import { StreakReminder } from "./features/Training/StreakReminder";
 import { NutritionReminders, habitMilestones } from "./features/Progress/GoalViews";
@@ -136,6 +138,8 @@ export function RootView() {
   const [habitsSeen, setHabitsSeen] = useAppStorage("setline.badges.habitsSeen", "");
   /** An invite link opened: setline://add/<username>. */
   const [invite, setInvite] = useState<string | undefined>(undefined);
+  /** A workout a friend sent as a link, offered once the account is open. */
+  const [sharedWorkout, setSharedWorkout] = useState<CustomWorkoutLink_Received | undefined>(undefined);
 
   /** `?onboarding=1` walks the new-account flow without making one (development builds). */
   const showsOnboarding = devFlag("onboarding") === "1" && !onboarded;
@@ -279,7 +283,14 @@ export function RootView() {
   const shownRunning = useLastItem(running);
   const shownComposing = useLastItem(composing);
   const shownInvite = useLastItem(invite);
+  const shownSharedWorkout = useLastItem(sharedWorkout);
   const signedInShell = app.isSignedIn && !app.isLoading && !app.needsNewPassword && !(app.isNewAccount || showsOnboarding) && !showsColdOpen;
+  // Offered once the account is open; taken from the inbox so it's offered once.
+  useEffect(() => {
+    if (!signedInShell || sharedWorkout !== undefined) return;
+    const received = SharedWorkoutInbox.take();
+    if (received) setSharedWorkout(received);
+  }, [signedInShell, sharedWorkout]);
 
   return (
     <div style={{ height: "100%", background: SL.Surface.ground, color: SL.Ink.primary }}>
@@ -335,6 +346,14 @@ export function RootView() {
               </SafeArea>
             )}
           </FullScreenCover>
+
+          <Sheet isPresented={sharedWorkout !== undefined} onDismiss={() => setSharedWorkout(undefined)}>
+            {shownSharedWorkout !== undefined && (
+              <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" }}>
+                <SharedWorkoutSheet received={shownSharedWorkout} onClose={() => setSharedWorkout(undefined)} />
+              </div>
+            )}
+          </Sheet>
 
           <Sheet isPresented={invite !== undefined} onDismiss={() => setInvite(undefined)}>
             {shownInvite !== undefined && <InviteLandingSheet username={shownInvite} onClose={() => setInvite(undefined)} />}

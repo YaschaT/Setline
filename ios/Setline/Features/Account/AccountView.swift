@@ -50,6 +50,8 @@ struct AccountView: View {
     @AppStorage(SLSound.preferenceKey) private var soundsOn = true
     @AppStorage(AppLock.preferenceKey) private var appLock = false
     @State private var showsPolicy = false
+    @State private var showsUpdates = false
+    private let updates = PatchNotes.shared
     @State private var remindersDenied = false
 
     private var summary: AccountSummary {
@@ -103,6 +105,10 @@ struct AccountView: View {
         #endif
         .sheet(isPresented: $reauthenticating) { reauthentication }
         .sheet(isPresented: $showsCredits) { credits }
+        .sheet(isPresented: $showsUpdates) {
+            PatchNotesView(onClose: { showsUpdates = false })
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showsPolicy) {
             PrivacyPolicyView(onClose: { showsPolicy = false })
                 .presentationDragIndicator(.visible)
@@ -558,6 +564,19 @@ struct AccountView: View {
 
     private var appGroup: some View {
         group("App") {
+            row("sparkles", tint: SL.Signal.action, title: "What's new",
+                detail: updates.notes.first?.title ?? "Every update, in plain words",
+                action: { showsUpdates = true }) {
+                if updates.hasUnseen {
+                    Text("NEW")
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(SL.Signal.onAction)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(SL.Signal.action))
+                }
+            }
             toggleRow("speaker.wave.2.fill", tint: SL.Ink.secondary, title: "Sounds",
                       detail: "A click for a set, a chime for a record", isOn: $soundsOn)
             if AppLock.isAvailable {

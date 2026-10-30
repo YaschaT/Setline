@@ -75,6 +75,31 @@ export const SubstitutionCopy = {
   strongScore: 0.75,
   strongOverlap: 0.80,
 
+  /**
+   * How close a result is, as the meter beside it shows: 3 a strong match,
+   * 2 a good one, 1 everything that changes the movement or the setup.
+   */
+  strength(alternative: RankedAlternative): 1 | 2 | 3 {
+    if (alternative.match === "broader" || alternative.match === "related") return 1;
+    if (alternative.score >= SubstitutionCopy.strongScore && alternative.muscleOverlap >= SubstitutionCopy.strongOverlap) return 3;
+    if (alternative.muscleOverlap >= 0.65) return 2;
+    return 1;
+  },
+
+  /** "Dumbbell", for the line under a result's name. */
+  equipmentLabel(equipment: Equipment): string {
+    switch (equipment) {
+      case "barbell": return "Barbell";
+      case "dumbbell": return "Dumbbells";
+      case "machinePlate": return "Plate machine";
+      case "machineSelectorised": return "Machine";
+      case "cable": return "Cable";
+      case "smith": return "Smith machine";
+      case "bodyweight": return "Bodyweight";
+      case "band": return "Band";
+    }
+  },
+
   fit(alternative: RankedAlternative): string {
     if (alternative.curatedFit !== undefined) return alternative.curatedFit;
     if (alternative.match === "broader") return "Different setup";

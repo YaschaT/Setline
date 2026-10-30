@@ -53,6 +53,8 @@ import { WeekPlanView } from "../Training/WeekPlanView";
 import { VisibilitySheet } from "../Friends/PostComposerView";
 import { BlockedPeopleSheet } from "../Friends/InviteViews";
 import { AppLock, PrivacyPolicyView } from "./PrivacyViews";
+import { usePatchNotes } from "./PatchNotes";
+import { PatchNotesView } from "./PatchNotesView";
 import { ProgramSheet } from "./ProgramSheet";
 import { TargetsSheet } from "./TargetsSheet";
 
@@ -143,6 +145,8 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
   const [soundsOn, setSoundsOnStored] = useAppStorage<boolean>(SLSound.preferenceKey, true);
   const [appLock, setAppLock] = useAppStorage<boolean>(AppLock.preferenceKey, false);
   const [showsPolicy, setShowsPolicy] = useState(false);
+  const [showsUpdates, setShowsUpdates] = useState(false);
+  const updates = usePatchNotes();
   const [remindersDenied, setRemindersDenied] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
 
@@ -679,6 +683,17 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
   // MARK: - App
 
   const appGroup = group("App", [
+    row("sparkles", {
+      tint: SL.Signal.action,
+      title: "What's new",
+      detail: updates.notes[0] ? updates.notes[0].title : "Every update, in plain words",
+      action: () => setShowsUpdates(true),
+      trailing: updates.hasUnseen ? (
+        <Text size={SL.TypeSize.micro} weight={SL.Weight.bold} tracking={0.8} color={SL.Signal.onAction} style={{ background: SL.Signal.action, borderRadius: 999, padding: "2px 8px" }}>
+          NEW
+        </Text>
+      ) : undefined,
+    }),
     toggleRow("speaker.wave.2.fill", { tint: SL.Ink.secondary, title: "Sounds", detail: "A click for a set, a chime for a record", isOn: soundsOn, set: setSoundsOn }),
     // Face ID / Touch ID / the passcode: never available to a web page, so
     // this row is never drawn here.
@@ -847,6 +862,11 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
         <Credits onDone={() => setShowsCredits(false)} />
       </Sheet>
 
+      <Sheet isPresented={showsUpdates} onDismiss={() => setShowsUpdates(false)}>
+        <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <PatchNotesView onClose={() => setShowsUpdates(false)} />
+        </div>
+      </Sheet>
       <Sheet isPresented={showsPolicy} onDismiss={() => setShowsPolicy(false)}>
         <PrivacyPolicyView onClose={() => setShowsPolicy(false)} />
       </Sheet>

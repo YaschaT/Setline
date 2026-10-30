@@ -297,9 +297,10 @@ public struct LoggedSet: Codable, Hashable, Identifiable, Sendable {
         sideReps = try container.decodeIfPresent(SideReps.self, forKey: .sideReps)
     }
 
-    /// A set with weight and reps is a complete set. RIR is the optional
-    /// third tap (addendum 11R) and never gates anything.
-    public var isLogged: Bool { (weightKg ?? 0) > 0 && reps > 0 }
+    /// A set with weight and reps is a complete set — 0 kg included, which is
+    /// a set without weight. RIR is the optional third tap (addendum 11R) and
+    /// never gates anything.
+    public var isLogged: Bool { (weightKg ?? -1) >= 0 && reps > 0 }
 
     /// Whether this set contributes to volume load.
     ///

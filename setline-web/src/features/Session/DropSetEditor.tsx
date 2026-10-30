@@ -44,7 +44,7 @@ export function DropSetEditor({ drops, step, display }: { drops: Binding<DropSte
             value: NumberDisplay.number(display, drop.weightKg),
             unit: "kg",
             label: `drop ${index + 1} weight`,
-            minus: () => change(index, (d) => ({ ...d, weightKg: Math.max(step, dec(d.weightKg - step)) })),
+            minus: () => change(index, (d) => ({ ...d, weightKg: Math.max(0, dec(d.weightKg - step)) })),
             plus: () => change(index, (d) => ({ ...d, weightKg: dec(d.weightKg + step) })),
           })}
           <Text {...slMeta()} color={SL.Ink.secondary} style={{ paddingLeft: 4, paddingRight: 4 }}>×</Text>
@@ -84,10 +84,11 @@ export function DropSetEditor({ drops, step, display }: { drops: Binding<DropSte
 
 DropSetEditor.maxDrops = 3;
 
-/** About a fifth lighter than `weight`, on the step, never below it. */
+/** About a fifth lighter than `weight`, on the step, never below it (or none). */
 DropSetEditor.next = (weight: number, a: { reps: number; step: number }): DropStep => {
   const lighter = Estimates.round(weight * 0.8, { toIncrement: a.step });
-  return DropStep.make({ weightKg: Math.max(lighter, a.step), reps: Math.max(1, a.reps) });
+  // A set without weight drops to none.
+  return DropStep.make({ weightKg: weight > 0 ? Math.max(lighter, a.step) : 0, reps: Math.max(1, a.reps) });
 };
 
 function stepper(p: { value: string; unit: string | undefined; label: string; minus: () => void; plus: () => void }) {

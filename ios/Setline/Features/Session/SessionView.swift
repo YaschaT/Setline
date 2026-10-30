@@ -51,6 +51,9 @@ struct SessionView: View {
     @State private var sideDraft: [UUID: SetSide] = [:]
     /// Taken to failure on purpose — stored as RIR 0.
     @State private var failureDraft: Set<UUID> = []
+    /// The rest's clock, turned into a field to type a length of its own.
+    @State private var typingRest: String?
+    @FocusState private var restFieldFocused: Bool
     /// A drop set's lighter rounds, while the set is open.
     @State private var dropsDraft: [UUID: [DropStep]] = [:]
     /// Reps per side on a two-sided set of a one-sided exercise; present
@@ -966,7 +969,7 @@ struct SessionView: View {
     private func quickCheck(slotIndex: Int, setIndex: Int) {
         let set = runner.slots[slotIndex].sets[setIndex]
         let calibrating = setIndex == 0 && runner.needsCalibration(slotIndex: slotIndex)
-        guard !calibrating, let weight = set.weightKg, weight > 0 else {
+        guard !calibrating, let weight = set.weightKg, weight >= 0 else {
             entryOpensOnKeypad = (set.weightKg ?? 0) <= 0
             runner.editing = (slotIndex, setIndex)
             return
@@ -1372,7 +1375,7 @@ struct SessionView: View {
     private func moreMenu(setIndex: Int) -> some View {
         Menu {
             Button("Add an exercise", systemImage: "plus.circle") { addingExercise = true }
-            Button("Mark as failed…", systemImage: "slider.horizontal.3") {
+            Button("Edit set…", systemImage: "slider.horizontal.3") {
                 entryOpensOnKeypad = false
                 runner.editing = (runner.currentIndex, setIndex)
             }
@@ -1408,21 +1411,73 @@ struct SessionView: View {
             .frame(width: 30, height: 30)
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(SLRestPill.clockLabel(remaining))
-                    .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+            if let typed = typingRest {
+                // Type a length of its own: "2:30", "90", "2".
+                VStack(alignment: .leading, spacing: 0) {
+                    // Empty, with the rest as it stands for a hint: typing replaces it.
+                    TextField(SLRestPill.clockLabel(timer.length).replacing(/^0(?=\d:)/, with: ""),
+                              text: Binding(get: { typed }, set: { typingRest = $0 }))
+                        .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                        .monospacedDigit()
+                        .keyboardType(.numbersAndPunctuation)
+                        .submitLabel(.done)
+                        .focused($restFieldFocused)
+                        .padding(.horizontal, SL.Space.s2)
+                        .frame(width: 96)
+                        .background(RoundedRectangle(cornerRadius: SL.Radius.sm).fill(SL.Surface.raised2))
+                        .onSubmit { commitRestLength() }
+                        .onChange(of: restFieldFocused) { _, focused in if !focused { commitRestLength() } }
+                        .accessibilityLabel("Rest length, minutes and seconds")
+                    Text("Rest length")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Button {
+                    typingRest = ""
+                    restFieldFocused = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 6) {
+                            Text(SLRestPill.clockLabel(remaining))
+                                .font(.sl(SL.TypeSize.title, SL.Weight.semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(SL.Ink.primary)
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(SL.Ink.tertiary)
+                        }
+                        Text(runner.nextIndex(in: runner.current).map { "Rest · then set \($0 + 1)" } ?? "Rest")
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Rest, \(remaining / 60) minutes \(remaining % 60) seconds left")
+                .accessibilityHint("Change the rest length")
+            }
+
+            Button { runner.adjustRest(by: -Int(SL.Metric.restAdjustStep)) } label: {
+                Text("−30")
+                    .slMeta(SL.Weight.semibold)
                     .monospacedDigit()
                     .foregroundStyle(SL.Ink.primary)
-                Text(runner.nextIndex(in: runner.current).map { "Rest · then set \($0 + 1)" } ?? "Rest")
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
+                    .padding(.horizontal, SL.Space.s3)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .background(Capsule().fill(SL.Surface.raised2))
+                    .contentShape(Capsule())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Rest, \(remaining / 60) minutes \(remaining % 60) seconds left")
+            .buttonStyle(.plain)
+            .accessibilityLabel("Rest 30 seconds shorter")
 
             Button { runner.adjustRest(by: Int(SL.Metric.restAdjustStep)) } label: {
-                Text("+30s")
+                Text("+30")
                     .slMeta(SL.Weight.semibold)
                     .monospacedDigit()
                     .foregroundStyle(SL.Ink.primary)
@@ -1448,12 +1503,21 @@ struct SessionView: View {
         .transition(.opacity)
     }
 
+    /// The typed rest length, once: a length that reads is set, anything
+    /// else leaves the rest as it was.
+    private func commitRestLength() {
+        guard let typed = typingRest else { return }
+        typingRest = nil
+        if let seconds = RestTimerState.parseLength(typed) { runner.setRestLength(seconds) }
+    }
+
     /// Where the numbers in the card came from, in the design's own words.
     private func status(setIndex: Int, set: LoggedSet) -> String {
         let slotIndex = runner.currentIndex
         if adjusted.contains(set.id) { return "adjusted" }
         if setIndex == 0, runner.needsCalibration(slotIndex: slotIndex) { return "calibration set" }
-        guard let weight = set.weightKg, weight > 0 else { return "no weight yet" }
+        guard let weight = set.weightKg else { return "no weight yet" }
+        if weight == 0 { return "no weight" }
 
         let slot = runner.current
         let reference = slot.history.mostRecent
@@ -1481,7 +1545,7 @@ struct SessionView: View {
         let changed = adjusted.contains(set.id)
         return HStack(alignment: .top, spacing: SL.Space.s2) {
             SLStepper(
-                label: "Weight",
+                label: set.weightKg == 0 ? "No weight" : "Weight",
                 display: set.weightKg.map(app.display.number) ?? "—",
                 isChanged: changed && (openingWeight[set.id].map { $0 != (runner.slots[slotIndex].sets[setIndex].weightKg ?? 0) } ?? false),
                 valueHint: "Type the weight",
@@ -1610,40 +1674,46 @@ struct SessionView: View {
 
     // MARK: - Paused, partial, side
 
-    /// The set's rarer facts, in plain sight and off by default: two small
-    /// chips, and L / R / Both on a one-sided exercise. A chip turned on
-    /// becomes its own count — "− 3 paused +" — inside the card, so a mixed
-    /// set is logged without leaving it.
+    /// The set's rarer facts, in plain sight and off by default: the same four
+    /// chips on every set of every exercise — Paused, Partial, Failed, Drop
+    /// set — then the side. A count chip turned on becomes its own
+    /// "− 3 paused +" inside the card, so a mixed set is logged without
+    /// leaving it.
     private func attributeRow(slotIndex: Int, setIndex: Int, set: LoggedSet) -> some View {
         let slot = runner.slots[slotIndex]
         let reps = openReps(slotIndex: slotIndex, setIndex: setIndex)
-        let pausable = !slot.planned.modifiers.pauseEnabled
         let drops = dropsDraft[set.id] ?? []
+        let unilateral = slot.exercise.unilateral
+        let picked = oneSide(slotIndex: slotIndex, setIndex: setIndex)
         return VStack(alignment: .leading, spacing: SL.Space.s2) {
             // Chips wrap to a second line rather than hide behind a menu.
             SLFlow(spacing: SL.Space.s2) {
-                if pausable {
-                    attributeChip("Paused", count: paused(slotIndex: slotIndex, setIndex: setIndex, reps: reps), reps: reps) {
-                        pausedDraft[set.id] = $0 ?? 0
-                    }
+                attributeChip("Paused", count: paused(slotIndex: slotIndex, setIndex: setIndex, reps: reps), reps: reps) {
+                    pausedDraft[set.id] = $0 ?? 0
                 }
                 attributeChip("Partial", count: partial(slotIndex: slotIndex, setIndex: setIndex, reps: reps), reps: reps) {
                     partialDraft[set.id] = $0 ?? 0
                 }
-                // Where the set already asks RIR, its 0 is this chip.
-                if !asksForRIR(slotIndex: slotIndex, setIndex: setIndex) {
-                    toggleChip("To failure", isOn: failureDraft.contains(set.id)) {
-                        if failureDraft.contains(set.id) { failureDraft.remove(set.id) } else { failureDraft.insert(set.id) }
-                    }
+                toggleChip("Failed", isOn: failureDraft.contains(set.id)) {
+                    if failureDraft.contains(set.id) { failureDraft.remove(set.id) } else { failureDraft.insert(set.id) }
                 }
                 if drops.isEmpty {
                     toggleChip("Drop set", isOn: false) {
                         dropsDraft[set.id] = [DropSetEditor.next(after: set.weightKg ?? 0, reps: reps, step: slot.exercise.incrementKg)]
                     }
                 }
-                if slot.exercise.unilateral { sidePicker(slotIndex: slotIndex, setIndex: setIndex) }
+                if unilateral {
+                    sidePicker(slotIndex: slotIndex, setIndex: setIndex)
+                } else if picked == nil {
+                    // Any exercise can be done one side at a time: off until asked.
+                    toggleChip("One side", isOn: false) {
+                        sideDraft[set.id] = previousLogged(slotIndex: slotIndex, setIndex: setIndex)?.side == .left ? .right : .left
+                    }
+                } else {
+                    sidePicker(slotIndex: slotIndex, setIndex: setIndex)
+                }
                 // Both sides in one set, and they didn't match: count them apart.
-                if slot.exercise.unilateral, side(slotIndex: slotIndex, setIndex: setIndex) == .both {
+                if unilateral, side(slotIndex: slotIndex, setIndex: setIndex) == .both {
                     toggleChip("Per side", isOn: sideRepsDraft[set.id] != nil) {
                         if sideRepsDraft[set.id] != nil {
                             sideRepsDraft[set.id] = nil
@@ -1691,22 +1761,26 @@ struct SessionView: View {
         runner.slots[slotIndex].sets.prefix(setIndex).last(where: \.isLogged)
     }
 
-    /// Paused reps as the card shows them: what was chosen here, else what
-    /// the previous set had — a lifter who paused the last two on set 1
-    /// usually does on set 2. Never more than the reps.
+    /// Paused reps as the card shows them: only what was chosen on this set.
+    /// Every set starts plain — nothing is carried over from the set before or
+    /// read off the plan, so a tag is always one the lifter put there. Never
+    /// more than the reps.
     private func paused(slotIndex: Int, setIndex: Int, reps: Int) -> Int? {
         let id = runner.slots[slotIndex].sets[setIndex].id
-        let carried: Int? = previousLogged(slotIndex: slotIndex, setIndex: setIndex).flatMap { prior in
-            prior.pausedReps ?? (prior.modifiers.pauseEnabled ? prior.reps : nil)
-        }
-        let count = pausedDraft[id] ?? carried ?? 0
+        let count = pausedDraft[id] ?? 0
         return count > 0 ? min(count, reps) : nil
     }
 
     private func partial(slotIndex: Int, setIndex: Int, reps: Int) -> Int? {
         let id = runner.slots[slotIndex].sets[setIndex].id
-        let count = partialDraft[id] ?? previousLogged(slotIndex: slotIndex, setIndex: setIndex)?.partialReps ?? 0
+        let count = partialDraft[id] ?? 0
         return count > 0 ? min(count, reps) : nil
+    }
+
+    /// The side of a set on an exercise that is not one-sided by nature: none
+    /// until "One side" is tapped, which picks the side the last set didn't.
+    private func oneSide(slotIndex: Int, setIndex: Int) -> SetSide? {
+        sideDraft[runner.slots[slotIndex].sets[setIndex].id]
     }
 
     /// One side is always picked, so a one-sided set never costs a tap:
@@ -1779,7 +1853,9 @@ struct SessionView: View {
         return SetSidePicker(side: Binding(
             get: { side(slotIndex: slotIndex, setIndex: setIndex) },
             set: { picked in
-                sideDraft[id] = picked
+                // On a two-sided exercise, Both is simply the ordinary set again.
+                let plain = picked == .both && !runner.slots[slotIndex].exercise.unilateral
+                sideDraft[id] = plain ? nil : picked
                 if picked != .both { sideRepsDraft[id] = nil }
             }
         ))
@@ -1798,7 +1874,7 @@ struct SessionView: View {
                 .lineLimit(1)
         }
         .buttonStyle(SLPrimaryButtonStyle(prominent: true))
-        .disabled(weight <= 0 || reps <= 0)
+        .disabled(set.weightKg == nil || reps <= 0)
         .accessibilityLabel("Save set, \(app.display.kg(weight)) × \(reps)")
     }
 
@@ -1820,7 +1896,8 @@ struct SessionView: View {
     private func save(slotIndex: Int, setIndex: Int) {
         let slot = runner.slots[slotIndex]
         let set = slot.sets[setIndex]
-        guard let weight = set.weightKg, weight > 0 else { return }
+        // 0 is a set without weight — bodyweight, or a drop to nothing.
+        guard let weight = set.weightKg, weight >= 0 else { return }
         let sides = slot.exercise.unilateral ? sideRepsDraft[set.id] : nil
         // Sides counted apart: the set is the weaker side.
         let reps = sides?.weaker ?? openReps(slotIndex: slotIndex, setIndex: setIndex)
@@ -1831,17 +1908,12 @@ struct SessionView: View {
             entry: SessionRunner.SetEntry(
                 weightKg: weight,
                 reps: reps,
-                // "To failure" is reserve 0, the field both clients already keep.
-                rir: asksForRIR(slotIndex: slotIndex, setIndex: setIndex)
-                    ? rirDraft[set.id]
-                    : (failureDraft.contains(set.id) ? 0 : nil),
-                failed: false,
-                // A planned paused exercise is performed paused throughout,
-                // which is what the plan prescribes; otherwise the chip's
-                // count, never more than the reps.
-                pausedReps: slot.planned.modifiers.pauseEnabled ? reps : paused(slotIndex: slotIndex, setIndex: setIndex, reps: reps),
+                rir: asksForRIR(slotIndex: slotIndex, setIndex: setIndex) ? rirDraft[set.id] : nil,
+                failed: failureDraft.contains(set.id),
+                // Only what the chip says, on every exercise alike.
+                pausedReps: paused(slotIndex: slotIndex, setIndex: setIndex, reps: reps),
                 partialReps: partial(slotIndex: slotIndex, setIndex: setIndex, reps: reps),
-                side: slot.exercise.unilateral ? side(slotIndex: slotIndex, setIndex: setIndex) : nil,
+                side: slot.exercise.unilateral ? side(slotIndex: slotIndex, setIndex: setIndex) : oneSide(slotIndex: slotIndex, setIndex: setIndex),
                 drops: dropsDraft[set.id] ?? [],
                 sideReps: .some(sides)
             )

@@ -718,6 +718,39 @@ export class AppState {
     await this.commit([StateChange.make({ kind: "upsertCustomWorkout", value: workout })]);
   }
 
+  /** Monday first, as the week sheet lists it; `Schedule.weekKey` counts from Sunday. */
+  static readonly weekdaysMondayFirst = [1, 2, 3, 4, 5, 6, 0];
+
+  /** Your own week, Monday first (a day id or "rest" each), when you made one. */
+  get ownWeek(): string[] | undefined {
+    const week = Schedule.weekOnly(this.scheduleOverrides);
+    if (Object.keys(week).length === 0) return undefined;
+    return AppState.weekdaysMondayFirst.map((index) => week[Schedule.weekKey(index)] ?? Schedule.defaultWeek[index] ?? "rest");
+  }
+
+  /**
+   * Writes your own week, Monday first, for the plan you're on — every
+   * weekday, so the week is wholly yours — or with `undefined` hands the week
+   * back to the plan. Days you moved by date keep their change.
+   */
+  async saveOwnWeek(days: string[] | undefined): Promise<void> {
+    const changes = AppState.weekdaysMondayFirst.map((index, position) => {
+      const key = `${this.programKey}:${Schedule.weekKey(index)}`;
+      return days === undefined
+        ? StateChange.make({ kind: "removeScheduleOverride", key })
+        : StateChange.make({ kind: "setScheduleDay", key, dayID: days[position] ?? "rest" });
+    });
+    // It holds from the day it was first made; an edit keeps that start.
+    const fromKey = `${this.programKey}:${Schedule.weekFromKey}`;
+    const from = this.scheduleOverrides[Schedule.weekFromKey] ?? Schedule.dateKey(new Date());
+    changes.push(
+      days === undefined
+        ? StateChange.make({ kind: "removeScheduleOverride", key: fromKey })
+        : StateChange.make({ kind: "setScheduleDay", key: fromKey, dayID: from }),
+    );
+    await this.record(changes);
+  }
+
   async removeCustomWorkout(a: { id: string }): Promise<void> {
     await this.commit([StateChange.make({ kind: "removeCustomWorkout", id: a.id })]);
   }

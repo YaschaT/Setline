@@ -90,7 +90,8 @@ export function SetEntrySheet(p: {
       // reserve already picked in the card.
       rir: logged ? draft.rirReported : p.proposedRIR,
       failed: logged && SetFlags.contains(draft.flags, SetFlags.failed),
-      side: draft.side ?? SetSidePicker.defaultSide({ after: previousSide }),
+      // A two-sided exercise is both sides until one is picked.
+      side: draft.side ?? (slot.exercise.unilateral ? SetSidePicker.defaultSide({ after: previousSide }) : "both"),
       drops: draft.drops,
       ...(logged
         ? {
@@ -101,10 +102,8 @@ export function SetEntrySheet(p: {
             partialReps: (draft.partialReps ?? 0) > 0 ? draft.partialReps : undefined,
           }
         : {
-            // A planned paused exercise opens with every rep paused, because
-            // that is what the plan prescribes; anywhere else it is off until
-            // asked for.
-            pausedReps: planned.modifiers.pauseEnabled ? openingReps : undefined,
+            // Off until asked for, on every exercise alike.
+            pausedReps: undefined,
             // The pain flow's "Beperk de beweging" opens the set with partial
             // on, because that is what it promised.
             partialReps: p.startsPartial ? 1 : undefined,
@@ -418,7 +417,7 @@ export function SetEntrySheet(p: {
     <div ref={logControlsRef} style={{ alignSelf: "stretch" }}>
       <VStack spacing={0}>
         <SLPrimaryButton
-          disabled={weight <= 0 || reps <= 0}
+          disabled={weight < 0 || reps <= 0}
           onPress={() =>
             onLog({
               weightKg: weight,
@@ -427,7 +426,7 @@ export function SetEntrySheet(p: {
               failed,
               pausedReps,
               partialReps,
-              side: slot.exercise.unilateral ? side : undefined,
+              side: slot.exercise.unilateral || side !== "both" ? side : undefined,
               drops,
             })
           }
@@ -479,7 +478,8 @@ export function SetEntrySheet(p: {
             </div>
             {asksForRIR && rirRow}
             {chips}
-            {slot.exercise.unilateral && (
+            {/* Every exercise can be done one side at a time. */}
+            {(
               <HStack style={{ alignSelf: "stretch", paddingBottom: SL.Space.s4 }}>
                 <SLEyebrow text="Side" />
                 <Spacer />

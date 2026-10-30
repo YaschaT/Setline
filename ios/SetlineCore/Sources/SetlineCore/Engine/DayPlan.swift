@@ -88,7 +88,7 @@ public struct DayPlan: Equatable, Sendable {
 
         // The programme's own reading of this date, with every change taken
         // off: the way back to standard has to name what it returns to.
-        let standardID = Schedule.canonicalDay(for: date, overrides: [:], calendar: calendar)
+        let standardID = Schedule.canonicalDay(for: date, overrides: Schedule.weekOnly(overrides), calendar: calendar)
         let standard = Schedule.day(for: standardID, in: plan)
         let standardTitle = standard?.short ?? "rest day"
         let standardDayID = standard?.id ?? "rest"

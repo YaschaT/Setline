@@ -396,7 +396,7 @@ final class SessionRunner {
         // which exercise it stood in for.
         set.substitutedFrom = slots[slotIndex].substitutedFrom?.id
         if let side = entry.side { set.side = side }
-        if let drops = entry.drops { set.drops = drops.filter { $0.weightKg > 0 && $0.reps > 0 } }
+        if let drops = entry.drops { set.drops = drops.filter { $0.weightKg >= 0 && $0.reps > 0 } }
         if let sideReps = entry.sideReps { set.sideReps = sideReps }
         // Per-side reps only mean something on a set done on both sides, and
         // only while they differ.
@@ -858,9 +858,13 @@ final class SessionRunner {
         // Nothing to rest for in a workout that is already over.
         guard !isLoggedAfterwards else { return }
         let prescription = RestPrescription.forRole(planned.role)
-        let timer = RestTimerState(targetSeconds: prescription.defaultSeconds, startedAt: Date())
+        // A length typed for this exercise earlier in the session holds.
+        let typed = restLengths[planned.exerciseID]
+        let timer = RestTimerState(targetSeconds: typed ?? prescription.defaultSeconds, startedAt: Date())
         restTimer = timer
-        restTitle = "Rest · \(Self.roleLabel(planned.role)) \(prescription.displayLabel)"
+        restExerciseID = planned.exerciseID
+        restTitle = typed.map { "Rest · \(RestTimerState.clockLabel($0))" }
+            ?? "Rest · \(Self.roleLabel(planned.role)) \(prescription.displayLabel)"
         restCompletionSignalled = false
         isTimerExpanded = false
         RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
@@ -881,6 +885,27 @@ final class SessionRunner {
         guard let timer = restTimer else { return }
         if timer.remaining(at: Date()) > 0 { restCompletionSignalled = false }
         RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
+    }
+
+    /// Rest lengths typed this session, by exercise: its next rests keep them.
+    private var restLengths: [String: Int] = [:]
+    private var restExerciseID: String?
+
+    /// The running rest gets a length of its own, counted from when it began,
+    /// and the exercise it follows keeps that length for the rest of the
+    /// session.
+    func setRestLength(_ seconds: Int) {
+        guard var timer = restTimer else { return }
+        timer.setLength(seconds)
+        restTimer = timer
+        if let restExerciseID { restLengths[restExerciseID] = seconds }
+        restTitle = "Rest · \(RestTimerState.clockLabel(seconds))"
+        if timer.remaining(at: Date()) > 0 {
+            restCompletionSignalled = false
+            RestNotifier.schedule(at: timer.fireDate, startedAt: timer.startedAt)
+        } else {
+            RestNotifier.cancel()
+        }
     }
 
     func endRest() {

@@ -588,7 +588,7 @@ export class SessionRunner {
     // which exercise it stood in for.
     set.substitutedFrom = this._slots[slotIndex].substitutedFrom?.id;
     if (entry.side !== undefined) set.side = entry.side;
-    if (entry.drops !== undefined) set.drops = entry.drops.filter((d) => d.weightKg > 0 && d.reps > 0);
+    if (entry.drops !== undefined) set.drops = entry.drops.filter((d) => d.weightKg >= 0 && d.reps > 0);
     if (entry.sideReps !== undefined) set.sideReps = entry.sideReps.value;
     // Per-side reps only mean something on a set done on both sides, and
     // only while they differ.
@@ -1180,9 +1180,14 @@ export class SessionRunner {
     // Nothing to rest for in a workout that is already over.
     if (this.isLoggedAfterwards) return;
     const prescription = RestPrescription.forRole(planned.role);
-    const timer = RestTimerState.make({ targetSeconds: prescription.defaultSeconds, startedAt: new Date() });
+    // A length typed for this exercise earlier in the session holds.
+    const typed = this.restLengths[planned.exerciseID];
+    const timer = RestTimerState.make({ targetSeconds: typed ?? prescription.defaultSeconds, startedAt: new Date() });
     this._restTimer = timer;
-    this._restTitle = `Rest · ${SessionRunner.roleLabel(planned.role)} ${RestPrescription.displayLabel(prescription)}`;
+    this.restExerciseID = planned.exerciseID;
+    this._restTitle = typed !== undefined
+      ? `Rest · ${RestTimerState.clockLabel(typed)}`
+      : `Rest · ${SessionRunner.roleLabel(planned.role)} ${RestPrescription.displayLabel(prescription)}`;
     this.restCompletionSignalled = false;
     this._isTimerExpanded = false;
     RestNotifier.schedule(RestTimerState.fireDate(timer), { startedAt: timer.startedAt });
@@ -1208,6 +1213,31 @@ export class SessionRunner {
     if (!timer) return;
     if (RestTimerState.remaining(timer, { at: new Date() }) > 0) this.restCompletionSignalled = false;
     RestNotifier.schedule(RestTimerState.fireDate(timer), { startedAt: timer.startedAt });
+    this.notify();
+  }
+
+  /** Rest lengths typed this session, by exercise: its next rests keep them. */
+  private restLengths: Record<string, number> = {};
+  private restExerciseID: string | undefined;
+
+  /**
+   * The running rest gets a length of its own, counted from when it began,
+   * and the exercise it follows keeps that length for the rest of the
+   * session.
+   */
+  setRestLength(a: { seconds: number }): void {
+    const current = this._restTimer;
+    if (!current) return;
+    const timer = RestTimerState.withLength(current, { seconds: a.seconds });
+    this._restTimer = timer;
+    if (this.restExerciseID !== undefined) this.restLengths[this.restExerciseID] = a.seconds;
+    this._restTitle = `Rest · ${RestTimerState.clockLabel(a.seconds)}`;
+    if (RestTimerState.remaining(timer, { at: new Date() }) > 0) {
+      this.restCompletionSignalled = false;
+      RestNotifier.schedule(RestTimerState.fireDate(timer), { startedAt: timer.startedAt });
+    } else {
+      RestNotifier.cancel();
+    }
     this.notify();
   }
 

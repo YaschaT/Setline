@@ -111,7 +111,7 @@ export const DayPlan = {
 
     // The programme's own reading of this date, with every change taken
     // off: the way back to standard has to name what it returns to.
-    const standardID = Schedule.canonicalDay({ for: date, overrides: {} });
+    const standardID = Schedule.canonicalDay({ for: date, overrides: Schedule.weekOnly(overrides) });
     const standard = Schedule.day({ for: standardID, in: plan });
     const standardTitle = standard?.short ?? "rest day";
     const standardDayID = standard?.id ?? "rest";

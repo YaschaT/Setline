@@ -2,6 +2,7 @@
 // head above a list, the date column of a row, the marks a row ends on, the
 // amber card that asks for attention, and every tab's head.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { usePatchNotes } from "../../features/Account/PatchNotes";
 import { SL } from "../tokens";
 import { HStack, Text, VStack } from "../swiftui";
 import { SFSymbol } from "../SFSymbol";
@@ -256,6 +257,7 @@ export function SLTabHeader({
   trailing?: ReactNode;
 }) {
   const app = useApp();
+  const updates = usePatchNotes();
   return (
     <HStack alignment="center" spacing={SL.Space.s3} style={{ height: SL.Metric.tabHeaderHeight, alignSelf: "stretch" }}>
       <SLPress scale={0.92} onPress={onAccount} aria-label="Profile and settings" style={{ borderRadius: "50%", flexShrink: 0 }}>
@@ -292,10 +294,14 @@ export function SLTabHeader({
       <HStack spacing={SL.Space.s1} style={{ flexShrink: 0 }}>
         {trailing}
         {/* Settings, where people look for them, on every tab. */}
-        <SLPress scale={0.9} bounces onPress={onAccount} aria-label="Settings" style={{ borderRadius: "50%" }}>
+        <SLPress scale={0.9} bounces onPress={onAccount} aria-label={updates.hasUnseen ? "Settings, new update" : "Settings"} style={{ borderRadius: "50%", position: "relative" }}>
           <RoundHeaderFace>
             <SFSymbol name="gearshape" size={17} weight={600} color={SL.Ink.primary} />
           </RoundHeaderFace>
+          {/* A new update to read: "What's new" is in Settings. */}
+          {updates.hasUnseen && (
+            <span aria-hidden style={{ position: "absolute", top: 5, right: 5, width: 9, height: 9, borderRadius: 999, background: SL.Signal.action, boxShadow: `0 0 0 2px ${SL.Surface.ground}` }} />
+          )}
         </SLPress>
       </HStack>
     </HStack>

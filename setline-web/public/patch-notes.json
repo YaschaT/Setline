@@ -1,0 +1,32 @@
+{
+  "notes": [
+    {
+      "id": "2026-10-30",
+      "date": "2026-10-30",
+      "title": "Your feedback, built in",
+      "items": [
+        "Make your own week: in Plan & workouts, pick a workout for every day (one of yours or one from your plan) and it repeats every week. No more changing it day by day.",
+        "Send a workout to a friend: tap the share button next to one of your workouts and send the link in WhatsApp, Messages or any chat. Your friend taps it and saves a copy, on iPhone or Android.",
+        "Logging a set: Paused, Partial, Failed and Drop set now sit under every set of every exercise. Nothing is ticked for you anymore, so a set only counts as paused if you say so.",
+        "Sets without weight: step the weight down to 0, or type 0, for bodyweight sets like pull-ups without a belt. Drop sets can go down to 0 kg too.",
+        "Every exercise can now be done one side at a time. Tap “One side” and pick left or right.",
+        "Swapping an exercise: every option now shows the muscle it works and a match meter, best matches first. One tap swaps it in.",
+        "Rest timer: tap the time to type your own rest, like 2:30 or 90. The exercise keeps that rest for the rest of the workout. There's a −30 button now too.",
+        "Android: when you leave the app during a rest, your notifications show when the rest ends, and you get a buzz when it's over. Allow notifications when the app asks.",
+        "This page: every update, in plain words. A green dot on Settings means there's something new."
+      ]
+    },
+    {
+      "id": "2026-10-29",
+      "date": "2026-10-29",
+      "title": "Setline in your browser",
+      "items": [
+        "Setline now runs in any browser, Android included, with the same account as the iPhone app.",
+        "Sign-in and password-reset links bring you straight back into the app.",
+        "Leaving a workout you picked up again keeps it, instead of throwing it away.",
+        "Your own workouts: one row per exercise, and Save or Cancel when you build one.",
+        "Workout places show on a real map, and you can name the friends you trained with."
+      ]
+    }
+  ]
+}

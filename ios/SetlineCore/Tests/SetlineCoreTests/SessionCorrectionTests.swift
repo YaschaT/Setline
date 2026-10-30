@@ -185,10 +185,12 @@ final class SessionCorrectionTests: XCTestCase {
 
     func testACorrectionNeverUnlogsASet() {
         let before = account()
-        for attempt in [correction(weight: 0), correction(reps: 0)] {
+        for attempt in [correction(weight: -1), correction(reps: 0)] {
             let after = apply([attempt], to: before)
             XCTAssertEqual(after.raw, before.raw, "a set may be corrected, never emptied")
         }
+        // 0 kg is a set without weight (2026-10-30), not an empty one.
+        XCTAssertNotEqual(apply([correction(weight: 0)], to: before).raw, before.raw, "a set may become one without weight")
     }
 
     func testACorrectionSkipsWhatIsNoLongerThere() {

@@ -51,7 +51,7 @@ public enum WeekPlan {
         return dates.enumerated().map { index, date in
             let key = keys[index]
             let assignment = overrides[key]
-            let canonical = assignment ?? defaultDay(for: date, calendar: calendar)
+            let canonical = assignment ?? defaultDay(for: date, overrides: overrides, calendar: calendar)
             let workout = Schedule.day(for: canonical, in: plan)
 
             let kind: Kind
@@ -75,8 +75,10 @@ public enum WeekPlan {
         }
     }
 
-    static func defaultDay(for date: Date, calendar: Calendar) -> String {
-        Schedule.defaultWeek[calendar.component(.weekday, from: date) - 1] ?? "rest"
+    /// What a weekday holds without a change of its own: your week, else the program's.
+    static func defaultDay(for date: Date, overrides: [String: String] = [:], calendar: Calendar) -> String {
+        Schedule.ownWeekDay(for: date, overrides: overrides, calendar: calendar)
+            ?? Schedule.defaultWeek[calendar.component(.weekday, from: date) - 1] ?? "rest"
     }
 
     /// The usual weekday for this session, named in full — and only when the
@@ -91,9 +93,9 @@ public enum WeekPlan {
         overrides: [String: String],
         calendar: Calendar
     ) -> String? {
-        guard let home = dates.firstIndex(where: { defaultDay(for: $0, calendar: calendar) == canonical }) else { return nil }
+        guard let home = dates.firstIndex(where: { defaultDay(for: $0, overrides: overrides, calendar: calendar) == canonical }) else { return nil }
         guard keys[home] != key else { return nil }
-        let atHome = overrides[keys[home]] ?? defaultDay(for: dates[home], calendar: calendar)
+        let atHome = overrides[keys[home]] ?? defaultDay(for: dates[home], overrides: overrides, calendar: calendar)
         guard atHome != canonical else { return nil }
         return fullWeekday(dates[home])
     }
@@ -167,6 +169,8 @@ public struct WeekDraft: Equatable, Sendable {
     private let calendar: Calendar
     private let stored: [String: String]
     private var overrides: [String: String]
+    /// Your own week, which the dates fall back to; never edited here.
+    private let week: [String: String]
 
     public init(dates: [Date], overrides stored: [String: String], calendar: Calendar = .current) {
         self.dates = dates
@@ -176,6 +180,7 @@ public struct WeekDraft: Equatable, Sendable {
         let mine = stored.filter { keys.contains($0.key) }
         self.stored = mine
         self.overrides = mine
+        self.week = Schedule.weekOnly(stored)
     }
 
     public var assignments: [String: String] { overrides }
@@ -186,7 +191,7 @@ public struct WeekDraft: Equatable, Sendable {
     public func canonical(on key: String) -> String {
         if let named = overrides[key] { return named }
         guard let index = keys.firstIndex(of: key) else { return "rest" }
-        return WeekPlan.defaultDay(for: dates[index], calendar: calendar)
+        return WeekPlan.defaultDay(for: dates[index], overrides: week, calendar: calendar)
     }
 
     /// The two dates trade what they hold, so nothing is dropped on the way.
@@ -208,7 +213,7 @@ public struct WeekDraft: Equatable, Sendable {
     /// plan's own shape.
     public mutating func assign(_ canonical: String, to key: String) {
         guard let index = keys.firstIndex(of: key) else { return }
-        if canonical == WeekPlan.defaultDay(for: dates[index], calendar: calendar) {
+        if canonical == WeekPlan.defaultDay(for: dates[index], overrides: week, calendar: calendar) {
             overrides.removeValue(forKey: key)
         } else {
             overrides[key] = canonical
