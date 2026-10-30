@@ -1,38 +1,70 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- private R2 and local blob URLs are intentionally rendered directly */
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { Tabs as TabsPrimitive } from "radix-ui";
 import { AuthGate } from "./auth-gate";
 import { signOutEverywhere } from "./auth/supabase-auth";
 import { clearCloudState, loadCloudState, saveCloudState } from "@/lib/cloud-state";
 import { refinishSession } from "@/lib/refinish-session";
 import { estimate1RM } from "@/lib/one-rep-max";
-import { boundPausedReps, completedReps, setSummary } from "@/lib/set-reps";
+import { boundPausedReps, completedReps, pausedReps, setSummary } from "@/lib/set-reps";
 import { clearOnboarded } from "./auth-gate";
 import { dateKey, datesInWeek, parseDateKey, startOfWeek } from "@/lib/week";
 import {
-  Activity,
+  bestSetsSince,
+  defaultSetValues,
+  estimateSessionMinutes,
+  formatKg,
+  formatThousands,
+  isLoggedSet,
+  isoWeek,
+  parseRestSeconds,
+  sessionVolumeKg,
+  summarizeSets,
+  trailingAverage,
+  weeklyVolume,
+} from "@/lib/setline-log";
+import {
+  CategoryGlyph,
+  IconBarbell,
+  IconCalendar,
+  IconCamera,
+  IconCameraSmall,
+  IconChart,
+  IconCheck,
+  IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
+  IconClock,
+  IconDone,
+  IconFork,
+  IconImage,
+  IconMoon,
+  IconPlates,
+  IconPlay,
+  IconPlus,
+  PlateStack,
+  RestPill,
+  SessionClock,
+  Sheet,
+  Stepper,
+  VolumeBars,
+  WeightChart,
+  useElementHeight,
+  type CategoryKind,
+  type RestTimerState,
+} from "./setline-ui";
+import {
   ArrowRightLeft,
-  Camera,
-  CalendarDays,
   Check,
   ChevronLeft,
-  ChevronDown,
   ChevronRight,
-  Clock3,
   Cloud,
   CloudOff,
-  Dumbbell,
-  Flame,
-  Footprints,
-  HeartPulse,
-  History,
-  Images,
   ExternalLink,
   LoaderCircle,
   LogOut,
-  Microscope,
-  Moon,
   Pause,
   Pencil,
   Play,
@@ -43,17 +75,12 @@ import {
   Search,
   ShieldCheck,
   Smartphone,
-  Target,
   Trash2,
   TrendingUp,
-  Trophy,
-  Upload,
   UserRound,
-  Utensils,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,8 +112,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 
 type Exercise = {
   id: string;
@@ -334,6 +359,67 @@ type ExerciseAlternative = {
 };
 
 const STORAGE_KEY = "yascha-training-v1";
+
+/**
+ * A workout in progress, on this device only: the running rest, when the
+ * session started and the bar the plates calculator assumes. It never syncs —
+ * a timer belongs to the phone it is running on — and it survives a reload or
+ * a trip to another tab, which is what keeps the rest timer persistent.
+ */
+const LIVE_STORAGE_KEY = "setline-live-v1";
+
+type LiveSession = { key: string; startedAt: number };
+
+type LiveState = { rest: RestTimerState | null; session: LiveSession | null; bar: number };
+
+/** Rests that ended long ago and sessions from yesterday are not "live". */
+function readLiveState(now: number): LiveState {
+  try {
+    const raw = window.localStorage.getItem(LIVE_STORAGE_KEY);
+    const parsed = (raw ? JSON.parse(raw) : {}) as Partial<LiveState>;
+    const rest = parsed.rest
+      && [parsed.rest.endsAt, parsed.rest.total, parsed.rest.planned].every(Number.isFinite)
+      && parsed.rest.endsAt > now - 10 * 60_000
+      ? parsed.rest
+      : null;
+    const session = parsed.session
+      && typeof parsed.session.key === "string"
+      && Number.isFinite(parsed.session.startedAt)
+      && now - parsed.session.startedAt < 12 * 3_600_000
+      ? parsed.session
+      : null;
+    return { rest, session, bar: parsed.bar === 15 ? 15 : 20 };
+  } catch {
+    return { rest: null, session: null, bar: 20 };
+  }
+}
+
+/** The numbers on the steppers before they are saved as a set. */
+type StepDraft = {
+  key: string;
+  weight: number | null;
+  reps: number | null;
+  pauseEnabled: boolean;
+  pausedReps: number | null;
+  pauseSeconds: number | null;
+};
+
+/** The word behind a day's title: PUSH, PULL, LEGS, UPPER, LOWER, FULL, RUST. */
+function letterForTemplate(template: { id: string; short: string }) {
+  if (template.id === "rest") return "RUST";
+  return (template.short.split(/\s+/)[0] ?? "").toUpperCase();
+}
+
+function categoryForTemplate(template: { id: string; short: string }): CategoryKind {
+  if (template.id === "rest") return "rest";
+  const word = (template.short.split(/\s+/)[0] ?? "").toLowerCase();
+  if (word === "push" || word === "pull" || word === "legs" || word === "upper" || word === "lower") return word;
+  return "full";
+}
+
+function capitalize(value: string) {
+  return value ? value[0].toUpperCase() + value.slice(1) : value;
+}
 
 const GUIDANCE: Record<string, ExerciseGuide> = {
   "flat-bench": {
@@ -1174,20 +1260,6 @@ function newSessionId() {
   return `${Date.now()}`;
 }
 
-const RECENT_WINDOW_DAYS = 8;
-
-/**
- * Whether a session falls in the trailing window that ends on `today`.
- *
- * The window is measured in whole days from a fixed `today` rather than from
- * the wall clock, so the counts it feeds stay the same for a whole render
- * instead of drifting each time the component happens to re-render.
- */
-function isRecentSession(session: Session, today: string) {
-  const age = parseDateKey(today).getTime() - parseDateKey(dateKey(new Date(session.date))).getTime();
-  return age >= 0 && age < RECENT_WINDOW_DAYS * 86_400_000;
-}
-
 /** Six weeks of Mondays-to-Sundays covering the month the anchor week sits in.
  *  A week belongs to the month containing its Thursday (ISO 8601), so the week
  *  of 31 Aug - 6 Sep shows September, not August. */
@@ -1369,6 +1441,27 @@ function TrainingApp() {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [photoPlaying, setPhotoPlaying] = useState(false);
   const [photoSpeed, setPhotoSpeed] = useState(1500);
+  // SETLINE screens: sheets, the logging steppers and the live workout.
+  const [returnTab, setReturnTab] = useState("training");
+  const [agendaOpen, setAgendaOpen] = useState(false);
+  const [agendaDay, setAgendaDay] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [platesOpen, setPlatesOpen] = useState(false);
+  const [foodSheetOpen, setFoodSheetOpen] = useState(false);
+  const [metricSheetOpen, setMetricSheetOpen] = useState(false);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const [compareSheetOpen, setCompareSheetOpen] = useState(false);
+  const [compareIds, setCompareIds] = useState<{ before: string; after: string } | null>(null);
+  const [stepDraft, setStepDraft] = useState<StepDraft | null>(null);
+  const [correcting, setCorrecting] = useState<{ key: string; index: number } | null>(null);
+  const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
+  const [liveSession, setLiveSession] = useState<LiveSession | null>(null);
+  const [barWeight, setBarWeight] = useState(20);
+  const [logAnnouncement, setLogAnnouncement] = useState("");
+  const [cardDrag, setCardDrag] = useState({ x: 0, animate: false });
+  const cardSwipe = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
+  const [setDockElement, dockHeight] = useElementHeight<HTMLDivElement>();
 
   useEffect(() => {
     const today = dateKey();
@@ -1447,6 +1540,10 @@ function TrainingApp() {
     // synchronous effect path instead of cascading inside the same commit.
     void Promise.resolve().then(() => {
       applyStoredState(localState);
+      const live = readLiveState(Date.now());
+      setRestTimer(live.rest);
+      setLiveSession(live.session);
+      setBarWeight(live.bar);
       setMetricDraft((current) => ({ ...current, date: today }));
       setPhotoDraft((current) => ({ ...current, capturedOn: today }));
       // The meal tab opens on whatever meal is next. Only the browser knows
@@ -1616,6 +1713,18 @@ function TrainingApp() {
   }, [hydrated, cloudHydrated, account, plan, planMode, sciencePlanId, scheduleOverrides, completed, performance, sessions, metrics, targets, nutritionEntries, chatMessages, recoveryDraft]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(
+        LIVE_STORAGE_KEY,
+        JSON.stringify({ rest: restTimer, session: liveSession, bar: barWeight } satisfies LiveState),
+      );
+    } catch {
+      // Private mode or a full disk: the timer still runs for this visit.
+    }
+  }, [hydrated, restTimer, liveSession, barWeight]);
+
+  useEffect(() => {
     if (!banner) return;
     const timer = window.setTimeout(() => setBanner(""), 3200);
     return () => window.clearTimeout(timer);
@@ -1692,18 +1801,6 @@ function TrainingApp() {
     ),
     [selectedNutritionEntries],
   );
-  const trainingNutritionTotals = useMemo(
-    () => nutritionEntries
-      .filter((entry) => entry.date === selectedDate)
-      .reduce(
-        (total, entry) => ({
-          calories: total.calories + entry.calories,
-          protein: total.protein + entry.protein,
-        }),
-        { calories: 0, protein: 0 },
-      ),
-    [nutritionEntries, selectedDate],
-  );
   const caloriesRemaining = Math.round(targets.calories - nutritionTotals.calories);
   const scheduleForDate = (value: string, mode: PlanMode = planMode, selectedSciencePlanId: SciencePlanId = sciencePlanId) => {
     const key = programKey(mode, selectedSciencePlanId);
@@ -1723,17 +1820,8 @@ function TrainingApp() {
   const day = activePlan.find((item) => item.id === selectedDay) ?? activePlan[0];
   const isRestDay = day.id === "rest";
   const exerciseScopeKey = `${activeProgramKey}:${selectedDate}:${day.id}`;
+  // On the logging screen this is the exercise being logged.
   const storedOpenExerciseKey = openExerciseByScope[exerciseScopeKey];
-  const openExerciseKey = storedOpenExerciseKey === undefined
-    || (storedOpenExerciseKey !== null && !day.exercises.some((exercise) => `${day.id}:${exercise.id}` === storedOpenExerciseKey))
-    ? null
-    : storedOpenExerciseKey;
-  const bannerSessionMark = isRestDay
-    ? "OFF"
-    : String(Math.max(1, datesInWeek(parseDateKey(selectedDate)).filter((date) => {
-        const key = dateKey(date);
-        return key <= selectedDate && scheduleForDate(key) !== "rest";
-      }).length)).padStart(2, "0");
   const primaryGuide = GUIDANCE[day.exercises[0]?.id ?? ""] ?? DEFAULT_GUIDE;
   const doneCount = isRestDay
     ? recoveryDraft.completedIds.length
@@ -1771,6 +1859,24 @@ function TrainingApp() {
       body: "Kies twee tot vier blokken die goed voelen. Je hoeft de lijst niet volledig af te werken.",
     };
   })();
+
+  /**
+   * The history panel reads newest first, but `sessions` is kept in the order
+   * entries were saved. A workout logged late for an earlier day therefore
+   * lands above the days that actually came after it, so order the panel by
+   * the date on the entry instead of by when it was typed in.
+   *
+   * The stored array keeps its own order: `recentExerciseHistory` sorts by
+   * timestamp itself and leans on that insertion order only to break ties.
+   */
+  const orderedSessions = useMemo(() => {
+    // An unparseable date sorts last rather than dragging the list with it.
+    const timestampOf = (session: Session) => {
+      const value = new Date(session.date).getTime();
+      return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+    };
+    return [...sessions].sort((a, b) => timestampOf(b) - timestampOf(a));
+  }, [sessions]);
 
   const orderedMetrics = useMemo(
     () => [...metrics].sort((a, b) => a.date.localeCompare(b.date)),
@@ -1860,92 +1966,6 @@ function TrainingApp() {
     return count || WORKING_SETS[exerciseId] || 3;
   }
 
-  function setExerciseDone(exerciseId: string, checked: boolean) {
-    const key = `${day.id}:${exerciseId}`;
-    setCompleted((current) => ({ ...current, [key]: checked }));
-    setOpenExerciseByScope((current) => ({
-      ...current,
-      [exerciseScopeKey]: null,
-    }));
-  }
-
-  function setResult(
-    exerciseId: string,
-    setIndex: number,
-    field: "weight" | "reps" | "pausedReps" | "pauseSeconds",
-    value: string,
-  ) {
-    const key = `${day.id}:${exerciseId}`;
-    const prescribedSets = setCountFor(exerciseId);
-    setPerformance((current) => {
-      const existing = current[key] ?? {
-        sets: emptySetsForExercise(exerciseId, prescribedSets),
-        note: "",
-      };
-      const sets = [...existing.sets];
-      while (sets.length <= setIndex) sets.push(emptySetForExercise(exerciseId));
-      sets[setIndex] = boundPausedReps({ ...sets[setIndex], [field]: value });
-      return { ...current, [key]: { ...existing, sets } };
-    });
-  }
-
-  function togglePausedReps(exerciseId: string, setIndex: number) {
-    const key = `${day.id}:${exerciseId}`;
-    const prescribedSets = setCountFor(exerciseId);
-    setPerformance((current) => {
-      const existing = current[key] ?? {
-        sets: emptySetsForExercise(exerciseId, prescribedSets),
-        note: "",
-      };
-      const sets = [...existing.sets];
-      while (sets.length <= setIndex) sets.push(emptySetForExercise(exerciseId));
-      const enabled = !sets[setIndex].pauseEnabled;
-      sets[setIndex] = {
-        ...sets[setIndex],
-        pauseEnabled: enabled,
-        pausedReps: enabled ? sets[setIndex].pausedReps ?? "" : "",
-        pauseSeconds: enabled ? sets[setIndex].pauseSeconds ?? "" : "",
-      };
-      return { ...current, [key]: { ...existing, sets } };
-    });
-  }
-
-  function addSet(exerciseId: string) {
-    const key = `${day.id}:${exerciseId}`;
-    const prescribedSets = setCountFor(exerciseId);
-    setPerformance((current) => {
-      const existing = current[key] ?? {
-        sets: emptySetsForExercise(exerciseId, prescribedSets),
-        note: "",
-      };
-      return {
-        ...current,
-        [key]: {
-          ...existing,
-          sets: [...existing.sets, emptySetForExercise(exerciseId)],
-        },
-      };
-    });
-  }
-
-  function clearOrRemoveSet(exerciseId: string, setIndex: number) {
-    const key = `${day.id}:${exerciseId}`;
-    const prescribedSets = setCountFor(exerciseId);
-    setPerformance((current) => {
-      const existing = current[key] ?? {
-        sets: emptySetsForExercise(exerciseId, prescribedSets),
-        note: "",
-      };
-      const sets = [...existing.sets];
-      if (setIndex >= prescribedSets) {
-        sets.splice(setIndex, 1);
-      } else {
-        sets[setIndex] = emptySetForExercise(exerciseId);
-      }
-      return { ...current, [key]: { ...existing, sets } };
-    });
-  }
-
   function setRecoveryLevel(field: "sleep" | "soreness" | "energy", value: string) {
     setRecoveryDraft((current) => ({
       ...current,
@@ -1965,7 +1985,7 @@ function TrainingApp() {
   function finishRecovery() {
     if (parseDateKey(selectedDate).getTime() > parseDateKey(todayKey).getTime()) {
       setBanner("Je kunt een toekomstige rest day nog niet opslaan");
-      return;
+      return false;
     }
     const activities = RECOVERY_ACTIVITIES.filter((activity) =>
       recoveryDraft.completedIds.includes(activity.id),
@@ -2017,12 +2037,13 @@ function TrainingApp() {
         ? `Rest day opgeslagen voor ${selectedDateLabel} · ${activities.length} ${activities.length === 1 ? "herstelblok" : "herstelblokken"}`
         : `Volledige rustdag opgeslagen voor ${selectedDateLabel}`,
     );
+    return true;
   }
 
   function finishSession() {
     if (parseDateKey(selectedDate).getTime() > parseDateKey(todayKey).getTime()) {
       setBanner("Je kunt een toekomstige sessie nog niet opslaan");
-      return;
+      return false;
     }
     const resultRows = day.exercises.map((exercise) => {
       const result = performance[`${day.id}:${exercise.id}`];
@@ -2084,6 +2105,7 @@ function TrainingApp() {
         ? `${day.short} ${verb} voor ${selectedDateLabel} · ${readyCount} ${readyCount === 1 ? "oefening mag" : "oefeningen mogen"} hoger`
         : `${day.short} ${verb} voor ${selectedDateLabel}`,
     );
+    return true;
   }
 
   /**
@@ -2155,7 +2177,7 @@ function TrainingApp() {
     const waist = Number(metricDraft.waist.replace(",", "."));
     if (!weight || !metricDraft.date) {
       setBanner("Vul minstens datum en gewicht in");
-      return;
+      return false;
     }
     const metric: Metric = {
       id: `${Date.now()}`,
@@ -2166,6 +2188,7 @@ function TrainingApp() {
     setMetrics((current) => [...current, metric].slice(-30));
     setMetricDraft((current) => ({ ...current, weight: "", waist: "" }));
     setBanner("Meting opgeslagen");
+    return true;
   }
 
   async function uploadProgressPhoto() {
@@ -2173,11 +2196,11 @@ function TrainingApp() {
     setPhotoError("");
     if (!photoFile || !photoDraft.capturedOn || !Number.isFinite(weight) || weight < 35 || weight > 250) {
       setPhotoError("Kies een foto, datum en geldig gewicht.");
-      return;
+      return false;
     }
     if (photos.some((photo) => photo.capturedOn === photoDraft.capturedOn)) {
       setPhotoError("Voor deze datum bestaat al een check-in.");
-      return;
+      return false;
     }
 
     setPhotoUploadLoading(true);
@@ -2194,8 +2217,10 @@ function TrainingApp() {
       choosePhotoFile(null);
       setPhotoDraft((current) => ({ ...current, weight: "" }));
       setBanner("Dagelijkse check-in opgeslagen");
+      return true;
     } catch (error) {
       setPhotoError(photoErrorMessage(error, "Upload mislukt."));
+      return false;
     } finally {
       setPhotoUploadLoading(false);
     }
@@ -2463,7 +2488,7 @@ function TrainingApp() {
 
     if (!name || calories <= 0) {
       setBanner("Vul een naam en calorieën of macro’s in");
-      return;
+      return false;
     }
 
     const entry: NutritionEntry = {
@@ -2491,6 +2516,7 @@ function TrainingApp() {
     setFoodAmount("100");
     setFoodSearchError("");
     setBanner(`${name} toegevoegd aan ${nutritionDateLabel}`);
+    return true;
   }
 
   function recentExerciseHistory(exerciseId: string) {
@@ -2605,42 +2631,6 @@ function TrainingApp() {
     return null;
   }
 
-  function setComparisonFeedback(exerciseId: string, setIndex: number, current: SetResult): SetSignal | null {
-    const progress = setProgressSignal(exerciseId, setIndex, current);
-    if (progress) return progress;
-
-    const previous = recentExerciseSets(exerciseId)[0]?.sets[setIndex];
-    if (!previous) return null;
-    const currentWeight = numberValue(current.weight);
-    const previousWeight = numberValue(previous.weight);
-    const currentReps = completedReps(current);
-    const previousReps = completedReps(previous);
-    if (!currentWeight || !currentReps || !previousWeight || !previousReps) return null;
-
-    if (currentWeight === previousWeight && currentReps === previousReps) {
-      return {
-        metric: "Gelijk",
-        label: "Zelfde prestatie als vorige sessie",
-        tone: "neutral",
-      };
-    }
-
-    if (currentWeight === previousWeight && currentReps < previousReps) {
-      const repsToMatch = previousReps - currentReps;
-      return {
-        metric: `Nog ${repsToMatch} ${repsToMatch === 1 ? "rep" : "reps"}`,
-        label: "Om je vorige sessie te evenaren",
-        tone: "neutral",
-      };
-    }
-
-    return {
-      metric: "Referentie",
-      label: `Vorige keer · ${previousWeight.toLocaleString("nl-BE")} kg × ${previousReps}`,
-      tone: "neutral",
-    };
-  }
-
   function liveProgressStatus(exercise: Exercise, currentSets: SetResult[]) {
     const targets = progressionTargets(exercise.prescription);
     const filled = currentSets.filter((set) => set.weight || set.reps || set.pausedReps);
@@ -2738,30 +2728,12 @@ function TrainingApp() {
     };
   }
 
-  const weekSessions = sessions.filter(
-    (session) =>
-      session.sessionType !== "recovery" &&
-      session.dayId !== "rest" &&
-      isRecentSession(session, todayKey),
-  ).length;
-  const weekRecoveryDays = sessions.filter(
-    (session) =>
-      (session.sessionType === "recovery" || session.dayId === "rest") &&
-      isRecentSession(session, todayKey),
-  ).length;
-  const photoSpanDays = photos.length > 1
-    ? Math.round((new Date(`${photos[photos.length - 1].capturedOn}T12:00:00`).getTime() - new Date(`${photos[0].capturedOn}T12:00:00`).getTime()) / 86_400_000)
-    : 0;
-  const photoWeightDelta = photos.length > 1 ? photos[photos.length - 1].weight - photos[0].weight : 0;
   const viewerPhoto = photos[Math.min(photoIndex, Math.max(0, photos.length - 1))];
-  const weekRangeLabel = `${weekDays[0].toLocaleDateString("nl-BE", { day: "numeric", month: "short" })} – ${weekDays[6].toLocaleDateString("nl-BE", { day: "numeric", month: "short" })}`;
+  const weekRangeLabel = `${weekDays[0].toLocaleDateString("nl-BE", { day: "numeric", month: "short" })} – ${weekDays[6].toLocaleDateString("nl-BE", { day: "numeric", month: "short" })}`.replaceAll(".", "");
   const moveSourceAssignment = moveSourceDate ? scheduleForDate(moveSourceDate) : null;
   const moveSourceTemplate = moveSourceAssignment
     ? activePlan.find((item) => item.id === planIdForMode(moveSourceAssignment, planMode, sciencePlanId))
     : null;
-  const scrollToSession = () => {
-    document.getElementById("session-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
   const selectedActualSessions = sessions.filter((session) => dateKey(new Date(session.date)) === selectedDate);
   const selectedActualWorkout = selectedActualSessions.find((session) => session.sessionType !== "recovery" && session.dayId !== "rest");
   const selectedActualRecovery = selectedActualSessions.find((session) => session.sessionType === "recovery" || session.dayId === "rest");
@@ -2784,111 +2756,12 @@ function TrainingApp() {
       )
     : 0;
   const trackedSetCount = Math.max(draftTrackedSetCount, savedTrackedSetCount);
-  const selectedIsDone = Boolean(selectedActualWorkout || selectedActualRecovery);
-  const selectedStatusLabel = selectedActualWorkout
-    ? `Afgerond · ${selectedActualWorkout.dayLabel}`
-    : selectedActualRecovery
-      ? "Rust gelogd"
-      : selectedDate === todayKey
-        ? "Vandaag gepland"
-        : "Nog niet uitgevoerd";
-  const completedWeekDays = weekDays.filter((calendarDate) => {
-    const key = dateKey(calendarDate);
-    return sessions.some((session) => dateKey(new Date(session.date)) === key);
-  }).length;
   const accountInitials = account?.displayName
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "YT";
-  /**
-   * What this day actually is, in one word, because every other decision on
-   * this screen hangs off it: the headline, the state line and the one action.
-   */
-  const todayState: "rest" | "done" | "active" | "fresh" = isRestDay
-    ? (selectedActualRecovery ? "done" : "rest")
-    : selectedActualWorkout?.dayId === day.id
-      ? "done"
-      : trackedSetCount > 0
-        ? "active"
-        : "fresh";
-
-  const todayAction = {
-    rest: "Open herstel",
-    done: "Bekijk samenvatting",
-    active: "Hervat training",
-    fresh: "Start training",
-  }[todayState];
-
-  const todayStateLabel = isRestDay
-    ? todayState === "done"
-      ? `${doneCount}/${dayItemCount} herstelblokken`
-      : "Rustdag"
-    : todayState === "done"
-      ? `Afgerond · ${trackedSetCount}/${plannedSetCount} sets`
-      : todayState === "active"
-        ? `Bezig · ${trackedSetCount}/${plannedSetCount} sets`
-        : "Nog niet gestart";
-
-  /**
-   * One honest line about progression, or none at all.
-   *
-   * Two sessions at the top of the prescribed rep range on the same weight is
-   * this app's own double-progression rule, so that is the call worth making
-   * before a set is entered. Failing that, the last logged top set is the
-   * reference point. No target weight is produced: the next increment depends
-   * on the equipment, and inventing one would be advice the data cannot carry.
-   */
-  const todayInsight = (() => {
-    if (isRestDay) return null;
-    const topSetOf = (sets: SetResult[]) =>
-      sets.reduce<{ weight: number; reps: number } | null>((best, set) => {
-        const weight = numberValue(set.weight);
-        const reps = completedReps(set);
-        if (!weight || !reps) return best;
-        const better = !best || weight > best.weight || (weight === best.weight && reps > best.reps);
-        return better ? { weight, reps } : best;
-      }, null);
-
-    let reference: { tone: "reference"; exercise: string; detail: string } | null = null;
-
-    for (const exercise of day.exercises) {
-      const history = recentExerciseHistory(exercise.id);
-      if (history.length === 0) continue;
-      const last = topSetOf(history[0].sets);
-      if (!last) continue;
-      const kg = last.weight.toLocaleString("nl-BE");
-
-      if (!reference) {
-        reference = {
-          tone: "reference",
-          exercise: exercise.name,
-          detail: `vorige keer ${last.reps} reps op ${kg} kg`,
-        };
-      }
-
-      const targets = progressionTargets(exercise.prescription);
-      const topTarget = targets.length ? Math.max(...targets) : 0;
-      const previous = history[1] ? topSetOf(history[1].sets) : null;
-      if (
-        topTarget &&
-        previous &&
-        last.weight === previous.weight &&
-        last.reps >= topTarget &&
-        previous.reps >= topTarget
-      ) {
-        return {
-          tone: "advance" as const,
-          exercise: exercise.name,
-          detail: `twee sessies ${topTarget}+ reps op ${kg} kg — tijd om te verzwaren`,
-        };
-      }
-    }
-    return reference;
-  })();
-
-  const nutritionLogged = Math.round(trainingNutritionTotals.calories) > 0;
 
   const syncLabel = syncStatus === "saving"
     ? "Opslaan…"
@@ -2907,656 +2780,1584 @@ function TrainingApp() {
         ? "Alleen dit toestel"
         : "Opslaan…";
 
+  /* ======================================================================
+     SETLINE screens. Everything below reads the same state as before; the
+     screens only arrange it differently.
+     ====================================================================== */
+
+  const isToday = selectedDate === todayKey;
+  const selectedIsFuture = selectedDate > todayKey;
+  const programLabel = planMode === "personal" ? "Mijn plan" : activeSciencePlan.label;
+  const setsPlannedFor = (exercise: Exercise) =>
+    progressionTargets(exercise.prescription).length || WORKING_SETS[exercise.id] || 3;
+  const minutesFor = (template: WorkoutDay) =>
+    estimateSessionMinutes(
+      template.exercises.map((exercise) => ({ sets: setsPlannedFor(exercise), restSeconds: parseRestSeconds(exercise.rest) })),
+    );
+  const templateForDate = (value: string) =>
+    activePlan.find((item) => item.id === planIdForMode(scheduleForDate(value), planMode, sciencePlanId)) ?? REST_DAY;
+  const isWorkoutSession = (session: Session) => session.sessionType !== "recovery" && session.dayId !== "rest";
+  const loggedSetsIn = (session: Session) =>
+    session.results.reduce((total, row) => total + resultSets(row).filter(isLoggedSet).length, 0);
+  const shortDate = (date: Date) =>
+    date.toLocaleDateString("nl-BE", { day: "numeric", month: "short" }).replaceAll(".", "");
+  const weekdayShort = (date: Date) =>
+    date.toLocaleDateString("nl-BE", { weekday: "short" }).replaceAll(".", "");
+  const topWeightOf = (sets: SetResult[]) =>
+    sets.reduce((best, set) => Math.max(best, numberValue(set.weight)), 0);
+  const selectedDateLong = capitalize(
+    parseDateKey(selectedDate).toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long" }),
+  );
+  const firstName = account?.displayName?.trim().split(/\s+/)[0] ?? "";
+  const avatarInitial = (account?.displayName?.trim() || account?.email || "").charAt(0).toUpperCase();
+  const dataOnlyHere = !account || syncStatus === "offline";
+
+  // --- Training: the day card
+  const cardSession = selectedActualWorkout ?? (isRestDay ? selectedActualRecovery : undefined);
+  const cardKind: "train" | "active" | "rest" | "done" = cardSession
+    ? "done"
+    : isRestDay
+      ? "rest"
+      : draftTrackedSetCount > 0 && !selectedIsFuture
+        ? "active"
+        : "train";
+  const cardTitle = cardKind === "done" ? "Voltooid" : isRestDay ? "Rust" : day.short;
+  const cardFocus = cardKind === "done"
+    ? selectedActualWorkout
+      ? `${selectedActualWorkout.dayLabel} · ${loggedSetsIn(selectedActualWorkout)} sets gelogd`
+      : `Herstel gelogd · ${selectedActualRecovery?.recovery?.activities.length ?? selectedActualRecovery?.results.length ?? 0} herstelblokken`
+    : isRestDay
+      ? "Geen training gepland"
+      : day.focus;
+  const cardLetter = cardKind === "done" ? "" : letterForTemplate(day);
+  const stripKeys = weekDays.map((date) => dateKey(date));
+  const stripIndex = stripKeys.indexOf(selectedDate);
+  const prevKey = stripIndex > 0 ? stripKeys[stripIndex - 1] : null;
+  const nextKey = stripIndex >= 0 && stripIndex < stripKeys.length - 1 ? stripKeys[stripIndex + 1] : null;
+  const restOfWeek = datesInWeek(parseDateKey(todayKey))
+    .filter((date) => dateKey(date) > todayKey)
+    .map((date) => {
+      const key = dateKey(date);
+      return { date, key, template: templateForDate(key) };
+    });
+
+  function changeTab(value: string) {
+    if (value === "account" && activeTab !== "account") setReturnTab(activeTab);
+    setActiveTab(value);
+    window.scrollTo({ top: 0 });
+  }
+
+  /** Moves the day card, sliding in from the side it came from. */
+  function goToDate(value: string, direction: 1 | -1 | 0 = 0) {
+    if (value === selectedDate) return;
+    selectAgendaDay(value);
+    setStepDraft(null);
+    setCorrecting(null);
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!direction || reduceMotion) {
+      setCardDrag({ x: 0, animate: false });
+      return;
+    }
+    setCardDrag({ x: direction * 56, animate: false });
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => setCardDrag({ x: 0, animate: true })));
+  }
+
+  function cardPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    cardSwipe.current = { x: event.clientX, y: event.clientY, dragging: false };
+  }
+
+  function cardPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const swipe = cardSwipe.current;
+    if (!swipe) return;
+    const dx = event.clientX - swipe.x;
+    const dy = event.clientY - swipe.y;
+    if (!swipe.dragging && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      swipe.dragging = true;
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer that already ended cannot be captured; the swipe still ends.
+      }
+    }
+    if (swipe.dragging) setCardDrag({ x: dx * 0.9, animate: false });
+  }
+
+  function cardPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const swipe = cardSwipe.current;
+    cardSwipe.current = null;
+    if (!swipe?.dragging) return;
+    const dx = event.clientX - swipe.x;
+    if (dx < -64 && nextKey) goToDate(nextKey, 1);
+    else if (dx > 64 && prevKey) goToDate(prevKey, -1);
+    else setCardDrag({ x: 0, animate: true });
+  }
+
+  const liveKey = `${selectedDate}:${day.id}`;
+
+  /** Start is the only way into a session; the preview never starts one. */
+  function startTraining() {
+    if (!liveSession || liveSession.key !== liveKey) setLiveSession({ key: liveKey, startedAt: Date.now() });
+    setPreviewOpen(false);
+    setAgendaOpen(false);
+    changeTab("loggen");
+  }
+
+  /** Logging a day that has passed: no session clock, no rest timer. */
+  function logAfterwards() {
+    setPreviewOpen(false);
+    setAgendaOpen(false);
+    changeTab("loggen");
+  }
+
+  function openAgenda(expandSelected: boolean) {
+    setAgendaDay(expandSelected ? selectedDate : null);
+    setAgendaOpen(true);
+  }
+
+  // --- Loggen
+  const logRows = isRestDay
+    ? []
+    : day.exercises.map((exercise) => {
+        const key = `${day.id}:${exercise.id}`;
+        const prescribed = setsPlannedFor(exercise);
+        const draft = performance[key]?.sets;
+        const savedRow = selectedActualWorkout?.dayId === day.id
+          ? selectedActualWorkout.results.find((row) => row.exerciseId === exercise.id)
+          : undefined;
+        // What was typed this time wins; a day already saved shows what was saved.
+        const base = draft?.some(isLoggedSet) ? draft : savedRow ? resultSets(savedRow) : draft ?? [];
+        const sets = [...base, ...emptySetsForExercise(exercise.id, Math.max(0, prescribed - base.length))];
+        const logged = sets.filter(isLoggedSet).length;
+        return { exercise, key, prescribed, sets, logged, done: Boolean(completed[key]) || logged >= prescribed };
+      });
+  const storedLogIndex = logRows.findIndex((row) => row.key === storedOpenExerciseKey);
+  const logIndex = storedLogIndex >= 0 ? storedLogIndex : Math.max(0, logRows.findIndex((row) => !row.done));
+  const logRow = logRows[logIndex] as (typeof logRows)[number] | undefined;
+  const logExercise = logRow?.exercise;
+  const logHistory = logExercise ? recentExerciseHistory(logExercise.id) : [];
+  const logPrevious = logHistory[0];
+  const logPreviousSets = logPrevious?.sets ?? [];
+  const logTargets = logExercise ? progressionTargets(logExercise.prescription) : [];
+  const firstOpenSet = logRow ? logRow.sets.findIndex((set) => !isLoggedSet(set)) : -1;
+  const correctingIndex = logRow && correcting?.key === logRow.key && correcting.index < logRow.sets.length
+    ? correcting.index
+    : null;
+  const focusIndex = correctingIndex ?? (firstOpenSet >= 0 ? firstOpenSet : null);
+  const focusKey = logRow && focusIndex !== null ? `${logRow.key}#${focusIndex}` : null;
+  const supportsPause = Boolean(
+    logExercise && (logExercise.id.includes("bench") || logExercise.name.toLowerCase().includes("bench")),
+  );
+  const focusDefaults = (() => {
+    if (!logRow || !logExercise || focusIndex === null) return null;
+    if (correctingIndex !== null) {
+      const set = logRow.sets[correctingIndex];
+      return {
+        weight: numberValue(set.weight),
+        reps: completedReps(set) || null,
+        source: "correct" as const,
+        pauseEnabled: Boolean(set.pauseEnabled),
+        pausedReps: numberValue(set.pausedReps) || null,
+        pauseSeconds: numberValue(set.pauseSeconds) || null,
+      };
+    }
+    const guess = defaultSetValues({
+      current: logRow.sets,
+      previous: logPreviousSets,
+      index: focusIndex,
+      targetReps: logTargets[focusIndex] ?? logTargets[logTargets.length - 1] ?? null,
+    });
+    const template = emptySetForExercise(logExercise.id);
+    const previousSet = logPreviousSets[focusIndex];
+    return {
+      weight: guess.weight,
+      reps: guess.reps,
+      source: guess.source,
+      pauseEnabled: Boolean(template.pauseEnabled || previousSet?.pauseEnabled),
+      pausedReps: null,
+      pauseSeconds: numberValue(previousSet?.pauseSeconds) || numberValue(template.pauseSeconds) || null,
+    };
+  })();
+  const focusEdited = Boolean(focusDefaults && focusKey && stepDraft?.key === focusKey);
+  const focusValues = focusDefaults && focusEdited && stepDraft ? { ...focusDefaults, ...stepDraft } : focusDefaults;
+  const focusStatus = !focusValues || !logExercise
+    ? ""
+    : correctingIndex !== null
+      ? focusEdited ? "aangepast · nog niet bewaard" : "al opgeslagen"
+      : focusEdited
+        ? "aangepast"
+        : focusValues.source === "current" && focusValues.weight !== null
+          ? `overgenomen: ${formatKg(focusValues.weight)} kg`
+          : focusValues.source === "previous" && logPrevious
+            ? `doel uit ${shortDate(new Date(logPrevious.date))}`
+            : focusValues.source === "plan"
+              ? `doel uit je plan · ${logExercise.prescription}`
+              : "nog niet opgeslagen";
+  // A day that has not come yet can be looked at, not logged: its sets would
+  // land in the draft that today's session of the same workout also uses.
+  const canSaveFocus = !selectedIsFuture
+    && Boolean(focusValues && focusValues.weight !== null && focusValues.reps !== null && focusValues.reps > 0);
+  const nextOpenIndex = (() => {
+    const after = logRows.findIndex((row, index) => index > logIndex && !row.done);
+    return after >= 0 ? after : logRows.findIndex((row, index) => index !== logIndex && !row.done);
+  })();
+  const canFinishSession = !selectedIsFuture && (draftTrackedSetCount > 0 || doneCount > 0 || selectedActualWorkout?.dayId === day.id);
+  const logStatus = logExercise ? liveProgressStatus(logExercise, logRow?.sets ?? []) : null;
+  const logRecord = logExercise && logRow ? strengthRecord(logExercise.id, logRow.sets) : null;
+  const logGuide = logExercise ? GUIDANCE[logExercise.id] ?? DEFAULT_GUIDE : DEFAULT_GUIDE;
+  const logTrend = logExercise && logRow ? strengthTrendPoints(logExercise.id, logRow.sets) : [];
+  const logVariants = (() => {
+    if (!logExercise || planMode !== "personal") return [];
+    const originalExercise = DEFAULT_PLAN.flatMap((workoutDay) => workoutDay.exercises).find((item) => item.id === logExercise.id);
+    const options: Array<{ name: string; fit: string; why?: string }> = [
+      ...(originalExercise ? [{ name: originalExercise.name, fit: "Jouw schema" }] : []),
+      ...(ALTERNATIVES[logExercise.id] ?? []).map((alternative) => ({ name: alternative.name, fit: alternative.fit, why: alternative.why })),
+    ].filter((option, index, list) => list.findIndex((item) => item.name === option.name) === index);
+    if (!options.some((option) => option.name === logExercise.name)) options.unshift({ name: logExercise.name, fit: "Actief" });
+    return options;
+  })();
+
+  function updateFocus(patch: Partial<Omit<StepDraft, "key">>) {
+    if (!focusKey || !focusValues) return;
+    setStepDraft({
+      key: focusKey,
+      weight: focusValues.weight,
+      reps: focusValues.reps,
+      pauseEnabled: focusValues.pauseEnabled,
+      pausedReps: focusValues.pausedReps,
+      pauseSeconds: focusValues.pauseSeconds,
+      ...patch,
+    });
+  }
+
+  /**
+   * Writes one exercise's sets. A day that was already saved seeds the draft
+   * with what was saved, because finishing again replaces an exercise's saved
+   * sets with the draft's (see refinishSession) — a draft holding only the
+   * corrected set would drop the others.
+   */
+  function writeExerciseSets(exerciseId: string, update: (sets: SetResult[]) => SetResult[]) {
+    const key = `${day.id}:${exerciseId}`;
+    const prescribed = setCountFor(exerciseId);
+    const savedRow = selectedActualWorkout?.dayId === day.id
+      ? selectedActualWorkout.results.find((row) => row.exerciseId === exerciseId)
+      : undefined;
+    const saved = savedRow ? resultSets(savedRow).map((set) => ({ ...set })) : null;
+    setPerformance((current) => {
+      const existing = current[key];
+      const base = existing?.sets.some(isLoggedSet) ? existing.sets : saved ?? existing?.sets ?? [];
+      const sets = base.map((set) => ({ ...set }));
+      while (sets.length < prescribed) sets.push(emptySetForExercise(exerciseId));
+      return { ...current, [key]: { sets: update(sets), note: existing?.note ?? "" } };
+    });
+  }
+
+  function saveFocusedSet() {
+    if (!logRow || !logExercise || focusIndex === null || !focusValues || !canSaveFocus) return;
+    const weight = focusValues.weight ?? 0;
+    const reps = focusValues.reps ?? 0;
+    const pause = supportsPause && focusValues.pauseEnabled;
+    const value: SetResult = boundPausedReps({
+      weight: weight > 0 ? formatKg(weight) : "",
+      reps: String(reps),
+      ...(supportsPause
+        ? {
+            pauseEnabled: pause,
+            pausedReps: pause && focusValues.pausedReps ? String(focusValues.pausedReps) : "",
+            pauseSeconds: pause && focusValues.pauseSeconds ? String(focusValues.pauseSeconds) : "",
+          }
+        : {}),
+    });
+    const index = focusIndex;
+    writeExerciseSets(logExercise.id, (sets) => {
+      sets[index] = value;
+      return sets;
+    });
+    // Stay on this exercise once its last set is in: moving on is a tap on
+    // "Volgende oefening", not something the screen does on its own.
+    setOpenExerciseByScope((current) => ({ ...current, [exerciseScopeKey]: logRow.key }));
+    const loggedAfter = logRow.sets.filter((set, position) => position === index || isLoggedSet(set)).length;
+    if (loggedAfter >= logRow.prescribed) setCompleted((current) => ({ ...current, [logRow.key]: true }));
+    const correction = correctingIndex !== null;
+    setStepDraft(null);
+    setCorrecting(null);
+    setLogAnnouncement(
+      `Set ${index + 1} ${correction ? "bijgewerkt" : "opgeslagen"}: ${weight > 0 ? `${formatKg(weight)} kilo` : "zonder gewicht"} maal ${reps}`,
+    );
+    // A rest and a session clock only mean something while training today.
+    if (!correction && isToday) {
+      const planned = parseRestSeconds(logExercise.rest) ?? 120;
+      const now = Date.now();
+      setRestTimer({ endsAt: now + planned * 1000, total: planned, planned });
+      if (!liveSession || liveSession.key !== liveKey) setLiveSession({ key: liveKey, startedAt: now });
+    }
+  }
+
+  function clearCorrectedSet() {
+    if (!logRow || !logExercise || correctingIndex === null) return;
+    const index = correctingIndex;
+    const exerciseId = logExercise.id;
+    const prescribed = logRow.prescribed;
+    writeExerciseSets(exerciseId, (sets) => {
+      if (index >= prescribed) sets.splice(index, 1);
+      else sets[index] = emptySetForExercise(exerciseId);
+      return sets;
+    });
+    setCompleted((current) => ({ ...current, [logRow.key]: false }));
+    setCorrecting(null);
+    setStepDraft(null);
+    setLogAnnouncement(`Set ${index + 1} gewist`);
+  }
+
+  function addExtraSet() {
+    if (!logExercise) return;
+    const exerciseId = logExercise.id;
+    writeExerciseSets(exerciseId, (sets) => [...sets, emptySetForExercise(exerciseId)]);
+    setCorrecting(null);
+    setStepDraft(null);
+  }
+
+  function selectLogExercise(index: number) {
+    const row = logRows[index];
+    if (!row) return;
+    setOpenExerciseByScope((current) => ({ ...current, [exerciseScopeKey]: row.key }));
+    setCorrecting(null);
+    setStepDraft(null);
+    window.scrollTo({ top: 0 });
+  }
+
+  function toggleExerciseDone(key: string, done: boolean) {
+    setCompleted((current) => ({ ...current, [key]: done }));
+  }
+
+  function finishFromLog() {
+    if (!finishSession()) return;
+    setRestTimer(null);
+    setLiveSession(null);
+    setStepDraft(null);
+    setCorrecting(null);
+    changeTab("training");
+  }
+
+  function finishRecoveryFromLog() {
+    if (finishRecovery()) changeTab("training");
+  }
+
+  /** +30 s lengthens the running rest; after it ended, it starts a new one. */
+  function adjustRest(seconds: number) {
+    const now = Date.now();
+    setRestTimer((current) => {
+      if (!current) return current;
+      const running = current.endsAt > now;
+      const endsAt = Math.max(now, (running ? current.endsAt : now) + seconds * 1000);
+      const remaining = Math.ceil((endsAt - now) / 1000);
+      return { ...current, endsAt, total: Math.max(running ? current.total : 0, remaining) };
+    });
+  }
+
+  function resetRestToPlan() {
+    const now = Date.now();
+    setRestTimer((current) => (current ? { ...current, endsAt: now + current.planned * 1000, total: current.planned } : current));
+  }
+
+  function skipRest() {
+    const now = Date.now();
+    setRestTimer((current) => (current ? { ...current, endsAt: now } : current));
+  }
+
+  // --- Agenda
+  const agendaWeek = weekDays.map((date) => {
+    const key = dateKey(date);
+    const template = templateForDate(key);
+    const onDay = sessions.filter((session) => dateKey(new Date(session.date)) === key);
+    return {
+      date,
+      key,
+      template,
+      isRest: template.id === "rest",
+      workout: onDay.find(isWorkoutSession),
+      recovery: onDay.find((session) => !isWorkoutSession(session)),
+      isToday: key === todayKey,
+    };
+  });
+  const agendaPlanned = agendaWeek.filter((entry) => !entry.isRest).length;
+  const agendaDone = agendaWeek.filter((entry) => entry.workout).length;
+  const previousWeekStart = new Date(weekDays[0]);
+  previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+  const previousWeekKeys = datesInWeek(previousWeekStart).map((date) => dateKey(date));
+  const previousWeekSessions = orderedSessions.filter(
+    (session) => isWorkoutSession(session) && previousWeekKeys.includes(dateKey(new Date(session.date))),
+  );
+  const previousWeekRange = `${shortDate(parseDateKey(previousWeekKeys[0]))} – ${shortDate(parseDateKey(previousWeekKeys[6]))}`;
+  const bestOfSession = (session: Session) => {
+    let best: { name: string; weight: number; reps: number; value: number } | null = null;
+    for (const row of session.results) {
+      const top = bestStrengthSet(resultSets(row));
+      if (top && (!best || top.value > best.value)) best = { name: row.name, ...top };
+    }
+    return best;
+  };
+
+  // --- Preview
+  const lastSameWorkout = orderedSessions.find((session) => session.dayId === day.id && isWorkoutSession(session));
+  const lastSameVolume = lastSameWorkout ? sessionVolumeKg(lastSameWorkout) : 0;
+
+  // --- Voeding
+  const nutritionIsToday = nutritionDate === todayKey;
+  const caloriePercent = targets.calories > 0 ? clamp((nutritionTotals.calories / targets.calories) * 100) : 0;
+  const proteinStreak = (() => {
+    const byDate = new Map<string, number>();
+    for (const entry of nutritionEntries) byDate.set(entry.date, (byDate.get(entry.date) ?? 0) + entry.protein);
+    // Only whole days count: the day on screen joins once it is over.
+    let cursor = nutritionDate < todayKey ? nutritionDate : shiftDateKey(nutritionDate, -1);
+    let days = 0;
+    let shortfall = 0;
+    while (byDate.has(cursor) && (byDate.get(cursor) ?? 0) < targets.protein && days < 60) {
+      shortfall += targets.protein - (byDate.get(cursor) ?? 0);
+      days += 1;
+      cursor = shiftDateKey(cursor, -1);
+    }
+    return days >= 2 ? { days, average: Math.round(shortfall / days) } : null;
+  })();
+  /** Entries logged here carry the moment they were added; older ones do not. */
+  const loggedAtLabel = (entry: NutritionEntry) => {
+    const match = /^food-(\d{12,})$/.exec(entry.id);
+    if (!match) return null;
+    const moment = new Date(Number(match[1]));
+    if (!Number.isFinite(moment.getTime()) || dateKey(moment) !== entry.date) return null;
+    return moment.toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" });
+  };
+  const eatenEntries = [...selectedNutritionEntries].sort(
+    (a, b) => (loggedAtLabel(a) ?? "99").localeCompare(loggedAtLabel(b) ?? "99")
+      || MEAL_OPTIONS.indexOf(a.meal) - MEAL_OPTIONS.indexOf(b.meal),
+  );
+
+  // --- Progressie
+  const weightPoints = trailingAverage(orderedMetrics.map((metric) => ({ date: metric.date, value: metric.weight })), 14);
+  const latestMetric = orderedMetrics[orderedMetrics.length - 1];
+  const averageChange = (() => {
+    const last = weightPoints[weightPoints.length - 1];
+    if (!last) return null;
+    const cutoff = parseDateKey(last.date).getTime() - 14 * 86_400_000;
+    const earlier = [...weightPoints].reverse().find((point) => parseDateKey(point.date).getTime() <= cutoff);
+    return earlier ? Math.round((last.average - earlier.average) * 10) / 10 : null;
+  })();
+  const monthName = (value: string) => parseDateKey(value).toLocaleDateString("nl-BE", { month: "long" });
+  const progressRange = orderedMetrics.length
+    ? capitalize(
+        monthName(orderedMetrics[0].date) === monthName(orderedMetrics[orderedMetrics.length - 1].date)
+          ? monthName(orderedMetrics[0].date)
+          : `${monthName(orderedMetrics[0].date)} – ${monthName(orderedMetrics[orderedMetrics.length - 1].date)}`,
+      )
+    : "Nog geen metingen";
+  const bestRows = bestSetsSince(sessions, shiftDateKey(todayKey, -56), 5);
+  const volumeWeeks = weeklyVolume(sessions, todayKey, 7);
+
+  // --- Foto's
+  const photoById = (id: string | undefined) => photos.find((photo) => photo.id === id);
+  const compareBefore = photoById(compareIds?.before) ?? photos[0];
+  const compareAfter = photoById(compareIds?.after) ?? photos[photos.length - 1];
+  const compareDays = compareBefore && compareAfter
+    ? Math.round(
+        (new Date(`${compareAfter.capturedOn}T12:00:00`).getTime() - new Date(`${compareBefore.capturedOn}T12:00:00`).getTime())
+          / 86_400_000,
+      )
+    : 0;
+  const compareLabel = Math.abs(compareDays) >= 14
+    ? `${Math.round(Math.abs(compareDays) / 7)} weken verschil`
+    : `${Math.abs(compareDays)} ${Math.abs(compareDays) === 1 ? "dag" : "dagen"} verschil`;
+
+  const restFloating = Boolean(restTimer) && activeTab !== "loggen";
+
   return (
-    <main className="app-shell min-h-screen text-[#f3f7f4] selection:bg-[#c8ff66] selection:text-[#071009]">
-      <div className="performance-line" aria-hidden="true" />
-      <div className="ambient-canvas" aria-hidden="true"><span /><span /><span /></div>
-      <div className="app-frame mx-auto min-h-screen max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">
+    <main className="sl-app">
+      {/*
+        The live region itself is always in the document; only the message
+        inside it comes and goes. A role="status" element that appears together
+        with its text is announced unreliably. (WCAG 4.1.3)
+      */}
+      <div role="status" aria-live="polite">
+        {banner && (
+          <div className="sl-toast">
+            <IconCheck size={16} />
+            <span>{banner}</span>
+          </div>
+        )}
+      </div>
 
-        {/*
-          The live region itself is always in the document; only the pill inside
-          it comes and goes. A role="status" element that appears together with
-          its text is announced unreliably, so the container is mounted from the
-          first paint and the confirmation is inserted into it. (WCAG 4.1.3)
-        */}
-        <div role="status" aria-live="polite">
-          {banner && (
-            <div className="fixed left-1/2 top-4 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#b9f45b]/30 bg-[#182018] px-4 py-2 text-sm font-medium shadow-2xl">
-              <Check className="size-4 text-[#b9f45b]" aria-hidden="true" /> {banner}
+      <TabsPrimitive.Root value={activeTab} onValueChange={changeTab}>
+        {/* ============================================================ 1a Training */}
+        <TabsPrimitive.Content value="training" className="sl-screen" data-rest-floating={restFloating || undefined}>
+          <header className="sl-hello">
+            <button
+              type="button"
+              className="sl-avatar"
+              onClick={() => changeTab("account")}
+              aria-label={`Account openen · ${shortSyncLabel}`}
+            >
+              {avatarInitial ? <span aria-hidden="true">{avatarInitial}</span> : <UserRound size={20} aria-hidden="true" />}
+              {dataOnlyHere && <span className="sl-avatar-dot" aria-hidden="true" />}
+            </button>
+            <div className="sl-hello-copy">
+              <h1 className="sl-hello-title">Hoi{firstName ? ` ${firstName}` : ""}</h1>
+              <span className="sl-hello-date">{selectedDateLong}</span>
             </div>
-          )}
-        </div>
+          </header>
 
-        {/* App chrome: the same header on every tab, so the product reads as
-            one thing rather than five screens that each start differently. */}
-        <div className="app-header">
-          <h1 className="today-wordmark">
-            <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
-              <path d="M32 31V51" stroke="var(--sig-rest)" strokeWidth="9" strokeLinecap="round" />
-              <path
-                d="M14 14C18 24 24 30 32 35C40 30 46 24 50 14"
-                stroke="var(--sig-action)"
-                strokeWidth="9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Setline
-          </h1>
-
-          <button
-            type="button"
-            className={`banner-sync banner-sync-${account ? syncStatus : "signedout"}`}
-            onClick={() => setActiveTab("account")}
-          >
-            {!account || syncStatus === "offline" ? (
-              <CloudOff aria-hidden="true" />
-            ) : syncStatus === "synced" ? (
-              <Cloud aria-hidden="true" />
-            ) : (
-              <LoaderCircle className="banner-sync-spin" aria-hidden="true" />
-            )}
-            <span>{shortSyncLabel}</span>
-            {/* Keeps the visible words in the accessible name (WCAG 2.5.3). */}
-            <span className="sr-only"> — open account</span>
-          </button>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="main-nav fixed inset-x-0 bottom-0 z-40 grid !h-[calc(70px+env(safe-area-inset-bottom))] !w-full max-w-none grid-cols-5 rounded-none px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:sticky lg:top-4 lg:mx-auto lg:mb-8 lg:!h-12 lg:!w-fit lg:grid-cols-5 lg:rounded-[18px] lg:p-1.5">
-            <TabsTrigger value="training" className="nav-tab"><Dumbbell /> <span>Training</span></TabsTrigger>
-            <TabsTrigger value="voeding" className="nav-tab"><Utensils /> <span>Voeding</span></TabsTrigger>
-            <TabsTrigger value="progressie" className="nav-tab"><TrendingUp /> <span>Progressie</span></TabsTrigger>
-            <TabsTrigger value="transformatie" className="nav-tab"><Images /> <span>Foto’s</span></TabsTrigger>
-            <TabsTrigger value="account" className="nav-tab"><UserRound /> <span>Account</span></TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="training" className="training-stack">
-            <section className="training-overview" aria-label="Training en dagdoel">
-              <div className={`today today-${todayState}`}>
-                {/* The editorial layer, restored from the original banner: the
-                    session number as a watermark, the arc and its signal dot,
-                    over a ruled ground. All of it sits *behind* the content
-                    now. What made the old hero 520px tall was never these — it
-                    was a min-height of 64svh the content was justified against,
-                    which is the one thing not coming back. */}
-                <span className="today-mark" aria-hidden="true">{bannerSessionMark}</span>
-                <span className="today-arc" aria-hidden="true"><span /><i /></span>
-
-                <p className="today-meta">
-                  <span>{selectedDate === todayKey ? "Vandaag" : selectedDateLabel}</span>
-                  <i aria-hidden="true">·</i>
-                  <span>{isRestDay ? "Herstel" : `Sessie ${bannerSessionMark}`}</span>
-                </p>
-
-                <h2 className="today-title">
-                  <span>{day.short}.</span>{" "}
-                  <em>
-                    {isRestDay
-                      ? "Herstel slim."
-                      : todayState === "done"
-                        ? "Klaar."
-                        : todayState === "active"
-                          ? "Maak het af."
-                          : "Bouw verder."}
-                  </em>
-                </h2>
-
-                <p className="today-sub">
-                  {isRestDay ? "Optioneel · 10–15 min" : `${day.exercises.length} oefeningen · ${day.focus}`}
-                </p>
-
-                {/* The state has to be readable before the action is, or the
-                    action is a guess. Colour repeats it; the words carry it. */}
-                <p className="today-state tabular" data-state={todayState}>
-                  <span className="today-state-dot" aria-hidden="true" />
-                  {todayStateLabel}
-                </p>
-
-                <button
-                  type="button"
-                  className="today-cta"
-                  onClick={scrollToSession}
-                  aria-label={`${todayAction}: ${day.short} voor ${selectedDateLabel}`}
-                >
-                  <span>{todayAction}</span>
-                  <ChevronRight aria-hidden="true" />
-                </button>
-
-                {todayInsight && (
-                  <p className={`today-insight today-insight-${todayInsight.tone}`}>
-                    <TrendingUp aria-hidden="true" />
-                    <span>
-                      <strong>{todayInsight.exercise}</strong> — {todayInsight.detail}
-                    </span>
-                  </p>
-                )}
-
-                {nutritionLogged && (
+          <section className="sl-week" aria-labelledby="sl-week-label">
+            <div className="sl-week-head">
+              <h2 id="sl-week-label" className="sl-overline">{weekLabel}</h2>
+              <button type="button" className="sl-link-action" onClick={() => openAgenda(false)}>
+                <IconCalendar size={18} />
+                Agenda
+                <IconChevronRight />
+              </button>
+            </div>
+            <div className="sl-strip" role="group" aria-label={`Dagen van ${weekLabel.toLowerCase()}`}>
+              {weekDays.map((date) => {
+                const key = dateKey(date);
+                const template = templateForDate(key);
+                const done = sessions.some((session) => dateKey(new Date(session.date)) === key);
+                return (
                   <button
+                    key={key}
                     type="button"
-                    className="today-nutrition"
-                    onClick={() => {
-                      setNutritionDate(selectedDate);
-                      setActiveTab("voeding");
-                    }}
-                    aria-label={`Voeding voor ${selectedDateLabel} openen: ${Math.round(trainingNutritionTotals.calories)} van ${targets.calories} kilocalorieën en ${Math.round(trainingNutritionTotals.protein)} van ${targets.protein} gram eiwit`}
+                    className="sl-strip-day"
+                    aria-pressed={key === selectedDate}
+                    aria-current={key === todayKey ? "date" : undefined}
+                    data-today={key === todayKey || undefined}
+                    data-rest={template.id === "rest" || undefined}
+                    aria-label={`${date.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long" })}: ${template.id === "rest" ? "rust" : template.short}${done ? ", afgerond" : ""}${key === todayKey ? ", vandaag" : ""}`}
+                    onClick={() => goToDate(key, key > selectedDate ? 1 : -1)}
                   >
-                    <Utensils aria-hidden="true" />
-                    <span className="tabular">
-                      {Math.round(trainingNutritionTotals.calories)} / {targets.calories} kcal
-                      <i aria-hidden="true">·</i>
-                      {Math.round(trainingNutritionTotals.protein)} / {targets.protein} g eiwit
-                    </span>
-                    <ChevronRight aria-hidden="true" />
+                    <span className="sl-strip-d">{weekdayShort(date)}</span>
+                    <span className="sl-strip-n sl-num">{date.getDate()}</span>
+                    <span className="sl-strip-mark" aria-hidden="true"><i /></span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="sl-daycard-wrap">
+            <article
+              className="sl-daycard"
+              aria-labelledby="sl-day-title"
+              data-dragging={cardDrag.x !== 0 || undefined}
+              style={{
+                transform: `translateX(${cardDrag.x}px)`,
+                opacity: 1 - Math.min(Math.abs(cardDrag.x) / 400, 0.4),
+                transition: cardDrag.animate ? "transform 220ms cubic-bezier(.2,.8,.2,1), opacity 220ms" : "none",
+              }}
+              onPointerDown={cardPointerDown}
+              onPointerMove={cardPointerMove}
+              onPointerUp={cardPointerUp}
+              onPointerCancel={cardPointerUp}
+            >
+              <div className="sl-daycard-top">
+                <span className="sl-eyebrow sl-num">Week {isoWeek(parseDateKey(selectedDate))} · {programLabel}</span>
+                {isToday ? (
+                  <span className="sl-badge">Vandaag</span>
+                ) : (
+                  <button type="button" className="sl-back-today" onClick={() => goToDate(todayKey, todayKey > selectedDate ? 1 : -1)}>
+                    <IconChevronLeft />
+                    Naar vandaag
                   </button>
                 )}
               </div>
-            </section>
-
-            <section className="week-agenda" aria-labelledby="week-agenda-title">
-              <div className="week-agenda-head">
-                <div className="week-agenda-title">
-                  <span className="week-agenda-icon"><CalendarDays /></span>
-                  <div>
-                    <p className="eyebrow">{weekLabel}</p>
-                    <h2 id="week-agenda-title">{weekRangeLabel}</h2>
+              <div className="sl-daycard-body">
+                <div className="sl-daycard-titlerow">
+                  <div className="sl-daycard-titles">
+                    <h2 id="sl-day-title" className="sl-daycard-title" data-tone={cardKind === "rest" ? "rest" : undefined}>{cardTitle}</h2>
+                    <p className="sl-daycard-focus">{cardFocus}</p>
                   </div>
+                  {cardLetter && (
+                    <span className="sl-letter" data-tone={isRestDay ? "rest" : undefined} aria-hidden="true">{cardLetter}</span>
+                  )}
                 </div>
-                <span className="week-agenda-count"><Check /> {completedWeekDays}/7</span>
+                {(cardKind === "train" || cardKind === "active") && (
+                  <div className="sl-daycard-meta sl-num">
+                    <span>
+                      {cardKind === "active"
+                        ? `${draftTrackedSetCount} van ${plannedSetCount} sets gelogd`
+                        : `${day.exercises.length} oefeningen`}
+                    </span>
+                    <span>
+                      <IconClock />~{minutesFor(day)} min
+                    </span>
+                  </div>
+                )}
               </div>
-
-              <div className="agenda-nav">
-                <button
-                  type="button"
-                  className="agenda-nav-step"
-                  onClick={() => setWeekOffset((value) => value - 1)}
-                  aria-label="Vorige week"
-                >
-                  <ChevronLeft />
-                </button>
-                <div className="agenda-nav-mid">
-                  {weekOffset !== 0 && (
-                    <button type="button" className="agenda-nav-today" onClick={() => setWeekOffset(0)}>
-                      Naar deze week
+              {(cardKind !== "rest" || isToday) && (
+                <div className="sl-daycard-actions">
+                  {isToday && (cardKind === "train" || cardKind === "active") && (
+                    <>
+                      <button type="button" className="sl-btn-start" onClick={startTraining}>
+                        <IconPlay />
+                        {cardKind === "active" ? "Hervat training" : "Start training"}
+                      </button>
+                      <button type="button" className="sl-btn-quiet" onClick={() => setPreviewOpen(true)}>
+                        Oefeningen bekijken
+                        <IconChevronRight className="sl-chev" />
+                      </button>
+                    </>
+                  )}
+                  {isToday && cardKind === "rest" && (
+                    <button type="button" className="sl-btn-outline" onClick={logAfterwards}>
+                      Herstel loggen
+                      <IconChevronRight className="sl-chev" />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className={`agenda-nav-month ${monthOpen ? "agenda-nav-month-open" : ""}`}
-                    onClick={() => setMonthOpen((value) => !value)}
-                    aria-expanded={monthOpen}
-                  >
-                    <CalendarDays /> {monthOpen ? "Week tonen" : "Hele maand"}
-                  </button>
+                  {!isToday && (cardKind === "train" || cardKind === "active") && (
+                    <button type="button" className="sl-btn-outline" onClick={() => openAgenda(true)}>
+                      Details in agenda
+                      <IconChevronRight className="sl-chev" />
+                    </button>
+                  )}
+                  {cardKind === "done" && (
+                    <button type="button" className="sl-btn-outline" onClick={() => openAgenda(true)}>
+                      Resultaten bekijken
+                      <IconChevronRight className="sl-chev" />
+                    </button>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  className="agenda-nav-step"
-                  onClick={() => setWeekOffset((value) => value + 1)}
-                  aria-label="Volgende week"
-                >
-                  <ChevronRight />
+              )}
+            </article>
+            <div className="sl-daynav">
+              <button
+                type="button"
+                className="sl-daynav-btn"
+                data-hidden={!prevKey || undefined}
+                disabled={!prevKey}
+                aria-label={prevKey ? `Vorige dag, ${parseDateKey(prevKey).toLocaleDateString("nl-BE", { weekday: "long", day: "numeric" })}` : undefined}
+                onClick={() => prevKey && goToDate(prevKey, -1)}
+              >
+                <IconChevronLeft />
+                <span className="sl-num">{prevKey ? `${weekdayShort(parseDateKey(prevKey))} ${parseDateKey(prevKey).getDate()}` : ""}</span>
+              </button>
+              <span className="sl-daynav-hint" aria-hidden="true">veeg om van dag te wisselen</span>
+              <button
+                type="button"
+                className="sl-daynav-btn"
+                data-hidden={!nextKey || undefined}
+                disabled={!nextKey}
+                aria-label={nextKey ? `Volgende dag, ${parseDateKey(nextKey).toLocaleDateString("nl-BE", { weekday: "long", day: "numeric" })}` : undefined}
+                onClick={() => nextKey && goToDate(nextKey, 1)}
+              >
+                <span className="sl-num">{nextKey ? `${weekdayShort(parseDateKey(nextKey))} ${parseDateKey(nextKey).getDate()}` : ""}</span>
+                <IconChevronRight />
+              </button>
+            </div>
+          </div>
+
+          {restOfWeek.length > 0 && (
+            <section className="sl-section" aria-labelledby="sl-rest-of-week">
+              <div className="sl-section-head">
+                <h2 id="sl-rest-of-week" className="sl-section-title">Rest van de week</h2>
+              </div>
+              <div className="sl-list">
+                {restOfWeek.map(({ date, key, template }) =>
+                  template.id === "rest" ? (
+                    <div key={key} className="sl-row" data-kind="rest">
+                      <span className="sl-row-date sl-num">{weekdayShort(date)}<b>{date.getDate()}</b></span>
+                      <span className="sl-row-rest">Rust</span>
+                      <span className="sl-row-end sl-rest-ink"><IconMoon /></span>
+                    </div>
+                  ) : (
+                    <button
+                      key={key}
+                      type="button"
+                      className="sl-row"
+                      onClick={() => {
+                        goToDate(key);
+                        setAgendaDay(key);
+                        setAgendaOpen(true);
+                      }}
+                      aria-label={`${date.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric" })}: ${template.short}, ${template.exercises.reduce((total, exercise) => total + setsPlannedFor(exercise), 0)} sets — in agenda bekijken`}
+                    >
+                      <span className="sl-row-date sl-num">{weekdayShort(date)}<b>{date.getDate()}</b></span>
+                      <span className="sl-row-main">
+                        <span className="sl-row-title">{template.short}</span>
+                        <span className="sl-row-sub sl-num">
+                          {template.focus} · {template.exercises.reduce((total, exercise) => total + setsPlannedFor(exercise), 0)} sets
+                        </span>
+                      </span>
+                      <IconChevronRight size={16} className="sl-chev" />
+                    </button>
+                  ),
+                )}
+              </div>
+            </section>
+          )}
+        </TabsPrimitive.Content>
+
+        {/* ============================================================ 1b Loggen */}
+        <TabsPrimitive.Content
+          value="loggen"
+          className="sl-log"
+          style={{ "--sl-dock-h": `${dockHeight}px` } as CSSProperties}
+        >
+          <span className="sl-sr-only" role="status" aria-live="polite">{logAnnouncement}</span>
+          <div className="sl-log-top">
+            <button type="button" className="sl-log-back" onClick={() => changeTab("training")}>
+              <IconChevronLeft size={18} />
+              Training
+            </button>
+            {isToday && liveSession?.key === liveKey && <SessionClock startedAt={liveSession.startedAt} />}
+          </div>
+          {!isToday && (
+            <div className="sl-log-context">
+              <p>
+                {selectedIsFuture ? (
+                  <>Gepland voor <b>{selectedDateLabel}</b>. Opslaan kan vanaf die dag.</>
+                ) : (
+                  <>Je logt <b>{selectedDateLabel}</b> achteraf; alles wordt op die datum bewaard.</>
+                )}
+              </p>
+              <button type="button" className="sl-link-action" onClick={() => goToDate(todayKey)}>
+                Naar vandaag
+              </button>
+            </div>
+          )}
+
+          {isRestDay ? (
+            <>
+              <div className="sl-log-head">
+                <div>
+                  <h1 className="sl-log-title">Herstel</h1>
+                  <p className="sl-log-meta sl-num">Rustdag · optioneel 10–15 min</p>
+                </div>
+              </div>
+              <section className="sl-section" aria-labelledby="sl-checkin-title">
+                <div className="sl-section-head">
+                  <h2 id="sl-checkin-title" className="sl-section-title">Hoe voelt je lichaam vandaag?</h2>
+                  <span className="sl-section-meta">optioneel</span>
+                </div>
+                <div className="sl-list sl-checkin">
+                  {([
+                    { key: "sleep", label: "Slaap" },
+                    { key: "soreness", label: "Spierstijfheid" },
+                    { key: "energy", label: "Energie" },
+                  ] as const).map((field) => (
+                    <div className="sl-checkin-field" key={field.key}>
+                      <span id={`sl-scale-${field.key}`}>{field.label}</span>
+                      <div className="sl-segmented" role="group" aria-labelledby={`sl-scale-${field.key}`}>
+                        {RECOVERY_SCALE[field.key].map((option) => (
+                          <button
+                            type="button"
+                            key={option.value}
+                            aria-pressed={recoveryDraft[field.key] === option.value}
+                            onClick={() => setRecoveryLevel(field.key, option.value)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <div className="sl-note-line" data-tone={recoveryInsight.tone === "protect" ? "attention" : "rest"}>
+                <i aria-hidden="true" />
+                <p>
+                  {recoveryInsight.title}
+                  <small>{recoveryInsight.body}</small>
+                </p>
+              </div>
+              <section className="sl-section" aria-labelledby="sl-activities-title">
+                <div className="sl-section-head">
+                  <h2 id="sl-activities-title" className="sl-section-title">Herstelblokken</h2>
+                  <span className="sl-section-meta sl-num">{doneCount} van {RECOVERY_ACTIVITIES.length} gekozen</span>
+                </div>
+                <div className="sl-list">
+                  {RECOVERY_ACTIVITIES.map((activity) => {
+                    const selected = recoveryDraft.completedIds.includes(activity.id);
+                    return (
+                      <button
+                        type="button"
+                        key={activity.id}
+                        className="sl-activity"
+                        aria-pressed={selected}
+                        onClick={() => toggleRecoveryActivity(activity.id)}
+                      >
+                        <span>
+                          <small>{activity.category}</small>
+                          <b>{activity.name}</b>
+                          <small className="sl-num">{activity.dose}</small>
+                          <p>{activity.detail}</p>
+                        </span>
+                        <span className="sl-setrow-ring" aria-hidden="true">{selected ? <IconCheck /> : null}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+              <label className="sl-field">
+                Notitie voor je coach · optioneel
+                <textarea
+                  className="sl-text"
+                  value={recoveryDraft.note}
+                  onChange={(event) => setRecoveryDraft((current) => ({ ...current, note: event.target.value.slice(0, 280) }))}
+                  placeholder="Bijv. kuiten stijf bij opstaan, rechterschouder voelt goed…"
+                  rows={3}
+                />
+              </label>
+              <p className="sl-help">Volledige rust zonder checklist is ook een geldige keuze. Bij scherpe of aanhoudende pijn: niet forceren.</p>
+            </>
+          ) : logRow && logExercise ? (
+            <>
+              <div className="sl-log-head">
+                <div>
+                  <h1 className="sl-log-title">{logExercise.name}</h1>
+                  <p className="sl-log-meta sl-num">
+                    Oefening {logIndex + 1} van {logRows.length} · {logExercise.prescription}
+                  </p>
+                </div>
+                {logVariants.length > 0 && (
+                  <button type="button" className="sl-pill-btn" onClick={() => setSwapOpen(true)} aria-label={`${logExercise.name} wisselen`}>
+                    Wissel
+                    <IconChevronRight className="sl-chev" />
+                  </button>
+                )}
+              </div>
+
+              {logStatus?.tone === "ready" && (
+                <div className="sl-note-line">
+                  <i aria-hidden="true" />
+                  <p>{logStatus.label}</p>
+                </div>
+              )}
+
+              <div className="sl-prev">
+                <div className="sl-prev-head">
+                  <span className="sl-prev-label sl-num">
+                    {logPrevious ? `Vorige sessie · ${shortDate(new Date(logPrevious.date))}` : "Vorige sessie"}
+                  </span>
+                  {logPrevious ? (
+                    (() => {
+                      const logged = logPreviousSets.filter(isLoggedSet);
+                      const firstWeight = numberValue(logged[0]?.weight);
+                      const sameWeight = firstWeight > 0 && logged.every((set) => numberValue(set.weight) === firstWeight);
+                      return (
+                        <span className="sl-prev-value sl-num">
+                          {sameWeight ? (
+                            <>
+                              {formatKg(firstWeight)} kg <em>× {logged.map((set) => completedReps(set)).join("/")}</em>
+                            </>
+                          ) : (
+                            summarizeSets(logPreviousSets)
+                          )}
+                        </span>
+                      );
+                    })()
+                  ) : (
+                    <span className="sl-prev-value" data-none>nog niet gelogd</span>
+                  )}
+                </div>
+                {logRow.sets.map((set, index) => {
+                  const state = index === focusIndex ? "open" : isLoggedSet(set) ? "done" : "pending";
+                  const previousSet = logPreviousSets[index];
+                  const previousText = previousSet && isLoggedSet(previousSet)
+                    ? `vorige ${numberValue(previousSet.weight) > 0 ? formatKg(numberValue(previousSet.weight)) : "—"} × ${completedReps(previousSet)}`
+                    : "";
+                  const weightText = (value: number | null) => (value === null ? "—" : value > 0 ? formatKg(value) : "0");
+                  const valueText = state === "open" && focusValues
+                    ? `${weightText(focusValues.weight)} × ${focusValues.reps ?? "—"}`
+                    : state === "done"
+                      ? `${weightText(numberValue(set.weight))} × ${completedReps(set)}`
+                      : "—";
+                  const paused = pausedReps(set);
+                  const content = (
+                    <>
+                      <span className="sl-setrow-ring" aria-hidden="true">{state === "done" ? <IconCheck /> : null}</span>
+                      <span className="sl-setrow-label sl-num">
+                        {state === "open" ? `Set ${index + 1} · ${correctingIndex === index ? "corrigeren" : "open"}` : `Set ${index + 1}`}
+                        {state === "done" && paused > 0 && (
+                          <span className="sl-setrow-note">{paused} gepauzeerd{set.pauseSeconds ? ` · ${set.pauseSeconds}s` : ""}</span>
+                        )}
+                      </span>
+                      <span className="sl-setrow-prev sl-num">{previousText}</span>
+                      <span className="sl-setrow-value sl-num">{valueText}</span>
+                    </>
+                  );
+                  return state === "done" ? (
+                    <button
+                      key={`${logRow.key}-${index}`}
+                      type="button"
+                      className="sl-setrow"
+                      data-state={state}
+                      onClick={() => {
+                        setCorrecting({ key: logRow.key, index });
+                        setStepDraft(null);
+                      }}
+                      aria-label={`Set ${index + 1}: ${valueText}${previousText ? `, ${previousText}` : ""}. Tik om te corrigeren.`}
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    <div
+                      key={`${logRow.key}-${index}`}
+                      className="sl-setrow"
+                      data-state={state}
+                      aria-current={state === "open" ? "step" : undefined}
+                    >
+                      {content}
+                    </div>
+                  );
+                })}
+                <button type="button" className="sl-setrow-add" onClick={addExtraSet}>
+                  <IconPlus size={14} />
+                  Extra set
                 </button>
               </div>
 
-              {monthOpen && (
-                <div className="agenda-month" role="group" aria-label={`Maandoverzicht ${monthLabel}`}>
-                  <p className="agenda-month-label">{monthLabel}</p>
-                  <div className="agenda-month-weekdays" aria-hidden="true">
-                    {["ma", "di", "wo", "do", "vr", "za", "zo"].map((label) => <span key={label}>{label}</span>)}
-                  </div>
-                  <div className="agenda-month-grid">
-                    {monthDays.map((calendarDate) => {
-                      const iso = dateKey(calendarDate);
-                      const inMonth = calendarDate.getMonth() === monthAnchor.getMonth();
-                      const isToday = iso === todayKey;
-                      const isSelected = iso === selectedDate;
-                      const isDone = sessions.some((entry) => entry.date === iso);
-                      return (
-                        <button
-                          key={iso}
-                          type="button"
-                          className={`agenda-month-day ${inMonth ? "" : "agenda-month-day-muted"} ${isSelected ? "agenda-month-day-selected" : ""} ${isToday ? "agenda-month-day-today" : ""}`}
-                          onClick={() => {
-                            setSelectedDate(iso);
-                            const diff = Math.round((startOfWeek(calendarDate).getTime() - startOfWeek().getTime()) / (7 * 24 * 60 * 60 * 1000));
-                            setWeekOffset(diff);
-                            setMonthOpen(false);
-                          }}
-                          aria-label={`${calendarDate.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long" })}${isDone ? ", sessie gelogd" : ""}`}
-                          aria-current={isToday ? "date" : undefined}
-                        >
-                          <span>{calendarDate.getDate()}</span>
-                          {isDone && <i aria-hidden="true" />}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {logRecord && (
+                <div className="sl-note-line" role="status">
+                  <i aria-hidden="true" />
+                  <p>
+                    {logRecord.title}
+                    <small>{logRecord.detail}</small>
+                  </p>
                 </div>
               )}
-              <div className="plan-selector agenda-plan-selector" aria-label="Trainingsplan kiezen">
-                <div className="plan-selector-primary">
-                  <div className="plan-selector-copy">
-                    <span className="eyebrow">Schema</span>
-                    <strong>{planMode === "personal" ? "PPL + Upper/Lower · op maat" : `${activeSciencePlan.label} · ${activeSciencePlan.daysLabel}`}</strong>
-                  </div>
-                  <div className="plan-toggle" role="tablist" aria-label="Trainingsplan kiezen">
-                    <button role="tab" aria-selected={planMode === "personal"} className={planMode === "personal" ? "plan-toggle-active" : ""} onClick={() => changePlanMode("personal")}><UserRound /> Mijn plan</button>
-                    <button role="tab" aria-selected={planMode === "science"} className={planMode === "science" ? "plan-toggle-active" : ""} onClick={() => changePlanMode("science")}><Microscope /> Science-based</button>
-                  </div>
-                </div>
-                {planMode === "science" && (
-                  <div className="plan-template-row">
-                    <div className="plan-template-copy">
-                      <span><ShieldCheck /> Geselecteerd · {activeSciencePlan.daysLabel}</span>
-                      <strong>{activeSciencePlan.label}</strong>
-                      <small>{activeSciencePlan.summary}</small>
+
+              <Collapsible className="sl-disclosure">
+                <CollapsibleTrigger className="sl-disclosure-trigger">
+                  <span>
+                    Opwarming &amp; progressie
+                    {logStatus && <small>{logStatus.label}</small>}
+                  </span>
+                  <IconChevronDown />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="sl-disclosure-body">
+                  {logIndex === 0 && (
+                    <div>
+                      <strong>Algemeen · ongeveer 5 min</strong>
+                      <p>5 minuten rustig bewegen en 2 dynamische mobiliteitsrondes.</p>
                     </div>
-                    <Select value={sciencePlanId} onValueChange={changeSciencePlan}>
-                      <SelectTrigger className="plan-template-select" aria-label="Evidence-based trainingsschema kiezen">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent position="popper" align="end" className="plan-template-menu">
-                        <SelectItem value="ppl-ul">PPL + Upper/Lower · 5 dagen</SelectItem>
-                        <SelectItem value="upper-lower">Upper/Lower · 4 dagen</SelectItem>
-                        <SelectItem value="full-body">Full body · 3 dagen</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  )}
+                  <div>
+                    <strong>Opwarming</strong>
+                    <p>{logIndex === 0 ? primaryGuide.warmup : logGuide.warmup}</p>
                   </div>
+                  <div>
+                    <strong>Wanneer verhogen?</strong>
+                    <p>{logGuide.progression}</p>
+                  </div>
+                  <div>
+                    <strong>Plan</strong>
+                    <p className="sl-num">{logExercise.prescription} · {logExercise.load} · rust {logExercise.rest}</p>
+                  </div>
+                  <StrengthTrendChart points={logTrend} />
+                </CollapsibleContent>
+              </Collapsible>
+
+              <section className="sl-section" aria-labelledby="sl-session-title">
+                <div className="sl-section-head">
+                  <h2 id="sl-session-title" className="sl-section-title">{day.short} · {selectedDateLabel}</h2>
+                  <span className="sl-section-meta sl-num">{trackedSetCount} van {plannedSetCount} sets</span>
+                </div>
+                <div className="sl-list">
+                  {logRows.map((row, index) => (
+                    <div key={row.key} className="sl-exrow" data-active={index === logIndex || undefined}>
+                      <button
+                        type="button"
+                        className="sl-exrow-open"
+                        onClick={() => selectLogExercise(index)}
+                        aria-current={index === logIndex ? "step" : undefined}
+                      >
+                        <span className="sl-num">{index + 1}</span>
+                        <span>
+                          <b>{row.exercise.name}</b>
+                          <small className="sl-num">{row.logged} van {row.prescribed} sets{row.done ? " · klaar" : ""}</small>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="sl-ring-btn"
+                        aria-pressed={row.done}
+                        disabled={row.logged >= row.prescribed}
+                        onClick={() => toggleExerciseDone(row.key, !completed[row.key])}
+                        aria-label={
+                          row.logged >= row.prescribed
+                            ? `${row.exercise.name}: alle sets gelogd`
+                            : `${row.exercise.name} ${row.done ? "niet meer als klaar markeren" : "als klaar markeren"}`
+                        }
+                      >
+                        <span className="sl-num">{row.done ? <IconCheck /> : `${row.logged}/${row.prescribed}`}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="sl-btn-outline" onClick={finishFromLog} disabled={!canFinishSession}>
+                  {selectedActualWorkout?.dayId === day.id ? "Training bijwerken" : "Training afronden"} · {selectedDateLabel}
+                </button>
+                <p className="sl-help">Stop bij techniekverlies. Is pijn scherp? Kies een pijnvrije ROM.</p>
+              </section>
+            </>
+          ) : (
+            <div className="sl-list">
+              <p className="sl-empty">
+                <strong>Geen oefeningen</strong>
+                Kies in de agenda een training voor deze dag.
+              </p>
+            </div>
+          )}
+
+          <div className="sl-dock" ref={setDockElement}>
+            {restTimer && (
+              <RestPill
+                timer={restTimer}
+                onAdjust={adjustRest}
+                onReset={resetRestToPlan}
+                onSkip={skipRest}
+                onDismiss={() => setRestTimer(null)}
+              />
+            )}
+            {isRestDay ? (
+              <div className="sl-inputcard">
+                <button type="button" className="sl-cta" style={{ marginTop: 0 }} onClick={finishRecoveryFromLog} disabled={selectedIsFuture}>
+                  {selectedActualRecovery ? "Rustdag bijwerken" : "Rustdag opslaan"}
+                  <small className="sl-num">{selectedDateLabel}</small>
+                </button>
+              </div>
+            ) : logRow && logExercise ? (
+              <div className="sl-inputcard">
+                {focusIndex !== null && focusValues ? (
+                  <>
+                    <div className="sl-inputcard-head">
+                      <span className="sl-inputcard-status sl-num">
+                        <i aria-hidden="true" />
+                        <span>
+                          <span>Set {focusIndex + 1} van {Math.max(logRow.prescribed, logRow.sets.length)}</span>
+                          <small>{focusStatus}</small>
+                        </span>
+                      </span>
+                      <span className="sl-inputcard-tools">
+                        {supportsPause && (
+                          <button
+                            type="button"
+                            className="sl-pill-btn"
+                            aria-pressed={focusValues.pauseEnabled}
+                            onClick={() => updateFocus({ pauseEnabled: !focusValues.pauseEnabled })}
+                          >
+                            Pauze
+                          </button>
+                        )}
+                        <button type="button" className="sl-pill-btn" data-quiet onClick={() => setPlatesOpen(true)}>
+                          <IconPlates />
+                          Schijven
+                        </button>
+                      </span>
+                    </div>
+                    <div className="sl-steppers">
+                      <Stepper
+                        label="gewicht"
+                        value={focusValues.weight}
+                        step={2.5}
+                        min={0}
+                        max={500}
+                        unit="kg"
+                        decimals
+                        onChange={(value) => updateFocus({ weight: value })}
+                      />
+                      <Stepper
+                        label="reps"
+                        kind="reps"
+                        value={focusValues.reps}
+                        step={1}
+                        min={1}
+                        max={100}
+                        unit="herhalingen"
+                        onChange={(value) => updateFocus({ reps: value })}
+                      />
+                    </div>
+                    {supportsPause && focusValues.pauseEnabled && (
+                      <div className="sl-pause-row">
+                        <Stepper
+                          label="gepauzeerd"
+                          kind="small"
+                          value={focusValues.pausedReps}
+                          step={1}
+                          min={0}
+                          max={focusValues.reps ?? 100}
+                          unit="herhalingen"
+                          onChange={(value) => updateFocus({ pausedReps: value })}
+                        />
+                        <Stepper
+                          label="pauze (sec)"
+                          kind="small"
+                          value={focusValues.pauseSeconds}
+                          step={1}
+                          min={1}
+                          max={10}
+                          unit="seconden"
+                          onChange={(value) => updateFocus({ pauseSeconds: value })}
+                        />
+                      </div>
+                    )}
+                    <button type="button" className="sl-cta" onClick={saveFocusedSet} disabled={!canSaveFocus}>
+                      {correctingIndex !== null ? `Set ${focusIndex + 1} bijwerken` : "Set opslaan"}
+                      <small className="sl-num">
+                        {selectedIsFuture
+                          ? `vanaf ${selectedDateLabel}`
+                          : canSaveFocus
+                            ? `${formatKg(focusValues.weight ?? 0)} × ${focusValues.reps}`
+                            : "kies een gewicht"}
+                      </small>
+                    </button>
+                    {correctingIndex !== null && (
+                      <div className="sl-cta-secondary">
+                        <button type="button" className="sl-btn-outline" data-tone="danger" onClick={clearCorrectedSet}>
+                          Set wissen
+                        </button>
+                        <button
+                          type="button"
+                          className="sl-btn-outline"
+                          onClick={() => {
+                            setCorrecting(null);
+                            setStepDraft(null);
+                          }}
+                        >
+                          Annuleren
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="sl-inputcard-head">
+                      <span className="sl-inputcard-status sl-num">
+                        <i aria-hidden="true" />
+                        <span>
+                          <span>Alle {logRow.sets.length} sets gelogd</span>
+                          <small>{logExercise.name}</small>
+                        </span>
+                      </span>
+                      <span className="sl-inputcard-tools">
+                        <button type="button" className="sl-pill-btn" data-quiet onClick={addExtraSet}>
+                          <IconPlus size={14} />
+                          Extra set
+                        </button>
+                      </span>
+                    </div>
+                    {nextOpenIndex >= 0 ? (
+                      <button type="button" className="sl-cta" onClick={() => selectLogExercise(nextOpenIndex)}>
+                        Volgende oefening
+                        <small>{logRows[nextOpenIndex].exercise.name}</small>
+                      </button>
+                    ) : (
+                      <button type="button" className="sl-cta" onClick={finishFromLog} disabled={!canFinishSession}>
+                        {selectedActualWorkout?.dayId === day.id ? "Training bijwerken" : "Training opslaan"}
+                        <small className="sl-num">{selectedDateLabel}</small>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
-              <div className="week-agenda-grid" role="group" aria-label="Dagen van deze trainingsweek">
-                {weekDays.map((calendarDate) => {
-                  const key = dateKey(calendarDate);
-                  const canonicalId = scheduleForDate(key);
-                  const template = activePlan.find((item) => item.id === planIdForMode(canonicalId, planMode, sciencePlanId)) ?? REST_DAY;
-                  const actualSessions = sessions.filter((session) => dateKey(new Date(session.date)) === key);
-                  const actualWorkout = actualSessions.find((session) => session.sessionType !== "recovery" && session.dayId !== "rest");
-                  const actualRecovery = actualSessions.find((session) => session.sessionType === "recovery" || session.dayId === "rest");
-                  const isToday = key === todayKey;
-                  const isSelected = key === selectedDate;
-                  const isDone = Boolean(actualWorkout || actualRecovery);
+            ) : null}
+          </div>
+        </TabsPrimitive.Content>
+
+        {/* ============================================================ 1c Voeding */}
+        <TabsPrimitive.Content value="voeding" className="sl-screen" data-rest-floating={restFloating || undefined}>
+          <header className="sl-page-head">
+            <div>
+              <h1 className="sl-page-title">Voeding</h1>
+              <label className="sl-page-sub sl-date-pick">
+                {capitalize(nutritionDateLabel)}
+                <input
+                  type="date"
+                  value={nutritionDate}
+                  onChange={(event) => setNutritionDate(event.target.value || dateKey())}
+                  onClick={(event) => {
+                    try {
+                      event.currentTarget.showPicker?.();
+                    } catch {
+                      // Some browsers only open the picker from their own icon.
+                    }
+                  }}
+                  aria-label="Datum van je voedingsdagboek kiezen"
+                />
+              </label>
+            </div>
+            <div className="sl-head-tools">
+              {!nutritionIsToday && (
+                <button type="button" className="sl-link-action" onClick={() => setNutritionDate(todayKey)}>Vandaag</button>
+              )}
+              <button type="button" className="sl-icon-btn" onClick={() => shiftNutritionDate(-1)} aria-label="Vorige dag">
+                <IconChevronLeft size={18} />
+              </button>
+              <button type="button" className="sl-icon-btn" onClick={() => shiftNutritionDate(1)} aria-label="Volgende dag">
+                <IconChevronRight size={18} />
+              </button>
+            </div>
+          </header>
+
+          <section className="sl-hero" aria-labelledby="sl-kcal-label">
+            <div className="sl-hero-top">
+              <div className="sl-hero-figure">
+                <span id="sl-kcal-label">{caloriesRemaining < 0 ? "Boven je doel" : "Nog te eten"}</span>
+                <span className="sl-hero-value sl-num">
+                  <b data-tone={caloriesRemaining < 0 ? "attention" : "action"}>{formatThousands(Math.abs(caloriesRemaining))}</b>
+                  <span>kcal</span>
+                </span>
+              </div>
+              <span className="sl-letter" aria-hidden="true">KCAL</span>
+            </div>
+            <div
+              className="sl-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(caloriePercent)}
+              aria-label={`${Math.round(caloriePercent)}% van je caloriedoel gegeten`}
+            >
+              <i style={{ width: `${caloriePercent}%` }} data-tone={caloriesRemaining < 0 ? "over" : undefined} />
+            </div>
+            <div className="sl-hero-stats sl-num">
+              <div className="sl-hero-stat">
+                <b>{formatThousands(nutritionTotals.calories)} <small>kcal</small></b>
+                <span>gegeten</span>
+              </div>
+              <button
+                type="button"
+                className="sl-hero-stat"
+                onClick={() => setTargetDialog(true)}
+                aria-label={`Doel ${targets.calories} kcal. Doelen aanpassen.`}
+              >
+                <b>{formatThousands(targets.calories)} <small>kcal</small></b>
+                <span>doel <Pencil size={12} aria-hidden="true" /></span>
+              </button>
+            </div>
+            <button type="button" className="sl-btn-start" onClick={() => setFoodSheetOpen(true)}>
+              <IconPlus />
+              Maaltijd loggen
+            </button>
+          </section>
+
+          <section className="sl-section" aria-labelledby="sl-macros-title">
+            <div className="sl-section-head">
+              <h2 id="sl-macros-title" className="sl-section-title">Macro’s</h2>
+              <span className="sl-section-meta">gegeten / doel</span>
+            </div>
+            <div className="sl-list">
+              {([
+                ["Eiwit", nutritionTotals.protein, targets.protein, "1"],
+                ["Koolhydraten", nutritionTotals.carbs, targets.carbs, "2"],
+                ["Vet", nutritionTotals.fat, targets.fat, "3"],
+              ] as const).map(([label, value, target, level]) => {
+                const left = Math.round(target - value);
+                const percent = target > 0 ? clamp((value / target) * 100) : 0;
+                return (
+                  <div key={label} className="sl-macro">
+                    <div className="sl-macro-head sl-num">
+                      <span>{label}</span>
+                      <span>
+                        {Math.round(value)}
+                        <small> / {target} g</small>
+                      </span>
+                    </div>
+                    <div className="sl-bar" data-size="small" aria-hidden="true">
+                      <i data-level={level} style={{ width: `${percent}%` }} />
+                    </div>
+                    <span className="sl-num">{left >= 0 ? `nog ${left} g` : `${Math.abs(left)} g boven doel`}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {proteinStreak && (
+            <aside className="sl-attention" aria-label="Aandacht">
+              <i aria-hidden="true" />
+              <div>
+                <b>Aandacht</b>
+                <p className="sl-num">
+                  {proteinStreak.days} dagen op rij onder je eiwitdoel. Gemiddeld {proteinStreak.average} g tekort.
+                </p>
+              </div>
+            </aside>
+          )}
+
+          <section className="sl-section" aria-labelledby="sl-eaten-title">
+            <div className="sl-section-head">
+              <h2 id="sl-eaten-title" className="sl-section-title">
+                {nutritionIsToday ? "Vandaag gegeten" : `Gegeten op ${parseDateKey(nutritionDate).toLocaleDateString("nl-BE", { weekday: "short", day: "numeric", month: "short" }).replaceAll(".", "")}`}
+              </h2>
+              <span className="sl-section-meta sl-num">
+                {eatenEntries.length} {eatenEntries.length === 1 ? "item" : "items"}
+              </span>
+            </div>
+            <div className="sl-list">
+              {eatenEntries.length === 0 ? (
+                <p className="sl-empty">
+                  <strong>Nog niets gelogd</strong>
+                  Voeg je eerste maaltijd toe; je totalen en dagbudget rekenen meteen mee.
+                </p>
+              ) : (
+                eatenEntries.map((entry) => {
+                  const loggedAt = loggedAtLabel(entry);
                   return (
+                    <div key={entry.id} className="sl-eaten">
+                      <span className="sl-eaten-time sl-num" aria-label={loggedAt ? `gelogd om ${loggedAt}` : undefined}>{loggedAt ?? ""}</span>
+                      <span className="sl-row-main">
+                        <span className="sl-row-title">{entry.name}</span>
+                        <span className="sl-row-sub sl-num">{entry.meal} · {Math.round(entry.protein)} g eiwit</span>
+                      </span>
+                      <span className="sl-eaten-kcal sl-num">
+                        {Math.round(entry.calories)}
+                        <small> kcal</small>
+                      </span>
+                      <button
+                        type="button"
+                        className="sl-icon-btn"
+                        onClick={() => setDeleteTarget({ kind: "nutrition", id: entry.id, label: `${entry.name} · ${Math.round(entry.calories)} kcal` })}
+                        aria-label={`${entry.name} verwijderen`}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        </TabsPrimitive.Content>
+
+        {/* ============================================================ 1d Progressie */}
+        <TabsPrimitive.Content value="progressie" className="sl-screen" data-rest-floating={restFloating || undefined}>
+          <header className="sl-page-head">
+            <div>
+              <h1 className="sl-page-title">Progressie</h1>
+              <span className="sl-page-sub">{progressRange}</span>
+            </div>
+            <button type="button" className="sl-pill-primary" onClick={() => setMetricSheetOpen(true)}>
+              <IconPlus size={14} />
+              Meting
+            </button>
+          </header>
+
+          <section className="sl-hero" aria-labelledby="sl-weight-label">
+            <div className="sl-hero-top" data-align="end">
+              <div className="sl-hero-figure">
+                <span id="sl-weight-label">Lichaamsgewicht</span>
+                <span className="sl-hero-value sl-num">
+                  <b>{latestMetric ? formatKg(Math.round(latestMetric.weight * 10) / 10) : "—"}</b>
+                  <span>kg</span>
+                </span>
+              </div>
+              {averageChange !== null ? (
+                <div className="sl-trend sl-num">
+                  <b data-tone={averageChange !== 0 ? "change" : undefined}>
+                    {averageChange > 0 ? "+" : averageChange < 0 ? "−" : ""}
+                    {formatKg(Math.abs(averageChange))} kg
+                  </b>
+                  <span>14-daags gem.</span>
+                </div>
+              ) : weightTrend !== null ? (
+                <div className="sl-trend sl-num">
+                  <b data-tone={Math.round(weightTrend * 10) !== 0 ? "change" : undefined}>
+                    {weightTrend > 0.05 ? "+" : weightTrend < -0.05 ? "−" : ""}
+                    {formatKg(Math.abs(Math.round(weightTrend * 10) / 10))} kg
+                  </b>
+                  <span>per week</span>
+                </div>
+              ) : null}
+            </div>
+            {weightPoints.length >= 2 ? (
+              <WeightChart points={weightPoints} />
+            ) : (
+              <p className="sl-help">Log twee ochtendmetingen; daarna verschijnen je trend en het 14-daagse gemiddelde.</p>
+            )}
+          </section>
+
+          <section className="sl-section" aria-labelledby="sl-best-title">
+            <div className="sl-section-head">
+              <h2 id="sl-best-title" className="sl-section-title">Beste sets</h2>
+              <span className="sl-section-meta">laatste 8 weken</span>
+            </div>
+            <div className="sl-list">
+              {bestRows.length === 0 ? (
+                <p className="sl-empty">
+                  <strong>Nog geen sets met gewicht</strong>
+                  Sla een training op; je beste set per oefening verschijnt hier.
+                </p>
+              ) : (
+                bestRows.map((row) => (
+                  <div key={row.exerciseId} className="sl-best">
+                    <span className="sl-row-main">
+                      <span className="sl-row-title">{row.name}</span>
+                      <span className="sl-row-sub sl-num">
+                        {formatKg(row.weight)} kg × {row.reps} · {shortDate(new Date(row.date))}
+                      </span>
+                    </span>
+                    <span className="sl-best-delta sl-num">
+                      {/* "nieuw" only where nothing came before: a lift trained
+                          before in another way is neither compared nor new. */}
+                      {row.delta === null ? (
+                        row.hasEarlierBest ? null : (
+                          <>
+                            <b>nieuw</b>
+                            <span>geen eerdere beste</span>
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <b data-tone={row.delta > 0 ? "gain" : row.delta < 0 ? "loss" : undefined}>
+                            {row.delta > 0 ? "+" : row.delta < 0 ? "−" : ""}
+                            {formatKg(Math.abs(row.delta))} kg
+                          </b>
+                          <span>geschat t.o.v. vorige beste</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="sl-section" aria-labelledby="sl-volume-title">
+            <div className="sl-section-head">
+              <h2 id="sl-volume-title" className="sl-section-title">Volume per week</h2>
+              <span className="sl-section-meta sl-num">
+                ton · w{volumeWeeks[0].week}–w{volumeWeeks[volumeWeeks.length - 1].week}
+              </span>
+            </div>
+            <VolumeBars weeks={volumeWeeks} />
+          </section>
+        </TabsPrimitive.Content>
+
+        {/* ============================================================ 1e Foto's */}
+        <TabsPrimitive.Content value="transformatie" className="sl-screen" data-rest-floating={restFloating || undefined}>
+          <header className="sl-page-head">
+            <div>
+              <h1 className="sl-page-title">Foto’s</h1>
+              <span className="sl-page-sub sl-num">
+                {photosLoading ? "Laden…" : `${photos.length} ${photos.length === 1 ? "opname" : "opnames"}`}
+              </span>
+            </div>
+            <button type="button" className="sl-pill-primary" onClick={() => setPhotoSheetOpen(true)}>
+              <IconCameraSmall />
+              Nieuwe opname
+            </button>
+          </header>
+
+          {photoError && !photoSheetOpen && <p className="sl-error" role="alert">{photoError}</p>}
+
+          {photosLoading ? (
+            <p className="sl-help">
+              <LoaderCircle className="animate-spin" size={16} aria-hidden="true" /> Tijdlijn laden…
+            </p>
+          ) : photos.length === 0 ? (
+            <div className="sl-list">
+              <p className="sl-empty">
+                <strong>Je eerste foto wordt het startpunt</strong>
+                Zelfde pose, licht en afstand. Vanaf twee foto’s verschijnt de vergelijking.
+              </p>
+            </div>
+          ) : (
+            <>
+              <section className="sl-section" aria-labelledby="sl-compare-title">
+                <div className="sl-section-head">
+                  <h2 id="sl-compare-title" className="sl-section-title">Vergelijking</h2>
+                  {photos.length > 1 && <span className="sl-section-meta sl-num">{compareLabel}</span>}
+                </div>
+                <div className="sl-compare">
+                  {[
+                    { photo: compareBefore, tag: "voor" },
+                    ...(photos.length > 1 ? [{ photo: compareAfter, tag: "nu" }] : []),
+                  ].map(({ photo, tag }) =>
+                    photo ? (
+                      <button
+                        key={`${tag}-${photo.id}`}
+                        type="button"
+                        className="sl-compare-item"
+                        onClick={() => openPhoto(photo.id)}
+                        aria-label={`Foto ${tag} van ${photoDateLabel(photo.capturedOn)}, ${formatKg(photo.weight)} kg, openen`}
+                      >
+                        <span className="sl-photo">
+                          <IconImage />
+                          <img src={photo.imageUrl} alt="" />
+                        </span>
+                        <span className="sl-compare-caption sl-num">
+                          <b>{photoDateLabel(photo.capturedOn, { day: "numeric", month: "short" }).replaceAll(".", "")} · {tag}</b>
+                          <span>{formatKg(photo.weight)} kg</span>
+                        </span>
+                      </button>
+                    ) : null,
+                  )}
+                </div>
+                {photos.length > 2 && (
+                  <button type="button" className="sl-btn-outline" onClick={() => setCompareSheetOpen(true)}>
+                    Andere datums kiezen
+                    <IconChevronRight className="sl-chev" />
+                  </button>
+                )}
+              </section>
+
+              <section className="sl-section" aria-labelledby="sl-all-photos-title">
+                <div className="sl-section-head">
+                  <h2 id="sl-all-photos-title" className="sl-section-title">Alle opnames</h2>
+                  <span className="sl-head-tools">
+                    {photos.length > 1 && (
+                      <button
+                        type="button"
+                        className="sl-link-action"
+                        onClick={() => {
+                          setPhotoIndex(0);
+                          setPhotoPlaying(true);
+                          setPhotoViewerOpen(true);
+                        }}
+                      >
+                        <IconPlay size={12} />
+                        Afspelen
+                      </button>
+                    )}
+                    <span className="sl-section-meta sl-num">{photos.length}</span>
+                  </span>
+                </div>
+                <div className="sl-thumbs">
+                  {[...photos].reverse().map((photo) => (
                     <button
+                      key={photo.id}
                       type="button"
-                      key={key}
-                      className={`agenda-day ${isSelected ? "agenda-day-selected" : ""} ${isToday ? "agenda-day-today" : ""} ${isDone ? "agenda-day-done" : ""}`}
-                      onClick={() => selectAgendaDay(key)}
-                      aria-pressed={isSelected}
-                      aria-current={isToday ? "date" : undefined}
-                      aria-label={`${calendarDate.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric" })}: ${template.short}, ${isDone ? "afgerond" : isToday ? "vandaag" : "gepland"}`}
+                      className="sl-thumb"
+                      onClick={() => openPhoto(photo.id)}
+                      aria-label={`Foto van ${photoDateLabel(photo.capturedOn)}, ${formatKg(photo.weight)} kg, openen`}
                     >
-                      <span className="agenda-day-date"><strong>{calendarDate.toLocaleDateString("nl-BE", { weekday: "short" }).replace(".", "")}</strong><em>{calendarDate.getDate()}</em></span>
-                      <span className="agenda-day-plan">{workoutLabelForSlot(canonicalId).replace("Full body ", "Full ")}</span>
-                      <span className={`agenda-day-status ${isDone ? "agenda-day-status-done" : isToday ? "agenda-day-status-today" : ""}`} aria-hidden="true">
-                        {isDone ? <Check /> : isToday ? <i /> : null}
+                      <span className="sl-photo" data-size="small">
+                        <IconImage />
+                        <img loading="lazy" src={photo.imageUrl} alt="" />
+                      </span>
+                      <span className="sl-num">
+                        {photoDateLabel(photo.capturedOn, { day: "numeric", month: "short" }).replaceAll(".", "")}
                       </span>
                     </button>
-                  );
-                })}
-              </div>
-
-              <Collapsible className="agenda-manage">
-                <div className="agenda-selected-panel">
-                  <div className="agenda-selected-copy">
-                    <span className="agenda-selected-icon">{isRestDay ? <Moon /> : <Dumbbell />}</span>
-                    <div>
-                      <small>{selectedDateLabel}{selectedDate === todayKey ? " · Vandaag" : ""}</small>
-                      <strong>{day.short}</strong>
-                      <p className={selectedIsDone ? "agenda-selected-done" : ""}>{selectedIsDone && <Check />}{selectedStatusLabel}</p>
-                    </div>
-                  </div>
-                  <CollapsibleTrigger className="agenda-manage-trigger" aria-label={`Planning voor ${selectedDateLabel} aanpassen`}>
-                    <span>Planning</span><ChevronDown />
-                  </CollapsibleTrigger>
-                </div>
-                <CollapsibleContent className="agenda-manage-content">
-                  <div className="agenda-manage-head">
-                    <div><span>Sessie kiezen</span><small>Voor {selectedDateLabel}; opslaan blijft aan deze datum gekoppeld.</small></div>
-                    <button type="button" className="agenda-move-selected" onClick={() => setMoveSourceDate(selectedDate)} aria-label={`${day.short} van ${selectedDateLabel} verplaatsen`}>
-                      <ArrowRightLeft /><span>Verplaatsen</span>
-                    </button>
-                  </div>
-                  <div className="day-workout-options" data-count={workoutChoices.length} role="group" aria-label={`Sessie kiezen voor ${selectedDateLabel}`}>
-                    {workoutChoices.map((choice) => {
-                      const active = scheduleForDate(selectedDate) === choice;
-                      return (
-                        <button key={choice} type="button" className={active ? "day-workout-choice-active" : ""} aria-pressed={active} onClick={() => chooseWorkoutForDate(choice)}>
-                          {choice === "rest" ? <Moon /> : <Dumbbell />}
-                          <span>{workoutLabelForSlot(choice)}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="week-agenda-note"><Check /> Historiek blijft op de werkelijk opgeslagen dag staan.</div>
-                </CollapsibleContent>
-              </Collapsible>
-            </section>
-
-            {planMode === "science" && !isRestDay && (
-              <Collapsible className="science-brief">
-                <CollapsibleTrigger className="science-brief-trigger">
-                  <div className="science-brief-title"><span className="science-icon"><Microscope /></span><div><p className="eyebrow">Onderbouwing & vergelijking</p><strong>Waarom {activeSciencePlan.label}?</strong></div></div>
-                  <div className="science-trigger-meta"><span>{activeSciencePlan.frequency}</span><ChevronDown /></div>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="science-brief-content">
-                  <div className="science-compare-grid">
-                    <article><span><UserRound /> Persoonlijk</span><h4>Bench twee keer</h4><p>Zware flat bench op Push en een lichtere paused bench op Upper. De rest blijft gericht op jouw side delts, latbreedte en bovenborst.</p></article>
-                    <article className="science-reference"><span><Microscope /> {activeSciencePlan.label}</span><h4>{activeSciencePlan.daysLabel}</h4><p>{activeSciencePlan.comparison}</p></article>
-                  </div>
-                  <div className="science-principles">
-                    <div><strong>Volume</strong><p>Ongeveer 9–14 directe sets per grote spiergroep; onder de zone waar rendement sterk begint af te vlakken.</p></div>
-                    <div><strong>Inspanning</strong><p>Praktisch uitgangspunt: compounds RIR 1–2. Falentraining is niet verplicht; isolatie mag op de laatste set dichterbij.</p></div>
-                    <div><strong>Verdeling</strong><p>{activeSciencePlan.distribution}</p></div>
-                    <div><strong>Uitvoering</strong><p>Prioriteitsoefeningen eerst, volledige pijnvrije ROM en voldoende rust om reps en techniek te behouden.</p></div>
-                  </div>
-                  <div className="science-sources">
-                    <span>Bronnen</span>
-                    {SCIENCE_SOURCES.map((source) => <a key={source.href} href={source.href} target="_blank" rel="noreferrer">{source.label}<ExternalLink /></a>)}
-                  </div>
-                  <p className="science-disclaimer">Origineel referentieprogramma op basis van publieke literatuur en principes; geen kopie van of samenwerking met Jeff Nippard.</p>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
-
-            {isRestDay ? (
-              <section id="session-workspace" className="recovery-panel scroll-mt-24">
-                <div className="recovery-panel-head">
-                  <div>
-                    <p className="eyebrow">Rest day · persoonlijk herstel</p>
-                    <h3>Doe alleen wat vandaag nuttig voelt.</h3>
-                    <p>Start met de korte check-in. Alles blijft optioneel; stop bij scherpe pijn en maak hiervan geen extra trainingssessie.</p>
-                  </div>
-                  <div className="recovery-time-pill"><Moon /><span><strong>10–15</strong> min</span></div>
-                </div>
-
-                <div className="recovery-content">
-                  <section className="recovery-checkin-card" aria-labelledby="recovery-checkin-title">
-                    <div className="recovery-section-title">
-                      <div><p className="eyebrow">Snelle check-in</p><h4 id="recovery-checkin-title">Hoe voelt je lichaam vandaag?</h4></div>
-                      <span>Optioneel · 10 sec</span>
-                    </div>
-                    <div className="recovery-status-grid">
-                      {([
-                        { key: "sleep", label: "Slaap", icon: <Moon /> },
-                        { key: "soreness", label: "Spierstijfheid", icon: <Activity /> },
-                        { key: "energy", label: "Energie", icon: <HeartPulse /> },
-                      ] as const).map((field) => (
-                        <div className="recovery-status-field" key={field.key}>
-                          <div className="recovery-status-label">{field.icon}<span>{field.label}</span></div>
-                          <div className="recovery-status-options" role="group" aria-label={field.label}>
-                            {RECOVERY_SCALE[field.key].map((option) => (
-                              <button type="button" key={option.value} aria-pressed={recoveryDraft[field.key] === option.value} onClick={() => setRecoveryLevel(field.key, option.value)}>{option.label}</button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <div className={`recovery-insight recovery-insight-${recoveryInsight.tone}`}>
-                    <span><HeartPulse /></span>
-                    <div><small>Live hersteladvies</small><strong>{recoveryInsight.title}</strong><p>{recoveryInsight.body}</p></div>
-                  </div>
-
-                  <div className="recovery-activities-head">
-                    <div><p className="eyebrow">Kies je herstelblokken</p><h4>{doneCount} van {RECOVERY_ACTIVITIES.length} geselecteerd</h4></div>
-                    <span>Je hoeft ze niet allemaal te doen</span>
-                  </div>
-
-                  <div className="recovery-activity-grid">
-                    {RECOVERY_ACTIVITIES.map((activity) => {
-                      const selected = recoveryDraft.completedIds.includes(activity.id);
-                      const ActivityIcon = activity.tone === "calves" || activity.tone === "cardio" ? Footprints : Activity;
-                      return (
-                        <button type="button" key={activity.id} aria-pressed={selected} onClick={() => toggleRecoveryActivity(activity.id)} className={`recovery-activity-card recovery-tone-${activity.tone} ${selected ? "recovery-activity-selected" : ""}`}>
-                          <span className="recovery-activity-icon"><ActivityIcon /></span>
-                          <span className="recovery-activity-copy"><small>{activity.category}</small><strong>{activity.name}</strong><em>{activity.dose}</em><p>{activity.detail}</p></span>
-                          <span className="recovery-activity-check">{selected ? <Check /> : <Plus />}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <label className="recovery-note-label">Notitie voor je coach <span>optioneel</span>
-                    <Textarea value={recoveryDraft.note} onChange={(event) => setRecoveryDraft((current) => ({ ...current, note: event.target.value.slice(0, 280) }))} placeholder="Bijv. kuiten stijf bij opstaan, rechterschouder voelt goed…" rows={3} />
-                  </label>
-                </div>
-
-                <div className="recovery-panel-footer">
-                  <p><ShieldCheck /> Volledige rust zonder checklist is ook een geldige keuze. Bij scherpe of aanhoudende pijn: niet forceren.</p>
-                  <Button onClick={finishRecovery} className="recovery-save-button"><Save /> {selectedActualRecovery ? "Bijwerken" : "Opslaan"} · {selectedDateLabel}</Button>
+                  ))}
                 </div>
               </section>
-            ) : (
-            <section id="session-workspace" className="workout-panel scroll-mt-24 overflow-hidden">
-              <div className="workout-panel-head">
-                <div>
-                  <p className="eyebrow">{planMode === "personal" ? "Persoonlijk plan" : `Science-based · ${activeSciencePlan.label}`}</p>
-                  <h3>Jouw oefeningen</h3>
-                  <p>Tik een oefening om je sets te loggen.</p>
-                </div>
-                <span className="workout-panel-count"><strong>{doneCount}/{dayItemCount}</strong><small>klaar</small></span>
-              </div>
-              <Collapsible className="session-warmup-disclosure">
-                <CollapsibleTrigger className="session-warmup-trigger" aria-label="Opwarming voor deze training bekijken">
-                  <span className="session-warmup-icon"><Flame /></span>
-                  <span className="session-warmup-copy"><small>Voor je eerste werkset</small><strong>Opwarming · ongeveer 5 min</strong></span>
-                  <span className="session-warmup-action">Bekijk <ChevronDown /></span>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="session-warmup-content">
-                  <div><span>Algemeen</span><p>5 minuten rustig bewegen en 2 dynamische mobiliteitsrondes.</p></div>
-                  <div><span>{day.exercises[0]?.name}</span><p>{primaryGuide.warmup}</p></div>
-                </CollapsibleContent>
-              </Collapsible>
-              <div className="exercise-list">
-                {day.exercises.map((exercise, index) => {
-                  const key = `${day.id}:${exercise.id}`;
-                  const prescribedSets = progressionTargets(exercise.prescription).length || WORKING_SETS[exercise.id] || 3;
-                  const storedResult = performance[key];
-                  // Re-opening a day you already logged must show what you
-                  // logged. The saved session is read here only — it is never
-                  // written into the draft, which is shared by every date.
-                  const savedRow = selectedActualWorkout?.dayId === day.id
-                    ? selectedActualWorkout.results.find((row) => row.exerciseId === exercise.id)
-                    : undefined;
-                  const draftSets = storedResult?.sets.filter((set) => set.weight || set.reps || set.pausedReps).length
-                    ? storedResult.sets
-                    : undefined;
-                  const baseSets = draftSets ?? (savedRow ? resultSets(savedRow) : undefined);
-                  const visibleSets = baseSets
-                    ? [
-                        ...baseSets,
-                        ...emptySetsForExercise(exercise.id, Math.max(0, prescribedSets - baseSets.length)),
-                      ]
-                    : emptySetsForExercise(exercise.id, prescribedSets);
-                  const guide = GUIDANCE[exercise.id] ?? DEFAULT_GUIDE;
-                  const alternatives = ALTERNATIVES[exercise.id] ?? [];
-                  const originalExercise = DEFAULT_PLAN.flatMap((workoutDay) => workoutDay.exercises).find((item) => item.id === exercise.id);
-                  const variantOptions: Array<{ name: string; fit: string }> = [
-                    ...(originalExercise ? [{ name: originalExercise.name, fit: "Jouw schema" }] : []),
-                    ...alternatives.map((alternative) => ({ name: alternative.name, fit: alternative.fit })),
-                  ].filter((option, optionIndex, options) => options.findIndex((item) => item.name === option.name) === optionIndex);
-                  if (!variantOptions.some((option) => option.name === exercise.name)) {
-                    variantOptions.unshift({ name: exercise.name, fit: "Actief" });
-                  }
-                  const status = liveProgressStatus(exercise, visibleSets);
-                  const trendPoints = strengthTrendPoints(exercise.id, visibleSets);
-                  const record = strengthRecord(exercise.id, visibleSets);
-                  const setSignals = visibleSets.map((set, setIndex) => setProgressSignal(exercise.id, setIndex, set));
-                  const strongestSignal = setSignals.find((signal) => signal?.tone === "good") ?? setSignals.find(Boolean) ?? null;
-                  const previousSessionSets = recentExerciseSets(exercise.id)[0]?.sets ?? [];
-                  const currentBest = bestStrengthSet(visibleSets);
-                  const hasCurrentInput = visibleSets.some((set) => set.weight || set.reps || set.pausedReps);
-                  const loggedSets = visibleSets.filter((set) => numberValue(set.weight) > 0 && completedReps(set) > 0).length;
-                  const remainingSets = Math.max(0, prescribedSets - loggedSets);
-                  const setProgress = prescribedSets ? Math.min(100, Math.round((loggedSets / prescribedSets) * 100)) : 0;
-                  const supportsPausedReps = exercise.id.includes("bench") || exercise.name.toLowerCase().includes("bench");
-                  const isDone = Boolean(completed[key]);
-                  const isExpanded = openExerciseKey === key;
-                  const compactResult = currentBest
-                    ? `${currentBest.weight.toLocaleString("nl-BE")} kg × ${currentBest.reps}`
-                    : exercise.prescription;
-                  const motivation = record
-                    ? `${record.allTime ? "Nieuw PR" : "Sterker"} · ${record.detail}`
-                    : strongestSignal
-                      ? `${strongestSignal.metric} vooruit`
-                      : isDone
-                        ? "Oefening afgerond"
-                        : loggedSets >= prescribedSets
-                          ? "Alle werksets gelogd"
-                          : loggedSets === 0
-                            ? hasCurrentInput ? "Maak set 1 compleet" : "Klaar voor set 1"
-                            : remainingSets === 1
-                              ? "Nog één sterke set"
-                              : `Nog ${remainingSets} werksets`;
-                  const motivationDetail = record
-                    ? record.title
-                    : strongestSignal
-                      ? strongestSignal.label
-                      : loggedSets >= prescribedSets
-                        ? "Vink de oefening af wanneer je klaar bent."
-                        : loggedSets === 0
-                          ? hasCurrentInput ? "Vul gewicht én reps in om de set te tellen." : "Start gecontroleerd en bouw van daaruit op."
-                          : `Sterke start — houd je techniek vast voor ${remainingSets === 1 ? "je laatste set" : `de volgende ${remainingSets} sets`}.`;
-                  return (
-                    <Collapsible
-                      key={exercise.id}
-                      open={isExpanded}
-                      onOpenChange={(open) => setOpenExerciseByScope((current) => ({ ...current, [exerciseScopeKey]: open ? key : null }))}
-                      className={`exercise-row ${isExpanded ? "exercise-active" : ""} ${isDone ? "exercise-done" : ""}`}
-                    >
-                      <div className="exercise-summary">
-                        <Checkbox checked={isDone} onCheckedChange={(checked) => setExerciseDone(exercise.id, checked === true)} aria-label={`${exercise.name} voltooid`} className="exercise-check border-white/20 data-[state=checked]:border-[#b9f45b] data-[state=checked]:bg-[#b9f45b] data-[state=checked]:text-[#0b0e0c]" />
-                        <CollapsibleTrigger className="exercise-summary-trigger" aria-label={`${isExpanded ? "Sluit" : "Open"} ${exercise.name}`}>
-                          <span className="exercise-summary-copy">
-                            <span className="exercise-title-line"><span className="exercise-number">{String(index + 1).padStart(2, "0")}</span><strong className="exercise-name">{exercise.name}</strong></span>
-                            <span className="exercise-summary-meta"><strong>{compactResult}</strong><i /><small>{motivation}</small></span>
-                          </span>
-                          <span className="exercise-summary-status">
-                            <span className="exercise-set-ring" style={{ background: `conic-gradient(#c8ff66 ${setProgress}%, rgba(255,255,255,.075) ${setProgress}% 100%)` }} role="progressbar" aria-valuemin={0} aria-valuemax={prescribedSets} aria-valuenow={Math.min(loggedSets, prescribedSets)} aria-label={`${loggedSets} van ${prescribedSets} werksets gelogd`}>
-                              <span><strong>{loggedSets}</strong><small>/{prescribedSets}</small></span>
-                            </span>
-                            <span className="exercise-expand-icon"><ChevronDown /></span>
-                          </span>
-                        </CollapsibleTrigger>
-                      </div>
+            </>
+          )}
+          <p className="sl-help">’s Morgens nuchter, zelfde plek, afstand, licht en een ontspannen pose. Geen pump.</p>
+        </TabsPrimitive.Content>
 
-                      <CollapsibleContent className="exercise-details">
-                        <div className="exercise-detail-toolbar">
-                          <div className="exercise-meta"><strong>{exercise.prescription}</strong><span>{exercise.load}</span><span><Clock3 /> {exercise.rest}</span></div>
-                          {planMode === "personal" ? (
-                            <Select value="" onValueChange={(value) => chooseExerciseVariant(day.id, exercise, value)}>
-                              <SelectTrigger className="exercise-swap-trigger" aria-label={`${exercise.name} wisselen of aanpassen`}>
-                                <ArrowRightLeft /><span>Wissel</span>
-                              </SelectTrigger>
-                              <SelectContent position="popper" align="end" className="exercise-swap-menu">
-                                {variantOptions.map((option) => (
-                                  <SelectItem key={option.name} value={option.name}>{option.name} · {option.fit}</SelectItem>
-                                ))}
-                                <SelectItem value="__manual__"><Pencil /> Meer aanpassen…</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : <span className="research-lock" title="Onderdeel van het science-based referentieplan"><Microscope /></span>}
-                        </div>
-
-                        <div className={`exercise-motivation ${strongestSignal || record ? "exercise-motivation-win" : ""}`} role={strongestSignal || record ? "status" : undefined} aria-live={strongestSignal || record ? "polite" : undefined}>
-                          <span>{strongestSignal || record ? <Trophy /> : <Flame />}</span>
-                          <p><strong>{motivation}</strong><small>{motivationDetail}</small></p>
-                        </div>
-
-                        <div className="sets-grid">
-                          {!previousSessionSets.length && hasCurrentInput && (
-                            <div className="set-comparison-baseline set-comparison-empty">
-                              <TrendingUp />
-                              <span>Eerste referentie</span>
-                              <strong>Na opslaan vergelijken we je volgende sessie</strong>
-                            </div>
-                          )}
-                          <div className="sets-column-head" aria-hidden="true"><span>Set</span><span>Gewicht</span><span>Herhalingen</span><span>Opties</span></div>
-                          {visibleSets.map((set, setIndex) => {
-                            const signal = setComparisonFeedback(exercise.id, setIndex, set);
-                            const previousSet = previousSessionSets[setIndex];
-                            // Last session's numbers become the hint, so the target is in the
-                            // field you are about to type into rather than a line below it.
-                            // A placeholder only — never a value, so nothing is ever logged
-                            // that the user did not type.
-                            const previousWeight = previousSet ? numberValue(previousSet.weight) : 0;
-                            const previousRepCount = previousSet ? completedReps(previousSet) : 0;
-                            const weightHint = previousWeight > 0 ? previousWeight.toLocaleString("nl-BE") : "0";
-                            const repsHint = previousRepCount > 0 ? String(previousRepCount) : "0";
-                            return <div className="set-entry" key={`${exercise.id}-set-${setIndex}`}>
-                              <div className="set-line">
-                                <span className="set-index" aria-label={`Set ${setIndex + 1}`}>{String(setIndex + 1).padStart(2, "0")}</span>
-                                <label className="log-field"><input inputMode="decimal" enterKeyHint="next" value={set.weight} onChange={(event) => setResult(exercise.id, setIndex, "weight", event.target.value)} placeholder={weightHint} aria-label={`${exercise.name} set ${setIndex + 1} gewicht${previousWeight > 0 ? `, vorige keer ${weightHint} kg` : ""}`} /><span>kg</span></label>
-                                <label className="log-field"><input inputMode="numeric" enterKeyHint="next" value={set.reps} onChange={(event) => setResult(exercise.id, setIndex, "reps", event.target.value)} placeholder={repsHint} aria-label={`${exercise.name} set ${setIndex + 1} herhalingen${previousRepCount > 0 ? `, vorige keer ${repsHint}` : ""}`} /><span>reps</span></label>
-                                <span className="set-actions">
-                                  {supportsPausedReps && !set.pauseEnabled && <button type="button" className="pause-add" onClick={() => togglePausedReps(exercise.id, setIndex)} aria-label={`Paused reps toevoegen aan set ${setIndex + 1}`}><Pause /><span>Pauze</span></button>}
-                                  {(set.weight || set.reps || set.pausedReps || setIndex >= prescribedSets) && <button type="button" className="set-clear" onClick={() => clearOrRemoveSet(exercise.id, setIndex)} aria-label={`${exercise.name} set ${setIndex + 1} ${setIndex >= prescribedSets ? "verwijderen" : "wissen"}`}><Trash2 /><span>{setIndex >= prescribedSets ? "Verwijder" : "Wis"}</span></button>}
-                                </span>
-                              </div>
-                              {supportsPausedReps && set.pauseEnabled && (
-                                <div className="pause-line">
-                                  <span className="pause-mark"><Pause aria-hidden="true" /><span>Pauze</span></span>
-                                  <label className="log-field pause-field"><input inputMode="numeric" enterKeyHint="next" value={set.pausedReps ?? ""} onChange={(event) => setResult(exercise.id, setIndex, "pausedReps", event.target.value)} placeholder="0" aria-label={`${exercise.name} set ${setIndex + 1} gepauzeerde herhalingen, van de reps in deze set`} /><span>van de reps</span></label>
-                                  <label className="log-field pause-field"><input inputMode="decimal" value={set.pauseSeconds ?? ""} onChange={(event) => setResult(exercise.id, setIndex, "pauseSeconds", event.target.value)} placeholder="3" aria-label={`${exercise.name} set ${setIndex + 1} pauzeduur`} /><span>sec</span></label>
-                                  <button type="button" className="pause-remove" onClick={() => togglePausedReps(exercise.id, setIndex)} aria-label={`Paused reps uit set ${setIndex + 1} verwijderen`}><Trash2 /><span>Verwijder</span></button>
-                                </div>
-                              )}
-                              {signal && (
-                                <div className={`set-live-signal set-live-${signal.tone}`} role="status" aria-live="polite" aria-atomic="true">
-                                  <span className="set-live-icon">{signal.tone === "good" ? <Trophy /> : <TrendingUp />}</span>
-                                  <span className="set-live-copy"><strong>{signal.metric}</strong><small>{signal.label}</small></span>
-                                  <em>{signal.tone === "good" ? `Set ${setIndex + 1} verbeterd` : "Live vergelijking"}</em>
-                                </div>
-                              )}
-                              {!signal && previousSet && numberValue(previousSet.weight) > 0 && completedReps(previousSet) > 0 && (
-                                <div className="set-benchmark">
-                                  <History />
-                                  <span>Vorige set {setIndex + 1}</span>
-                                  <strong>{numberValue(previousSet.weight).toLocaleString("nl-BE")} kg · {setSummary(previousSet)}</strong>
-                                </div>
-                              )}
-                            </div>;
-                          })}
-                          <Button variant="ghost" size="sm" onClick={() => addSet(exercise.id)} className="extra-set-button"><Plus /> Extra set</Button>
-                        </div>
-
-                        {record && (
-                          <div className={`exercise-record ${record.allTime ? "exercise-record-alltime" : ""}`} role="status">
-                            <span className="exercise-record-icon"><Trophy /></span>
-                            <div><small>{record.title}</small><strong>{record.detail}</strong></div>
-                            <em>PR</em>
-                          </div>
-                        )}
-
-                        <Collapsible className="guidance-box">
-                          <CollapsibleTrigger className="guidance-trigger">
-                            <span className={`progress-signal progress-${status.tone}`}><TrendingUp /> {status.label}</span>
-                            <span className="guidance-label">Opwarming & progressie <ChevronDown /></span>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="guidance-content">
-                            <div><span>Opwarming</span><p>{guide.warmup}</p></div>
-                            <div><span>Wanneer verhogen?</span><p>{guide.progression}</p></div>
-                            <StrengthTrendChart points={trendPoints} />
-                          </CollapsibleContent>
-                        </Collapsible>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  );
-                })}
-              </div>
-              <div className="flex flex-col gap-3 border-t border-white/8 bg-black/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                <p className="text-xs leading-5 text-[#7e8a82]">Stop bij techniekverlies. Is pijn scherp? Kies een pijnvrije ROM.</p>
-                <Button onClick={finishSession} disabled={doneCount === 0 && selectedActualWorkout?.dayId !== day.id} className="h-11 rounded-xl bg-[#b9f45b] px-5 font-semibold text-[#0a0d0b] hover:bg-[#c7fa74]"><Save /> {selectedActualWorkout?.dayId === day.id ? "Bijwerken" : "Opslaan"} · {selectedDateLabel}</Button>
-              </div>
-            </section>
-            )}
-          </TabsContent>
-
-          <TabsContent value="account" className="space-y-5">
-            <section className="account-page">
+        {/* ============================================================ Account */}
+        <TabsPrimitive.Content
+          value="account"
+          className="sl-screen"
+          aria-labelledby="sl-account-title"
+          data-rest-floating={restFloating || undefined}
+        >
+          <div className="sl-account-top">
+            <button type="button" className="sl-log-back" onClick={() => changeTab(returnTab === "account" ? "training" : returnTab)}>
+              <IconChevronLeft size={18} />
+              Terug
+            </button>
+            <h1 id="sl-account-title" className="sl-sr-only">Account</h1>
+          </div>
+          <section className="account-page">
               <header className="account-identity">
                 <span className="account-identity-avatar">{accountInitials}</span>
                 <div className="account-identity-copy">
@@ -3761,395 +4562,957 @@ function TrainingApp() {
                 )}
               </div>
             </section>
-          </TabsContent>
+        </TabsPrimitive.Content>
 
-          <TabsContent value="voeding" className="space-y-5">
-            <section className="nutrition-top-grid">
-              <article className="nutrition-overview-card">
-                <div className="nutrition-date-nav">
-                  <button type="button" onClick={() => shiftNutritionDate(-1)} aria-label="Vorige voedingsdag"><ChevronLeft /></button>
-                  <label>
-                    <CalendarDays />
-                    <input type="date" value={nutritionDate} onChange={(event) => setNutritionDate(event.target.value || dateKey())} aria-label="Datum van voedingsdagboek" />
-                  </label>
-                  <button type="button" onClick={() => shiftNutritionDate(1)} aria-label="Volgende voedingsdag"><ChevronRight /></button>
-                  {nutritionDate !== todayKey && <button type="button" className="nutrition-today-button" onClick={() => setNutritionDate(todayKey)}>Vandaag</button>}
-                </div>
+        <div className="sl-tabbar-wrap" hidden={activeTab === "loggen"}>
+          <TabsPrimitive.List className="sl-tabbar" aria-label="Hoofdmenu">
+            <TabsPrimitive.Trigger value="training" className="sl-tab">
+              <IconCalendar />
+              <span>Training</span>
+            </TabsPrimitive.Trigger>
+            <TabsPrimitive.Trigger value="loggen" className="sl-tab">
+              <IconBarbell />
+              <span>Loggen</span>
+            </TabsPrimitive.Trigger>
+            <TabsPrimitive.Trigger value="voeding" className="sl-tab">
+              <IconFork />
+              <span>Voeding</span>
+            </TabsPrimitive.Trigger>
+            <TabsPrimitive.Trigger value="progressie" className="sl-tab">
+              <IconChart />
+              <span>Progressie</span>
+            </TabsPrimitive.Trigger>
+            <TabsPrimitive.Trigger value="transformatie" className="sl-tab">
+              <IconCamera />
+              <span>Foto’s</span>
+            </TabsPrimitive.Trigger>
+          </TabsPrimitive.List>
+        </div>
+      </TabsPrimitive.Root>
 
-                <div className="nutrition-summary-row">
-                  <div>
-                    <p className="eyebrow">{nutritionDateLabel}</p>
-                    <h2>{Math.round(nutritionTotals.calories).toLocaleString("nl-BE")} <span>/ {targets.calories.toLocaleString("nl-BE")} kcal</span></h2>
-                  </div>
-                  <button type="button" className={`nutrition-balance ${caloriesRemaining < 0 ? "nutrition-balance-over" : ""}`} onClick={() => setTargetDialog(true)} aria-label="Voedingsdoelen aanpassen">
-                    <span>{caloriesRemaining < 0 ? "Over target" : "Nog beschikbaar"}</span>
-                    <strong>{Math.abs(caloriesRemaining).toLocaleString("nl-BE")} kcal</strong>
-                    <Pencil />
+      {restFloating && restTimer && (
+        <div className="sl-float-rest">
+          <RestPill
+            timer={restTimer}
+            onAdjust={adjustRest}
+            onReset={resetRestToPlan}
+            onSkip={skipRest}
+            onDismiss={() => setRestTimer(null)}
+            onOpenLog={() => changeTab("loggen")}
+          />
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------ Agenda */}
+      <Sheet open={agendaOpen} onOpenChange={setAgendaOpen} title="Agenda" subtitle="Planning en resultaten">
+        <div className="sl-weeknav">
+          <button type="button" className="sl-icon-btn" onClick={() => setWeekOffset((value) => value - 1)} aria-label="Vorige week">
+            <IconChevronLeft size={18} />
+          </button>
+          <div className="sl-weeknav-mid" aria-live="polite">
+            <b>{weekLabel}</b>
+            <span className="sl-num">{weekRangeLabel}</span>
+          </div>
+          <button type="button" className="sl-icon-btn" onClick={() => setWeekOffset((value) => value + 1)} aria-label="Volgende week">
+            <IconChevronRight size={18} />
+          </button>
+        </div>
+        <div className="sl-weeknav-tools">
+          {weekOffset !== 0 && (
+            <button type="button" className="sl-btn-outline" onClick={() => setWeekOffset(0)}>Naar deze week</button>
+          )}
+          <button type="button" className="sl-btn-outline" aria-expanded={monthOpen} onClick={() => setMonthOpen((value) => !value)}>
+            <IconCalendar size={16} />
+            {monthOpen ? "Week tonen" : "Hele maand"}
+          </button>
+        </div>
+        {monthOpen && (
+          <div className="sl-month" role="group" aria-label={`Maandoverzicht ${monthLabel}`}>
+            <p className="sl-month-label">{monthLabel}</p>
+            <div className="sl-month-grid">
+              {["ma", "di", "wo", "do", "vr", "za", "zo"].map((label) => (
+                <span key={label} aria-hidden="true">{label}</span>
+              ))}
+              {monthDays.map((calendarDate) => {
+                const iso = dateKey(calendarDate);
+                const inMonth = calendarDate.getMonth() === monthAnchor.getMonth();
+                const isDone = sessions.some((entry) => dateKey(new Date(entry.date)) === iso);
+                return (
+                  <button
+                    key={iso}
+                    type="button"
+                    className="sl-month-day sl-num"
+                    data-muted={!inMonth || undefined}
+                    data-today={iso === todayKey || undefined}
+                    aria-pressed={iso === selectedDate}
+                    aria-current={iso === todayKey ? "date" : undefined}
+                    aria-label={`${calendarDate.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long" })}${isDone ? ", sessie gelogd" : ""}`}
+                    onClick={() => {
+                      goToDate(iso);
+                      const diff = Math.round((startOfWeek(calendarDate).getTime() - startOfWeek().getTime()) / (7 * 24 * 60 * 60 * 1000));
+                      setWeekOffset(diff);
+                      setMonthOpen(false);
+                      setAgendaDay(iso);
+                    }}
+                  >
+                    {calendarDate.getDate()}
+                    {isDone && <i aria-hidden="true" />}
                   </button>
-                </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                <div className="nutrition-calorie-track" aria-label={`${Math.round(clamp((nutritionTotals.calories / targets.calories) * 100))}% van caloriedoel`}>
-                  <span style={{ width: `${clamp((nutritionTotals.calories / targets.calories) * 100)}%` }} />
-                </div>
+        <div className="sl-agenda-summary">
+          <span className="sl-num">
+            <b>{agendaDone} van {agendaPlanned}</b> trainingen gedaan {weekLabel.toLowerCase()}
+          </span>
+          <div className="sl-segments" aria-hidden="true">
+            {agendaWeek.map((entry) => (
+              <i
+                key={entry.key}
+                data-kind={entry.workout ? "done" : entry.isToday && !entry.isRest ? "today" : entry.isRest ? "rest" : undefined}
+              />
+            ))}
+          </div>
+        </div>
 
-                <div className="nutrition-macro-grid">
-                  <NutritionMacroCard label="Eiwit" value={nutritionTotals.protein} target={targets.protein} color="var(--sig-action)" />
-                  <NutritionMacroCard label="Carbs" value={nutritionTotals.carbs} target={targets.carbs} color="var(--sig-rest)" />
-                  <NutritionMacroCard label="Vet" value={nutritionTotals.fat} target={targets.fat} color="var(--sig-attention)" />
-                </div>
-              </article>
-
-              <form id="nutrition-entry-form" className="nutrition-add-card" onSubmit={(event) => { event.preventDefault(); addNutritionEntry(); }}>
-                <div className="nutrition-add-head">
-                  <span><Plus /></span>
-                  <div><p className="eyebrow">Nieuwe entry</p><h3>Voeding toevoegen</h3></div>
-                </div>
-
-                <div className="food-lookup">
-                  <label htmlFor="food-search">Belgisch of generiek product zoeken</label>
-                  <div className="food-search-row">
-                    <div><Search /><Input id="food-search" value={foodQuery} onChange={(event) => setFoodQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void searchFoodProducts(); } }} placeholder="Bijv. Boni skyr, banaan…" className="dark-input" /></div>
-                    <Button type="button" onClick={() => void searchFoodProducts()} disabled={foodSearchLoading || foodQuery.trim().length < 2} aria-label="Product zoeken">{foodSearchLoading ? <LoaderCircle className="animate-spin" /> : <Search />}<span>Zoek</span></Button>
-                  </div>
-
-                  {foodSearchError && <p className="food-search-error">{foodSearchError}</p>}
-
-                  {foodResults.length > 0 && (
-                    <div className="food-search-results" role="listbox" aria-label="Gevonden voedingsproducten">
-                      {foodResults.map((food) => (
-                        <button type="button" role="option" aria-selected="false" key={food.id} onClick={() => chooseFood(food)}>
-                          <span className="food-result-image">{food.imageUrl ? <img src={food.imageUrl} alt="" /> : <PackageSearch />}</span>
-                          <span className="food-result-copy"><strong>{food.name}</strong><small>{food.brand} · {food.sourceNote}</small><em>P {food.protein.toFixed(1)} · C {food.carbs.toFixed(1)} · V {food.fat.toFixed(1)} g</em></span>
-                          <span className="food-result-kcal"><strong>{Math.round(food.calories)}</strong><small>kcal</small></span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {selectedFood && (
-                    <div className="food-selection">
-                      <div><Check /><span><strong>{selectedFood.name}</strong><small>{selectedFood.source} · waarden blijven handmatig aanpasbaar</small></span></div>
-                      <label>Hoeveelheid<Input inputMode="decimal" value={foodAmount} onChange={(event) => changeFoodAmount(event.target.value)} className="dark-input" /><span>g</span></label>
-                    </div>
-                  )}
-                  <p className="food-source-note">Productdata via <a href="https://world.openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a>; controleer altijd het Belgische etiket.</p>
-                </div>
-
-                <label className="nutrition-form-label">Maaltijd
-                  <Select value={nutritionDraft.meal} onValueChange={(value) => setNutritionDraft((current) => ({ ...current, meal: value as MealType }))}>
-                    <SelectTrigger className="nutrition-select"><SelectValue /></SelectTrigger>
-                    <SelectContent className="border-white/10 bg-[#111713] text-[#edf4ef]">
-                      {MEAL_OPTIONS.map((meal) => <SelectItem value={meal} key={meal}>{meal}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                <label className="nutrition-form-label">Product of maaltijd
-                  <Input value={nutritionDraft.name} onChange={(event) => setNutritionDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Bijv. 40 g Rice Krispies" className="dark-input" />
-                </label>
-
-                <div className="nutrition-number-grid">
-                  <label>kcal<Input inputMode="decimal" value={nutritionDraft.calories} onChange={(event) => setNutritionDraft((current) => ({ ...current, calories: event.target.value }))} placeholder="0" className="dark-input" /></label>
-                  <label>Eiwit<Input inputMode="decimal" value={nutritionDraft.protein} onChange={(event) => setNutritionDraft((current) => ({ ...current, protein: event.target.value }))} placeholder="g" className="dark-input" /></label>
-                  <label>Carbs<Input inputMode="decimal" value={nutritionDraft.carbs} onChange={(event) => setNutritionDraft((current) => ({ ...current, carbs: event.target.value }))} placeholder="g" className="dark-input" /></label>
-                  <label>Vet<Input inputMode="decimal" value={nutritionDraft.fat} onChange={(event) => setNutritionDraft((current) => ({ ...current, fat: event.target.value }))} placeholder="g" className="dark-input" /></label>
-                </div>
-                <p className="nutrition-calc-note">Laat kcal leeg en ik bereken ze uit eiwit, carbs en vet.</p>
-                <Button type="submit" className="nutrition-add-button"><Plus /> Toevoegen aan {nutritionDate === todayKey ? "vandaag" : nutritionDateLabel}</Button>
-              </form>
-
-              <section className="nutrition-ideas-panel" aria-labelledby="meal-ideas-title">
-                <div className="meal-ideas-head">
-                  <div className="meal-ideas-title">
-                    <span><Utensils /></span>
-                    <div><p className="eyebrow">Wat kan ik eten?</p><h3 id="meal-ideas-title">Eetideeën voor jouw doel</h3></div>
-                  </div>
-                  <div className="meal-idea-tabs" role="tablist" aria-label="Maaltijdmoment kiezen">
-                    {MEAL_IDEA_TYPES.map((meal) => (
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={mealIdeaType === meal}
-                        className={mealIdeaType === meal ? "active" : ""}
-                        onClick={() => setMealIdeaType(meal)}
-                        key={meal}
-                      >
-                        {meal === "Avondeten" ? "Diner" : meal}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <p className="meal-ideas-context">Afgestemd op {targets.calories.toLocaleString("nl-BE")} kcal en {targets.protein} g eiwit. Macro’s zijn praktische schattingen.</p>
-                <div className="meal-idea-grid" role="tabpanel" aria-label={`${mealIdeaType} ideeën`}>
-                  {MEAL_IDEAS[mealIdeaType].map((idea, index) => (
-                    <article className="meal-idea-card" key={idea.id}>
-                      <div className="meal-idea-index"><span>{String(index + 1).padStart(2, "0")}</span><strong>{Math.round(idea.calories)} kcal</strong></div>
-                      <h4>{idea.name}</h4>
-                      <p>{idea.description}</p>
-                      <div className="meal-idea-macros"><span>P {idea.protein}</span><span>C {idea.carbs}</span><span>V {idea.fat}</span></div>
-                      <button type="button" onClick={() => chooseMealIdea(idea)} aria-label={`${idea.name} vooraf invullen`}><span>Voorinvullen</span><Plus /></button>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </section>
-
-            <section className="nutrition-diary-panel">
-              <div className="nutrition-diary-head">
-                <div><p className="eyebrow">Dagboek</p><h3>{selectedNutritionEntries.length ? `${selectedNutritionEntries.length} ${selectedNutritionEntries.length === 1 ? "item" : "items"} gelogd` : "Nog niets gelogd"}</h3></div>
-                <span>{Math.round(nutritionTotals.protein)} g eiwit</span>
-              </div>
-
-              {selectedNutritionEntries.length === 0 ? (
-                <EmptyState title="Je voedingsdag is nog leeg" body="Voeg je eerste maaltijd of snack toe. De totalen en je resterende dagbudget worden automatisch bijgewerkt." />
-              ) : (
-                <div className="nutrition-meal-groups">
-                  {MEAL_OPTIONS.map((meal) => {
-                    const entries = selectedNutritionEntries.filter((entry) => entry.meal === meal);
-                    if (entries.length === 0) return null;
-                    const mealCalories = entries.reduce((sum, entry) => sum + entry.calories, 0);
-                    return (
-                      <section className="nutrition-meal-group" key={meal}>
-                        <div className="nutrition-meal-head"><h4>{meal}</h4><span>{Math.round(mealCalories)} kcal</span></div>
-                        <div>
-                          {entries.map((entry) => (
-                            <article className="nutrition-entry-row" key={entry.id}>
-                              <span className="nutrition-entry-mark">{entry.name.slice(0, 1).toUpperCase()}</span>
-                              <div className="nutrition-entry-copy"><strong>{entry.name}</strong><span>P {Math.round(entry.protein)} · C {Math.round(entry.carbs)} · V {Math.round(entry.fat)} g</span></div>
-                              <strong className="nutrition-entry-kcal">{Math.round(entry.calories)} <span>kcal</span></strong>
-                              <Button variant="ghost" size="icon" className="nutrition-entry-delete entry-delete" onClick={() => setDeleteTarget({ kind: "nutrition", id: entry.id, label: `${entry.name} · ${Math.round(entry.calories)} kcal` })} aria-label={`${entry.name} verwijderen`} title="Entry verwijderen"><Trash2 /></Button>
-                            </article>
-                          ))}
-                        </div>
-                      </section>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          </TabsContent>
-
-          <TabsContent value="progressie" className="space-y-5">
-            {/* Three numbers, not three cards. Stacked icon-and-number cards
-                cost ~690px of the first screen on a phone and pushed the thing
-                this tab exists for — entering a measurement — below the fold. */}
-            <section className="stat-strip" aria-label="Samenvatting">
-              <div>
-                <span>Laatste gewicht</span>
-                <strong className="tabular">{orderedMetrics.length ? `${orderedMetrics[orderedMetrics.length - 1].weight.toFixed(1)} kg` : "—"}</strong>
-              </div>
-              <div>
-                <span>Weektrend</span>
-                <strong className="tabular">{weightTrend === null ? "—" : `${weightTrend >= 0 ? "+" : ""}${weightTrend.toFixed(2)} kg`}</strong>
-              </div>
-              <div>
-                <span>Deze week</span>
-                <strong className="tabular">{weekSessions}/5 · {weekRecoveryDays} rust</strong>
-              </div>
-            </section>
-
-            <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
-              <div className="panel-card">
-                <div className="mb-5 flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-[#b9f45b]/10 text-[#b9f45b]"><Plus className="size-4" /></div><div><p className="eyebrow">Ochtend · nuchter</p><h3 className="font-semibold">Nieuwe meting</h3></div></div>
-                <div className="space-y-4">
-                  <label className="field-label">Datum<Input type="date" value={metricDraft.date} onChange={(event) => setMetricDraft((current) => ({ ...current, date: event.target.value }))} className="dark-input mt-1.5" /></label>
-                  <div className="grid grid-cols-2 gap-3"><label className="field-label">Gewicht (kg)<Input inputMode="decimal" value={metricDraft.weight} onChange={(event) => setMetricDraft((current) => ({ ...current, weight: event.target.value }))} placeholder="78,0" className="dark-input mt-1.5" /></label><label className="field-label">Taille (cm)<Input inputMode="decimal" value={metricDraft.waist} onChange={(event) => setMetricDraft((current) => ({ ...current, waist: event.target.value }))} placeholder="Optioneel" className="dark-input mt-1.5" /></label></div>
-                  <Button onClick={addMetric} className="h-11 w-full rounded-xl bg-[#b9f45b] font-semibold text-[#0a0d0b] hover:bg-[#c7fa74]"><Save /> Meting opslaan</Button>
-                </div>
-              </div>
-
-              <div className="surface-panel overflow-hidden">
-                <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 sm:px-6"><div><p className="eyebrow">Laatste 30</p><h3 className="mt-1 font-semibold">Lichaamstrend</h3></div><History className="size-5 text-[#68736c]" /></div>
-                {orderedMetrics.length === 0 ? <EmptyState title="Nog geen metingen" body="Start met één ochtendgewicht. Na twee datapunten verschijnt je weektrend en coachadvies." /> : (
-                  <div className="divide-y divide-white/[.065]">
-                    {[...orderedMetrics].reverse().map((metric, index, list) => {
-                      const previous = list[index + 1];
-                      const delta = previous ? metric.weight - previous.weight : null;
-                      const dateLabel = new Date(`${metric.date}T12:00:00`).toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
-                      return <div key={metric.id} className="measurement-row"><span className="text-sm text-[#aab5ad]">{dateLabel}</span><div className="text-right"><strong className="tabular-nums">{metric.weight.toFixed(1)} kg</strong>{metric.waist && <p className="text-xs text-[#87938a]">{metric.waist.toFixed(1)} cm taille</p>}</div><span className={`w-14 text-right text-xs tabular-nums ${delta === null ? "text-[#87938a]" : delta <= 0 ? "text-[#b9f45b]" : "text-[#f4c65b]"}`}>{delta === null ? "start" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`}</span><Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ kind: "metric", id: metric.id, label: `${dateLabel} · ${metric.weight.toFixed(1)} kg` })} className="history-delete entry-delete" aria-label={`Meting van ${dateLabel} verwijderen`} title="Meting verwijderen"><Trash2 /></Button></div>;
-                    })}
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="surface-panel overflow-hidden">
-              <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 sm:px-6"><div><p className="eyebrow">Training & herstel</p><h3 className="mt-1 font-semibold">Volledige historiek</h3></div><span className="rounded-full bg-white/5 px-3 py-1 text-xs text-[#87938a]">{sessions.length} sessies</span></div>
-              {sessions.length === 0 ? <EmptyState title="Nog geen sessies" body="Sla je eerste workout of rest day op. Oefeningen, sets en herstelcheck-ins verschijnen daarna hier." /> : (
-                <div className="divide-y divide-white/[.065]">
-                  {sessions.map((session) => {
-                    const isRecoverySession = session.sessionType === "recovery" || session.dayId === "rest";
-                    const loggedSets = session.results.reduce(
-                      (total, row) => total + resultSets(row).filter((set) => set.weight || set.reps || set.pausedReps).length,
-                      0,
-                    );
-                    const recoveryActivities = session.recovery?.activities ?? session.results.map((row) => ({ id: row.exerciseId, name: row.name, dose: row.recoveryDetail ?? "" }));
-                    const sessionDate = new Date(session.date);
-                    const dateLabel = sessionDate.toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
-                    return <Collapsible key={session.id} className={`history-session ${isRecoverySession ? "history-recovery-session" : ""}`}>
-                      <div className="history-summary">
-                        <CollapsibleTrigger className="history-open">
-                          <div><strong>{isRecoverySession && <Moon />} {session.dayLabel}</strong><p>{dateLabel} · {sessionDate.toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" })} · {isRecoverySession ? `${recoveryActivities.length} herstelblokken` : `${loggedSets} werksets`}</p></div>
-                          <div className="history-summary-meta"><span>{isRecoverySession ? "Rust" : `${session.completion}%`}</span><ChevronDown /></div>
-                        </CollapsibleTrigger>
-                        <div className="history-actions">
-                          {!isRecoverySession && <Button variant="ghost" onClick={() => openSessionEditor(session)} className="history-edit" aria-label={`${session.dayLabel}-sessie bewerken`} title="Workout bewerken"><Pencil /><span>Bewerk</span></Button>}
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ kind: "session", id: session.id, label: `${session.dayLabel} · ${dateLabel}` })} className="history-delete entry-delete" aria-label={`${session.dayLabel}-sessie verwijderen`} title="Sessie verwijderen"><Trash2 /></Button>
-                        </div>
-                      </div>
-                      <CollapsibleContent className="history-details">
-                        {isRecoverySession ? <div className="recovery-history-details">
-                          <div className="recovery-history-pulse">
-                            <span><small>Slaap</small><strong>{recoveryLevelLabel("sleep", session.recovery?.sleep ?? "")}</strong></span>
-                            <span><small>Stijfheid</small><strong>{recoveryLevelLabel("soreness", session.recovery?.soreness ?? "")}</strong></span>
-                            <span><small>Energie</small><strong>{recoveryLevelLabel("energy", session.recovery?.energy ?? "")}</strong></span>
-                          </div>
-                          {recoveryActivities.length ? <div className="recovery-history-activities">{recoveryActivities.map((activity) => <div key={`${session.id}-${activity.id}`}><Check /><span><strong>{activity.name}</strong><small>{activity.dose}</small></span></div>)}</div> : <div className="recovery-history-rest"><Moon /><span><strong>Volledige rust</strong><small>Geen herstelblokken nodig of gelogd.</small></span></div>}
-                          {session.recovery?.note && <div className="recovery-history-note"><span>Notitie</span><p>{session.recovery.note}</p></div>}
-                        </div> : session.results.map((row) => {
-                          const sets = resultSets(row).filter((set) => set.weight || set.reps || set.pausedReps);
-                          return <div className="history-exercise" key={`${session.id}-${row.exerciseId}`}>
-                            <div className="history-exercise-title"><strong>{row.name}</strong><span>{sets.length ? `${sets.length} sets` : "Geen cijfers gelogd"}</span></div>
-                            {sets.length > 0 && <div className="history-set-list">{sets.map((set, index) => <div key={`${row.exerciseId}-${index}`}><span>Set {index + 1}</span><strong>{set.weight ? `${set.weight} kg` : "—"}</strong><strong>{setSummary(set)}</strong></div>)}</div>}
-                          </div>;
-                        })}
-                      </CollapsibleContent>
-                    </Collapsible>;
-                  })}
-                </div>
-              )}
-            </section>
-          </TabsContent>
-
-          <TabsContent value="transformatie" className="space-y-5">
-            {/* This was a landing page inside a tab: a kicker, a 40px marketing
-                headline, a three-line explainer and a play button that did
-                nothing until two photos existed — roughly 740px before the
-                thing the tab is for. The instruction that actually matters
-                survives as one line. */}
-            <section className="transformation-head">
-              <div>
-                <h2>Foto&rsquo;s</h2>
-                <p>Zelfde pose, licht en afstand. De tijdlijn zet je foto&rsquo;s en gewicht naast elkaar.</p>
-              </div>
-              {photos.length > 1 && (
-                <Button
-                  onClick={() => { setPhotoIndex(0); setPhotoPlaying(true); setPhotoViewerOpen(true); }}
-                  className="transformation-play"
+        <div className="sl-section-head">
+          <h3 className="sl-section-title">{weekLabel}</h3>
+          <span className="sl-section-meta sl-num">{weekRangeLabel}</span>
+        </div>
+        <div className="sl-list" data-raised>
+          {agendaWeek.map((entry) => {
+            const expanded = agendaDay === entry.key && entry.key === selectedDate;
+            const setCount = entry.template.exercises.reduce((total, exercise) => total + setsPlannedFor(exercise), 0);
+            const dateLabel = entry.date.toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
+            return (
+              <Fragment key={entry.key}>
+                <button
+                  type="button"
+                  className="sl-row"
+                  data-kind={entry.isRest && !entry.workout ? "rest" : undefined}
+                  data-today={(entry.isToday && !entry.workout) || undefined}
+                  aria-expanded={expanded}
+                  aria-controls={expanded ? `sl-day-${entry.key}` : undefined}
+                  onClick={() => {
+                    if (entry.key !== selectedDate) goToDate(entry.key);
+                    setAgendaDay(expanded ? null : entry.key);
+                  }}
                 >
-                  <Play /> Afspelen
-                </Button>
-              )}
-            </section>
-
-            {photos.length > 0 && (
-              <section className="stat-strip" aria-label="Samenvatting">
-                <div><span>Check-ins</span><strong className="tabular">{photos.length}</strong></div>
-                <div><span>Dagen gevolgd</span><strong className="tabular">{photoSpanDays}</strong></div>
-                <div>
-                  <span>Kg verschil</span>
-                  <strong className="tabular">{photos.length > 1 ? `${photoWeightDelta > 0 ? "+" : ""}${photoWeightDelta.toFixed(1)}` : "—"}</strong>
-                </div>
-              </section>
-            )}
-
-            <section className="transformation-workspace">
-              <div className="photo-upload-card">
-                <div className="photo-section-head">
-                  <div className="photo-head-icon"><Upload /></div>
-                  <div><p className="eyebrow">Vandaag vastleggen</p><h3>Nieuwe check-in</h3></div>
-                </div>
-
-                <label htmlFor="progress-photo" className={`photo-dropzone ${photoPreview ? "photo-dropzone-filled" : ""}`}>
-                  {photoPreview ? (
-                    <><img src={photoPreview} alt="Voorbeeld van je gekozen progressiefoto" /><span><Camera /> Andere foto kiezen</span></>
+                  <span className="sl-row-date sl-num">{weekdayShort(entry.date)}<b>{entry.date.getDate()}</b></span>
+                  {entry.workout ? (
+                    <span className="sl-row-main">
+                      <span className="sl-row-title">Voltooid</span>
+                      <span className="sl-row-sub sl-num">{entry.workout.dayLabel} · {loggedSetsIn(entry.workout)} sets</span>
+                    </span>
+                  ) : entry.isRest ? (
+                    <span className="sl-row-rest">{entry.recovery ? "Rust · herstel gelogd" : "Rust"}</span>
                   ) : (
-                    <div><Camera /><strong>Tik om een foto te kiezen</strong><small>Camera of fotobibliotheek · max. 10 MB</small></div>
+                    <span className="sl-row-main">
+                      <span className="sl-row-title">{entry.template.short}</span>
+                      <span className="sl-row-sub sl-num">{entry.template.focus} · {setCount} sets</span>
+                    </span>
                   )}
-                </label>
-                <input
-                  id="progress-photo"
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(event) => choosePhotoFile(event.target.files?.[0] ?? null)}
-                />
-
-                <div className="photo-form-grid">
-                  <label className="field-label">Datum<Input type="date" value={photoDraft.capturedOn} max={dateKey()} onChange={(event) => setPhotoDraft((current) => ({ ...current, capturedOn: event.target.value }))} className="dark-input mt-1.5" /></label>
-                  <label className="field-label">Gewicht (kg)<Input inputMode="decimal" value={photoDraft.weight} onChange={(event) => setPhotoDraft((current) => ({ ...current, weight: event.target.value }))} placeholder="78,0" className="dark-input mt-1.5" /></label>
-                </div>
-                {photoError && <p className="photo-error">{photoError}</p>}
-                <Button onClick={() => void uploadProgressPhoto()} disabled={photoUploadLoading} className="photo-save-button">
-                  {photoUploadLoading ? <LoaderCircle className="animate-spin" /> : <Save />}
-                  {photoUploadLoading ? "Foto voorbereiden…" : "Check-in opslaan"}
-                </Button>
-                <p className="photo-storage-note">Foto’s worden verkleind voor snelle weergave en privé bij je account bewaard.</p>
-              </div>
-
-              <div className="photo-compare-card">
-                <div className="photo-card-title">
-                  <div><p className="eyebrow">Overview</p><h3>Eerste versus nieuwste</h3></div>
-                  {photos.length > 1 && <span>{photoSpanDays} dagen ertussen</span>}
-                </div>
-                {photosLoading ? (
-                  <div className="photo-loading"><LoaderCircle className="animate-spin" /> Tijdlijn laden…</div>
-                ) : photos.length === 0 ? (
-                  <EmptyState title="Je eerste foto wordt het startpunt" body="Voeg vandaag één consistente check-in toe. Vanaf twee foto's verschijnt de directe vergelijking en afspeelmodus." />
-                ) : (
-                  <div className={`photo-comparison ${photos.length === 1 ? "photo-comparison-single" : ""}`}>
-                    <button type="button" onClick={() => openPhoto(photos[0].id)}>
-                      <img src={photos[0].imageUrl} alt={`Startfoto van ${photoDateLabel(photos[0].capturedOn)}`} />
-                      <span><small>Start</small><strong>{photoDateLabel(photos[0].capturedOn, { day: "numeric", month: "short" })}</strong><em>{photos[0].weight.toFixed(1)} kg</em></span>
-                    </button>
-                    {photos.length > 1 && <button type="button" onClick={() => openPhoto(photos[photos.length - 1].id)}>
-                      <img src={photos[photos.length - 1].imageUrl} alt={`Nieuwste foto van ${photoDateLabel(photos[photos.length - 1].capturedOn)}`} />
-                      <span><small>Nu</small><strong>{photoDateLabel(photos[photos.length - 1].capturedOn, { day: "numeric", month: "short" })}</strong><em>{photos[photos.length - 1].weight.toFixed(1)} kg</em></span>
-                    </button>}
+                  <span className="sl-row-end">
+                    {entry.workout || entry.recovery ? (
+                      <IconDone />
+                    ) : entry.isRest ? (
+                      <span className="sl-rest-ink"><IconMoon /></span>
+                    ) : entry.isToday ? (
+                      <span className="sl-badge-small">Vandaag</span>
+                    ) : null}
+                    <IconChevronDown className={expanded ? "sl-chev sl-chev-open" : "sl-chev"} />
+                  </span>
+                </button>
+                {expanded && (
+                  <div id={`sl-day-${entry.key}`} className="sl-row-panel">
+                    {entry.workout && (
+                      <div className="sl-result-lines">
+                        <p className="sl-panel-label">Resultaten</p>
+                        {entry.workout.results.map((row) => {
+                          const sets = resultSets(row).filter(isLoggedSet);
+                          return sets.length ? (
+                            <div key={row.exerciseId} className="sl-result-line sl-num">
+                              <span>{row.name}</span>
+                              <span>{summarizeSets(sets)}</span>
+                            </div>
+                          ) : null;
+                        })}
+                        <div className="sl-btn-row">
+                          <button type="button" className="sl-btn-outline" onClick={() => entry.workout && openSessionEditor(entry.workout)}>
+                            <Pencil size={16} aria-hidden="true" />
+                            Bewerken
+                          </button>
+                          <button
+                            type="button"
+                            className="sl-btn-outline"
+                            data-tone="danger"
+                            onClick={() => entry.workout && setDeleteTarget({ kind: "session", id: entry.workout.id, label: `${entry.workout.dayLabel} · ${dateLabel}` })}
+                          >
+                            <Trash2 size={16} aria-hidden="true" />
+                            Verwijderen
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {entry.recovery && (
+                      <div className="sl-result-lines">
+                        <p className="sl-panel-label">Herstel</p>
+                        <div className="sl-result-line"><span>Slaap</span><span>{recoveryLevelLabel("sleep", entry.recovery.recovery?.sleep ?? "")}</span></div>
+                        <div className="sl-result-line"><span>Spierstijfheid</span><span>{recoveryLevelLabel("soreness", entry.recovery.recovery?.soreness ?? "")}</span></div>
+                        <div className="sl-result-line"><span>Energie</span><span>{recoveryLevelLabel("energy", entry.recovery.recovery?.energy ?? "")}</span></div>
+                        {(entry.recovery.recovery?.activities ?? []).map((activity) => (
+                          <div key={activity.id} className="sl-result-line"><span>{activity.name}</span><span>{activity.dose}</span></div>
+                        ))}
+                        {entry.recovery.recovery?.note && <p className="sl-panel-note">{entry.recovery.recovery.note}</p>}
+                        <button
+                          type="button"
+                          className="sl-btn-outline"
+                          data-tone="danger"
+                          onClick={() => entry.recovery && setDeleteTarget({ kind: "session", id: entry.recovery.id, label: `Rest day · ${dateLabel}` })}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                          Verwijderen
+                        </button>
+                      </div>
+                    )}
+                    {!entry.workout && (
+                      <>
+                        <div>
+                          <p className="sl-panel-label">Training voor deze dag</p>
+                          <div className="sl-chips" role="group" aria-label={`Training kiezen voor ${selectedDateLabel}`} style={{ marginTop: 8 }}>
+                            {workoutChoices.map((choice) => {
+                              const template = choice === "rest"
+                                ? REST_DAY
+                                : activePlan.find((item) => item.id === planIdForMode(choice, planMode, sciencePlanId)) ?? REST_DAY;
+                              return (
+                                <button
+                                  key={choice}
+                                  type="button"
+                                  className="sl-chip"
+                                  data-rest={choice === "rest" || undefined}
+                                  aria-pressed={scheduleForDate(selectedDate) === choice}
+                                  onClick={() => chooseWorkoutForDate(choice)}
+                                >
+                                  <span className="sl-chip-tile"><CategoryGlyph kind={categoryForTemplate(template)} /></span>
+                                  <span>{workoutLabelForSlot(choice)}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <button type="button" className="sl-btn-outline" onClick={() => setMoveSourceDate(selectedDate)}>
+                          <ArrowRightLeft size={16} aria-hidden="true" />
+                          Verplaatsen naar een andere dag
+                        </button>
+                        {!entry.isRest && entry.isToday && (
+                          <div className="sl-daycard-actions">
+                            <button type="button" className="sl-btn-start" onClick={startTraining}>
+                              <IconPlay />
+                              {draftTrackedSetCount > 0 ? "Hervat training" : "Start training"}
+                            </button>
+                            <button
+                              type="button"
+                              className="sl-btn-quiet"
+                              onClick={() => {
+                                setAgendaOpen(false);
+                                setPreviewOpen(true);
+                              }}
+                            >
+                              Oefeningen bekijken
+                              <IconChevronRight className="sl-chev" />
+                            </button>
+                          </div>
+                        )}
+                        {!entry.isRest && entry.key < todayKey && (
+                          <div className="sl-btn-row">
+                            <button type="button" className="sl-btn-outline" onClick={logAfterwards}>Achteraf loggen</button>
+                            <button
+                              type="button"
+                              className="sl-btn-outline"
+                              onClick={() => {
+                                setAgendaOpen(false);
+                                setPreviewOpen(true);
+                              }}
+                            >
+                              Oefeningen
+                            </button>
+                          </div>
+                        )}
+                        {!entry.isRest && entry.key > todayKey && (
+                          <button
+                            type="button"
+                            className="sl-btn-outline"
+                            onClick={() => {
+                              setAgendaOpen(false);
+                              setPreviewOpen(true);
+                            }}
+                          >
+                            Oefeningen bekijken
+                          </button>
+                        )}
+                        {entry.isRest && !entry.recovery && entry.key <= todayKey && (
+                          <button type="button" className="sl-btn-outline" data-tone="rest" onClick={logAfterwards}>
+                            Herstel loggen
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <p className="sl-panel-note">Historiek blijft op de werkelijk opgeslagen dag staan.</p>
                   </div>
                 )}
-                <div className="consistency-note">
-                  <Target />
-                  <p><strong>Maak de vergelijking betrouwbaar</strong><span>’s morgens nuchter, na toilet, zelfde plek, afstand, licht en ontspannen pose. Geen pump.</span></p>
-                </div>
-              </div>
-            </section>
+              </Fragment>
+            );
+          })}
+        </div>
 
-            <section className="photo-timeline-panel">
-              <div className="photo-timeline-head">
-                <div><p className="eyebrow">Chronologische tijdlijn</p><h3>Alle check-ins</h3></div>
-                <div className="photo-timeline-actions">
-                  <span>{photos.length} foto’s</span>
-                  <Button variant="ghost" onClick={() => { setPhotoIndex(0); setPhotoPlaying(true); setPhotoViewerOpen(true); }} disabled={photos.length < 2}><Play /> Afspelen</Button>
-                </div>
-              </div>
-              {photosLoading ? (
-                <div className="photo-loading"><LoaderCircle className="animate-spin" /> Foto’s ophalen…</div>
-              ) : photos.length === 0 ? (
-                <EmptyState title="Nog geen fototijdlijn" body="Je opgeslagen check-ins verschijnen hier van nieuw naar oud. In de afspeelmodus lopen ze juist chronologisch vooruit." />
-              ) : (
-                <div className="photo-gallery">
-                  {[...photos].reverse().map((photo) => (
-                    <article key={photo.id} className="photo-gallery-card">
-                      <button type="button" className="photo-gallery-open" onClick={() => openPhoto(photo.id)}>
-                        <img loading="lazy" src={photo.imageUrl} alt={`Progressiefoto van ${photoDateLabel(photo.capturedOn)}`} />
-                        <span className="photo-gallery-hover"><ChevronRight /></span>
-                      </button>
-                      <div className="photo-gallery-meta">
-                        <div><strong>{photoDateLabel(photo.capturedOn, { day: "numeric", month: "short", year: "2-digit" })}</strong><span>{photo.weight.toFixed(1)} kg</span></div>
-                        <Button variant="ghost" size="icon" className="entry-delete" onClick={() => setDeleteTarget({ kind: "photo", id: photo.id, label: `Foto van ${photoDateLabel(photo.capturedOn)} · ${photo.weight.toFixed(1)} kg` })} aria-label={`Foto van ${photoDateLabel(photo.capturedOn)} verwijderen`} title="Foto en check-in verwijderen"><Trash2 /></Button>
-                      </div>
-                    </article>
+        {previousWeekSessions.length > 0 && (
+          <>
+            <div className="sl-section-head">
+              <h3 className="sl-section-title">{weekOffset === 0 ? "Vorige week" : "Week ervoor"}</h3>
+              <span className="sl-section-meta sl-num">{previousWeekRange}</span>
+            </div>
+            <div className="sl-list" data-raised>
+              {previousWeekSessions.map((session) => {
+                const best = bestOfSession(session);
+                const date = new Date(session.date);
+                return (
+                  <div key={session.id} className="sl-row">
+                    <span className="sl-row-date sl-num">{weekdayShort(date)}<b>{date.getDate()}</b></span>
+                    <span className="sl-row-main">
+                      <span className="sl-row-title">{session.dayLabel}</span>
+                      <span className="sl-row-sub sl-num">
+                        {best ? `Beste set ${best.name} ${formatKg(best.weight)} kg × ${best.reps}` : `${loggedSetsIn(session)} sets`}
+                      </span>
+                    </span>
+                    <span className="sl-row-end"><IconDone /></span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <Collapsible className="sl-disclosure">
+          <CollapsibleTrigger className="sl-disclosure-trigger">
+            <span>
+              Schema
+              <small>{planMode === "personal" ? "Mijn plan · PPL + Upper/Lower op maat" : `${activeSciencePlan.label} · ${activeSciencePlan.daysLabel}`}</small>
+            </span>
+            <IconChevronDown />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="sl-disclosure-body">
+            <div className="sl-segmented" role="group" aria-label="Trainingsplan kiezen">
+              <button type="button" aria-pressed={planMode === "personal"} onClick={() => changePlanMode("personal")}>Mijn plan</button>
+              <button type="button" aria-pressed={planMode === "science"} onClick={() => changePlanMode("science")}>Science-based</button>
+            </div>
+            {planMode === "science" && (
+              <>
+                <div className="sl-list" data-raised>
+                  {SCIENCE_PLAN_ORDER.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="sl-activity"
+                      aria-pressed={sciencePlanId === id}
+                      onClick={() => changeSciencePlan(id)}
+                    >
+                      <span>
+                        <small>{SCIENCE_PLANS[id].daysLabel}</small>
+                        <b>{SCIENCE_PLANS[id].label}</b>
+                        <p>{SCIENCE_PLANS[id].summary}</p>
+                      </span>
+                      <span className="sl-setrow-ring" aria-hidden="true">{sciencePlanId === id ? <IconCheck /> : null}</span>
+                    </button>
                   ))}
                 </div>
+                <div>
+                  <strong>Waarom {activeSciencePlan.label}?</strong>
+                  <p>{activeSciencePlan.comparison}</p>
+                </div>
+                <div>
+                  <strong>Verdeling</strong>
+                  <p>{activeSciencePlan.frequency}. {activeSciencePlan.distribution}</p>
+                </div>
+                <div>
+                  <strong>Volume</strong>
+                  <p>Ongeveer 9–14 directe sets per grote spiergroep; onder de zone waar rendement sterk begint af te vlakken.</p>
+                </div>
+                <div>
+                  <strong>Inspanning</strong>
+                  <p>Praktisch uitgangspunt: compounds RIR 1–2. Falentraining is niet verplicht; isolatie mag op de laatste set dichterbij.</p>
+                </div>
+                <div>
+                  <strong>Uitvoering</strong>
+                  <p>Prioriteitsoefeningen eerst, volledige pijnvrije ROM en voldoende rust om reps en techniek te behouden.</p>
+                </div>
+                <div>
+                  <strong>Jouw persoonlijke plan</strong>
+                  <p>Zware flat bench op Push en een lichtere paused bench op Upper. De rest blijft gericht op jouw side delts, latbreedte en bovenborst.</p>
+                </div>
+                <div className="sl-sources">
+                  {SCIENCE_SOURCES.map((source) => (
+                    <a key={source.href} href={source.href} target="_blank" rel="noreferrer">
+                      {source.label}
+                      <ExternalLink size={14} aria-hidden="true" />
+                    </a>
+                  ))}
+                </div>
+                <p>Origineel referentieprogramma op basis van publieke literatuur en principes; geen kopie van of samenwerking met Jeff Nippard.</p>
+              </>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        <Collapsible className="sl-disclosure">
+          <CollapsibleTrigger className="sl-disclosure-trigger">
+            <span>
+              Historiek
+              <small className="sl-num">
+                {sessions.length} {sessions.length === 1 ? "sessie" : "sessies"} · bekijken, bewerken en verwijderen
+              </small>
+            </span>
+            <IconChevronDown />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {sessions.length === 0 ? (
+              <p className="sl-empty">
+                <strong>Nog geen sessies</strong>
+                Sla je eerste workout of rustdag op; oefeningen, sets en check-ins verschijnen daarna hier.
+              </p>
+            ) : (
+              <div className="sl-history">
+                {orderedSessions.map((session) => {
+                  const isRecoverySession = session.sessionType === "recovery" || session.dayId === "rest";
+                  const loggedSets = loggedSetsIn(session);
+                  const recoveryActivities = session.recovery?.activities
+                    ?? session.results.map((row) => ({ id: row.exerciseId, name: row.name, dose: row.recoveryDetail ?? "" }));
+                  const sessionDate = new Date(session.date);
+                  const dateLabel = sessionDate.toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
+                  return (
+                    <Collapsible key={session.id}>
+                      <div className="sl-history-row">
+                        <CollapsibleTrigger className="sl-history-open">
+                          <b>{session.dayLabel}</b>
+                          <span className="sl-num">
+                            {dateLabel} · {isRecoverySession ? `${recoveryActivities.length} herstelblokken` : `${loggedSets} werksets · ${session.completion}%`}
+                          </span>
+                        </CollapsibleTrigger>
+                        <span className="sl-history-actions">
+                          {!isRecoverySession && (
+                            <button
+                              type="button"
+                              className="sl-icon-btn"
+                              onClick={() => openSessionEditor(session)}
+                              aria-label={`${session.dayLabel} van ${dateLabel} bewerken`}
+                            >
+                              <Pencil size={18} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="sl-icon-btn"
+                            onClick={() => setDeleteTarget({ kind: "session", id: session.id, label: `${session.dayLabel} · ${dateLabel}` })}
+                            aria-label={`${session.dayLabel} van ${dateLabel} verwijderen`}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </span>
+                      </div>
+                      <CollapsibleContent className="sl-history-detail">
+                        {isRecoverySession ? (
+                          <>
+                            <div className="sl-result-line"><span>Slaap</span><span>{recoveryLevelLabel("sleep", session.recovery?.sleep ?? "")}</span></div>
+                            <div className="sl-result-line"><span>Stijfheid</span><span>{recoveryLevelLabel("soreness", session.recovery?.soreness ?? "")}</span></div>
+                            <div className="sl-result-line"><span>Energie</span><span>{recoveryLevelLabel("energy", session.recovery?.energy ?? "")}</span></div>
+                            {recoveryActivities.length ? (
+                              recoveryActivities.map((activity) => (
+                                <div key={`${session.id}-${activity.id}`} className="sl-result-line"><span>{activity.name}</span><span>{activity.dose}</span></div>
+                              ))
+                            ) : (
+                              <p className="sl-panel-note">Volledige rust; geen herstelblokken nodig of gelogd.</p>
+                            )}
+                            {session.recovery?.note && <p className="sl-panel-note">{session.recovery.note}</p>}
+                          </>
+                        ) : (
+                          session.results.map((row) => {
+                            const sets = resultSets(row).filter((set) => set.weight || set.reps || set.pausedReps);
+                            return (
+                              <div key={`${session.id}-${row.exerciseId}`} className="sl-result-lines">
+                                <div className="sl-result-line"><span><b>{row.name}</b></span><span>{sets.length ? `${sets.length} sets` : "Geen cijfers gelogd"}</span></div>
+                                {sets.map((set, index) => (
+                                  <div key={`${row.exerciseId}-${index}`} className="sl-result-line sl-num">
+                                    <span>Set {index + 1}</span>
+                                    <span>{set.weight ? `${set.weight} kg` : "—"} · {setSummary(set)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      </Sheet>
+
+      {/* ----------------------------------------------------------- Preview */}
+      <Sheet
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        title={isRestDay ? "Rustdag" : `${day.short} · ${day.focus.charAt(0).toLowerCase()}${day.focus.slice(1)}`}
+        subtitle="Voorbeeld · start nog niet"
+      >
+        {isRestDay ? (
+          <p className="sl-help">Geen training gepland op {selectedDateLabel}.</p>
+        ) : (
+          <>
+            <div className="sl-stats" style={{ "--sl-stat-count": lastSameVolume > 0 ? 4 : 3 } as CSSProperties}>
+              <div className="sl-stat">
+                <b className="sl-num">~{minutesFor(day)}</b>
+                <span>min</span>
+              </div>
+              <div className="sl-stat">
+                <b className="sl-num">{day.exercises.length}</b>
+                <span>oefeningen</span>
+              </div>
+              <div className="sl-stat">
+                <b className="sl-num">{plannedSetCount}</b>
+                <span>sets</span>
+              </div>
+              {lastSameVolume > 0 && (
+                <div className="sl-stat">
+                  <b className="sl-num">{formatKg(Math.round(lastSameVolume / 100) / 10)} t</b>
+                  <span>vorige keer</span>
+                </div>
               )}
-            </section>
-          </TabsContent>
-        </Tabs>
-      </div>
+            </div>
+            <ol className="sl-numbered" aria-label="Oefeningen">
+              {day.exercises.map((exercise, index) => {
+                const previous = recentExerciseHistory(exercise.id)[0];
+                const top = previous ? topWeightOf(previous.sets) : 0;
+                return (
+                  <li key={exercise.id} className="sl-numbered-row">
+                    <span className="sl-num">{index + 1}</span>
+                    <span className="sl-numbered-name">{exercise.name}</span>
+                    <span className="sl-numbered-meta sl-num">
+                      {exercise.prescription}
+                      {top > 0 ? ` · vorige ${formatKg(top)} kg` : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            <div className="sl-daycard-actions">
+              {isToday && cardKind !== "done" && (
+                <button type="button" className="sl-btn-start" onClick={startTraining}>
+                  <IconPlay />
+                  {cardKind === "active" ? "Hervat training" : "Start training"}
+                </button>
+              )}
+              {!isToday && !selectedIsFuture && cardKind !== "done" && (
+                <button type="button" className="sl-btn-start" onClick={logAfterwards}>Achteraf loggen</button>
+              )}
+              <button type="button" className="sl-btn-quiet" onClick={() => setPreviewOpen(false)}>Terug naar overzicht</button>
+            </div>
+          </>
+        )}
+      </Sheet>
+
+      {/* -------------------------------------------------------------- Swap */}
+      <Sheet
+        open={swapOpen}
+        onOpenChange={setSwapOpen}
+        title="Oefening wisselen"
+        subtitle={logExercise ? `${logExercise.name} · je krachtgeschiedenis blijft gekoppeld` : undefined}
+      >
+        <div className="sl-list" data-raised>
+          {logVariants.map((option) => (
+            <button
+              key={option.name}
+              type="button"
+              className="sl-activity"
+              aria-pressed={logExercise?.name === option.name}
+              onClick={() => {
+                if (logExercise) chooseExerciseVariant(day.id, logExercise, option.name);
+                setSwapOpen(false);
+              }}
+            >
+              <span>
+                <small>{option.fit}</small>
+                <b>{option.name}</b>
+                {option.why && <p>{option.why}</p>}
+              </span>
+              <span className="sl-setrow-ring" aria-hidden="true">{logExercise?.name === option.name ? <IconCheck /> : null}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="sl-btn-outline"
+          onClick={() => {
+            if (logExercise) chooseExerciseVariant(day.id, logExercise, "__manual__");
+            setSwapOpen(false);
+          }}
+        >
+          <Pencil size={16} aria-hidden="true" />
+          Meer aanpassen…
+        </button>
+      </Sheet>
+
+      {/* ------------------------------------------------------------ Plates */}
+      <Sheet
+        open={platesOpen}
+        onOpenChange={setPlatesOpen}
+        title="Schijven per kant"
+        subtitle={`stang ${barWeight} kg · ${formatKg(focusValues?.weight ?? 0)} kg totaal`}
+      >
+        <PlateStack total={focusValues?.weight ?? 0} bar={barWeight} />
+        <div className="sl-bar-choice">
+          <button type="button" aria-pressed={barWeight === 20} onClick={() => setBarWeight(20)}>stang 20 kg</button>
+          <button type="button" aria-pressed={barWeight === 15} onClick={() => setBarWeight(15)}>stang 15 kg</button>
+          <button type="button" data-kind="close" onClick={() => setPlatesOpen(false)}>Sluiten</button>
+        </div>
+      </Sheet>
+
+      {/* -------------------------------------------------------------- Food */}
+      <Sheet open={foodSheetOpen} onOpenChange={setFoodSheetOpen} title="Maaltijd loggen" subtitle={capitalize(nutritionDateLabel)}>
+        <form
+          id="nutrition-entry-form"
+          className="sl-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (addNutritionEntry()) setFoodSheetOpen(false);
+          }}
+        >
+          <div className="sl-choice-row" role="group" aria-label="Maaltijd">
+            {MEAL_OPTIONS.map((meal) => (
+              <button
+                key={meal}
+                type="button"
+                className="sl-pill-btn"
+                aria-pressed={nutritionDraft.meal === meal}
+                onClick={() => setNutritionDraft((current) => ({ ...current, meal }))}
+              >
+                {meal}
+              </button>
+            ))}
+          </div>
+          <div className="sl-field">
+            <label htmlFor="food-search">Product zoeken · Belgisch of generiek</label>
+            <div className="sl-search">
+              <input
+                id="food-search"
+                className="sl-text"
+                value={foodQuery}
+                onChange={(event) => setFoodQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void searchFoodProducts();
+                  }
+                }}
+                placeholder="Bijv. Boni skyr, banaan…"
+              />
+              <button
+                type="button"
+                className="sl-pill-btn"
+                onClick={() => void searchFoodProducts()}
+                disabled={foodSearchLoading || foodQuery.trim().length < 2}
+              >
+                {foodSearchLoading ? <LoaderCircle className="animate-spin" size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
+                Zoek
+              </button>
+            </div>
+          </div>
+          {foodSearchError && <p className="sl-error">{foodSearchError}</p>}
+          {foodResults.length > 0 && (
+            <div className="sl-list" data-raised role="listbox" aria-label="Gevonden voedingsproducten">
+              {foodResults.map((food) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  key={food.id}
+                  className="sl-food-result"
+                  onClick={() => chooseFood(food)}
+                >
+                  {food.imageUrl ? <img src={food.imageUrl} alt="" /> : <span className="sl-food-thumb"><PackageSearch size={18} /></span>}
+                  <span>
+                    <b>{food.name}</b>
+                    <small>{food.brand} · {food.sourceNote}</small>
+                    <small className="sl-num">P {food.protein.toFixed(1)} · C {food.carbs.toFixed(1)} · V {food.fat.toFixed(1)} g</small>
+                  </span>
+                  <span className="sl-food-kcal sl-num">
+                    {Math.round(food.calories)}
+                    <small> kcal</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {selectedFood && (
+            <>
+              <div className="sl-note-line">
+                <i aria-hidden="true" />
+                <p>
+                  {selectedFood.name}
+                  <small>{selectedFood.source} · waarden blijven handmatig aanpasbaar</small>
+                </p>
+              </div>
+              <label className="sl-field">
+                Hoeveelheid (g)
+                <input className="sl-text" inputMode="decimal" value={foodAmount} onChange={(event) => changeFoodAmount(event.target.value)} />
+              </label>
+            </>
+          )}
+          <label className="sl-field">
+            Product of maaltijd
+            <input
+              className="sl-text"
+              value={nutritionDraft.name}
+              onChange={(event) => setNutritionDraft((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Bijv. 40 g Rice Krispies"
+            />
+          </label>
+          <div className="sl-field-row" style={{ "--sl-cols": 4 } as CSSProperties}>
+            {([
+              ["calories", "kcal", "0"],
+              ["protein", "Eiwit", "g"],
+              ["carbs", "Carbs", "g"],
+              ["fat", "Vet", "g"],
+            ] as const).map(([field, label, placeholder]) => (
+              <label key={field} className="sl-field">
+                {label}
+                <input
+                  className="sl-text"
+                  inputMode="decimal"
+                  value={nutritionDraft[field]}
+                  onChange={(event) => setNutritionDraft((current) => ({ ...current, [field]: event.target.value }))}
+                  placeholder={placeholder}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="sl-help">Laat kcal leeg en de app rekent ze uit eiwit, carbs en vet.</p>
+          <button type="submit" className="sl-btn-start">
+            <IconPlus />
+            Toevoegen aan {nutritionIsToday ? "vandaag" : nutritionDateLabel}
+          </button>
+          <p className="sl-help">
+            Productdata via <a href="https://world.openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a>; controleer altijd het Belgische etiket.
+          </p>
+        </form>
+        <section className="sl-section" aria-labelledby="sl-ideas-title">
+          <div className="sl-section-head">
+            <h3 id="sl-ideas-title" className="sl-section-title">Eetideeën</h3>
+            <span className="sl-section-meta sl-num">{formatThousands(targets.calories)} kcal · {targets.protein} g eiwit</span>
+          </div>
+          <div className="sl-segmented" role="tablist" aria-label="Maaltijdmoment kiezen">
+            {MEAL_IDEA_TYPES.map((meal) => (
+              <button type="button" role="tab" key={meal} aria-selected={mealIdeaType === meal} onClick={() => setMealIdeaType(meal)}>
+                {meal === "Avondeten" ? "Diner" : meal}
+              </button>
+            ))}
+          </div>
+          <div className="sl-list" data-raised role="tabpanel" aria-label={`${mealIdeaType} ideeën`}>
+            {MEAL_IDEAS[mealIdeaType].map((idea) => (
+              <div key={idea.id} className="sl-idea">
+                <span>
+                  <b>{idea.name}</b>
+                  <p className="sl-num">
+                    {idea.description} · {idea.calories} kcal · P {idea.protein} · C {idea.carbs} · V {idea.fat}
+                  </p>
+                </span>
+                <button type="button" className="sl-pill-btn" onClick={() => chooseMealIdea(idea)} aria-label={`${idea.name} vooraf invullen`}>
+                  Invullen
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      </Sheet>
+
+      {/* ------------------------------------------------------------ Metric */}
+      <Sheet open={metricSheetOpen} onOpenChange={setMetricSheetOpen} title="Nieuwe meting" subtitle="’s Ochtends nuchter, voor het ontbijt">
+        <form
+          className="sl-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (addMetric()) setMetricSheetOpen(false);
+          }}
+        >
+          <label className="sl-field">
+            Datum
+            <input
+              className="sl-text"
+              type="date"
+              value={metricDraft.date}
+              onChange={(event) => setMetricDraft((current) => ({ ...current, date: event.target.value }))}
+            />
+          </label>
+          <div className="sl-field-row">
+            <label className="sl-field">
+              Gewicht (kg)
+              <input
+                className="sl-text"
+                inputMode="decimal"
+                value={metricDraft.weight}
+                onChange={(event) => setMetricDraft((current) => ({ ...current, weight: event.target.value }))}
+                placeholder="78,0"
+              />
+            </label>
+            <label className="sl-field">
+              Taille (cm)
+              <input
+                className="sl-text"
+                inputMode="decimal"
+                value={metricDraft.waist}
+                onChange={(event) => setMetricDraft((current) => ({ ...current, waist: event.target.value }))}
+                placeholder="Optioneel"
+              />
+            </label>
+          </div>
+          <button type="submit" className="sl-btn-start">Meting opslaan</button>
+        </form>
+        {orderedMetrics.length > 0 && (
+          <section className="sl-section" aria-labelledby="sl-metrics-title">
+            <div className="sl-section-head">
+              <h3 id="sl-metrics-title" className="sl-section-title">Metingen</h3>
+              <span className="sl-section-meta sl-num">laatste {orderedMetrics.length}</span>
+            </div>
+            <div className="sl-list" data-raised>
+              {[...orderedMetrics].reverse().map((metric, index, list) => {
+                const previous = list[index + 1];
+                const delta = previous ? Math.round((metric.weight - previous.weight) * 10) / 10 : null;
+                const dateLabel = new Date(`${metric.date}T12:00:00`).toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
+                return (
+                  <div key={metric.id} className="sl-metric sl-num">
+                    <span>
+                      {dateLabel}
+                      {metric.waist ? <small>{formatKg(Math.round(metric.waist * 10) / 10)} cm taille</small> : null}
+                    </span>
+                    <b>{formatKg(Math.round(metric.weight * 10) / 10)} kg</b>
+                    <span>{delta === null ? "start" : `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${formatKg(Math.abs(delta))}`}</span>
+                    <button
+                      type="button"
+                      className="sl-icon-btn"
+                      onClick={() => setDeleteTarget({ kind: "metric", id: metric.id, label: `${dateLabel} · ${metric.weight.toFixed(1)} kg` })}
+                      aria-label={`Meting van ${dateLabel} verwijderen`}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </Sheet>
+
+      {/* ------------------------------------------------------ Photo upload */}
+      <Sheet open={photoSheetOpen} onOpenChange={setPhotoSheetOpen} title="Nieuwe opname" subtitle="Zelfde pose, licht en afstand">
+        <form
+          className="sl-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void uploadProgressPhoto().then((saved) => {
+              if (saved) setPhotoSheetOpen(false);
+            });
+          }}
+        >
+          <label className="sl-dropzone">
+            {photoPreview ? (
+              <img src={photoPreview} alt="Voorbeeld van je gekozen progressiefoto" />
+            ) : (
+              <>
+                <IconCameraSmall size={24} />
+                <strong>Kies een foto</strong>
+                <span>Camera of fotobibliotheek · max. 10 MB</span>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="sl-sr-only"
+              onChange={(event) => choosePhotoFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          <div className="sl-field-row">
+            <label className="sl-field">
+              Datum
+              <input
+                className="sl-text"
+                type="date"
+                value={photoDraft.capturedOn}
+                max={todayKey}
+                onChange={(event) => setPhotoDraft((current) => ({ ...current, capturedOn: event.target.value }))}
+              />
+            </label>
+            <label className="sl-field">
+              Gewicht (kg)
+              <input
+                className="sl-text"
+                inputMode="decimal"
+                value={photoDraft.weight}
+                onChange={(event) => setPhotoDraft((current) => ({ ...current, weight: event.target.value }))}
+                placeholder="78,0"
+              />
+            </label>
+          </div>
+          {photoError && <p className="sl-error" role="alert">{photoError}</p>}
+          <button type="submit" className="sl-btn-start" disabled={photoUploadLoading}>
+            {photoUploadLoading ? "Foto voorbereiden…" : "Check-in opslaan"}
+          </button>
+          <p className="sl-help">Foto’s worden verkleind voor snelle weergave en privé bij je account bewaard.</p>
+        </form>
+      </Sheet>
+
+      {/* ----------------------------------------------------------- Compare */}
+      <Sheet open={compareSheetOpen} onOpenChange={setCompareSheetOpen} title="Datums kiezen" subtitle="Welke twee foto’s zet je naast elkaar?">
+        {(["before", "after"] as const).map((slot) => (
+          <section key={slot} className="sl-section" aria-labelledby={`sl-compare-${slot}`}>
+            <div className="sl-section-head">
+              <h3 id={`sl-compare-${slot}`} className="sl-section-title">{slot === "before" ? "Voor" : "Nu"}</h3>
+            </div>
+            <div className="sl-list" data-raised>
+              {photos.map((photo) => {
+                const chosen = (slot === "before" ? compareBefore : compareAfter)?.id === photo.id;
+                return (
+                  <button
+                    key={photo.id}
+                    type="button"
+                    className="sl-activity"
+                    aria-pressed={chosen}
+                    onClick={() =>
+                      setCompareIds({
+                        before: slot === "before" ? photo.id : compareBefore?.id ?? photo.id,
+                        after: slot === "after" ? photo.id : compareAfter?.id ?? photo.id,
+                      })
+                    }
+                  >
+                    <span>
+                      <b className="sl-num">{photoDateLabel(photo.capturedOn)}</b>
+                      <small className="sl-num">{formatKg(photo.weight)} kg</small>
+                    </span>
+                    <span className="sl-setrow-ring" aria-hidden="true">{chosen ? <IconCheck /> : null}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+        <button type="button" className="sl-btn-start" onClick={() => setCompareSheetOpen(false)}>Vergelijken</button>
+      </Sheet>
 
       <Dialog open={accountDialog} onOpenChange={setAccountDialog}>
-        <DialogContent className="account-dialog border-white/10 bg-[#101612] text-[#f3f7f4] sm:max-w-md">
+        <DialogContent className="sl-dialog account-dialog border-white/10 bg-[#101612] text-[#f3f7f4] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Account & clouddata</DialogTitle>
             <DialogDescription className="text-[#8e9a91]">Je voortgang wordt veilig gekoppeld aan je account.</DialogDescription>
@@ -4187,7 +5550,7 @@ function TrainingApp() {
       </Dialog>
 
       <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="border-white/10 bg-[#121714] text-[#f3f7f4] sm:max-w-md">
+        <DialogContent className="sl-dialog border-white/10 bg-[#121714] text-[#f3f7f4] sm:max-w-md">
           <DialogHeader><DialogTitle>Oefening aanpassen</DialogTitle><DialogDescription className="text-[#8e9a91]">Je wijziging wordt alleen op dit toestel bewaard.</DialogDescription></DialogHeader>
           {editing && <div className="space-y-4 py-2">
             <label className="field-label">Naam<Input value={editing.exercise.name} onChange={(event) => setEditing((current) => current ? { ...current, exercise: { ...current.exercise, name: event.target.value } } : current)} className="dark-input mt-1.5" /></label>
@@ -4200,7 +5563,7 @@ function TrainingApp() {
       </Dialog>
 
       <Dialog open={Boolean(editingSession)} onOpenChange={(open) => { if (!open) { setEditingSession(null); setSessionEditError(""); } }}>
-        <DialogContent className="session-edit-dialog border-white/10 bg-[#0d120f] text-[#f3f7f4] sm:max-w-2xl">
+        <DialogContent className="sl-dialog session-edit-dialog border-white/10 bg-[#0d120f] text-[#f3f7f4] sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Workout bewerken</DialogTitle>
             <DialogDescription className="text-[#8e9a91]">
@@ -4268,7 +5631,7 @@ function TrainingApp() {
       </Dialog>
 
       <Dialog open={targetDialog} onOpenChange={setTargetDialog}>
-        <DialogContent className="border-white/10 bg-[#121714] text-[#f3f7f4] sm:max-w-md">
+        <DialogContent className="sl-dialog border-white/10 bg-[#121714] text-[#f3f7f4] sm:max-w-md">
           <DialogHeader><DialogTitle>Voedingsdoelen aanpassen</DialogTitle><DialogDescription className="text-[#8e9a91]">Pas alleen aan op basis van je weekgemiddelde en tailletrend.</DialogDescription></DialogHeader>
           <div className="grid grid-cols-2 gap-3 py-2">
             {(["calories", "protein", "carbs", "fat"] as const).map((field) => <label key={field} className="field-label capitalize">{field === "calories" ? "Calorieën" : field === "protein" ? "Eiwit" : field === "carbs" ? "Carbs" : "Vet"}<Input type="number" value={targets[field]} onChange={(event) => setTargets((current) => ({ ...current, [field]: Number(event.target.value) }))} className="dark-input mt-1.5" /></label>)}
@@ -4278,7 +5641,7 @@ function TrainingApp() {
       </Dialog>
 
       <Dialog open={Boolean(moveSourceDate)} onOpenChange={(open) => !open && setMoveSourceDate(null)}>
-        <DialogContent className="schedule-dialog border-white/10 bg-[#121714] text-[#f3f7f4] sm:max-w-lg">
+        <DialogContent className="sl-dialog schedule-dialog border-white/10 bg-[#121714] text-[#f3f7f4] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{moveSourceTemplate?.short ?? "Planning"} verplaatsen</DialogTitle>
             <DialogDescription className="text-[#8e9a91]">Kies een andere dag in deze week. De twee dagen wisselen van planning, zodat geen training verdwijnt of dubbel komt te staan.</DialogDescription>
@@ -4303,7 +5666,7 @@ function TrainingApp() {
       </Dialog>
 
       <Dialog open={photoViewerOpen} onOpenChange={(open) => { setPhotoViewerOpen(open); if (!open) setPhotoPlaying(false); }}>
-        <DialogContent className="photo-viewer-dialog border-white/10 bg-[#090d0b] text-[#f3f7f4] sm:max-w-5xl">
+        <DialogContent className="sl-dialog photo-viewer-dialog border-white/10 bg-[#090d0b] text-[#f3f7f4] sm:max-w-5xl">
           <DialogHeader className="sr-only">
             <DialogTitle>Transformatie bekijken</DialogTitle>
             <DialogDescription>Bekijk of speel je dagelijkse progressiefoto’s chronologisch af.</DialogDescription>
@@ -4338,7 +5701,7 @@ function TrainingApp() {
       </Dialog>
 
       <AlertDialog open={resetOpen} onOpenChange={(open) => !resetting && setResetOpen(open)}>
-        <AlertDialogContent className="border-white/10 bg-[#121714] text-[#f3f7f4]">
+        <AlertDialogContent className="sl-dialog border-white/10 bg-[#121714] text-[#f3f7f4]">
           <AlertDialogHeader>
             <AlertDialogTitle>Alle progressie wissen?</AlertDialogTitle>
             <AlertDialogDescription className="text-[#93a096]">
@@ -4367,7 +5730,7 @@ function TrainingApp() {
       </AlertDialog>
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent className="border-white/10 bg-[#121714] text-[#f3f7f4]">
+        <AlertDialogContent className="sl-dialog border-white/10 bg-[#121714] text-[#f3f7f4]">
           <AlertDialogHeader>
             <AlertDialogTitle>Entry verwijderen?</AlertDialogTitle>
             <AlertDialogDescription className="text-[#8e9a91]">
@@ -4436,15 +5799,6 @@ function StrengthTrendChart({ points }: { points: StrengthTrendPoint[] }) {
       <p className="strength-trend-note">e1RM is een berekende schatting om sessies te vergelijken, geen werkelijk gelift gewicht.</p>
     </div>
   );
-}
-
-function NutritionMacroCard({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
-  const progress = clamp((value / target) * 100);
-  return <div className="nutrition-macro-card"><div><span>{label}</span><strong>{Math.round(value)} <small>/ {target} g</small></strong></div><div className="nutrition-macro-track"><span style={{ width: `${progress}%`, background: color }} /></div></div>;
-}
-
-function EmptyState({ title, body }: { title: string; body: string }) {
-  return <div className="px-6 py-14 text-center"><div className="mx-auto mb-4 grid size-11 place-items-center rounded-2xl bg-white/5 text-[#68746c]"><History className="size-5" /></div><h4 className="font-medium">{title}</h4><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#748078]">{body}</p></div>;
 }
 
 export default function Home() {

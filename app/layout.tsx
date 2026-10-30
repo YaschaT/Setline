@@ -41,6 +41,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="nl">
+      <head>
+        {/* SETLINE type: Archivo. The design's number face, "Archivo Expanded",
+            is not a Google Fonts family, so numbers fall back to Archivo —
+            exactly as they render in the design file itself. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* The root layout covers every route, and the static build in
+            deploy/web (plain Vite, no next/font) loads the same sheet. */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&display=swap"
+        />
+      </head>
       <body className="antialiased">{children}</body>
     </html>
   );

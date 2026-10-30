@@ -1,0 +1,56 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255, 184, 77, 0.35)",
+        "createdAt": "2026-09-29T21:56:31.299Z",
+        "reason": "Claude, from SETLINE Redesign.dc.html: the 1c Aandacht card and section B amber line use this exact border; the user made that file the visual source of truth"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "4px",
+        "createdAt": "2026-09-29T21:56:31.437Z",
+        "reason": "Claude, from SETLINE Redesign.dc.html: the plates sheet draws the bar stubs with radius 4px; the user made that file the visual source of truth"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "archivo",
+        "createdAt": "2026-09-29T22:17:51.766Z",
+        "reason": "Claude, from SETLINE Redesign.dc.html section D (--sl-font); the user made that file the visual source of truth, DESIGN.md still documents the previous Inter system"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "archivo expanded",
+        "createdAt": "2026-09-29T22:17:51.898Z",
+        "reason": "Claude, from SETLINE Redesign.dc.html section D (--sl-font-num); the user made that file the visual source of truth, DESIGN.md still documents the previous Inter system"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(120, 120, 128, 0.36)",
+        "createdAt": "2026-10-21T09:37:17.765Z",
+        "reason": "Claude: iOS system control colors (switch track, alert/menu chrome) copied for the user's exact-copy web port of the iPhone app"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(235,235,245,0.3)",
+        "createdAt": "2026-10-21T09:37:17.908Z",
+        "reason": "Claude: iOS system control colors (switch track, alert/menu chrome) copied for the user's exact-copy web port of the iPhone app"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(118,118,128,0.24)",
+        "createdAt": "2026-10-21T09:37:18.052Z",
+        "reason": "Claude: iOS system control colors (switch track, alert/menu chrome) copied for the user's exact-copy web port of the iPhone app"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(84,84,88,0.5)",
+        "createdAt": "2026-10-21T09:37:18.214Z",
+        "reason": "Claude: iOS system control colors (switch track, alert/menu chrome) copied for the user's exact-copy web port of the iPhone app"
+      }
+    ]
+  }
+}
