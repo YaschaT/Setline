@@ -480,3 +480,37 @@ create policy "remove a name" on public.post_participants
     user_id = auth.uid()
     or exists (select 1 from public.posts p where p.id = post_id and p.user_id = auth.uid())
   );
+
+-- ================================================================== chat
+-- The Friends tab's chat: one conversation for you and your friends, about
+-- training, food, or just keeping each other going. Like a post, a message
+-- is seen by its author and the author's accepted friends, never by
+-- strangers, and a block hides it both ways. Safe to re-run.
+create table if not exists public.chat_messages (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.profiles (user_id) on delete cascade,
+  body       text not null check (char_length(btrim(body)) between 1 and 1000),
+  topic      text check (topic in ('training', 'food', 'motivation')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists chat_messages_created_at on public.chat_messages (created_at desc);
+
+alter table public.chat_messages enable row level security;
+
+drop policy if exists "see own and friends messages" on public.chat_messages;
+create policy "see own and friends messages" on public.chat_messages
+  for select to authenticated using (
+    auth.uid() = user_id or public.are_friends(auth.uid(), user_id)
+  );
+
+drop policy if exists "write own messages" on public.chat_messages;
+create policy "write own messages" on public.chat_messages
+  for insert to authenticated with check (auth.uid() = user_id);
+
+drop policy if exists "delete own messages" on public.chat_messages;
+create policy "delete own messages" on public.chat_messages
+  for delete to authenticated using (auth.uid() = user_id);
+
+-- A report can name the message it is about.
+alter table public.reports add column if not exists message_id uuid references public.chat_messages (id) on delete set null;

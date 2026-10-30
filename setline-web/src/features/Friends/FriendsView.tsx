@@ -35,6 +35,7 @@ import { PressButton, useReduceMotion } from "../../design/support";
 import { useApp } from "../../data/AppState";
 import { FeedPost, HiddenStat, SocialProfile, SocialStore, useSocial, type Friendship } from "../../data/SocialStore";
 import { PostComposerView, RestReason } from "./PostComposerView";
+import { ChatReadMarker, ChatView } from "./ChatView";
 import { FriendProfileView, PostDetailView, PostMusic, PostPhotos, VisibilityBadge, type ProfileTarget } from "./PostDetailViews";
 import { PostPlaceView } from "./WorkoutPlaceViews";
 import { InviteQRSheet } from "./InviteViews";
@@ -65,13 +66,14 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
   const app = useApp();
   const social = useSocial();
   const [showsPeople, setShowsPeople] = useState(false);
+  const [chatting, setChatting] = useState(false);
   const [composing, setComposing] = useState<ComposeTarget | undefined>(undefined);
   const shownComposing = useLast(composing);
   /** Workouts the lifter said not to post, so the prompt moves on. */
   const [skippedPrompts, setSkippedPrompts] = useAppStorage<string>("setline.social.skippedPrompts", "");
 
   useEffect(() => {
-    void social.load();
+    void social.load().then(() => social.refreshChatLatest());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app.userID]);
 
@@ -87,6 +89,33 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
       }
     />
   );
+
+  /**
+   * The way into the chat, at the top of the feed: the latest message, and a
+   * lime dot while a friend's message is newer than your last look.
+   */
+  const chatRow = (() => {
+    const latest = social.chatLatest;
+    const unread = latest !== undefined && latest.user_id !== social.myID && latest.created_at > ChatReadMarker.get();
+    const who = latest ? (latest.user_id === social.myID ? "You" : (latest.author?.display_name.split(" ")[0] ?? "Friend")) : undefined;
+    return (
+      <SLPress scale={0.98} onPress={() => setChatting(true)} aria-label={unread ? "Chat, new message" : "Chat"} style={{ alignSelf: "stretch" }}>
+        <HStack spacing={SL.Space.s3} style={{ padding: SL.Space.s3, ...listCard() }}>
+          <div style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0, position: "relative" }}>
+            <SFSymbol name="bubble.left" size={18} weight={600} color={SL.Signal.action} />
+            {unread && <span aria-hidden style={{ position: "absolute", top: -2, right: -2, width: 10, height: 10, borderRadius: 999, background: SL.Signal.action, boxShadow: `0 0 0 2px ${SL.Surface.ground}` }} />}
+          </div>
+          <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+            <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>Chat</Text>
+            <Text {...slMeta(unread ? SL.Weight.semibold : SL.Weight.regular)} color={unread ? SL.Ink.primary : SL.Ink.secondary} lineLimit={1} style={{ maxWidth: "100%" }}>
+              {latest ? `${who}: ${latest.body}` : "Ask about training or food, or cheer each other on"}
+            </Text>
+          </VStack>
+          <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
+        </HStack>
+      </SLPress>
+    );
+  })();
 
   const requestsBanner = (
     <SLPress scale={0.98} onPress={() => setShowsPeople(true)} style={{ alignSelf: "stretch" }}>
@@ -286,6 +315,7 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
         <>
           {social.offlineSince !== undefined && offlineBanner}
           {social.incoming.length > 0 && requestsBanner}
+          {social.friends.length > 0 && chatRow}
           {social.pending.length > 0 && pendingBanner}
           {unpostedWorkout && latestWorkoutPrompt(unpostedWorkout)}
           {!social.hasPost({ sessionID: SocialStore.restID(today) }) && !app.sessions.some((s) => s.kind === "workout" && isSameDay(s.date, today)) && restDayRow}
@@ -317,6 +347,18 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
       <Sheet isPresented={showsPeople} onDismiss={() => setShowsPeople(false)} dragIndicator={false}>
         <PeopleSheet onClose={() => setShowsPeople(false)} />
       </Sheet>
+      <FullScreenCover isPresented={chatting}>
+        {chatting && (
+          <CoverBody>
+            <ChatView
+              onClose={() => {
+                setChatting(false);
+                void social.refreshChatLatest();
+              }}
+            />
+          </CoverBody>
+        )}
+      </FullScreenCover>
     </SLTabHeaderPinned>
   );
 }

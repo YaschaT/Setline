@@ -10,6 +10,7 @@ struct FriendsView: View {
     /// The avatar's way to Account, as on Training.
     let onAccount: () -> Void
     @State private var showsPeople = false
+    @State private var chatting = false
     @State private var composing: ComposeTarget?
     /// Workouts the lifter said not to post, so the prompt moves on.
     @AppStorage("setline.social.skippedPrompts") private var skippedPrompts = ""
@@ -45,6 +46,7 @@ struct FriendsView: View {
                 case .ready:
                     if social.offlineSince != nil { offlineBanner }
                     if !social.incoming.isEmpty { requestsBanner }
+                    if !social.friends.isEmpty { chatRow }
                     if !social.pending.isEmpty { pendingBanner }
                     if let session = unpostedWorkout {
                         latestWorkoutPrompt(session)
@@ -69,7 +71,13 @@ struct FriendsView: View {
         }
         .slTabHeader { header }
         .refreshable { await social.load() }
-        .task(id: app.userID) { await social.load() }
+        .task(id: app.userID) {
+            await social.load()
+            await social.refreshChatLatest()
+        }
+        .fullScreenCover(isPresented: $chatting, onDismiss: { Task { await social.refreshChatLatest() } }) {
+            ChatView(onClose: { chatting = false })
+        }
         .fullScreenCover(item: $composing) { target in
             switch target {
             case .workout(let session):
@@ -97,6 +105,45 @@ struct FriendsView: View {
                 ) { showsPeople = true }
             }
         }
+    }
+
+    /// The way into the chat, at the top of the feed: the latest message, and
+    /// a lime dot while a friend's message is newer than your last look.
+    private var chatRow: some View {
+        let latest = social.chatLatest
+        let unread = latest.map { $0.user_id != social.myID && $0.created_at > ChatReadMarker.value } ?? false
+        let who = latest.map { $0.user_id == social.myID ? "You" : ($0.author?.display_name.split(separator: " ").first.map(String.init) ?? "Friend") }
+        return Button { chatting = true } label: {
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(SL.Signal.action)
+                    .frame(width: 40, height: 40)
+                    .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
+                    .overlay(alignment: .topTrailing) {
+                        if unread {
+                            Circle().fill(SL.Signal.action).frame(width: 10, height: 10)
+                                .overlay(Circle().strokeBorder(SL.Surface.ground, lineWidth: 2).padding(-2))
+                                .offset(x: 2, y: -2)
+                        }
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Chat").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                    Text(latest.map { "\(who ?? "Friend"): \($0.body)" } ?? "Ask about training or food, or cheer each other on")
+                        .slMeta(unread ? SL.Weight.semibold : SL.Weight.regular)
+                        .foregroundStyle(unread ? SL.Ink.primary : SL.Ink.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: SL.Space.s2)
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(SL.Space.s3)
+            .slBorderBox()
+            .slListCard()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.98))
+        .accessibilityLabel(unread ? "Chat, new message" : "Chat")
     }
 
     private var requestsBanner: some View {

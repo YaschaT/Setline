@@ -131,6 +131,32 @@ struct PostComment: Codable, Hashable, Identifiable, Sendable {
     var date: Date { SocialStore.parseDate(created_at) ?? Date() }
 }
 
+/// What a chat message is about, when its author says so.
+enum ChatTopic: String, Codable, CaseIterable, Hashable, Sendable {
+    case training, food, motivation
+
+    var label: String {
+        switch self {
+        case .training: "Training"
+        case .food: "Food"
+        case .motivation: "Motivation"
+        }
+    }
+}
+
+/// One message in the Friends chat: seen by its author and the author's
+/// friends only (row-level security, chat_messages).
+struct ChatMessage: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    let user_id: String
+    let body: String
+    let topic: ChatTopic?
+    let created_at: String
+    var author: SocialProfile?
+
+    var date: Date { SocialStore.parseDate(created_at) ?? Date() }
+}
+
 /// A workout as a friend sees it: a summary, never the log itself.
 struct FeedPost: Codable, Hashable, Identifiable, Sendable {
     let id: String
@@ -1052,6 +1078,70 @@ final class SocialStore {
         feed[index].comments = [CommentCount(count: max(0, feed[index].commentCount + step))]
     }
 
+    // MARK: Chat
+
+    /// The newest message, for the Friends tab's chat row; refreshed with the tab.
+    private(set) var chatLatest: ChatMessage?
+    private var demoChat: [ChatMessage]?
+
+    private static let chatQuery =
+        "chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(\(profileFields))&order=created_at.desc"
+
+    /// The last 100 messages you can see, oldest first.
+    func chatMessages() async throws -> [ChatMessage] {
+        let messages: [ChatMessage]
+        if isDemo {
+            if demoChat == nil, let me { demoChat = demo.chat(me: me) }
+            messages = demoChat ?? []
+        } else {
+            let rows: [ChatMessage] = try await get("\(Self.chatQuery)&limit=100")
+            messages = rows.reversed()
+        }
+        if messages.last?.id != chatLatest?.id { chatLatest = messages.last }
+        return messages
+    }
+
+    func refreshChatLatest() async {
+        guard me != nil else { return }
+        if isDemo {
+            chatLatest = (try? await chatMessages())?.last
+            return
+        }
+        if let rows: [ChatMessage] = try? await get("\(Self.chatQuery)&limit=1") { chatLatest = rows.first }
+    }
+
+    func sendChat(_ text: String, topic: ChatTopic?) async throws {
+        let body = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000))
+        guard !body.isEmpty else { return }
+        if isDemo {
+            let message = ChatMessage(id: UUID().uuidString, user_id: myID, body: body, topic: topic,
+                                      created_at: Self.isoString(Date()), author: me)
+            demoChat = (demoChat ?? []) + [message]
+            return
+        }
+        let row = try JSONSerialization.data(withJSONObject: [
+            "user_id": myID, "body": body, "topic": topic?.rawValue ?? NSNull(),
+        ] as [String: Any])
+        _ = try await send("chat_messages", method: "POST", body: row)
+    }
+
+    /// Your own messages only.
+    func deleteChat(_ message: ChatMessage) async throws {
+        if isDemo {
+            demoChat?.removeAll { $0.id == message.id }
+            return
+        }
+        _ = try await send("chat_messages?id=eq.\(message.id)", method: "DELETE")
+    }
+
+    func report(message: ChatMessage, reason: String) async throws {
+        if isDemo { return }
+        let body = try JSONSerialization.data(withJSONObject: [
+            "reporter_id": myID, "message_id": message.id, "reported_id": message.user_id, "reason": reason,
+        ])
+        _ = try await send("reports", method: "POST", body: body)
+    }
+
     // MARK: Demo posts
 
     private var demoMedia: [String: Data] = [:]
@@ -1163,6 +1253,21 @@ private struct DemoSocial {
     let lina = SocialProfile(user_id: "demo-lina", username: "lina", display_name: "Lina Maes")
 
     var people: [SocialProfile] { [sam, cleo, noah, lina] }
+
+    func chat(me: SocialProfile) -> [ChatMessage] {
+        let now = Date()
+        func at(_ minutes: Double) -> String { SocialStore.isoString(now.addingTimeInterval(-minutes * 60)) }
+        return [
+            ChatMessage(id: "c1", user_id: sam.user_id, body: "Anyone tried pause squats for a plateau? Stuck at 140 for three weeks.",
+                        topic: .training, created_at: at(190), author: sam),
+            ChatMessage(id: "c2", user_id: cleo.user_id, body: "Yes! 2 s at the bottom, drop to 110 for a month. Came back stronger.",
+                        topic: nil, created_at: at(176), author: cleo),
+            ChatMessage(id: "c3", user_id: me.user_id, body: "What do you all eat before a morning session?",
+                        topic: .food, created_at: at(95), author: me),
+            ChatMessage(id: "c4", user_id: cleo.user_id, body: "Banana and a coffee, 45 min before.", topic: nil, created_at: at(88), author: cleo),
+            ChatMessage(id: "c5", user_id: sam.user_id, body: "Leg day done. Who's next? 💪", topic: .motivation, created_at: at(12), author: sam),
+        ]
+    }
 
     func friendships(me: SocialProfile) -> [Friendship] {
         [

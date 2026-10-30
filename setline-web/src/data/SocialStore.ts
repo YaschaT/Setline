@@ -188,6 +188,51 @@ export const PostComment = {
   },
 };
 
+/** What a chat message is about, when its author says so. */
+export type ChatTopic = "training" | "food" | "motivation";
+
+/**
+ * One message in the Friends chat: seen by its author and the author's
+ * friends only (row-level security, chat_messages).
+ */
+export interface ChatMessage {
+  id: string;
+  user_id: string;
+  body: string;
+  topic?: ChatTopic;
+  created_at: string;
+  author?: SocialProfile;
+}
+
+export const ChatMessage = {
+  topics: ["training", "food", "motivation"] as ChatTopic[],
+
+  date(self: ChatMessage): Date {
+    return SocialStore.parseDate(self.created_at) ?? new Date();
+  },
+
+  topicLabel(topic: ChatTopic): string {
+    switch (topic) {
+      case "training": return "Training";
+      case "food": return "Food";
+      case "motivation": return "Motivation";
+    }
+  },
+
+  decode(json: unknown): ChatMessage {
+    const o = (json ?? {}) as Record<string, unknown>;
+    const topic = ChatMessage.topics.find((t) => t === o.topic);
+    return {
+      id: String(o.id ?? ""),
+      user_id: String(o.user_id ?? ""),
+      body: String(o.body ?? ""),
+      topic,
+      created_at: String(o.created_at ?? ""),
+      author: o.author ? SocialProfile.decode(o.author) : undefined,
+    };
+  },
+};
+
 /** A workout as a friend sees it: a summary, never the log itself. */
 export interface FeedPost {
   id: string;
@@ -1356,6 +1401,54 @@ export class SocialStore {
     if (index < 0) return;
     this.feed = this.feed.map((p, i) => (i === index ? { ...p, comments: [{ count: Math.max(0, FeedPost.commentCount(p) + step) }] } : p));
     this.changed();
+  }
+
+  // MARK: Chat
+
+  /** The newest message, for the Friends tab's chat row; refreshed with the tab. */
+  chatLatest: ChatMessage | undefined = undefined;
+
+  /** The last 100 messages you can see, oldest first. */
+  async chatMessages(): Promise<ChatMessage[]> {
+    const rows = (await this.get(
+      `chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(${SocialStore.profileFields})&order=created_at.desc&limit=100`,
+    )) as unknown[];
+    const messages = rows.map(ChatMessage.decode).reverse();
+    const latest = messages[messages.length - 1];
+    if (latest?.id !== this.chatLatest?.id) {
+      this.chatLatest = latest;
+      this.changed();
+    }
+    return messages;
+  }
+
+  async refreshChatLatest(): Promise<void> {
+    if (!this.me) return;
+    try {
+      const rows = (await this.get(
+        `chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(${SocialStore.profileFields})&order=created_at.desc&limit=1`,
+      )) as unknown[];
+      this.chatLatest = rows.map(ChatMessage.decode)[0];
+      this.changed();
+    } catch {
+      /* the row keeps what it showed */
+    }
+  }
+
+  async sendChat(text: string, a: { topic?: ChatTopic } = {}): Promise<void> {
+    const body = prefixChars(trimmingWhitespacesAndNewlines(text), 1000);
+    if (body === "") return;
+    await this.send("chat_messages", { method: "POST", body: JSON.stringify({ user_id: this.myID, body, topic: a.topic ?? null }) });
+  }
+
+  /** Your own messages only. */
+  async deleteChat(message: ChatMessage): Promise<void> {
+    await this.send(`chat_messages?id=eq.${message.id}`, { method: "DELETE" });
+  }
+
+  async reportChat(a: { message: ChatMessage; reason: string }): Promise<void> {
+    const body = JSON.stringify({ reporter_id: this.myID, message_id: a.message.id, reported_id: a.message.user_id, reason: a.reason });
+    await this.send("reports", { method: "POST", body });
   }
 
   // MARK: Plumbing
