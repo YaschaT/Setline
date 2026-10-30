@@ -439,8 +439,11 @@ struct AccountView: View {
 
     private var trainingGroup: some View {
         group("Training") {
-            row("dumbbell.fill", tint: SL.Signal.action, title: "Plan", action: { choosingProgram = true }) {
-                value(summary.planName)
+            // With your own week, that week is the plan; the shape is where its workouts come from.
+            row("dumbbell.fill", tint: SL.Signal.action, title: "Plan",
+                detail: app.ownWeek != nil ? "Workouts from \(summary.planName)" : nil,
+                action: { choosingProgram = true }) {
+                value(app.ownWeek != nil ? "Your own week" : summary.planName)
             }
             if !summary.trainingDays.isEmpty {
                 weekRow

@@ -250,7 +250,8 @@ export function WorkoutChooserSheet({
           )}
 
           {group(
-            "Your plan",
+            // With your own week, the plan no longer builds the week: it supplies the workouts.
+            app.ownWeek ? "Workouts from your plan" : "Your plan",
             <>
               <SLRowButton onPress={onChangePlan}>
                 <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, minHeight: 60 }}>
@@ -258,8 +259,8 @@ export function WorkoutChooserSheet({
                     <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>
                       {ProgramCatalog.current({ in: app.state ?? { raw: {} }, plan: app.plan }).name}
                     </Text>
-                    <Text {...slMeta()} color={SL.Ink.secondary}>
-                      Plan shape · how your week is built
+                    <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={2}>
+                      {app.ownWeek ? `The ${spokenList(app.plan.map((day) => day.short))} days you pick from` : "Plan shape · how your week is built"}
                     </Text>
                   </VStack>
                   <Spacer />
@@ -535,6 +536,12 @@ CustomWorkoutBuilder.repRanges = [
 ] as [number, number][];
 
 // MARK: - Your week
+
+/** "Push, Pull and Legs". */
+function spokenList(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
 
 const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 

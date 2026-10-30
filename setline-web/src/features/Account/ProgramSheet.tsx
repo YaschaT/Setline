@@ -12,16 +12,23 @@ import { SLPrimaryButton } from "../../design/SetlineTokens";
 import { slBody, slDisplay, slHitTarget, slLead, slMeta } from "../../design/components/SLText";
 import { slLineHeight } from "../../design/SLDynamicType";
 import { Program } from "../../core/Catalog/Program";
+import { useApp } from "../../data/AppState";
 
 export function ProgramSheet({ programs, current, onSave, onClose }: { programs: Program[]; current: Program; onSave: (program: Program) => void; onClose: () => void }) {
   const [chosen, setChosen] = useState<Program | undefined>(undefined);
   const selection = chosen ?? current;
   const isCurrent = Program.id(selection) === Program.id(current);
+  /** Your own week belongs to the plan it was made on, so a switch parks it. */
+  const ownWeek = useApp().ownWeek !== undefined;
 
   /** What the choice produces, stated before it is made. */
   const consequence = isCurrent
-    ? `You're training on ${current.name} now.`
-    : `Your week is built from ${selection.name}. Your logged sessions and your own plan stay.`;
+    ? ownWeek
+      ? `You're on ${current.name}, with your own week.`
+      : `You're training on ${current.name} now.`
+    : ownWeek
+      ? `Your week becomes ${selection.name}'s standard week. Your own week stays with ${current.name} and comes back if you switch back. Logged sessions stay.`
+      : `Your week is built from ${selection.name}. Your logged sessions and your own plan stay.`;
 
   const save = () => {
     if (isCurrent) return onClose();
@@ -44,7 +51,9 @@ export function ProgramSheet({ programs, current, onSave, onClose }: { programs:
             Which plan shape?
           </Text>
           <Text {...slBody()} color={SL.Ink.secondary} style={{ ...slLineHeight(1.5, { size: SL.TypeSize.body }), paddingTop: SL.Space.s3 }}>
-            Your own plan is kept. Each program keeps its own week.
+            {ownWeek
+              ? `You're using your own week. It belongs to ${current.name}: another plan starts from its standard week.`
+              : "Your own plan is kept. Each program keeps its own week."}
           </Text>
 
           <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", alignItems: "stretch", paddingTop: SL.Space.s6 }}>
@@ -95,7 +104,8 @@ export function ProgramSheet({ programs, current, onSave, onClose }: { programs:
       </ScrollView>
 
       <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", paddingLeft: SL.Space.gutterSession, paddingRight: SL.Space.gutterSession, paddingBottom: SL.Space.s3, background: SL.Surface.ground }}>
-        <SLPrimaryButton disabled={isCurrent} onPress={save}>Save</SLPrimaryButton>
+        {/* With your own week at stake, the button says what it does. */}
+        <SLPrimaryButton disabled={isCurrent} onPress={save}>{ownWeek && !isCurrent ? `Switch to ${selection.name}` : "Save"}</SLPrimaryButton>
       </div>
     </div>
   );

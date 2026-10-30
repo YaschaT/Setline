@@ -8,6 +8,7 @@ import SetlineCore
 /// each programme keeps the week it was given, because schedule overrides are
 /// scoped per programme.
 struct ProgramSheet: View {
+    @Environment(AppState.self) private var app
     let programs: [Program]
     let current: Program
     let onSave: (Program) -> Void
@@ -16,6 +17,8 @@ struct ProgramSheet: View {
     @State private var chosen: Program?
 
     private var selection: Program { chosen ?? current }
+    /// Your own week belongs to the plan it was made on, so a switch parks it.
+    private var ownWeek: Bool { app.ownWeek != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,7 +32,9 @@ struct ProgramSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(SL.Ink.primary)
 
-                    Text("Your own plan is kept. Each program keeps its own week.")
+                    Text(ownWeek
+                         ? "You're using your own week. It belongs to \(current.name): another plan starts from its standard week."
+                         : "Your own plan is kept. Each program keeps its own week.")
                         .slBody()
                         .slLineHeight(1.5, size: SL.TypeSize.body)
                         .fixedSize(horizontal: false, vertical: true)
@@ -58,7 +63,8 @@ struct ProgramSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(SL.Surface.ground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            Button { save() } label: { Text("Save") }
+            // With your own week at stake, the button says what it does.
+            Button { save() } label: { Text(ownWeek && selection.id != current.id ? "Switch to \(selection.name)" : "Save") }
                 .buttonStyle(SLPrimaryButtonStyle())
                 .disabled(selection.id == current.id)
                 .padding(.horizontal, SL.Space.gutterSession)
@@ -128,8 +134,11 @@ struct ProgramSheet: View {
 
     /// What the choice produces, stated before it is made.
     private var consequence: String {
-        selection.id == current.id
-            ? "You're training on \(current.name) now."
+        if selection.id == current.id {
+            return ownWeek ? "You're on \(current.name), with your own week." : "You're training on \(current.name) now."
+        }
+        return ownWeek
+            ? "Your week becomes \(selection.name)'s standard week. Your own week stays with \(current.name) and comes back if you switch back. Logged sessions stay."
             : "Your week is built from \(selection.name). Your logged sessions and your own plan stay."
     }
 

@@ -94,13 +94,19 @@ struct WorkoutChooserSheet: View {
                     .accessibilityLabel(app.ownWeek != nil ? "Edit your own week" : "Make your own week")
                 }
 
-                group("Your plan", trailing: ("Change", onChangePlan)) {
+                // With your own week, the plan no longer builds the week: it supplies the workouts.
+                group(app.ownWeek != nil ? "Workouts from your plan" : "Your plan", trailing: ("Change", onChangePlan)) {
                     Button(action: onChangePlan) {
                         HStack(spacing: SL.Space.s3) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(ProgramCatalog.current(in: app.state ?? LegacyState(raw: [:]), plan: app.plan).name)
                                     .slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
-                                Text("Plan shape · how your week is built").slMeta().foregroundStyle(SL.Ink.secondary)
+                                Text(app.ownWeek != nil
+                                     ? "The \(spokenList(app.plan.map(\.short))) days you pick from"
+                                     : "Plan shape · how your week is built")
+                                    .slMeta().foregroundStyle(SL.Ink.secondary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
                             }
                             Spacer()
                             SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
@@ -412,6 +418,12 @@ struct CustomWorkoutBuilder: View {
 }
 
 // MARK: - Your week
+
+/// "Push, Pull and Legs".
+private func spokenList(_ items: [String]) -> String {
+    guard items.count > 1 else { return items.joined() }
+    return "\(items.dropLast().joined(separator: ", ")) and \(items.last!)"
+}
 
 private let weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 

@@ -624,7 +624,14 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
   });
 
   const trainingGroup = group("Training", [
-    row("dumbbell.fill", { tint: SL.Signal.action, title: "Plan", action: () => setChoosingProgram(true), trailing: value(summary.planName) }),
+    // With your own week, that week is the plan; the shape is where its workouts come from.
+    row("dumbbell.fill", {
+      tint: SL.Signal.action,
+      title: "Plan",
+      detail: app.ownWeek ? `Workouts from ${summary.planName}` : undefined,
+      action: () => setChoosingProgram(true),
+      trailing: value(app.ownWeek ? "Your own week" : summary.planName),
+    }),
     summary.trainingDays.length > 0 ? weekRow : null,
     row("square.stack.3d.up.fill", {
       tint: SL.Signal.action,
