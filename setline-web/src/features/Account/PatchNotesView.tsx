@@ -8,6 +8,7 @@ import { HStack, Text, VStack } from "../../design/swiftui";
 import { slBody, slLead, slMeta } from "../../design/components/SLText";
 import { SLOverline } from "../../design/components/SLPieces";
 import { SLSheet } from "../../design/components/SLSheet";
+import { SLPrimaryButton } from "../../design/SetlineTokens";
 import { PatchNotes, usePatchNotes } from "./PatchNotes";
 
 export function PatchNotesView({ onClose }: { onClose: () => void }) {
@@ -60,6 +61,9 @@ export function PatchNotesView({ onClose }: { onClose: () => void }) {
             Same updates on iPhone and in the browser.
           </Text>
         )}
+        <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
+          <SLPrimaryButton onPress={onClose}>Got it</SLPrimaryButton>
+        </div>
       </VStack>
     </SLSheet>
   );

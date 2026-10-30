@@ -30,6 +30,8 @@ import { PhotosHomeView } from "./features/Photos/PhotosHomeView";
 import { SessionView } from "./features/Session/SessionView";
 import { InviteLandingSheet } from "./features/Friends/InviteViews";
 import { SharedWorkoutInbox, SharedWorkoutSheet } from "./features/Training/SharedWorkoutSheet";
+import { PatchNotes, usePatchNotes } from "./features/Account/PatchNotes";
+import { PatchNotesView } from "./features/Account/PatchNotesView";
 import type { CustomWorkoutLink_Received } from "./core/Domain/CustomWorkoutLink";
 import { PostComposerView } from "./features/Friends/PostComposerView";
 import { StreakReminder } from "./features/Training/StreakReminder";
@@ -140,6 +142,10 @@ export function RootView() {
   const [invite, setInvite] = useState<string | undefined>(undefined);
   /** A workout a friend sent as a link, offered once the account is open. */
   const [sharedWorkout, setSharedWorkout] = useState<CustomWorkoutLink_Received | undefined>(undefined);
+  /** "What's new", opened by itself once for an update not read yet. */
+  const [showsUpdates, setShowsUpdates] = useState(false);
+  const updatesOffered = useRef(false);
+  const updates = usePatchNotes();
 
   /** `?onboarding=1` walks the new-account flow without making one (development builds). */
   const showsOnboarding = devFlag("onboarding") === "1" && !onboarded;
@@ -292,6 +298,21 @@ export function RootView() {
     if (received) setSharedWorkout(received);
   }, [signedInShell, sharedWorkout]);
 
+  // A new update, shown once as the app opens: on the home screen, never over
+  // a workout, a shared link or an invite. Someone who hasn't trained yet has
+  // nothing it changed for them, so it is simply marked read.
+  const hasUnseenUpdate = updates.hasUnseen;
+  useEffect(() => {
+    if (updatesOffered.current || !hasUnseenUpdate || !signedInShell) return;
+    if (running !== undefined || sharedWorkout !== undefined || invite !== undefined) return;
+    updatesOffered.current = true;
+    if (app.sessions.length === 0) {
+      PatchNotes.markSeen();
+      return;
+    }
+    setShowsUpdates(true);
+  }, [hasUnseenUpdate, signedInShell, running, sharedWorkout, invite, app.sessions.length]);
+
   return (
     <div style={{ height: "100%", background: SL.Surface.ground, color: SL.Ink.primary }}>
       <style>{"@keyframes slRootFade { from { opacity: 0 } to { opacity: 1 } }"}</style>
@@ -346,6 +367,14 @@ export function RootView() {
               </SafeArea>
             )}
           </FullScreenCover>
+
+          <Sheet isPresented={showsUpdates} onDismiss={() => setShowsUpdates(false)}>
+            {showsUpdates && (
+              <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" }}>
+                <PatchNotesView onClose={() => setShowsUpdates(false)} />
+              </div>
+            )}
+          </Sheet>
 
           <Sheet isPresented={sharedWorkout !== undefined} onDismiss={() => setSharedWorkout(undefined)}>
             {shownSharedWorkout !== undefined && (

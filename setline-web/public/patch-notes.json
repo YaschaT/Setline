@@ -1,6 +1,16 @@
 {
   "notes": [
     {
+      "id": "2026-10-30-2",
+      "date": "2026-10-30",
+      "title": "Swap in one tap",
+      "items": [
+        "Similar exercises now sit right under the exercise you're on, as cards you can swipe through. Each shows the muscle it works and how close a match it is. Tap one to swap; Undo puts it back.",
+        "The cards stay until you log your first set of that exercise. The Swap button is still there for everything else: pain, changing your plan, or your own exercise.",
+        "Updates like this one now open by themselves when you open the app, once. Tap Got it and they're out of the way; you can always find them again in Settings › What's new."
+      ]
+    },
+    {
       "id": "2026-10-30",
       "date": "2026-10-30",
       "title": "Your feedback, built in",

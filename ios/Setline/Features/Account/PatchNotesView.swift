@@ -131,6 +131,7 @@ struct PatchNotesView: View {
                         .slMeta()
                         .foregroundStyle(SL.Ink.tertiary)
                 }
+                Button("Got it", action: onClose).buttonStyle(SLPrimaryButtonStyle())
             }
         }
         .task {

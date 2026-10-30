@@ -40,6 +40,10 @@ struct RootView: View {
     private struct InviteLink: Identifiable { let id: String }
     /// A workout a friend sent as a link: setline://workout?workout=<code>.
     @State private var sharedWorkout: SharedWorkoutOffer?
+    /// "What's new", opened by itself once for an update not read yet.
+    @State private var showsUpdates = false
+    @State private var updatesOffered = false
+    private let updates = PatchNotes.shared
     private struct SharedWorkoutOffer: Identifiable {
         let id = UUID()
         let received: CustomWorkoutLink.Received
@@ -121,7 +125,17 @@ struct RootView: View {
             if !loading {
                 launchLoadDone = true
                 reopenLeftWorkout()
+                offerUpdates()
             }
+        }
+        .task {
+            await updates.load()
+            offerUpdates()
+        }
+        .onChange(of: updates.hasUnseen) { _, _ in offerUpdates() }
+        .sheet(isPresented: $showsUpdates) {
+            PatchNotesView(onClose: { showsUpdates = false })
+                .presentationDragIndicator(.visible)
         }
         // Resumed, finished or ended anywhere: no reminder about it is left.
         .onChange(of: app.resumableSession == nil) { _, none in if none { WorkoutReminder.cancel() } }
@@ -304,6 +318,21 @@ struct RootView: View {
     /// A workout left open — the app was closed in the background mid-workout
     /// — opens again where it was, rather than waiting on the home screen. A
     /// workout paused by hand stays paused; one left for hours stays too.
+    /// A new update, shown once as the app opens: on the home screen, never
+    /// over a workout, a shared link or an invite. Someone who hasn't trained
+    /// yet has nothing it changed for them, so it is simply marked read.
+    private func offerUpdates() {
+        guard !updatesOffered, updates.hasUnseen, app.isSignedIn, !app.isLoading,
+              !app.isNewAccount, !showsOnboarding, !showsColdOpen,
+              running == nil, sharedWorkout == nil, invite == nil else { return }
+        updatesOffered = true
+        if app.sessions.isEmpty {
+            updates.markSeen()
+            return
+        }
+        showsUpdates = true
+    }
+
     private func reopenLeftWorkout() {
         guard running == nil, let left = app.resumableSession, left.reopensOnLaunch(at: Date()),
               let day = app.day(for: left) else { return }

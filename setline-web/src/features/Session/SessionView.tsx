@@ -55,7 +55,7 @@ import { closedRange } from "../../core/Support/range";
 import { isSameDay } from "../../core/Support/calendar";
 import { uuid } from "../../core/Support/swift";
 import { ExercisePickerSheet } from "../Progress/ExercisePickerSheet";
-import { SwapSheet, type SwapOutcome } from "../Substitution/SwapFlow";
+import { SwapSheet, SwapSuggestionStrip, type SwapOutcome } from "../Substitution/SwapFlow";
 import { DropSetEditor, PerSideRepsTile, SetSidePicker } from "./DropSetEditor";
 import { PlateSheet } from "./PlateSheet";
 import { RestNotificationSheet } from "./RestNotificationSheet";
@@ -579,6 +579,15 @@ export function SessionView(p: {
             </span>
           </SLPillButton>
         </HStack>
+        {/* The same kind of exercises, one tap away, until the first set is in. */}
+        {!runner.hasLoggedSets({ slotIndex: runner.currentIndex }) && !S.isComplete(current) && (
+          <SwapSuggestionStrip
+            key={current.exercise.id}
+            exercise={current.exercise}
+            sessionExerciseIDs={runner.sessionExerciseIDs}
+            onPick={(exercise, reason) => handle({ kind: "substitute", _0: exercise, _1: reason })}
+          />
+        )}
       </VStack>
     </div>
   );

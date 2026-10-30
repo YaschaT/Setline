@@ -106,6 +106,73 @@ const escalationSignals = ["Sharp or sudden", "Tingling", "Loss of strength", "S
  * then the ways out, then — below a hairline, never beside them — the
  * program change and `Ik voel iets`.
  */
+/** How close a result is, as three bars: lime for a strong match. */
+export function MatchMeter({ strength }: { strength: 1 | 2 | 3 }) {
+  const tone = MatchMeter.tone(strength);
+  return (
+    <HStack spacing={3} aria-hidden style={{ alignItems: "flex-end", height: 14 }}>
+      {[1, 2, 3].map((bar) => (
+        <span key={bar} style={{ width: 5, height: 5 + bar * 3, borderRadius: 2, background: bar <= strength ? tone : SL.Surface.hairlineStrong }} />
+      ))}
+    </HStack>
+  );
+}
+MatchMeter.tone = (strength: 1 | 2 | 3): string => (strength === 3 ? SL.Signal.action : strength === 2 ? SL.Ink.primary : SL.Ink.secondary);
+
+/**
+ * The same kind of exercises, right under the exercise in the session: the
+ * swap list's best few as cards to swipe through, so another machine or
+ * another bar is one tap away (and one tap back, in the undo). Shown until
+ * the first set is logged; the Swap button keeps the rest — pain, the
+ * plan, your own exercise.
+ */
+export function SwapSuggestionStrip(p: { exercise: Exercise; sessionExerciseIDs: Set<string>; onPick: (exercise: Exercise, reason: SwapReason) => void }) {
+  const app = useApp();
+  const alternatives = app.alternatives({ for: p.exercise.id, occupied: false, excluding: p.sessionExerciseIDs }).slice(0, 5);
+  if (alternatives.length === 0) return null;
+  const reason = SwapContext.reason(
+    SwapContext.make({ currentExerciseID: p.exercise.id, role: "accessory", isOccupied: false, painfulLoadTags: app.painfulLoadTags }),
+  );
+  return (
+    <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
+      <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.secondary}>Similar · tap to swap</Text>
+      <div
+        role="list"
+        aria-label={`Exercises like ${p.exercise.name}`}
+        style={{ display: "flex", gap: SL.Space.s2, overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", alignSelf: "stretch", marginRight: -SL.Space.gutterSession, paddingRight: SL.Space.gutterSession }}
+      >
+        {alternatives.map((alternative) => {
+          const strength = SubstitutionCopy.strength(alternative);
+          const group = ExerciseModel.group(alternative.exercise);
+          return (
+            <Pressable
+              key={RankedAlternative.id(alternative)}
+              role="listitem"
+              aria-label={`Swap to ${alternative.exercise.name}, ${SubstitutionCopy.fit(alternative)}`}
+              onPress={() => p.onPick(alternative.exercise, reason)}
+              style={{ flex: "0 0 148px", scrollSnapAlign: "start", textAlign: "left", padding: SL.Space.s3, borderRadius: SL.Radius.lg, background: SL.Surface.raised, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}`, display: "flex", flexDirection: "column", gap: SL.Space.s2 }}
+            >
+              <HStack alignment="top" style={{ alignSelf: "stretch" }}>
+                <div aria-hidden style={{ width: 34, height: 34, padding: 5, boxSizing: "border-box", borderRadius: 10, background: strength === 3 ? SL.Signal.actionTint : SL.Surface.raised2, display: "grid", placeItems: "center" }}>
+                  <MuscleFigure group={group} highlight={strength === 3 ? SL.Signal.action : SL.Ink.primary} outline={colorOpacity(SL.Ink.secondary, 0.8)} style={{ width: "100%", height: "100%" }} />
+                </div>
+                <Spacer />
+                <MatchMeter strength={strength} />
+              </HStack>
+              <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={2} style={{ minHeight: 40 }}>
+                {alternative.exercise.name}
+              </Text>
+              <Text size={SL.TypeSize.micro} weight={SL.Weight.semibold} color={MatchMeter.tone(strength)} lineLimit={1}>
+                {SubstitutionCopy.fit(alternative)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </div>
+    </VStack>
+  );
+}
+
 export function SwapSheet(p: {
   exercise: Exercise;
   origin: Exercise | undefined;
@@ -298,7 +365,7 @@ export function SwapSheet(p: {
 
   const alternativeFace = (alternative: RankedAlternative, peers: RankedAlternative[], leads: boolean) => {
     const strength = SubstitutionCopy.strength(alternative);
-    const tone = strength === 3 ? SL.Signal.action : strength === 2 ? SL.Ink.primary : SL.Ink.secondary;
+    const tone = MatchMeter.tone(strength);
     const group = ExerciseModel.group(alternative.exercise);
     return (
       <HStack alignment="center" spacing={SL.Space.s3} style={{ paddingTop: SL.Space.s3, paddingBottom: SL.Space.s3, paddingLeft: 10, paddingRight: 10 }}>
@@ -317,11 +384,7 @@ export function SwapSheet(p: {
           )}
         </VStack>
         <VStack alignment="trailing" spacing={4} style={{ flexShrink: 0 }}>
-          <HStack spacing={3} aria-hidden style={{ alignItems: "flex-end", height: 14 }}>
-            {[1, 2, 3].map((bar) => (
-              <span key={bar} style={{ width: 5, height: 5 + bar * 3, borderRadius: 2, background: bar <= strength ? tone : SL.Surface.hairlineStrong }} />
-            ))}
-          </HStack>
+          <MatchMeter strength={strength} />
           <Text size={SL.TypeSize.micro} weight={SL.Weight.semibold} color={tone} lineLimit={1}>
             {SubstitutionCopy.fit(alternative)}
           </Text>

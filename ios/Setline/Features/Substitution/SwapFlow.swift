@@ -395,7 +395,7 @@ struct SwapSheet: View {
         _ alternative: RankedAlternative, among peers: [RankedAlternative], leads: Bool
     ) -> some View {
         let strength = SubstitutionCopy.strength(alternative)
-        let tone = strength == 3 ? SL.Signal.action : strength == 2 ? SL.Ink.primary : SL.Ink.secondary
+        let tone = MatchMeter.tone(strength)
         let group = alternative.exercise.group
         return HStack(alignment: .center, spacing: SL.Space.s3) {
             MuscleFigure(group: group, highlight: strength == 3 ? SL.Signal.action : SL.Ink.primary,
@@ -429,15 +429,7 @@ struct SwapSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 4) {
-                HStack(alignment: .bottom, spacing: 3) {
-                    ForEach(1...3, id: \.self) { bar in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(bar <= strength ? tone : SL.Surface.hairlineStrong)
-                            .frame(width: 5, height: CGFloat(5 + bar * 3))
-                    }
-                }
-                .frame(height: 14, alignment: .bottom)
-                .accessibilityHidden(true)
+                MatchMeter(strength: strength)
                 Text(SubstitutionCopy.fit(alternative))
                     .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
                     .foregroundStyle(tone)
@@ -1187,5 +1179,100 @@ struct FlowRow: Layout {
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
+    }
+}
+
+/// How close a result is, as three bars: lime for a strong match.
+struct MatchMeter: View {
+    let strength: Int
+
+    static func tone(_ strength: Int) -> Color {
+        strength == 3 ? SL.Signal.action : strength == 2 ? SL.Ink.primary : SL.Ink.secondary
+    }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 3) {
+            ForEach(1...3, id: \.self) { bar in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(bar <= strength ? Self.tone(strength) : SL.Surface.hairlineStrong)
+                    .frame(width: 5, height: CGFloat(5 + bar * 3))
+            }
+        }
+        .frame(height: 14, alignment: .bottom)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The same kind of exercises, right under the exercise in the session: the
+/// swap list's best few as cards to swipe through, so another machine or
+/// another bar is one tap away (and one tap back, in the undo). Shown until
+/// the first set is logged; the Swap button keeps the rest — pain, the
+/// plan, your own exercise.
+struct SwapSuggestionStrip: View {
+    @Environment(AppState.self) private var app
+    let exercise: Exercise
+    let sessionExerciseIDs: Set<String>
+    let onPick: (Exercise, SwapReason) -> Void
+
+    var body: some View {
+        let alternatives = Array(app.alternatives(for: exercise.id, occupied: false, excluding: sessionExerciseIDs).prefix(5))
+        if !alternatives.isEmpty {
+            let reason = SwapContext(
+                currentExerciseID: exercise.id, role: .accessory,
+                isOccupied: false, painfulLoadTags: app.painfulLoadTags
+            ).reason
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                Text("Similar · tap to swap")
+                    .slMeta(SL.Weight.semibold)
+                    .foregroundStyle(SL.Ink.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: SL.Space.s2) {
+                        ForEach(alternatives) { alternative in
+                            card(alternative) { onPick(alternative.exercise, reason) }
+                        }
+                    }
+                    .scrollTargetLayout()
+                    .padding(.trailing, SL.Space.gutterSession)
+                }
+                .scrollTargetBehavior(.viewAligned)
+                .padding(.trailing, -SL.Space.gutterSession)
+                .accessibilityLabel("Exercises like \(exercise.name)")
+            }
+        }
+    }
+
+    private func card(_ alternative: RankedAlternative, action: @escaping () -> Void) -> some View {
+        let strength = SubstitutionCopy.strength(alternative)
+        return Button(action: action) {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                HStack(alignment: .top) {
+                    MuscleFigure(group: alternative.exercise.group,
+                                 highlight: strength == 3 ? SL.Signal.action : SL.Ink.primary,
+                                 outline: SL.Ink.secondary.opacity(0.8))
+                        .padding(5)
+                        .frame(width: 34, height: 34)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(strength == 3 ? SL.Signal.actionTint : SL.Surface.raised2))
+                    Spacer(minLength: 0)
+                    MatchMeter(strength: strength)
+                }
+                Text(alternative.exercise.name)
+                    .slBody(SL.Weight.semibold)
+                    .foregroundStyle(SL.Ink.primary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2, reservesSpace: true)
+                Text(SubstitutionCopy.fit(alternative))
+                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                    .foregroundStyle(MatchMeter.tone(strength))
+                    .lineLimit(1)
+            }
+            .padding(SL.Space.s3)
+            .frame(width: 148, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised))
+            .overlay(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).strokeBorder(SL.Surface.hairline, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
+        }
+        .buttonStyle(SLPressStyle(scale: 0.97))
+        .accessibilityLabel("Swap to \(alternative.exercise.name), \(SubstitutionCopy.fit(alternative))")
     }
 }

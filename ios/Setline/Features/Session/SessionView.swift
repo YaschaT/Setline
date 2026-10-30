@@ -590,6 +590,15 @@ struct SessionView: View {
                 .accessibilityLabel("Swap \(runner.current.exercise.name)")
                 .accessibilityHint("Alternatives, change the order or report pain")
             }
+            // The same kind of exercises, one tap away, until the first set is in.
+            if !runner.hasLoggedSets(slotIndex: runner.currentIndex), !runner.current.isComplete {
+                SwapSuggestionStrip(
+                    exercise: runner.current.exercise,
+                    sessionExerciseIDs: runner.sessionExerciseIDs,
+                    onPick: { exercise, reason in handle(.substitute(exercise, reason)) }
+                )
+                .id(runner.current.exercise.id)
+            }
         }
     }
 
