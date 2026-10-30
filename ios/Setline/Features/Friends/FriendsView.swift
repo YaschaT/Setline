@@ -46,7 +46,7 @@ struct FriendsView: View {
                 case .ready:
                     if social.offlineSince != nil { offlineBanner }
                     if !social.incoming.isEmpty { requestsBanner }
-                    if !social.friends.isEmpty { chatRow }
+                    if !social.friends.isEmpty, social.chatAvailable { chatRow }
                     if !social.pending.isEmpty { pendingBanner }
                     if let session = unpostedWorkout {
                         latestWorkoutPrompt(session)

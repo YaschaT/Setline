@@ -1407,6 +1407,12 @@ export class SocialStore {
 
   /** The newest message, for the Friends tab's chat row; refreshed with the tab. */
   chatLatest: ChatMessage | undefined = undefined;
+  /**
+   * The server has the chat (chat_messages answers). Until it does, the
+   * Friends tab shows no way in, so the chat switches itself on the moment
+   * the table exists, without a new version of the app.
+   */
+  chatAvailable = false;
 
   /** The last 100 messages you can see, oldest first. */
   async chatMessages(): Promise<ChatMessage[]> {
@@ -1429,6 +1435,7 @@ export class SocialStore {
         `chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(${SocialStore.profileFields})&order=created_at.desc&limit=1`,
       )) as unknown[];
       this.chatLatest = rows.map(ChatMessage.decode)[0];
+      this.chatAvailable = true;
       this.changed();
     } catch {
       /* the row keeps what it showed */

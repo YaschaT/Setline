@@ -315,7 +315,7 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
         <>
           {social.offlineSince !== undefined && offlineBanner}
           {social.incoming.length > 0 && requestsBanner}
-          {social.friends.length > 0 && chatRow}
+          {social.friends.length > 0 && social.chatAvailable && chatRow}
           {social.pending.length > 0 && pendingBanner}
           {unpostedWorkout && latestWorkoutPrompt(unpostedWorkout)}
           {!social.hasPost({ sessionID: SocialStore.restID(today) }) && !app.sessions.some((s) => s.kind === "workout" && isSameDay(s.date, today)) && restDayRow}

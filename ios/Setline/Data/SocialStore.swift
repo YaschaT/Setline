@@ -1082,6 +1082,10 @@ final class SocialStore {
 
     /// The newest message, for the Friends tab's chat row; refreshed with the tab.
     private(set) var chatLatest: ChatMessage?
+    /// The server has the chat (chat_messages answers). Until it does, the
+    /// Friends tab shows no way in, so the chat switches itself on the moment
+    /// the table exists, without a new version of the app.
+    private(set) var chatAvailable = false
     private var demoChat: [ChatMessage]?
 
     private static let chatQuery =
@@ -1105,9 +1109,13 @@ final class SocialStore {
         guard me != nil else { return }
         if isDemo {
             chatLatest = (try? await chatMessages())?.last
+            chatAvailable = true
             return
         }
-        if let rows: [ChatMessage] = try? await get("\(Self.chatQuery)&limit=1") { chatLatest = rows.first }
+        if let rows: [ChatMessage] = try? await get("\(Self.chatQuery)&limit=1") {
+            chatLatest = rows.first
+            chatAvailable = true
+        }
     }
 
     func sendChat(_ text: String, topic: ChatTopic?) async throws {
