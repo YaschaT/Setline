@@ -16,12 +16,15 @@ WANTED="${1:-}"
 LIST="$(mktemp -t setline-devices).json"
 
 xcrun devicectl list devices --json-output "$LIST" >/dev/null
-# name|udid|devicectl id|developer mode — connected iPhones only.
+# name|udid|devicectl id|developer mode — connected iPhones only. A phone on
+# the cable (or on this Wi-Fi) shows its tunnel "disconnected" until something
+# opens it, so being reachable is enough; it is opened below.
 PHONES="$(python3 - "$LIST" <<'EOF'
 import json, sys
 for d in json.load(open(sys.argv[1]))["result"]["devices"]:
     h, c, p = d.get("hardwareProperties", {}), d.get("connectionProperties", {}), d.get("deviceProperties", {})
-    if h.get("deviceType") == "iPhone" and c.get("pairingState") == "paired" and c.get("tunnelState") == "connected":
+    reachable = c.get("tunnelState") == "connected" or c.get("transportType") in ("wired", "localNetwork")
+    if h.get("deviceType") == "iPhone" and c.get("pairingState") == "paired" and reachable:
         print(f'{p.get("name")}|{h.get("udid")}|{d.get("identifier")}|{p.get("developerModeStatus")}')
 EOF
 )"
@@ -46,11 +49,19 @@ if [ "$DEVMODE" != "enabled" ]; then
   exit 1
 fi
 
+# Opens the connection; fails while the phone is locked.
+if ! xcrun devicectl device info details --device "$ID" >/dev/null 2>&1; then
+  echo "Can't reach $NAME. Unlock it (and tap Trust if it asks), then run this again." >&2
+  exit 1
+fi
+
 echo "Building Setline for $NAME…"
+APP="DerivedData-device/Build/Products/Release-iphoneos/Setline.app"
+# A failed build must never install the previous one.
+rm -rf "$APP"
 xcodebuild -project Setline.xcodeproj -scheme Setline -configuration Release \
   -destination "id=$UDID" -derivedDataPath "$PWD/DerivedData-device" \
   -allowProvisioningUpdates build | grep -E "error:|BUILD" || true
-APP="DerivedData-device/Build/Products/Release-iphoneos/Setline.app"
 [ -d "$APP" ] || { echo "The build failed — see the errors above." >&2; exit 1; }
 
 echo "Installing on $NAME…"
