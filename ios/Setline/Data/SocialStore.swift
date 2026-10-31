@@ -499,6 +499,7 @@ final class SocialStore {
             friendships = []
             feed = []
             phase = .loading
+            backfilled = false
             loadPending()
         }
         guard !myID.isEmpty else { return }
@@ -526,6 +527,7 @@ final class SocialStore {
                 await sendPending()
                 flushing = false
             }
+            await backfillExercises()
         } catch SupabaseClient.Failure.network {
             // No connection: what loaded last stays readable (SETLINE Social S3).
             if feed.isEmpty { loadFeedCache() }
@@ -538,6 +540,39 @@ final class SocialStore {
         } catch {
             phase = Self.phase(for: error)
         }
+    }
+
+    private struct MissingExercises: Decodable, Sendable {
+        let id: String
+        let session_id: String
+    }
+
+    private struct ExercisesPatch: Encodable {
+        let exercises: [PostExercise]
+    }
+
+    /// Set once this account's older posts have been looked at.
+    private var backfilled = false
+
+    /// Posts made before posts carried their exercises, or named a friend in
+    /// an edit later: filled in from your own log, so a friend sees what you
+    /// trained. Once a launch; a post whose workout is not on this device
+    /// stays as it is.
+    private func backfillExercises() async {
+        guard !backfilled, let app, !app.sessions.isEmpty else { return }
+        backfilled = true
+        guard let missing: [MissingExercises] = try? await get("posts?select=id,session_id&user_id=eq.\(myID)&exercises=is.null&limit=100"),
+              !missing.isEmpty else { return }
+        var changed = false
+        for post in missing {
+            guard let session = app.sessions.first(where: { $0.id == post.session_id }) else { continue }
+            let exercises = PostExercise.list(from: session)
+            guard !exercises.isEmpty, let body = try? JSONEncoder().encode(ExercisesPatch(exercises: exercises)) else { continue }
+            guard (try? await send("posts?id=eq.\(post.id)", method: "PATCH", body: body)) != nil else { continue }
+            if let index = feed.firstIndex(where: { $0.id == post.id }) { feed[index].exercises = exercises }
+            changed = true
+        }
+        if changed { saveFeedCache() }
     }
 
     /// Set while the feed shows what loaded before the connection went.

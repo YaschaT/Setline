@@ -860,6 +860,7 @@ export class SocialStore {
       this.me = undefined;
       this.friendships = [];
       this.feed = [];
+      this.backfilled = false;
       this.phase = { kind: "loading" };
       this.changed();
       await this.loadPending();
@@ -896,6 +897,7 @@ export class SocialStore {
         await this.sendPending();
         this.flushing = false;
       }
+      await this.backfillExercises();
     } catch (error) {
       if (isNetwork(error)) {
         // No connection: what loaded last stays readable (SETLINE Social S3).
@@ -910,6 +912,45 @@ export class SocialStore {
         this.phase = SocialStore.phaseFor(error);
       }
       this.changed();
+    }
+  }
+
+  /** Set once this account's older posts have been looked at. */
+  private backfilled = false;
+
+  /**
+   * Posts made before posts carried their exercises, or named a friend in an
+   * edit later: filled in from your own log, so a friend sees what you
+   * trained. Once a load; a post whose workout is not in this log stays as it is.
+   */
+  private async backfillExercises(): Promise<void> {
+    const app = this.app;
+    if (this.backfilled || !app || app.sessions.length === 0) return;
+    this.backfilled = true;
+    let missing: { id: string; session_id: string }[];
+    try {
+      missing = (await this.get(`posts?select=id,session_id&user_id=eq.${this.myID}&exercises=is.null&limit=100`)) as { id: string; session_id: string }[];
+    } catch {
+      return;
+    }
+    let changed = false;
+    for (const post of missing) {
+      const session = app.sessions.find((s) => s.id === post.session_id);
+      if (!session) continue;
+      const exercises = PostExercise.list(session);
+      if (exercises.length === 0) continue;
+      const body = JSON.stringify({ exercises: exercises.map((e) => ({ name: e.name, sets: e.sets, weight_kg: e.weight_kg ?? null, reps: e.reps ?? null })) });
+      try {
+        await this.send(`posts?id=eq.${post.id}`, { method: "PATCH", body });
+      } catch {
+        continue;
+      }
+      this.feed = this.feed.map((p) => (p.id === post.id ? { ...p, exercises } : p));
+      changed = true;
+    }
+    if (changed) {
+      this.changed();
+      this.saveFeedCache();
     }
   }
 
