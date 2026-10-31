@@ -153,8 +153,48 @@ struct ChatMessage: Codable, Hashable, Identifiable, Sendable {
     let topic: ChatTopic?
     let created_at: String
     var author: SocialProfile?
+    /// The room it was written in; none is the friends' chat.
+    var room_id: String? = nil
+    /// A photo with it, in the post-media bucket.
+    var image_path: String? = nil
 
     var date: Date { SocialStore.parseDate(created_at) ?? Date() }
+}
+
+/// A conversation besides the friends' chat: Everyone (every Setline
+/// lifter), a private one between two friends, or a room someone started on
+/// a topic.
+struct ChatRoom: Codable, Hashable, Identifiable, Sendable {
+    enum Kind: String, Codable, Sendable { case everyone, direct, room }
+    struct Member: Codable, Hashable, Sendable {
+        let user_id: String
+        var member: SocialProfile?
+    }
+
+    static let everyoneID = "00000000-0000-0000-0000-000000000001"
+
+    let id: String
+    let kind: Kind
+    var name: String?
+    var created_by: String?
+    let created_at: String
+    var chat_members: [Member]?
+
+    var members: [SocialProfile] { (chat_members ?? []).compactMap(\.member) }
+
+    /// "Everyone", the friend's name, or the room's own.
+    func title(myID: String) -> String {
+        switch kind {
+        case .everyone: return "Everyone"
+        case .direct: return other(myID: myID)?.display_name ?? "Private chat"
+        case .room: return name ?? "Room"
+        }
+    }
+
+    /// The friend on the other side of a private chat.
+    func other(myID: String) -> SocialProfile? {
+        kind == .direct ? members.first { $0.user_id != myID } : nil
+    }
 }
 
 /// A workout as a friend sees it: a summary, never the log itself.
@@ -1091,17 +1131,65 @@ final class SocialStore {
     private static let chatQuery =
         "chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(\(profileFields))&order=created_at.desc"
 
-    /// The last 100 messages you can see, oldest first.
-    func chatMessages() async throws -> [ChatMessage] {
+    /// Rooms are on the server (chat_rooms answers): Everyone, private chats
+    /// and rooms switch themselves on the moment the tables exist.
+    private(set) var roomsAvailable = false
+    /// Every room you are in, Everyone first.
+    private(set) var rooms: [ChatRoom] = []
+    /// The newest message per conversation, keyed by room id ("" is the friends' chat).
+    private(set) var latestByRoom: [String: ChatMessage] = [:]
+    private var demoRoomChat: [String: [ChatMessage]] = [:]
+
+    private var messageQuery: String {
+        let base = "chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(\(Self.profileFields))"
+        return roomsAvailable ? base + ",room_id,image_path" : base
+    }
+
+    /// The rooms you are in and each conversation's newest message.
+    func loadRooms() async {
+        guard let me else { return }
+        if isDemo {
+            if rooms.isEmpty { rooms = demo.rooms(me: me) }
+            if demoRoomChat.isEmpty { demoRoomChat = demo.roomChat(me: me) }
+            if demoChat == nil { demoChat = demo.chat(me: me) }
+            roomsAvailable = true
+            chatAvailable = true
+            var latest: [String: ChatMessage] = [:]
+            latest[""] = demoChat?.last
+            for (room, messages) in demoRoomChat { latest[room] = messages.last }
+            latestByRoom = latest
+            return
+        }
+        let query = "chat_rooms?select=id,kind,name,created_by,created_at,chat_members(user_id,member:profiles!chat_members_user_id_fkey(\(Self.profileFields)))&order=created_at.asc"
+        guard let list: [ChatRoom] = try? await get(query) else { return }
+        rooms = list.filter { $0.kind == .everyone } + list.filter { $0.kind != .everyone }
+        roomsAvailable = true
+        if let recent: [ChatMessage] = try? await get("\(messageQuery)&order=created_at.desc&limit=300") {
+            var latest: [String: ChatMessage] = [:]
+            for message in recent where latest[message.room_id ?? ""] == nil { latest[message.room_id ?? ""] = message }
+            latestByRoom = latest
+            chatAvailable = true
+        }
+    }
+
+    /// The last 100 messages of a conversation, oldest first; no room is the friends' chat.
+    func chatMessages(room: String? = nil) async throws -> [ChatMessage] {
         let messages: [ChatMessage]
         if isDemo {
-            if demoChat == nil, let me { demoChat = demo.chat(me: me) }
-            messages = demoChat ?? []
+            if let room {
+                messages = demoRoomChat[room] ?? []
+            } else {
+                if demoChat == nil, let me { demoChat = demo.chat(me: me) }
+                messages = demoChat ?? []
+            }
         } else {
-            let rows: [ChatMessage] = try await get("\(Self.chatQuery)&limit=100")
-            messages = rows.reversed()
+            let filter = roomsAvailable ? (room.map { "&room_id=eq.\($0)" } ?? "&room_id=is.null") : ""
+            let rows: [ChatMessage] = try await get("\(messageQuery)\(filter)&order=created_at.desc&limit=100")
+            let hidden = Set(blocked.map(\.user_id))
+            messages = rows.reversed().filter { !hidden.contains($0.user_id) }
         }
-        if messages.last?.id != chatLatest?.id { chatLatest = messages.last }
+        if let last = messages.last, latestByRoom[room ?? ""]?.id != last.id { latestByRoom[room ?? ""] = last }
+        if room == nil, messages.last?.id != chatLatest?.id { chatLatest = messages.last }
         return messages
     }
 
@@ -1110,33 +1198,102 @@ final class SocialStore {
         if isDemo {
             chatLatest = (try? await chatMessages())?.last
             chatAvailable = true
+            await loadRooms()
             return
         }
         if let rows: [ChatMessage] = try? await get("\(Self.chatQuery)&limit=1") {
             chatLatest = rows.first
             chatAvailable = true
         }
+        await loadRooms()
     }
 
-    func sendChat(_ text: String, topic: ChatTopic?) async throws {
+    /// A message, with a photo if one is given; no room is the friends' chat.
+    func sendChat(_ text: String, topic: ChatTopic?, room: String? = nil, photo: Data? = nil) async throws {
         let body = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000))
-        guard !body.isEmpty else { return }
+        guard !body.isEmpty || photo != nil else { return }
+        var path: String?
+        if let photo {
+            let name = "\(myID)/chat/\(UUID().uuidString.lowercased()).jpg"
+            if isDemo {
+                demoMedia[name] = photo
+            } else {
+                _ = try await storage("object/post-media/\(name)", method: "POST", body: photo, contentType: "image/jpeg")
+            }
+            path = name
+        }
         if isDemo {
             let message = ChatMessage(id: UUID().uuidString, user_id: myID, body: body, topic: topic,
-                                      created_at: Self.isoString(Date()), author: me)
-            demoChat = (demoChat ?? []) + [message]
+                                      created_at: Self.isoString(Date()), author: me, room_id: room, image_path: path)
+            if let room { demoRoomChat[room, default: []].append(message) } else { demoChat = (demoChat ?? []) + [message] }
             return
         }
-        let row = try JSONSerialization.data(withJSONObject: [
-            "user_id": myID, "body": body, "topic": topic?.rawValue ?? NSNull(),
-        ] as [String: Any])
-        _ = try await send("chat_messages", method: "POST", body: row)
+        var row: [String: Any] = ["user_id": myID, "body": body, "topic": topic?.rawValue ?? NSNull()]
+        if let room { row["room_id"] = room }
+        if let path { row["image_path"] = path }
+        _ = try await send("chat_messages", method: "POST", body: try JSONSerialization.data(withJSONObject: row))
+    }
+
+    private static let roomFields = "id,kind,name,created_by,created_at"
+
+    /// A room on a topic, with the friends picked; you are its first member.
+    func createRoom(name: String, memberIDs: [String]) async throws -> ChatRoom {
+        let title = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
+        let ids = [myID] + Array(Set(memberIDs.filter { $0 != myID }))
+        if isDemo {
+            let people = ([me].compactMap { $0 } + friends).filter { ids.contains($0.user_id) }
+            let room = ChatRoom(id: UUID().uuidString, kind: .room, name: title, created_by: myID, created_at: Self.isoString(Date()),
+                                chat_members: people.map { ChatRoom.Member(user_id: $0.user_id, member: $0) })
+            rooms.append(room)
+            return room
+        }
+        let row = try JSONSerialization.data(withJSONObject: ["kind": "room", "name": title, "created_by": myID])
+        let data = try await send("chat_rooms?select=\(Self.roomFields)", method: "POST", body: row, prefer: "return=representation")
+        guard let room = try JSONDecoder().decode([ChatRoom].self, from: data).first else { throw SupabaseClient.Failure.network }
+        let members = try JSONSerialization.data(withJSONObject: ids.map { ["room_id": room.id, "user_id": $0] })
+        _ = try await send("chat_members", method: "POST", body: members)
+        await loadRooms()
+        return rooms.first { $0.id == room.id } ?? room
+    }
+
+    /// The private chat with a friend: the one you have, or a new one.
+    func directRoom(with friend: SocialProfile) async throws -> ChatRoom {
+        if let held = rooms.first(where: { $0.kind == .direct && $0.members.contains { $0.user_id == friend.user_id } }) { return held }
+        if isDemo {
+            let room = ChatRoom(id: UUID().uuidString, kind: .direct, name: nil, created_by: myID, created_at: Self.isoString(Date()),
+                                chat_members: [me, friend].compactMap { $0 }.map { ChatRoom.Member(user_id: $0.user_id, member: $0) })
+            rooms.append(room)
+            return room
+        }
+        let row = try JSONSerialization.data(withJSONObject: ["kind": "direct", "created_by": myID])
+        let data = try await send("chat_rooms?select=\(Self.roomFields)", method: "POST", body: row, prefer: "return=representation")
+        guard let room = try JSONDecoder().decode([ChatRoom].self, from: data).first else { throw SupabaseClient.Failure.network }
+        let members = try JSONSerialization.data(withJSONObject: [
+            ["room_id": room.id, "user_id": myID], ["room_id": room.id, "user_id": friend.user_id],
+        ])
+        _ = try await send("chat_members", method: "POST", body: members)
+        await loadRooms()
+        return rooms.first { $0.id == room.id } ?? room
+    }
+
+    /// Out of a room; the one who started it closes it for everyone.
+    func leaveRoom(_ room: ChatRoom) async throws {
+        if !isDemo {
+            if room.created_by == myID {
+                _ = try await send("chat_rooms?id=eq.\(room.id)", method: "DELETE")
+            } else {
+                _ = try await send("chat_members?room_id=eq.\(room.id)&user_id=eq.\(myID)", method: "DELETE")
+            }
+        }
+        rooms.removeAll { $0.id == room.id }
+        latestByRoom[room.id] = nil
     }
 
     /// Your own messages only.
     func deleteChat(_ message: ChatMessage) async throws {
         if isDemo {
             demoChat?.removeAll { $0.id == message.id }
+            if let room = message.room_id { demoRoomChat[room]?.removeAll { $0.id == message.id } }
             return
         }
         _ = try await send("chat_messages?id=eq.\(message.id)", method: "DELETE")
@@ -1274,6 +1431,41 @@ private struct DemoSocial {
                         topic: .food, created_at: at(95), author: me),
             ChatMessage(id: "c4", user_id: cleo.user_id, body: "Banana and a coffee, 45 min before.", topic: nil, created_at: at(88), author: cleo),
             ChatMessage(id: "c5", user_id: sam.user_id, body: "Leg day done. Who's next? 💪", topic: .motivation, created_at: at(12), author: sam),
+        ]
+    }
+
+    func rooms(me: SocialProfile) -> [ChatRoom] {
+        func member(_ p: SocialProfile) -> ChatRoom.Member { ChatRoom.Member(user_id: p.user_id, member: p) }
+        let then = SocialStore.isoString(Date().addingTimeInterval(-7 * 86_400))
+        return [
+            ChatRoom(id: ChatRoom.everyoneID, kind: .everyone, name: "Everyone", created_by: nil, created_at: then, chat_members: []),
+            ChatRoom(id: "demo-room-legs", kind: .room, name: "Leg day crew", created_by: me.user_id, created_at: then,
+                     chat_members: [member(me), member(sam), member(cleo)]),
+            ChatRoom(id: "demo-direct-sam", kind: .direct, name: nil, created_by: sam.user_id, created_at: then,
+                     chat_members: [member(me), member(sam)]),
+        ]
+    }
+
+    func roomChat(me: SocialProfile) -> [String: [ChatMessage]] {
+        let now = Date()
+        func at(_ minutes: Double) -> String { SocialStore.isoString(now.addingTimeInterval(-minutes * 60)) }
+        return [
+            ChatRoom.everyoneID: [
+                ChatMessage(id: "e1", user_id: lina.user_id, body: "Anyone run 5/3/1 for bench? Worth it?", topic: .training,
+                            created_at: at(48), author: lina, room_id: ChatRoom.everyoneID),
+                ChatMessage(id: "e2", user_id: noah.user_id, body: "Three cycles in, +7.5 kg. Slow but it sticks.", topic: nil,
+                            created_at: at(41), author: noah, room_id: ChatRoom.everyoneID),
+            ],
+            "demo-room-legs": [
+                ChatMessage(id: "l1", user_id: sam.user_id, body: "Thursday 7am, who's in?", topic: .training,
+                            created_at: at(130), author: sam, room_id: "demo-room-legs"),
+                ChatMessage(id: "l2", user_id: me.user_id, body: "In. Bringing the chalk.", topic: nil,
+                            created_at: at(122), author: me, room_id: "demo-room-legs"),
+            ],
+            "demo-direct-sam": [
+                ChatMessage(id: "d1", user_id: sam.user_id, body: "Send me that cut plan 🙏", topic: .food,
+                            created_at: at(15), author: sam, room_id: "demo-direct-sam"),
+            ],
         ]
     }
 

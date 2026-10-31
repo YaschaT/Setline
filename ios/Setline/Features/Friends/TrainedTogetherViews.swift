@@ -125,9 +125,9 @@ enum TrainedWithLine {
     }
 }
 
-/// A workout done together, on the post's own page: a section per person —
-/// the post's author first, then each friend named, from their own post of
-/// that day.
+/// The workout on the post's own page, exercise by exercise. Done together,
+/// it is a section per person — the post's author first, then each friend
+/// named, from their own post of that day.
 struct TogetherSection: View {
     @Environment(SocialStore.self) private var social
     let post: FeedPost
@@ -136,7 +136,7 @@ struct TogetherSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SL.Space.s4) {
-            Text("TOGETHER")
+            Text(post.trainedWith.isEmpty ? "THE WORKOUT" : "TOGETHER")
                 .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
                 .tracking(SL.TypeSize.meta * 0.06)
                 .foregroundStyle(SL.Ink.secondary)
@@ -147,7 +147,9 @@ struct TogetherSection: View {
                 } else {
                     VStack(alignment: .leading, spacing: SL.Space.s1) {
                         Text(friend.user_id == social.myID ? "You" : friend.display_name).slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
-                        Text(loaded ? "No post from \(friend.user_id == social.myID ? "you" : friend.display_name) for this day yet." : "Loading…")
+                        Text(!loaded ? "Loading…"
+                             : friend.user_id == social.myID ? "Your own sets show here once you post this workout too."
+                             : "Trained along. Their own sets show here once they post this workout.")
                             .slMeta().foregroundStyle(SL.Ink.secondary)
                     }
                     .padding(SL.Space.s4)
@@ -157,6 +159,10 @@ struct TogetherSection: View {
             }
         }
         .task(id: post.id) {
+            guard !post.trainedWith.isEmpty else {
+                loaded = true
+                return
+            }
             theirs = await social.togetherPosts(for: post)
             loaded = true
         }

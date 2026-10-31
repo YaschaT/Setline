@@ -11,6 +11,7 @@ struct FriendsView: View {
     let onAccount: () -> Void
     @State private var showsPeople = false
     @State private var chatting = false
+    @State private var showsMyProfile = false
     @State private var composing: ComposeTarget?
     /// Workouts the lifter said not to post, so the prompt moves on.
     @AppStorage("setline.social.skippedPrompts") private var skippedPrompts = ""
@@ -46,7 +47,8 @@ struct FriendsView: View {
                 case .ready:
                     if social.offlineSince != nil { offlineBanner }
                     if !social.incoming.isEmpty { requestsBanner }
-                    if !social.friends.isEmpty, social.chatAvailable { chatRow }
+                    myProfileRow
+                    if social.chatAvailable, !social.friends.isEmpty || social.roomsAvailable { chatRow }
                     if !social.pending.isEmpty { pendingBanner }
                     if let session = unpostedWorkout {
                         latestWorkoutPrompt(session)
@@ -75,8 +77,11 @@ struct FriendsView: View {
             await social.load()
             await social.refreshChatLatest()
         }
+        .fullScreenCover(isPresented: $showsMyProfile) {
+            FriendProfileView(userID: social.myID, onClose: { showsMyProfile = false })
+        }
         .fullScreenCover(isPresented: $chatting, onDismiss: { Task { await social.refreshChatLatest() } }) {
-            ChatView(onClose: { chatting = false })
+            ChatInbox(onClose: { chatting = false })
         }
         .fullScreenCover(item: $composing) { target in
             switch target {
@@ -107,12 +112,43 @@ struct FriendsView: View {
         }
     }
 
+    /// Your own profile, one tap from the top: streak and badges at a glance.
+    private var myProfileRow: some View {
+        let earned = (Milestones.make(sessions: app.sessions, bestStreak: app.streak.best) + app.habitMilestones()).filter(\.isReached).count
+        return Button { showsMyProfile = true } label: {
+            HStack(spacing: SL.Space.s3) {
+                SLAvatar(photo: app.profilePhoto, initial: app.avatarInitial, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(social.me?.display_name ?? "Your profile").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).lineLimit(1)
+                    HStack(spacing: 6) {
+                        SLGlyph(name: .flameFill, size: 11, fixed: true).foregroundStyle(app.streak.weeks > 0 ? SL.Signal.action : SL.Ink.tertiary)
+                        Text("\(app.streak.weeks)-week streak · \(earned == 1 ? "1 badge" : "\(earned) badges")")
+                            .slMeta().slNumerals().foregroundStyle(SL.Ink.secondary).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: SL.Space.s2)
+                Text("Profile").font(.sl(SL.TypeSize.meta, SL.Weight.semibold)).foregroundStyle(SL.Signal.action)
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(SL.Space.s3)
+            .slBorderBox()
+            .slListCard()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.98))
+        .accessibilityLabel("Your profile, \(app.streak.weeks)-week streak, \(earned) badges")
+    }
+
     /// The way into the chat, at the top of the feed: the latest message, and
     /// a lime dot while a friend's message is newer than your last look.
     private var chatRow: some View {
-        let latest = social.chatLatest
-        let unread = latest.map { $0.user_id != social.myID && $0.created_at > ChatReadMarker.value } ?? false
-        let who = latest.map { $0.user_id == social.myID ? "You" : ($0.author?.display_name.split(separator: " ").first.map(String.init) ?? "Friend") }
+        // The newest message of every chat you are in, and whether any is unread.
+        let all = social.latestByRoom
+        let newest = all.values.max { $0.created_at < $1.created_at } ?? social.chatLatest
+        let unread = all.isEmpty
+            ? (social.chatLatest.map { $0.user_id != social.myID && $0.created_at > ChatReadMarker.value } ?? false)
+            : all.contains { room, message in message.user_id != social.myID && message.created_at > ChatReadMarker.value(room.isEmpty ? nil : room) }
+        let who = newest.map { $0.user_id == social.myID ? "You" : ($0.author?.display_name.split(separator: " ").first.map(String.init) ?? "Someone") }
         return Button { chatting = true } label: {
             HStack(spacing: SL.Space.s3) {
                 Image(systemName: "bubble.left.fill")
@@ -128,8 +164,9 @@ struct FriendsView: View {
                         }
                     }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Chat").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
-                    Text(latest.map { "\(who ?? "Friend"): \($0.body)" } ?? "Ask about training or food, or cheer each other on")
+                    Text(social.roomsAvailable ? "Chats" : "Chat").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                    Text(newest.map { "\(who ?? "Someone"): \($0.body.isEmpty ? "Photo" : $0.body)" }
+                         ?? (social.roomsAvailable ? "Everyone, friends, private chats and rooms" : "Ask about training or food, or cheer each other on"))
                         .slMeta(unread ? SL.Weight.semibold : SL.Weight.regular)
                         .foregroundStyle(unread ? SL.Ink.primary : SL.Ink.secondary)
                         .lineLimit(1)
@@ -143,7 +180,7 @@ struct FriendsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SLPressStyle(scale: 0.98))
-        .accessibilityLabel(unread ? "Chat, new message" : "Chat")
+        .accessibilityLabel(unread ? "Chats, new message" : "Chats")
     }
 
     private var requestsBanner: some View {
@@ -674,6 +711,16 @@ struct PostCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let with = TrainedWithLine.text(post.trainedWith) {
                 Text(with).slBody(SL.Weight.medium).foregroundStyle(SL.Signal.action)
+            }
+            // What was trained, at a glance; the post's page lists every set.
+            if !isDetail, let names = post.exercises?.map(\.name), !names.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "dumbbell.fill").font(.system(size: 11, weight: .semibold))
+                    Text(names.prefix(3).joined(separator: " · ") + (names.count > 3 ? " · +\(names.count - 3)" : ""))
+                        .lineLimit(1)
+                }
+                .font(.sl(SL.TypeSize.meta, SL.Weight.medium))
+                .foregroundStyle(SL.Ink.secondary)
             }
             if let notes = post.notes, !notes.isEmpty {
                 Text(notes)

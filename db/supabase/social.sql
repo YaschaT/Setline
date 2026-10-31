@@ -514,3 +514,115 @@ create policy "delete own messages" on public.chat_messages
 
 -- A report can name the message it is about.
 alter table public.reports add column if not exists message_id uuid references public.chat_messages (id) on delete set null;
+
+-- ================================================================== chat rooms
+-- More than one conversation: Everyone (every Setline lifter), private
+-- messages between two friends, and rooms a lifter starts on a topic and
+-- invites friends to. A message can carry one photo. The friends' chat above
+-- stays as it was: its messages have no room. Safe to re-run.
+create table if not exists public.chat_rooms (
+  id         uuid primary key default gen_random_uuid(),
+  kind       text not null check (kind in ('everyone', 'direct', 'room')),
+  name       text check (name is null or char_length(btrim(name)) between 1 and 40),
+  created_by uuid references public.profiles (user_id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.chat_members (
+  room_id    uuid not null references public.chat_rooms (id) on delete cascade,
+  user_id    uuid not null references public.profiles (user_id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (room_id, user_id)
+);
+
+create index if not exists chat_members_user on public.chat_members (user_id);
+
+-- The one Everyone room.
+insert into public.chat_rooms (id, kind, name)
+values ('00000000-0000-0000-0000-000000000001', 'everyone', 'Everyone')
+on conflict (id) do nothing;
+
+alter table public.chat_messages add column if not exists room_id uuid references public.chat_rooms (id) on delete cascade;
+alter table public.chat_messages add column if not exists image_path text;
+create index if not exists chat_messages_room on public.chat_messages (room_id, created_at desc);
+
+-- A photo can go without words.
+alter table public.chat_messages drop constraint if exists chat_messages_body_check;
+alter table public.chat_messages add constraint chat_messages_body_check
+  check (char_length(body) <= 1000 and (char_length(btrim(body)) >= 1 or image_path is not null));
+
+-- In the room: Everyone is open to every account; the rest to their members.
+-- Security definer, so the policies on chat_members can use it without
+-- reading themselves.
+create or replace function public.in_chat_room(room uuid, uid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.chat_rooms r
+    where r.id = room
+      and (r.kind = 'everyone' or exists (select 1 from public.chat_members m where m.room_id = room and m.user_id = uid))
+  );
+$$;
+
+alter table public.chat_rooms enable row level security;
+alter table public.chat_members enable row level security;
+
+drop policy if exists "see rooms you are in" on public.chat_rooms;
+create policy "see rooms you are in" on public.chat_rooms
+  for select to authenticated using (created_by = auth.uid() or public.in_chat_room(id, auth.uid()));
+
+drop policy if exists "start a room" on public.chat_rooms;
+create policy "start a room" on public.chat_rooms
+  for insert to authenticated with check (created_by = auth.uid() and kind in ('direct', 'room'));
+
+drop policy if exists "rename own room" on public.chat_rooms;
+create policy "rename own room" on public.chat_rooms
+  for update to authenticated using (created_by = auth.uid()) with check (created_by = auth.uid() and kind in ('direct', 'room'));
+
+drop policy if exists "delete own room" on public.chat_rooms;
+create policy "delete own room" on public.chat_rooms
+  for delete to authenticated using (created_by = auth.uid() and kind in ('direct', 'room'));
+
+drop policy if exists "see members of your rooms" on public.chat_members;
+create policy "see members of your rooms" on public.chat_members
+  for select to authenticated using (public.in_chat_room(room_id, auth.uid()));
+
+-- The room's starter adds themself and their friends.
+drop policy if exists "add friends to own room" on public.chat_members;
+create policy "add friends to own room" on public.chat_members
+  for insert to authenticated with check (
+    exists (select 1 from public.chat_rooms r where r.id = room_id and r.created_by = auth.uid() and r.kind in ('direct', 'room'))
+    and (user_id = auth.uid() or public.are_friends(auth.uid(), user_id))
+  );
+
+-- Anyone leaves; the starter can take someone out.
+drop policy if exists "leave or remove" on public.chat_members;
+create policy "leave or remove" on public.chat_members
+  for delete to authenticated using (
+    user_id = auth.uid()
+    or exists (select 1 from public.chat_rooms r where r.id = room_id and r.created_by = auth.uid())
+  );
+
+-- Messages: the friends' chat as before; a room's to whoever is in it, with
+-- a block hiding the other side either way.
+drop policy if exists "see own and friends messages" on public.chat_messages;
+create policy "see own and friends messages" on public.chat_messages
+  for select to authenticated using (
+    auth.uid() = user_id
+    or (room_id is null and public.are_friends(auth.uid(), user_id))
+    or (room_id is not null and public.in_chat_room(room_id, auth.uid()) and not public.is_blocked(auth.uid(), user_id))
+  );
+
+drop policy if exists "write own messages" on public.chat_messages;
+create policy "write own messages" on public.chat_messages
+  for insert to authenticated with check (
+    auth.uid() = user_id and (room_id is null or public.in_chat_room(room_id, auth.uid()))
+  );
+
+-- Chat photos live in the post-media bucket under <user_id>/chat/, readable
+-- by whoever can read the message.
+drop policy if exists "chat photos read when message visible" on storage.objects;
+create policy "chat photos read when message visible" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'post-media'
+    and exists (select 1 from public.chat_messages c where c.image_path = storage.objects.name)
+  );

@@ -43,6 +43,7 @@ struct NutritionHomeView: View {
         case edit(NutritionEntry)
         case targets
         case recipe(Recipe)
+        case plan
 
         var id: String {
             switch self {
@@ -50,6 +51,7 @@ struct NutritionHomeView: View {
             case .edit(let entry): return "edit-\(entry.id)"
             case .targets: return "targets"
             case .recipe(let recipe): return "recipe-\(recipe.id)"
+            case .plan: return "plan"
             }
         }
     }
@@ -175,16 +177,15 @@ struct NutritionHomeView: View {
         }
     }
 
-    /// Off track on the body-weight goal: the fix lives here, with the calories.
-    @ViewBuilder
-    private var goalNudge: some View {
-        if let goal = GoalPreference.goal {
-            let check = GoalCheck.evaluate(goal: goal, weighIns: GoalCheck.weighIns(BodyProgress.make(metrics: app.metrics)),
-                                           startedAt: GoalPreference.since)
-            if check.isOffTrack {
-                GoalCheckCard(check: check, weeksOnTrack: 0)
-            }
-        }
+    /// Weight, goal and whether the eating fits it: where people look for it.
+    /// Read again whenever the plan sheet closes.
+    @State private var planRevision = 0
+    private var planCard: some View {
+        let _ = planRevision
+        return NutritionPlanCard(
+            plan: NutritionPlan.make(app: app, goal: GoalPreference.goal, profile: BodyProfilePreference.profile),
+            onOpen: { sheet = .plan }
+        )
     }
 
     var body: some View {
@@ -195,7 +196,7 @@ struct NutritionHomeView: View {
                 // still missing — Training's order: now, done, next.
                 hero
                 mealNudge
-                goalNudge
+                planCard
                 foodLog
                 ideasSection
                 RecipesSection(display: app.display, initial: likely) { sheet = .recipe($0) }
@@ -228,7 +229,7 @@ struct NutritionHomeView: View {
             try? await Task.sleep(for: .seconds(SL.Metric.undoWindow))
             if toast?.id == id { toast = nil }
         }
-        .sheet(item: $sheet) { which in
+        .sheet(item: $sheet, onDismiss: { planRevision += 1 }) { which in
             switch which {
             case .add(let meal):
                 AddFoodSheet(date: now, meal: meal, onLog: { entry in
@@ -265,6 +266,12 @@ struct NutritionHomeView: View {
                     now = moment
                     add(recipe.entry(id: "food-\(Int(moment.timeIntervalSince1970 * 1000))", date: moment, meal: meal))
                 }, onClose: { sheet = nil })
+                .presentationDragIndicator(.visible)
+            case .plan:
+                NutritionPlanSheet(onClose: {
+                    sheet = nil
+                    planRevision += 1
+                })
                 .presentationDragIndicator(.visible)
             case .targets:
                 TargetsSheet(targets: app.targets) { changes in

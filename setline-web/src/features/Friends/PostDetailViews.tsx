@@ -6,7 +6,9 @@ import { Medals, LiftMedal_Place } from "../../core/Progress/Medals";
 import { Milestones, Milestone } from "../../core/Progress/Milestones";
 import { trimmingWhitespacesAndNewlines } from "../../core/Support/nutrition";
 import { ConfirmationDialog, FullScreenCover, HStack, Menu, ScrollView, Spacer, Text, VStack, type MenuEntry } from "../../design/swiftui";
-import { SL, slFont, slNumerals } from "../../design/tokens";
+import { SL, slFont, slListCard, slNumerals } from "../../design/tokens";
+
+const slListCardStyle = slListCard();
 import { slFixed } from "../../design/SLDynamicType";
 import { SFSymbol } from "../../design/SFSymbol";
 import { SLPrimaryButton } from "../../design/SetlineTokens";
@@ -18,6 +20,11 @@ import { SLRowButton } from "../../design/components/SLPieces";
 import { SLHairline, slBody, slLead, slMeta } from "../../design/components/SLText";
 import { DashedBorder, PressButton } from "../../design/support";
 import { useApp } from "../../data/AppState";
+import { SLFlow } from "../../design/components/SLFlow";
+import { BodyProgress } from "../../core/Progress/BodyProgress";
+import { GoalCheck, WeightGoal } from "../../core/Progress/WeightGoal";
+import { startOfMondayWeek } from "../../core/Support/calendar";
+import { GoalCheckExt, GoalPreference, GoalSymbol, habitMilestones } from "../Progress/GoalViews";
 import {
   FeedPost, Friendship, PostComment, PostTrack, PostVisibility, SocialProfile, useSocial, type PostMedia,
 } from "../../data/SocialStore";
@@ -356,7 +363,7 @@ export function PostDetailView({ postID, onClose }: { postID: string; onClose: (
           <ScrollView style={{ flex: "1 1 0" }}>
             <VStack alignment="leading" spacing={SL.Space.s6} style={{ paddingLeft: SL.Space.gutterSession, paddingRight: SL.Space.gutterSession, paddingTop: SL.Space.s2, paddingBottom: SL.Space.s6 }}>
               <PostCard post={post} isDetail />
-              {FeedPost.trainedWith(post).length > 0 && <TogetherSection post={post} />}
+              {!FeedPost.isRest(post) && (FeedPost.trainedWith(post).length > 0 || (post.exercises ?? []).length > 0) && <TogetherSection post={post} />}
               {commentsSection(post)}
             </VStack>
           </ScrollView>
@@ -469,6 +476,85 @@ export function FriendProfileView({ userID, onClose }: { userID: string; onClose
     return null;
   })();
 
+  // Goal, weight and this week, as chips under the name.
+  const progress = BodyProgress.make({ metrics: app.metrics });
+  const latest = BodyProgress.latest(progress);
+  const weekStart = startOfMondayWeek(new Date()).getTime();
+  const thisWeek = app.sessions.filter((s) => s.kind === "workout" && s.date.getTime() >= weekStart).length;
+  const chip = (icon: string, text: string) => (
+    <HStack key={text} spacing={5} style={{ padding: "0 10px", minHeight: 30, borderRadius: 999, background: SL.Surface.raised2 }}>
+      {icon === "scope" ? <SFSymbol name="target" size={11} weight={600} color={SL.Signal.action} /> : <SFSymbol name={icon} size={11} weight={600} color={SL.Signal.action} />}
+      <Text size={SL.TypeSize.meta} weight={SL.Weight.medium} numerals color={SL.Ink.primary}>{text}</Text>
+    </HStack>
+  );
+  const goal = GoalPreference.goal;
+  const statusChips = (
+    <SLFlow spacing={SL.Space.s2} style={{ justifyContent: "center" }}>
+      {goal !== undefined && chip("scope", WeightGoal.title(goal))}
+      {latest !== undefined && chip("scalemass.fill", `${latest.weightKg.toFixed(1)} kg`)}
+      {chip("calendar", thisWeek === 1 ? "1 workout this week" : `${thisWeek} workouts this week`)}
+    </SLFlow>
+  );
+
+  // Where you stand today: the weight, its last month as a line, and the goal.
+  const nowCard = (() => {
+    if (!isMe || latest === undefined) return null;
+    const cutoff = Date.now() - 30 * 86_400_000;
+    const month = progress.entries.filter((e) => e.date.getTime() > cutoff).map((e) => e.weightKg);
+    const check = goal === undefined ? undefined : GoalCheck.evaluate({ goal, weighIns: GoalCheckExt.weighIns(progress), startedAt: GoalPreference.since });
+    let line = "";
+    if (month.length >= 2) {
+      const low = Math.min(...month);
+      const span = Math.max(Math.max(...month) - low, 0.1);
+      line = month.map((v, i) => `${i === 0 ? "M" : "L"}${((120 * i) / (month.length - 1)).toFixed(1)},${(46 - (44 * (v - low)) / span).toFixed(1)}`).join(" ");
+    }
+    return (
+      <HStack spacing={SL.Space.s4} style={{ alignSelf: "stretch", padding: SL.Space.s4, background: SL.Surface.raised, borderRadius: SL.Radius.xl, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}` }}>
+        <VStack alignment="leading" spacing={4} style={{ minWidth: 0 }}>
+          <Text size={SL.TypeSize.micro} weight={SL.Weight.semibold} tracking={1.2} color={SL.Ink.secondary}>RIGHT NOW</Text>
+          <HStack alignment="lastTextBaseline" spacing={4}>
+            <Text size={30} weight={SL.Weight.bold} numerals color={SL.Ink.primary}>{latest.weightKg.toFixed(1)}</Text>
+            <Text {...slBody()} color={SL.Ink.secondary}>kg</Text>
+          </HStack>
+          {check ? (
+            <HStack spacing={4}>
+              <GoalSymbol name={GoalCheckExt.verdictSymbol(check)} size={11} weight={700} color={GoalCheckExt.verdictInk(check)} />
+              <Text size={SL.TypeSize.meta} weight={SL.Weight.semibold} color={GoalCheckExt.verdictInk(check)} lineLimit={1}>
+                {`${WeightGoal.title(check.goal)} · ${GoalCheckExt.headline(check)}`}
+              </Text>
+            </HStack>
+          ) : (
+            <Text {...slMeta()} color={SL.Ink.secondary}>No goal set</Text>
+          )}
+        </VStack>
+        <Spacer minLength={SL.Space.s2} />
+        {line !== "" && (
+          <svg width={120} height={48} viewBox="0 0 120 48" role="img" aria-label="Weight over the last month" style={{ flexShrink: 0, overflow: "visible" }}>
+            <path d={line} fill="none" stroke={SL.Signal.action} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </HStack>
+    );
+  })();
+
+  // Every photo from the posts you can see, newest first.
+  const photos = posts.flatMap((post) => FeedPost.photos(post).map((photo) => ({ postID: post.id, photo })));
+  const photoGrid =
+    photos.length === 0 ? null : (
+      <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
+        <Text as="h3" {...slLead(SL.Weight.semibold)} color={SL.Ink.primary}>Photos</Text>
+        <div style={{ alignSelf: "stretch", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4 }}>
+          {photos.slice(0, 9).map((item, index) => (
+            <SLRowButton key={index} onPress={() => setOpened({ id: item.postID })} aria-label="Photo, opens its post" style={{ borderRadius: SL.Radius.sm }}>
+              <div style={{ aspectRatio: "1 / 1", borderRadius: SL.Radius.sm, overflow: "hidden", width: "100%" }}>
+                <PostPhoto path={item.photo.path} />
+              </div>
+            </SLRowButton>
+          ))}
+        </div>
+      </VStack>
+    );
+
   const identity = (
     <VStack spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
       <div style={{ position: "relative" }}>
@@ -508,12 +594,14 @@ export function FriendProfileView({ userID, onClose }: { userID: string; onClose
         </Text>
         {person?.username !== undefined && <Text {...slBody()} color={SL.Ink.secondary}>{`@${person.username}`}</Text>}
       </VStack>
+      {isMe && statusChips}
       {!isMe && friendButton}
     </VStack>
   );
 
-  const statTile = (value: string, label: string) => (
+  const statTile = (value: string, label: string, icon: string, ink: string) => (
     <VStack alignment="leading" spacing={4} style={{ flex: "1 1 0", minWidth: 0, padding: 14, background: SL.Surface.raised, border: `1px solid ${SL.Surface.hairline}`, borderRadius: SL.Radius.lg, overflow: "hidden" }}>
+      <SFSymbol name={icon} size={13} weight={600} color={ink} />
       <Text size={24} weight={SL.Weight.semibold} numerals color={SL.Ink.primary}>{value}</Text>
       <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={2}>{label}</Text>
     </VStack>
@@ -522,25 +610,70 @@ export function FriendProfileView({ userID, onClose }: { userID: string; onClose
   const workouts = isMe ? app.sessions.filter((s) => s.kind === "workout").length : posts.length;
   const stats = (
     <HStack spacing={SL.Space.s3} style={{ alignSelf: "stretch", alignItems: "stretch" }}>
-      {statTile(`${streak}`, "week streak")}
-      {statTile(`${workouts}`, isMe ? (workouts === 1 ? "workout" : "workouts") : workouts === 1 ? "post" : "posts")}
-      {statTile(prsThisYear === 0 ? "—" : `${prsThisYear}`, "PRs this year")}
+      {statTile(`${streak}`, "week streak", "flame.fill", streak > 0 ? SL.Signal.action : SL.Ink.tertiary)}
+      {statTile(`${workouts}`, isMe ? (workouts === 1 ? "workout" : "workouts") : workouts === 1 ? "post" : "posts", "dumbbell.fill", SL.Ink.secondary)}
+      {statTile(prsThisYear === 0 ? "—" : `${prsThisYear}`, "PRs this year", "trophy.fill", prsThisYear > 0 ? "#E8C35A" : SL.Ink.tertiary)}
     </HStack>
   );
 
-  /** Your badges, earned first; friends' badges are not shared. */
-  const badges =
-    isMe && reachedBadges.length > 0 ? (
-      <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-        <Text as="h3" {...slLead(SL.Weight.semibold)} color={SL.Ink.primary}>Badges</Text>
-        <HStack spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
-          {reachedBadges.slice(-4).map((badge) => (
-            <SLBadge key={badge.id} milestone={badge} size={64} />
-          ))}
-          <Spacer minLength={0} />
+  /**
+   * Your whole collection: earned badges in colour, the ones ahead dimmed with
+   * how far along you are. Friends' badges are not shared.
+   */
+  const badges = (() => {
+    if (!isMe) return null;
+    const all = [...Milestones.make({ sessions: app.sessions, bestStreak: app.streak.best }), ...habitMilestones(app)];
+    const earned = all.filter(Milestone.isReached);
+    const nextByKind = new Map<string, Milestone>();
+    for (const m of all.filter((m) => !Milestone.isReached(m))) {
+      const held = nextByKind.get(m.kind);
+      if (!held || Milestone.fraction(m) > Milestone.fraction(held)) nextByKind.set(m.kind, m);
+    }
+    const ahead = [...nextByKind.values()].sort((a, b) => Milestone.fraction(b) - Milestone.fraction(a));
+    const shown = [...earned.slice().reverse(), ...ahead].slice(0, 12);
+    const next = ahead[0];
+    return (
+      <VStack alignment="leading" spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
+        <HStack alignment="lastTextBaseline" style={{ alignSelf: "stretch" }}>
+          <Text as="h3" {...slLead(SL.Weight.semibold)} color={SL.Ink.primary}>Badges</Text>
+          <Spacer />
+          <Text {...slMeta()} numerals color={SL.Ink.secondary}>{`${earned.length} of ${all.length} earned`}</Text>
         </HStack>
+        {next && (
+          <VStack alignment="leading" spacing={6} style={{ ...slListCardStyle, alignSelf: "stretch", padding: SL.Space.s3 }}>
+            <HStack style={{ alignSelf: "stretch" }}>
+              <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={1}>{`Next: ${next.title}`}</Text>
+              <Spacer />
+              <Text {...slMeta()} numerals color={SL.Signal.action}>{`${Math.round(Milestone.fraction(next) * 100)} %`}</Text>
+            </HStack>
+            <div style={{ alignSelf: "stretch", height: 6, borderRadius: 999, background: SL.Surface.raised2, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${Math.max(3, Milestone.fraction(next) * 100)}%`, borderRadius: 999, background: SL.Signal.action }} />
+            </div>
+            {next.howTo !== "" && <Text {...slMeta()} color={SL.Ink.secondary}>{next.howTo}</Text>}
+          </VStack>
+        )}
+        <div style={{ alignSelf: "stretch", display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", columnGap: SL.Space.s2, rowGap: SL.Space.s3 }}>
+          {shown.map((badge) => {
+            const reached = Milestone.isReached(badge);
+            return (
+              <VStack
+                key={badge.id}
+                spacing={4}
+                aria-label={`${badge.title}, ${reached ? "earned" : `${Math.round(Milestone.fraction(badge) * 100)} percent of the way`}`}
+              >
+                <div style={{ filter: reached ? undefined : "grayscale(1)", opacity: reached ? 1 : 0.35 }}>
+                  <SLBadge milestone={badge} size={60} />
+                </div>
+                <Text size={SL.TypeSize.micro} weight={SL.Weight.medium} color={reached ? SL.Ink.primary : SL.Ink.tertiary} align="center" lineLimit={2}>
+                  {badge.title}
+                </Text>
+              </VStack>
+            );
+          })}
+        </div>
       </VStack>
-    ) : null;
+    );
+  })();
 
   const kudosAndComments = (post: FeedPost): string => {
     const k = post.kudos.length;
@@ -625,7 +758,9 @@ export function FriendProfileView({ userID, onClose }: { userID: string; onClose
           {isMe || isFriend ? (
             <>
               {stats}
+              {nowCard}
               {badges}
+              {photoGrid}
               {postList}
             </>
           ) : (

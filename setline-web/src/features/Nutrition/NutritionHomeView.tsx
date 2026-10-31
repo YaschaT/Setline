@@ -40,13 +40,15 @@ import { TargetsSheet } from "../Account/TargetsSheet";
 import { AddFoodSheet } from "./AddFoodSheet";
 import { FoodEntrySheet } from "./FoodEntrySheet";
 import { RecipeSheet, RecipesSection } from "./RecipeViews";
+import { BodyProfilePreference, NutritionPlan, NutritionPlanCard, NutritionPlanSheet } from "./PlanViews";
 
 /** `NutritionHomeView.Sheet` — one sheet at a time. */
 export type NutritionHomeView_Sheet =
   | { kind: "add"; value: Meal }
   | { kind: "edit"; value: NutritionEntry }
   | { kind: "targets" }
-  | { kind: "recipe"; value: Recipe };
+  | { kind: "recipe"; value: Recipe }
+  | { kind: "plan" };
 
 const sheetID = (s: NutritionHomeView_Sheet | undefined): string | undefined => {
   if (!s) return undefined;
@@ -59,6 +61,8 @@ const sheetID = (s: NutritionHomeView_Sheet | undefined): string | undefined => 
       return "targets";
     case "recipe":
       return `recipe-${s.value.id}`;
+    case "plan":
+      return "plan";
   }
 };
 
@@ -377,19 +381,13 @@ export function NutritionHomeView({ onAccount = () => {} }: { /** The avatar's w
     return null;
   })();
 
-  /** Off track on the body-weight goal: the fix lives here, with the calories. */
-  const goalNudge = (() => {
-    const goal = GoalPreference.goal;
-    if (!goal) return null;
-    const progress = BodyProgress.make({ metrics: app.metrics });
-    const check = GoalCheck.evaluate({
-      goal,
-      weighIns: progress.entries.map((e) => ({ date: e.date, kg: e.weightKg })),
-      startedAt: GoalPreference.since,
-    });
-    if (!GoalCheck.isOffTrack(check)) return null;
-    return <GoalCheckCard check={check} weeksOnTrack={0} />;
-  })();
+  /** Weight, goal and whether the eating fits it: where people look for it. */
+  const planCard = (
+    <NutritionPlanCard
+      plan={NutritionPlan.make(app, GoalPreference.goal, BodyProfilePreference.profile)}
+      onOpen={() => setSheet({ kind: "plan" })}
+    />
+  );
 
   // MARK: - The hero card
 
@@ -1188,6 +1186,8 @@ export function NutritionHomeView({ onAccount = () => {} }: { /** The avatar's w
           />
         );
       }
+      case "plan":
+        return <NutritionPlanSheet key="plan" onClose={close} />;
       case "targets":
         return (
           <TargetsSheet
@@ -1235,7 +1235,7 @@ export function NutritionHomeView({ onAccount = () => {} }: { /** The avatar's w
           {/* Today, then what it was made of, then ideas for what is still missing — Training's order: now, done, next. */}
           {hero}
           {mealNudge}
-          {goalNudge}
+          {planCard}
           {foodLog}
           {ideasSection}
           <RecipesSection display={display} initial={likely} onOpen={(recipe) => setSheet({ kind: "recipe", value: recipe })} />

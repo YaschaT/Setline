@@ -1,6 +1,18 @@
 {
   "notes": [
     {
+      "id": "2026-10-31-2",
+      "date": "2026-10-31",
+      "title": "Your plan and your profile",
+      "items": [
+        "Nutrition now has Your plan, right under today's numbers: your weight, your goal and whether you're heading the right way, in one card. Tap Open your plan for everything.",
+        "Add your height, sex and age there, and Setline works out what you burn and what your goal asks you to eat, using the formulas sports dietitians use. Every number shows where it comes from: tap Sources.",
+        "One tap sets those numbers as your calorie and protein targets.",
+        "Your profile is one tap from the top of Friends: your streak, your weight and goal, every badge (with how close you are to the next) and the photos from your posts.",
+        "Fixed: a workout posted with a friend didn't show what you trained. Every post now lists its exercises, with or without a friend named."
+      ]
+    },
+    {
       "id": "2026-10-31",
       "date": "2026-10-31",
       "title": "Chat with your friends",

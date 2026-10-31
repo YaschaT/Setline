@@ -115,8 +115,9 @@ function detail(exercise: PostExercise, hidesWeights: boolean): string {
 }
 
 /**
- * A workout done together, on the post's own page: a section per person —
- * the post's author first, then each friend named, from their own post of that day.
+ * The workout on the post's own page, exercise by exercise. Done together, it
+ * is a section per person — the post's author first, then each friend named,
+ * from their own post of that day.
  */
 export function TogetherSection({ post }: { post: FeedPost }) {
   const social = useSocial();
@@ -125,6 +126,10 @@ export function TogetherSection({ post }: { post: FeedPost }) {
   useEffect(() => {
     let live = true;
     setLoaded(false);
+    if (FeedPost.trainedWith(post).length === 0) {
+      setLoaded(true);
+      return;
+    }
     void social.togetherPosts(post).then((posts) => {
       if (!live) return;
       setTheirs(posts);
@@ -158,7 +163,9 @@ export function TogetherSection({ post }: { post: FeedPost }) {
 
   return (
     <VStack alignment="leading" spacing={SL.Space.s4} style={{ alignSelf: "stretch" }}>
-      <Text {...slMeta(SL.Weight.semibold)} tracking={SL.TypeSize.meta * 0.06} color={SL.Ink.secondary}>TOGETHER</Text>
+      <Text {...slMeta(SL.Weight.semibold)} tracking={SL.TypeSize.meta * 0.06} color={SL.Ink.secondary}>
+        {FeedPost.trainedWith(post).length === 0 ? "THE WORKOUT" : "TOGETHER"}
+      </Text>
       {section(nameOf(post.user_id, post.author?.display_name ?? "A friend"), post, "author")}
       {FeedPost.trainedWith(post).map((friend) => {
         const match = theirs.find((p) => p.user_id === friend.user_id);
@@ -168,7 +175,11 @@ export function TogetherSection({ post }: { post: FeedPost }) {
           <VStack key={friend.user_id} alignment="leading" spacing={SL.Space.s1} style={{ ...slListCard(), alignSelf: "stretch", padding: SL.Space.s4 }}>
             <Text {...slLead(SL.Weight.semibold)} color={SL.Ink.primary}>{name}</Text>
             <Text {...slMeta()} color={SL.Ink.secondary}>
-              {loaded ? `No post from ${friend.user_id === social.myID ? "you" : friend.display_name} for this day yet.` : "Loading…"}
+              {!loaded
+                ? "Loading…"
+                : friend.user_id === social.myID
+                  ? "Your own sets show here once you post this workout too."
+                  : "Trained along. Their own sets show here once they post this workout."}
             </Text>
           </VStack>
         );

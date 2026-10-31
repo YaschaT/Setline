@@ -128,6 +128,23 @@ struct PostMusic: View {
 
 struct ProfileTarget: Identifiable { let id: String }
 
+/// A line through the values, scaled to fill the frame.
+struct Sparkline: Shape {
+    let values: [Double]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard values.count >= 2, let low = values.min(), let high = values.max() else { return path }
+        let span = max(high - low, 0.1)
+        for (index, value) in values.enumerated() {
+            let point = CGPoint(x: rect.minX + rect.width * CGFloat(index) / CGFloat(values.count - 1),
+                                y: rect.maxY - rect.height * CGFloat((value - low) / span))
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        return path
+    }
+}
+
 // MARK: - The full post
 
 /// A post on its own, with its comments (SETLINE Social 7).
@@ -167,7 +184,9 @@ struct PostDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: SL.Space.s6) {
                         PostCard(post: post, isDetail: true)
-                        if !post.trainedWith.isEmpty { TogetherSection(post: post) }
+                        if !post.isRest, !post.trainedWith.isEmpty || !(post.exercises ?? []).isEmpty {
+                            TogetherSection(post: post)
+                        }
                         commentsSection(post)
                     }
                     .padding(.horizontal, SL.Space.gutterSession)
@@ -370,7 +389,9 @@ struct FriendProfileView: View {
                     identity
                     if isMe || isFriend {
                         stats
+                        if isMe { nowCard }
                         badges
+                        photoGrid
                         postList
                     } else {
                         locked
@@ -424,6 +445,7 @@ struct FriendProfileView: View {
                     Text("@\(username)").slBody().foregroundStyle(SL.Ink.secondary)
                 }
             }
+            if isMe { statusChips }
             if !isMe {
                 friendButton
             }
@@ -475,15 +497,16 @@ struct FriendProfileView: View {
     private var stats: some View {
         let workouts = isMe ? app.sessions.filter { $0.kind == .workout }.count : posts.count
         return HStack(spacing: SL.Space.s3) {
-            statTile("\(streak)", "week streak")
-            statTile("\(workouts)", isMe ? (workouts == 1 ? "workout" : "workouts") : (workouts == 1 ? "post" : "posts"))
-            statTile(prsThisYear == 0 ? "—" : "\(prsThisYear)", "PRs this year")
+            statTile("\(streak)", "week streak", icon: "flame.fill", ink: streak > 0 ? SL.Signal.action : SL.Ink.tertiary)
+            statTile("\(workouts)", isMe ? (workouts == 1 ? "workout" : "workouts") : (workouts == 1 ? "post" : "posts"), icon: "dumbbell.fill", ink: SL.Ink.secondary)
+            statTile(prsThisYear == 0 ? "—" : "\(prsThisYear)", "PRs this year", icon: "trophy.fill", ink: prsThisYear > 0 ? Color(hex: 0xE8C35A) : SL.Ink.tertiary)
         }
         .task(id: posts.count) { countPRs() }
     }
 
-    private func statTile(_ value: String, _ label: String) -> some View {
+    private func statTile(_ value: String, _ label: String, icon: String, ink: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(ink).accessibilityHidden(true)
             Text(value).font(.sl(24, SL.Weight.semibold)).slNumerals().foregroundStyle(SL.Ink.primary)
             Text(label).slMeta().foregroundStyle(SL.Ink.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
         }
@@ -494,18 +517,144 @@ struct FriendProfileView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Your badges, earned first; friends' badges are not shared.
+    /// Your whole collection: earned badges in colour, the ones ahead dimmed
+    /// with how far along you are. Friends' badges are not shared.
     @ViewBuilder
     private var badges: some View {
-        let earned = reachedBadges
-        if isMe, !earned.isEmpty {
-            VStack(alignment: .leading, spacing: SL.Space.s2) {
-                Text("Badges").slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).accessibilityAddTraits(.isHeader)
-                HStack(spacing: SL.Space.s3) {
-                    ForEach(earned.suffix(4)) { badge in
-                        SLBadge(milestone: badge, size: 64)
+        if isMe {
+            let all = Milestones.make(sessions: app.sessions, bestStreak: app.streak.best) + app.habitMilestones()
+            let earned = all.filter(\.isReached)
+            // The next of each kind, so the collection reads as a path, not a wall.
+            let ahead = Dictionary(grouping: all.filter { !$0.isReached }, by: \.kind).values
+                .compactMap { $0.max { $0.fraction < $1.fraction } }
+                .sorted { $0.fraction > $1.fraction }
+            let shown = earned.reversed() + ahead
+            VStack(alignment: .leading, spacing: SL.Space.s3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Badges").slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    Text("\(earned.count) of \(all.count) earned").slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
+                }
+                if let next = ahead.first {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Next: \(next.title)").slMeta(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).lineLimit(1)
+                            Spacer()
+                            Text("\(Int((next.fraction * 100).rounded())) %").slMeta().slNumerals().foregroundStyle(SL.Signal.action)
+                        }
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(SL.Surface.raised2)
+                                Capsule().fill(SL.Signal.action).frame(width: max(6, proxy.size.width * next.fraction))
+                            }
+                        }
+                        .frame(height: 6)
+                        if !next.howTo.isEmpty { Text(next.howTo).slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true) }
                     }
-                    Spacer(minLength: 0)
+                    .padding(SL.Space.s3)
+                    .slListCard()
+                    .accessibilityElement(children: .combine)
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: SL.Space.s2), count: 4), spacing: SL.Space.s3) {
+                    ForEach(Array(shown.prefix(12))) { badge in
+                        VStack(spacing: 4) {
+                            SLBadge(milestone: badge, size: 60)
+                                .saturation(badge.isReached ? 1 : 0)
+                                .opacity(badge.isReached ? 1 : 0.35)
+                            Text(badge.title)
+                                .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                                .foregroundStyle(badge.isReached ? SL.Ink.primary : SL.Ink.tertiary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(badge.title), \(badge.isReached ? "earned" : "\(Int((badge.fraction * 100).rounded())) percent of the way")")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Where you stand today: the weight, its last month as a line, and the goal.
+    @ViewBuilder
+    private var nowCard: some View {
+        let progress = BodyProgress.make(metrics: app.metrics)
+        if let latest = progress.latest {
+            let kg = NSDecimalNumber(decimal: latest.weightKg).doubleValue
+            let month = progress.entries.filter { $0.date > Date().addingTimeInterval(-30 * 86_400) }
+                .map { NSDecimalNumber(decimal: $0.weightKg).doubleValue }
+            let goal = GoalPreference.goal
+            let check = goal.map { GoalCheck.evaluate(goal: $0, weighIns: GoalCheck.weighIns(progress), startedAt: GoalPreference.since) }
+            HStack(alignment: .center, spacing: SL.Space.s4) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("RIGHT NOW").font(.sl(SL.TypeSize.micro, SL.Weight.semibold)).tracking(1.2).foregroundStyle(SL.Ink.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(String(format: "%.1f", kg)).font(.sl(30, SL.Weight.bold)).slNumerals().foregroundStyle(SL.Ink.primary)
+                        Text("kg").slBody().foregroundStyle(SL.Ink.secondary)
+                    }
+                    if let check {
+                        HStack(spacing: 4) {
+                            Image(systemName: check.verdictSymbol).font(.system(size: 11, weight: .bold))
+                            Text("\(check.goal.title) · \(check.headline)").font(.sl(SL.TypeSize.meta, SL.Weight.semibold)).lineLimit(1)
+                        }
+                        .foregroundStyle(check.verdictInk)
+                    } else {
+                        Text("No goal set").slMeta().foregroundStyle(SL.Ink.secondary)
+                    }
+                }
+                Spacer(minLength: SL.Space.s2)
+                if month.count >= 2 {
+                    Sparkline(values: month)
+                        .stroke(SL.Signal.action, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        .frame(width: 120, height: 48)
+                        .accessibilityLabel("Weight over the last month")
+                }
+            }
+            .padding(SL.Space.s4)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised))
+            .overlay(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).strokeBorder(SL.Surface.hairline, lineWidth: 1))
+        }
+    }
+
+    /// Goal, weight and this week, as chips under the name.
+    private var statusChips: some View {
+        let progress = BodyProgress.make(metrics: app.metrics)
+        let thisWeek = app.sessions.filter { $0.kind == .workout && Calendar.current.isDate($0.date, equalTo: Date(), toGranularity: .weekOfYear) }.count
+        return SLFlow(spacing: SL.Space.s2) {
+            if let goal = GoalPreference.goal { chip("scope", goal.title) }
+            if let latest = progress.latest { chip("scalemass.fill", "\(app.display.number(latest.weightKg)) kg") }
+            chip("calendar", thisWeek == 1 ? "1 workout this week" : "\(thisWeek) workouts this week")
+        }
+    }
+
+    private func chip(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(SL.Signal.action)
+            Text(text).font(.sl(SL.TypeSize.meta, SL.Weight.medium)).slNumerals().foregroundStyle(SL.Ink.primary)
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 30)
+        .background(Capsule().fill(SL.Surface.raised2))
+    }
+
+    /// Every photo from the posts you can see, newest first.
+    @ViewBuilder
+    private var photoGrid: some View {
+        let photos = posts.flatMap { post in post.photos.map { (post.id, $0) } }
+        if !photos.isEmpty {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                Text("Photos").slLead(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).accessibilityAddTraits(.isHeader)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
+                    ForEach(Array(photos.prefix(9).enumerated()), id: \.offset) { _, item in
+                        Button { opened = ProfileTarget(id: item.0) } label: {
+                            Color.clear
+                                .aspectRatio(1, contentMode: .fit)
+                                .overlay { PostPhoto(path: item.1.path) }
+                                .clipShape(RoundedRectangle(cornerRadius: SL.Radius.sm, style: .continuous))
+                        }
+                        .buttonStyle(SLPressStyle(scale: 0.97))
+                        .accessibilityLabel("Photo, opens its post")
+                    }
                 }
             }
         }

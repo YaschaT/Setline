@@ -9,9 +9,12 @@
 // `navigator.share`, else the text is copied.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { TrainedWithLine } from "./TrainedTogetherViews";
+import { SLAvatar } from "../../design/components/SLAvatar";
+import { habitMilestones } from "../Progress/GoalViews";
 import type { TrainingSession } from "../../core/Domain/Model";
 import { LoggedSet } from "../../core/Domain/Model";
 import { Medals, LiftMedal_Place } from "../../core/Progress/Medals";
+import { Milestones, Milestone } from "../../core/Progress/Milestones";
 import { RecordsEngine } from "../../core/Engine/RecordsEngine";
 import { NumberDisplay } from "../../core/Engine/NumberDisplay";
 import { addDays, isSameDay } from "../../core/Support/calendar";
@@ -35,7 +38,7 @@ import { PressButton, useReduceMotion } from "../../design/support";
 import { useApp } from "../../data/AppState";
 import { FeedPost, HiddenStat, SocialProfile, SocialStore, useSocial, type Friendship } from "../../data/SocialStore";
 import { PostComposerView, RestReason } from "./PostComposerView";
-import { ChatReadMarker, ChatView } from "./ChatView";
+import { ChatInbox, ChatReadMarker } from "./ChatView";
 import { FriendProfileView, PostDetailView, PostMusic, PostPhotos, VisibilityBadge, type ProfileTarget } from "./PostDetailViews";
 import { PostPlaceView } from "./WorkoutPlaceViews";
 import { InviteQRSheet } from "./InviteViews";
@@ -67,6 +70,7 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
   const social = useSocial();
   const [showsPeople, setShowsPeople] = useState(false);
   const [chatting, setChatting] = useState(false);
+  const [showsMyProfile, setShowsMyProfile] = useState(false);
   const [composing, setComposing] = useState<ComposeTarget | undefined>(undefined);
   const shownComposing = useLast(composing);
   /** Workouts the lifter said not to post, so the prompt moves on. */
@@ -95,22 +99,51 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
    * lime dot while a friend's message is newer than your last look.
    */
   const chatRow = (() => {
-    const latest = social.chatLatest;
-    const unread = latest !== undefined && latest.user_id !== social.myID && latest.created_at > ChatReadMarker.get();
-    const who = latest ? (latest.user_id === social.myID ? "You" : (latest.author?.display_name.split(" ")[0] ?? "Friend")) : undefined;
+    // The newest message of every chat you are in, and whether any is unread.
+    const entries = Object.entries(social.latestByRoom).filter(([, m]) => m !== undefined);
+    const fallback = social.chatLatest;
+    const newest = entries.length > 0 ? entries.map(([, m]) => m).reduce((a, b) => (a.created_at > b.created_at ? a : b)) : fallback;
+    const unread =
+      entries.length > 0
+        ? entries.some(([room, m]) => m.user_id !== social.myID && m.created_at > ChatReadMarker.get(room === "" ? undefined : room))
+        : fallback !== undefined && fallback.user_id !== social.myID && fallback.created_at > ChatReadMarker.get();
+    const who = newest ? (newest.user_id === social.myID ? "You" : (newest.author?.display_name.split(" ")[0] ?? "Someone")) : undefined;
+    const body = newest ? (newest.body !== "" ? newest.body : "Photo") : undefined;
     return (
-      <SLPress scale={0.98} onPress={() => setChatting(true)} aria-label={unread ? "Chat, new message" : "Chat"} style={{ alignSelf: "stretch" }}>
+      <SLPress scale={0.98} onPress={() => setChatting(true)} aria-label={unread ? "Chats, new message" : "Chats"} style={{ alignSelf: "stretch" }}>
         <HStack spacing={SL.Space.s3} style={{ padding: SL.Space.s3, ...listCard() }}>
           <div style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0, position: "relative" }}>
             <SFSymbol name="bubble.left" size={18} weight={600} color={SL.Signal.action} />
             {unread && <span aria-hidden style={{ position: "absolute", top: -2, right: -2, width: 10, height: 10, borderRadius: 999, background: SL.Signal.action, boxShadow: `0 0 0 2px ${SL.Surface.ground}` }} />}
           </div>
           <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
-            <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>Chat</Text>
+            <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>{social.roomsAvailable ? "Chats" : "Chat"}</Text>
             <Text {...slMeta(unread ? SL.Weight.semibold : SL.Weight.regular)} color={unread ? SL.Ink.primary : SL.Ink.secondary} lineLimit={1} style={{ maxWidth: "100%" }}>
-              {latest ? `${who}: ${latest.body}` : "Ask about training or food, or cheer each other on"}
+              {newest ? `${who}: ${body}` : social.roomsAvailable ? "Everyone, friends, private chats and rooms" : "Ask about training or food, or cheer each other on"}
             </Text>
           </VStack>
+          <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
+        </HStack>
+      </SLPress>
+    );
+  })();
+
+  /** Your own profile, one tap from the top: streak and badges at a glance. */
+  const myProfileRow = (() => {
+    const earned = [...Milestones.make({ sessions: app.sessions, bestStreak: app.streak.best }), ...habitMilestones(app)].filter(Milestone.isReached).length;
+    const weeks = app.streak.weeks;
+    return (
+      <SLPress scale={0.98} onPress={() => setShowsMyProfile(true)} aria-label={`Your profile, ${weeks}-week streak, ${earned} badges`} style={{ alignSelf: "stretch" }}>
+        <HStack spacing={SL.Space.s3} style={{ padding: SL.Space.s3, ...listCard() }}>
+          <SLAvatar photo={app.profilePhoto} initial={app.avatarInitial} size={44} />
+          <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+            <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={1}>{social.me?.display_name ?? "Your profile"}</Text>
+            <HStack spacing={6}>
+              <SFSymbol name="flame.fill" size={11} weight={600} color={weeks > 0 ? SL.Signal.action : SL.Ink.tertiary} />
+              <Text {...slMeta()} numerals color={SL.Ink.secondary} lineLimit={1}>{`${weeks}-week streak · ${earned === 1 ? "1 badge" : `${earned} badges`}`}</Text>
+            </HStack>
+          </VStack>
+          <Text size={SL.TypeSize.meta} weight={SL.Weight.semibold} color={SL.Signal.action}>Profile</Text>
           <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
         </HStack>
       </SLPress>
@@ -315,7 +348,8 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
         <>
           {social.offlineSince !== undefined && offlineBanner}
           {social.incoming.length > 0 && requestsBanner}
-          {social.friends.length > 0 && social.chatAvailable && chatRow}
+          {myProfileRow}
+          {social.chatAvailable && (social.friends.length > 0 || social.roomsAvailable) && chatRow}
           {social.pending.length > 0 && pendingBanner}
           {unpostedWorkout && latestWorkoutPrompt(unpostedWorkout)}
           {!social.hasPost({ sessionID: SocialStore.restID(today) }) && !app.sessions.some((s) => s.kind === "workout" && isSameDay(s.date, today)) && restDayRow}
@@ -347,10 +381,17 @@ export function FriendsView({ onAccount }: { onAccount: () => void }) {
       <Sheet isPresented={showsPeople} onDismiss={() => setShowsPeople(false)} dragIndicator={false}>
         <PeopleSheet onClose={() => setShowsPeople(false)} />
       </Sheet>
+      <FullScreenCover isPresented={showsMyProfile}>
+        {showsMyProfile && (
+          <CoverBody>
+            <FriendProfileView userID={social.myID} onClose={() => setShowsMyProfile(false)} />
+          </CoverBody>
+        )}
+      </FullScreenCover>
       <FullScreenCover isPresented={chatting}>
         {chatting && (
           <CoverBody>
-            <ChatView
+            <ChatInbox
               onClose={() => {
                 setChatting(false);
                 void social.refreshChatLatest();
@@ -506,6 +547,16 @@ export function PostCard({ post, isDetail = false }: { post: FeedPost; isDetail?
       </Text>
       {TrainedWithLine.text(FeedPost.trainedWith(post)) !== undefined && (
         <Text {...slBody(SL.Weight.medium)} color={SL.Signal.action}>{TrainedWithLine.text(FeedPost.trainedWith(post))}</Text>
+      )}
+      {/* What was trained, at a glance; the post's page lists every set. */}
+      {!isDetail && (post.exercises ?? []).length > 0 && (
+        <HStack spacing={6} style={{ color: SL.Ink.secondary, minWidth: 0 }}>
+          <SFSymbol name="dumbbell.fill" size={11} weight={600} />
+          <Text {...slMeta(SL.Weight.medium)} color={SL.Ink.secondary} lineLimit={1}>
+            {(post.exercises ?? []).slice(0, 3).map((e) => e.name).join(" · ") +
+              ((post.exercises ?? []).length > 3 ? ` · +${(post.exercises ?? []).length - 3}` : "")}
+          </Text>
+        </HStack>
       )}
       {post.notes !== undefined && post.notes !== "" && (
         <Text {...slBody()} color={colorOpacity(SL.Ink.primary, 0.82)} lineLimit={isDetail ? undefined : 3} style={{ whiteSpace: "pre-wrap" }}>

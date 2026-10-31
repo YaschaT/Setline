@@ -10,7 +10,7 @@ import {
   Redo2, RefreshCw, RotateCcw, RotateCw, Scale, ScanBarcode, ScanFace, ScanLine, Search, Server, Share, Shield,
   ShieldCheck, SlidersHorizontal, Sparkles, SquareDashed, Star, StarOff, Sunrise, SwitchCamera, TextCursorInput,
   Thermometer, Timer, Trash2, Trees, Triangle, Trophy, Users, Volume2, WifiOff, X, Layers, Fingerprint, Hash,
-  Settings, Utensils, Circle, Calendar, Bandage, Briefcase, Plane, Hourglass,
+  Settings, Utensils, Circle, Calendar, Bandage, Briefcase, Plane, Hourglass, Target, Send, MessagesSquare, ImagePlus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +29,10 @@ const MAP: Record<string, LucideIcon> = {
   "bell.fill": Bell,
   "bolt.heart.fill": HeartPulse,
   "bubble.left": MessageCircle,
+  "bubble.left.and.bubble.right.fill": MessagesSquare,
+  "paperplane.fill": Send,
+  "photo.badge.plus": ImagePlus,
+  "target": Target,
   "camera.badge.ellipsis": Camera,
   "camera.fill": Camera,
   camera: Camera,

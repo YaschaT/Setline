@@ -202,7 +202,58 @@ export interface ChatMessage {
   topic?: ChatTopic;
   created_at: string;
   author?: SocialProfile;
+  /** The room it was written in; none is the friends' chat. */
+  room_id?: string;
+  /** A photo with it, in the post-media bucket. */
+  image_path?: string;
 }
+
+/**
+ * A conversation besides the friends' chat: Everyone (every Setline lifter),
+ * a private one between two friends, or a room someone started on a topic.
+ */
+export type ChatRoomKind = "everyone" | "direct" | "room";
+
+export interface ChatRoom {
+  id: string;
+  kind: ChatRoomKind;
+  name?: string;
+  created_by?: string;
+  created_at: string;
+  members: SocialProfile[];
+}
+
+export const ChatRoom = {
+  everyoneID: "00000000-0000-0000-0000-000000000001",
+
+  /** "Everyone", the friend's name, or the room's own. */
+  title(self: ChatRoom, myID: string): string {
+    if (self.kind === "everyone") return "Everyone";
+    if (self.kind === "direct") return self.members.find((m) => m.user_id !== myID)?.display_name ?? "Private chat";
+    return self.name ?? "Room";
+  },
+
+  /** The friend on the other side of a private chat. */
+  other(self: ChatRoom, myID: string): SocialProfile | undefined {
+    return self.kind === "direct" ? self.members.find((m) => m.user_id !== myID) : undefined;
+  },
+
+  decode(json: unknown): ChatRoom {
+    const o = (json ?? {}) as Record<string, unknown>;
+    const kind = (["everyone", "direct", "room"] as ChatRoomKind[]).find((k) => k === o.kind) ?? "room";
+    const members = Array.isArray(o.chat_members)
+      ? (o.chat_members as Record<string, unknown>[]).map((m) => (m.member ? SocialProfile.decode(m.member) : undefined)).filter((m): m is SocialProfile => m !== undefined)
+      : [];
+    return {
+      id: String(o.id ?? ""),
+      kind,
+      name: typeof o.name === "string" ? o.name : undefined,
+      created_by: typeof o.created_by === "string" ? o.created_by : undefined,
+      created_at: String(o.created_at ?? ""),
+      members,
+    };
+  },
+};
 
 export const ChatMessage = {
   topics: ["training", "food", "motivation"] as ChatTopic[],
@@ -229,6 +280,8 @@ export const ChatMessage = {
       topic,
       created_at: String(o.created_at ?? ""),
       author: o.author ? SocialProfile.decode(o.author) : undefined,
+      room_id: typeof o.room_id === "string" ? o.room_id : undefined,
+      image_path: typeof o.image_path === "string" ? o.image_path : undefined,
     };
   },
 };
@@ -1414,18 +1467,67 @@ export class SocialStore {
    */
   chatAvailable = false;
 
-  /** The last 100 messages you can see, oldest first. */
-  async chatMessages(): Promise<ChatMessage[]> {
-    const rows = (await this.get(
-      `chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(${SocialStore.profileFields})&order=created_at.desc&limit=100`,
-    )) as unknown[];
-    const messages = rows.map(ChatMessage.decode).reverse();
+  /**
+   * Rooms are on the server (chat_rooms answers): Everyone, private chats and
+   * rooms switch themselves on the moment the tables exist.
+   */
+  roomsAvailable = false;
+  /** Every room you are in, Everyone first. */
+  rooms: ChatRoom[] = [];
+  /** The newest message per conversation, keyed by room id ("" is the friends' chat). */
+  latestByRoom: Record<string, ChatMessage> = {};
+
+  private get messageFields(): string {
+    const base = `id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(${SocialStore.profileFields})`;
+    return this.roomsAvailable ? `${base},room_id,image_path` : base;
+  }
+
+  /** The rooms you are in and each conversation's newest message. */
+  async loadRooms(): Promise<void> {
+    if (!this.me) return;
+    try {
+      const rows = (await this.get(
+        `chat_rooms?select=id,kind,name,created_by,created_at,chat_members(user_id,member:profiles!chat_members_user_id_fkey(${SocialStore.profileFields}))&order=created_at.asc`,
+      )) as unknown[];
+      const rooms = rows.map(ChatRoom.decode);
+      this.rooms = [...rooms.filter((r) => r.kind === "everyone"), ...rooms.filter((r) => r.kind !== "everyone")];
+      this.roomsAvailable = true;
+    } catch {
+      this.changed();
+      return;
+    }
+    try {
+      const recent = ((await this.get(`chat_messages?select=${this.messageFields}&order=created_at.desc&limit=300`)) as unknown[]).map(ChatMessage.decode);
+      const latest: Record<string, ChatMessage> = {};
+      for (const message of recent) {
+        const key = message.room_id ?? "";
+        if (!latest[key]) latest[key] = message;
+      }
+      this.latestByRoom = latest;
+      this.chatAvailable = true;
+    } catch {
+      /* the list keeps what it showed */
+    }
+    this.changed();
+  }
+
+  /** The last 100 messages of a conversation, oldest first; no room is the friends' chat. */
+  async chatMessages(a: { room?: string } = {}): Promise<ChatMessage[]> {
+    const where = this.roomsAvailable ? (a.room ? `&room_id=eq.${a.room}` : "&room_id=is.null") : "";
+    const rows = (await this.get(`chat_messages?select=${this.messageFields}${where}&order=created_at.desc&limit=100`)) as unknown[];
+    const messages = rows.map(ChatMessage.decode).reverse().filter((m) => !this.blockedIDs.has(m.user_id));
     const latest = messages[messages.length - 1];
-    if (latest?.id !== this.chatLatest?.id) {
-      this.chatLatest = latest;
+    const key = a.room ?? "";
+    if (latest && latest.id !== this.latestByRoom[key]?.id) {
+      this.latestByRoom = { ...this.latestByRoom, [key]: latest };
+      if (!a.room) this.chatLatest = latest;
       this.changed();
     }
     return messages;
+  }
+
+  private get blockedIDs(): Set<string> {
+    return new Set(this.blocked.map((p) => p.user_id));
   }
 
   async refreshChatLatest(): Promise<void> {
@@ -1440,12 +1542,65 @@ export class SocialStore {
     } catch {
       /* the row keeps what it showed */
     }
+    await this.loadRooms();
   }
 
-  async sendChat(text: string, a: { topic?: ChatTopic } = {}): Promise<void> {
+  /** A message, with a photo if one is given; no room is the friends' chat. */
+  async sendChat(text: string, a: { topic?: ChatTopic; room?: string; photo?: Blob } = {}): Promise<void> {
     const body = prefixChars(trimmingWhitespacesAndNewlines(text), 1000);
-    if (body === "") return;
-    await this.send("chat_messages", { method: "POST", body: JSON.stringify({ user_id: this.myID, body, topic: a.topic ?? null }) });
+    if (body === "" && !a.photo) return;
+    const row: Record<string, unknown> = { user_id: this.myID, body, topic: a.topic ?? null };
+    if (a.room) row.room_id = a.room;
+    if (a.photo) {
+      const path = `${this.myID}/chat/${uuid().toLowerCase()}.jpg`;
+      await this.storage(`object/post-media/${path}`, { method: "POST", body: a.photo, contentType: "image/jpeg" });
+      row.image_path = path;
+    }
+    await this.send("chat_messages", { method: "POST", body: JSON.stringify(row) });
+  }
+
+  /** A room on a topic, with the friends picked; you are its first member. */
+  async createRoom(name: string, memberIDs: string[]): Promise<ChatRoom> {
+    const title = prefixChars(trimmingWhitespacesAndNewlines(name), 40);
+    const data = await this.send("chat_rooms?select=id,kind,name,created_by,created_at", {
+      method: "POST",
+      prefer: "return=representation",
+      body: JSON.stringify({ kind: "room", name: title, created_by: this.myID }),
+    });
+    const room = ChatRoom.decode((JSON.parse(data) as unknown[])[0]);
+    const ids = [this.myID, ...new Set(memberIDs.filter((id) => id !== this.myID))];
+    await this.send("chat_members", { method: "POST", body: JSON.stringify(ids.map((id) => ({ room_id: room.id, user_id: id }))) });
+    await this.loadRooms();
+    return this.rooms.find((r) => r.id === room.id) ?? room;
+  }
+
+  /** The private chat with a friend: the one you have, or a new one. */
+  async directRoom(friend: SocialProfile): Promise<ChatRoom> {
+    const held = this.rooms.find((r) => r.kind === "direct" && r.members.some((m) => m.user_id === friend.user_id));
+    if (held) return held;
+    const data = await this.send("chat_rooms?select=id,kind,name,created_by,created_at", {
+      method: "POST",
+      prefer: "return=representation",
+      body: JSON.stringify({ kind: "direct", created_by: this.myID }),
+    });
+    const room = ChatRoom.decode((JSON.parse(data) as unknown[])[0]);
+    await this.send("chat_members", {
+      method: "POST",
+      body: JSON.stringify([{ room_id: room.id, user_id: this.myID }, { room_id: room.id, user_id: friend.user_id }]),
+    });
+    await this.loadRooms();
+    return this.rooms.find((r) => r.id === room.id) ?? { ...room, members: [this.me!, friend] };
+  }
+
+  /** Out of a room; the one who started it closes it for everyone. */
+  async leaveRoom(room: ChatRoom): Promise<void> {
+    if (room.created_by === this.myID) {
+      await this.send(`chat_rooms?id=eq.${room.id}`, { method: "DELETE" });
+    } else {
+      await this.send(`chat_members?room_id=eq.${room.id}&user_id=eq.${this.myID}`, { method: "DELETE" });
+    }
+    this.rooms = this.rooms.filter((r) => r.id !== room.id);
+    this.changed();
   }
 
   /** Your own messages only. */
