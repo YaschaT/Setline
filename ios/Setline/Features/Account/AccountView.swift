@@ -200,8 +200,8 @@ struct AccountView: View {
     /// greets you with, the address it signs in with, whether it is synced,
     /// and three numbers for what it holds. Only an expired session asks for
     /// anything, and then the button says what.
-    private var profileCard: some View {
-        VStack(spacing: 0) {
+    private var profileCard: AnyView {
+        AnyView(VStack(spacing: 0) {
             // A menu rather than a dialog: it opens where it was tapped.
             Menu {
                 Section("Your name and photo stay on this phone") {
@@ -292,7 +292,7 @@ struct AccountView: View {
                 let kept = if let data { await app.setProfilePhoto(data) } else { false }
                 if !kept { photoFailed = true }
             }
-        }
+        })
     }
 
     /// What the account holds, in three numbers. Side by side; stacked at
@@ -468,10 +468,10 @@ struct AccountView: View {
 
     /// This week at a glance: the seven days, the training ones lit. Tapping
     /// it moves them.
-    private var weekRow: some View {
+    private var weekRow: AnyView {
         let days = Schedule.mondayFirstWeek(containing: Date()).map(Schedule.weekdayLabel)
         let count = summary.trainingDays.count
-        return Button { planningWeek = true } label: {
+        return AnyView(Button { planningWeek = true } label: {
             VStack(alignment: .leading, spacing: SL.Space.s3) {
                 HStack(alignment: .center, spacing: SL.Space.s3) {
                     icon("calendar", tint: SL.Signal.action)
@@ -505,7 +505,7 @@ struct AccountView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Training days: \(summary.trainingDays.joined(separator: ", "))")
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Double-tap to move them")
+        .accessibilityHint("Double-tap to move them"))
     }
 
     /// How long a workout may sit open or paused before a nudge.
@@ -650,11 +650,11 @@ struct AccountView: View {
         }
     }
 
-    @ViewBuilder
-    private var exportRow: some View {
+    private var exportRow: AnyView {
         if exports.isEmpty {
-            row("square.and.arrow.up", tint: SL.Ink.secondary, title: "Export everything", detail: "No data to export yet")
-        } else {
+            return row("square.and.arrow.up", tint: SL.Ink.secondary, title: "Export everything", detail: "No data to export yet")
+        }
+        return AnyView(
             ShareLink(items: exports) {
                 // 23: the design's `download` glyph beside "Export", both
                 // lime — the screen's one action.
@@ -670,7 +670,7 @@ struct AccountView: View {
             }
             .buttonStyle(SLRowButtonStyle())
             .accessibilityLabel("Export everything. \(exportDetail)")
-        }
+        )
     }
 
     private var exportDetail: String {
@@ -718,8 +718,8 @@ struct AccountView: View {
 
     /// A topic: its overline, its rows in one card with a hairline between
     /// them that starts where the text does, and an optional note beneath.
-    private func group<Rows: View>(_ title: String, footer: String? = nil, @ViewBuilder rows: () -> Rows) -> some View {
-        VStack(alignment: .leading, spacing: SL.Space.s2) {
+    private func group<Rows: View>(_ title: String, footer: String? = nil, @ViewBuilder rows: () -> Rows) -> AnyView {
+        AnyView(VStack(alignment: .leading, spacing: SL.Space.s2) {
             SLOverline(text: title)
                 .padding(.leading, SL.Space.s1)
                 .accessibilityAddTraits(.isHeader)
@@ -741,7 +741,7 @@ struct AccountView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, SL.Space.s1)
             }
-        }
+        })
     }
 
     /// The tinted square that leads a row.
@@ -764,7 +764,10 @@ struct AccountView: View {
 
     /// A settings row: icon, label (and a line about it), its current value
     /// on the right, and a chevron when tapping it leads somewhere.
-    @ViewBuilder
+    ///
+    /// Rows, the profile card and topics come back as `AnyView`. Built as one
+    /// nested type, Settings took nearly 1 MB of stack to put together in a
+    /// debug build, and a phone's main thread has 1 MB: opening it crashed.
     private func row<Trailing: View>(
         _ symbol: String,
         tint: Color,
@@ -773,17 +776,16 @@ struct AccountView: View {
         detail: String? = nil,
         action: (() -> Void)? = nil,
         @ViewBuilder trailing: () -> Trailing
-    ) -> some View {
+    ) -> AnyView {
         // A destructive row asks first; it doesn't lead anywhere, so no chevron.
         let content = rowContent(symbol, tint: tint, title: title, detail: detail, titleColor: titleColor,
                                  chevron: action != nil && titleColor != SL.Signal.loss, trailing: trailing)
-        if let action {
+        guard let action else { return AnyView(content) }
+        return AnyView(
             Button(action: action) { content }
                 .buttonStyle(SLRowButtonStyle())
                 .accessibilityHint("Double-tap to change")
-        } else {
-            content
-        }
+        )
     }
 
     /// A row with nothing on the right but, when it leads somewhere, the chevron.
@@ -794,7 +796,7 @@ struct AccountView: View {
         titleColor: Color = SL.Ink.primary,
         detail: String? = nil,
         action: (() -> Void)? = nil
-    ) -> some View {
+    ) -> AnyView {
         row(symbol, tint: tint, title: title, titleColor: titleColor, detail: detail, action: action) { EmptyView() }
     }
 
@@ -839,23 +841,25 @@ struct AccountView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func toggleRow(_ symbol: String, tint: Color, title: String, detail: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            HStack(alignment: .center, spacing: SL.Space.s3) {
-                icon(symbol, tint: tint)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                    Text(detail)
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+    private func toggleRow(_ symbol: String, tint: Color, title: String, detail: String, isOn: Binding<Bool>) -> AnyView {
+        AnyView(
+            Toggle(isOn: isOn) {
+                HStack(alignment: .center, spacing: SL.Space.s3) {
+                    icon(symbol, tint: tint)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                        Text(detail)
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
-        }
-        .tint(SL.Signal.action)
-        .padding(.horizontal, SL.Space.s4)
-        .padding(.vertical, SL.Space.s3)
-        .frame(minHeight: 56)
+            .tint(SL.Signal.action)
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .frame(minHeight: 56)
+        )
     }
 
     /// Who made the food photos, as their licences ask.
