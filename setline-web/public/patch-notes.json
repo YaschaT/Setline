@@ -1,6 +1,17 @@
 {
   "notes": [
     {
+      "id": "2026-11-01",
+      "date": "2026-11-01",
+      "title": "Your week and your workouts, right on Training",
+      "items": [
+        "Training now shows Your week and Your workouts under your next workout. Tap Set up to pick a workout for each day; it repeats every week.",
+        "Tap Create to build your own workout straight away, from any exercises.",
+        "Settings has Your week too, next to your plan.",
+        "Fixed: on iPhone, opening Settings could close the app."
+      ]
+    },
+    {
       "id": "2026-10-31-4",
       "date": "2026-10-31",
       "title": "Chat notifications",

@@ -47,6 +47,7 @@ struct AccountView: View {
     @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
     @AppStorage(WorkoutReminder.minutesKey) private var openWorkoutMinutes = 20
     @State private var managingWorkouts = false
+    @State private var editingOwnWeek = false
     @AppStorage(SLSound.preferenceKey) private var soundsOn = true
     @AppStorage(AppLock.preferenceKey) private var appLock = false
     @State private var showsPolicy = false
@@ -136,6 +137,9 @@ struct AccountView: View {
                 },
                 onClose: { managingWorkouts = false }
             )
+        }
+        .sheet(isPresented: $editingOwnWeek) {
+            OwnWeekSheet(onClose: { editingOwnWeek = false })
         }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })
@@ -444,6 +448,11 @@ struct AccountView: View {
                 detail: app.ownWeek != nil ? "Workouts from \(summary.planName)" : nil,
                 action: { choosingProgram = true }) {
                 value(app.ownWeek != nil ? "Your own week" : summary.planName)
+            }
+            row("calendar.badge.checkmark", tint: SL.Signal.action, title: "Your week",
+                detail: app.ownWeek.map { ownWeekSummary($0, workouts: app.schedulePlan) } ?? "A workout for each day, every week",
+                action: { editingOwnWeek = true }) {
+                value(app.ownWeek != nil ? "Edit" : "Set up")
             }
             if !summary.trainingDays.isEmpty {
                 weekRow

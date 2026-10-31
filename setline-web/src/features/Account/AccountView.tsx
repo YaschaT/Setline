@@ -48,7 +48,7 @@ import { PostVisibility, useSocial } from "../../data/SocialStore";
 import { SignInView } from "../Auth/SignInView";
 import { NutritionReminders } from "../Progress/GoalViews";
 import { WorkoutReminder } from "../Session/WorkoutReminder";
-import { WorkoutChooserSheet } from "../Training/WorkoutChooser";
+import { OwnWeekSheet, WorkoutChooserSheet, ownWeekSummary } from "../Training/WorkoutChooser";
 import { WeekPlanView } from "../Training/WeekPlanView";
 import { VisibilitySheet } from "../Friends/PostComposerView";
 import { BlockedPeopleSheet } from "../Friends/InviteViews";
@@ -142,6 +142,7 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
   const [mealReminders, setMealReminders] = useAppStorage<boolean>(NutritionReminders.mealsKey, false);
   const [openWorkoutMinutes, setOpenWorkoutMinutes] = useAppStorage<number>(WorkoutReminder.minutesKey, 20);
   const [managingWorkouts, setManagingWorkouts] = useState(false);
+  const [editingOwnWeek, setEditingOwnWeek] = useState(false);
   const [soundsOn, setSoundsOnStored] = useAppStorage<boolean>(SLSound.preferenceKey, true);
   const [appLock, setAppLock] = useAppStorage<boolean>(AppLock.preferenceKey, false);
   const [showsPolicy, setShowsPolicy] = useState(false);
@@ -632,6 +633,13 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
       action: () => setChoosingProgram(true),
       trailing: value(app.ownWeek ? "Your own week" : summary.planName),
     }),
+    row("calendar.badge.checkmark", {
+      tint: SL.Signal.action,
+      title: "Your week",
+      detail: app.ownWeek ? ownWeekSummary(app.ownWeek, app.schedulePlan) : "A workout for each day, every week",
+      action: () => setEditingOwnWeek(true),
+      trailing: value(app.ownWeek ? "Edit" : "Set up"),
+    }),
     summary.trainingDays.length > 0 ? weekRow : null,
     row("square.stack.3d.up.fill", {
       tint: SL.Signal.action,
@@ -897,6 +905,14 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
         message="Turn them on in Settings › Setline › Notifications, then switch meal reminders on here."
         actions={[{ title: "OK", role: "cancel" }]}
       />
+
+      <Sheet isPresented={editingOwnWeek} onDismiss={() => setEditingOwnWeek(false)}>
+        {editingOwnWeek && (
+          <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <OwnWeekSheet onClose={() => setEditingOwnWeek(false)} />
+          </div>
+        )}
+      </Sheet>
 
       <Sheet isPresented={managingWorkouts} onDismiss={() => setManagingWorkouts(false)}>
         <WorkoutChooserSheet

@@ -9,7 +9,7 @@
 // the only thing here that changes the schedule — is reached from a day's
 // preview, from a rest day's row in the Agenda, or by holding a day.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { SL } from "../../design/tokens";
+import { SL, slFont } from "../../design/tokens";
 import { Alert, FullScreenCover, HStack, Menu, ScrollView, Sheet, Spacer, Text, VStack, useAppStorage } from "../../design/swiftui";
 import { SFSymbol } from "../../design/SFSymbol";
 import { SLOutlineButton, SLPrimaryButton, SLQuietButton, colorHex, colorOpacity, spring } from "../../design/SetlineTokens";
@@ -45,7 +45,8 @@ import { DeloadCard, type DeloadCard_Status } from "./DeloadCard";
 import { HistorySheet, QuickProgressCard } from "./QuickProgressCard";
 import { EarnedBadgeRow, NextBadgeCard } from "./StreakHero";
 import { TallyMascot, type TallyMascot_Mood } from "./TallyMascot";
-import { WorkoutChooserSheet } from "./WorkoutChooser";
+import { CustomWorkoutBuilder, OwnWeekSheet, WorkoutChooserSheet, ownWeekSummary } from "./WorkoutChooser";
+import { CustomWorkout } from "../../core/Domain/CustomWorkout";
 import { WorkoutPreviewView } from "./WorkoutPreviewView";
 import { StripDay } from "./WeekStrip";
 import { SessionDetailView } from "../Progress/SessionDetailView";
@@ -64,7 +65,9 @@ type Presented =
   | { kind: "preview"; value: AgendaDay }
   | { kind: "plan"; value: Date }
   | { kind: "history" }
-  | { kind: "chooser" };
+  | { kind: "chooser" }
+  | { kind: "ownWeek" }
+  | { kind: "newWorkout" };
 
 const presentedID = (p: Presented): string => {
   switch (p.kind) {
@@ -1070,26 +1073,64 @@ export function TrainingHomeView({
     );
   };
 
-  /** The way to your own workouts and your plan, named for what it is. */
-  const plansRow = (() => {
-    const own = app.customWorkouts.length;
+  /** The row's action, said on the row so it reads as one. */
+  const ctaPill = (text: string) => (
+    <span
+      style={{
+        ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
+        color: SL.Signal.action,
+        background: SL.Signal.actionTint,
+        borderRadius: 999,
+        padding: `0 ${SL.Space.s3}px`,
+        minHeight: 30,
+        display: "inline-flex",
+        alignItems: "center",
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+      }}
+    >
+      {text}
+    </span>
+  );
+
+  const ownRow = (symbol: string, title: string, detail: string, trailing: ReactNode) => (
+    <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, minHeight: 60 }}>
+      <div style={{ width: 44, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+        <SFSymbol name={symbol} size={15} weight={600} color={SL.Signal.action} />
+      </div>
+      <VStack alignment="leading" spacing={1} style={{ minWidth: 0, paddingTop: SL.Space.s3, paddingBottom: SL.Space.s3 }}>
+        <Text {...slBody(SL.Weight.medium)} color={SL.Ink.primary}>
+          {title}
+        </Text>
+        <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={2}>
+          {detail}
+        </Text>
+      </VStack>
+      <Spacer minLength={SL.Space.s2} />
+      {trailing}
+    </HStack>
+  );
+
+  /** Your own week, right under the next workout it decides. User tests looked for it here and didn't find it inside "Plan & workouts". */
+  const ownWeekRow = (() => {
+    const summary = app.ownWeek ? ownWeekSummary(app.ownWeek, app.schedulePlan) : undefined;
     return (
-      <SLRowButton onPress={() => setSheet({ kind: "chooser" })}>
-        <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, minHeight: 60 }}>
-          <div style={{ width: 44, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-            <SFSymbol name="square.stack.3d.up" size={15} weight={600} color={SL.Ink.secondary} />
-          </div>
-          <VStack alignment="leading" spacing={1}>
-            <Text {...slBody(SL.Weight.medium)} color={SL.Ink.primary}>
-              Plan &amp; workouts
-            </Text>
-            <Text {...slMeta()} color={SL.Ink.secondary}>
-              {own === 0 ? "Create your own workout" : own === 1 ? "1 of your own" : `${own} of your own`}
-            </Text>
-          </VStack>
-          <Spacer minLength={SL.Space.s2} />
-          <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
-        </HStack>
+      <SLRowButton
+        onPress={() => setSheet({ kind: "ownWeek" })}
+        aria-label={summary ? `Your week: ${summary}` : "Set up your week"}
+      >
+        {ownRow("calendar", "Your week", summary ?? "A workout for each day", ctaPill(summary ? "Edit" : "Set up"))}
+      </SLRowButton>
+    );
+  })();
+
+  /** Your own workouts. With none yet, the row builds the first one straight away; after that it opens them, with every other workout. */
+  const ownWorkoutsRow = (() => {
+    const own = app.customWorkouts.length;
+    const detail = own === 0 ? "Build one from any exercises" : `${own === 1 ? "1 of your own" : `${own} of your own`} · start any workout`;
+    return (
+      <SLRowButton onPress={() => setSheet({ kind: own === 0 ? "newWorkout" : "chooser" })}>
+        {ownRow("square.stack.3d.up", "Your workouts", detail, own === 0 ? ctaPill("Create") : <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />)}
       </SLRowButton>
     );
   })();
@@ -1118,7 +1159,7 @@ export function TrainingHomeView({
 
   const rowHairline = <SLHairline style={{ marginLeft: SL.Space.s4 + 44 + SL.Space.s3 }} />;
 
-  /** What's next and what's been: one card. The next workout after today, the plan, and every logged workout. */
+  /** What's next and what's yours: one card. The next workout after today, your week, your workouts, and every logged workout. */
   const planCard = (day: AgendaDay) => {
     const next = nextTraining(day.date);
     return (
@@ -1130,7 +1171,9 @@ export function TrainingHomeView({
               {rowHairline}
             </>
           )}
-          {plansRow}
+          {ownWeekRow}
+          {rowHairline}
+          {ownWorkoutsRow}
           {rowHairline}
           {allWorkoutsRow}
         </VStack>
@@ -1348,6 +1391,22 @@ export function TrainingHomeView({
           <WorkoutChooserSheet
             onStart={(day) => after(() => onStart(day))}
             onChangePlan={() => after(() => setChoosingProgram(true))}
+            onClose={() => setSheet(undefined)}
+          />
+        );
+      case "ownWeek":
+        return <OwnWeekSheet onClose={() => setSheet(undefined)} />;
+      case "newWorkout":
+        return (
+          <CustomWorkoutBuilder
+            workout={undefined}
+            onSave={(saved, start) => {
+              setSheet(undefined);
+              void app.saveCustomWorkout(saved).then(() => {
+                if (start && app.resumableSession === undefined) after(() => onStart(CustomWorkout.workoutDay(saved)));
+              });
+            }}
+            onDelete={undefined}
             onClose={() => setSheet(undefined)}
           />
         );

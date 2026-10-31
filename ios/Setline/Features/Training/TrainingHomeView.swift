@@ -65,6 +65,8 @@ struct TrainingHomeView: View {
         case plan(Date)
         case history
         case chooser
+        case ownWeek
+        case newWorkout
 
         var id: String {
             switch self {
@@ -77,6 +79,8 @@ struct TrainingHomeView: View {
             case .plan(let date): return "plan-\(Schedule.dateKey(date))"
             case .history: return "history"
             case .chooser: return "chooser"
+            case .ownWeek: return "ownWeek"
+            case .newWorkout: return "newWorkout"
             }
         }
     }
@@ -178,6 +182,16 @@ struct TrainingHomeView: View {
                     onChangePlan: { after(closing: { choosingProgram = true }) },
                     onClose: { sheet = nil }
                 )
+            case .ownWeek:
+                OwnWeekSheet(onClose: { sheet = nil })
+            case .newWorkout:
+                CustomWorkoutBuilder(workout: nil, onSave: { saved, start in
+                    sheet = nil
+                    Task {
+                        await app.saveCustomWorkout(saved)
+                        if start, app.resumableSession == nil { after(closing: { onStart(saved.workoutDay) }) }
+                    }
+                }, onDelete: nil, onClose: { sheet = nil })
             case .plan(let date):
                 DayPlanSheet(
                     plan: dayPlan(for: date),
@@ -446,16 +460,18 @@ struct TrainingHomeView: View {
     private static let insideTopic = SL.Space.s3
     private static let betweenTopics = SL.Space.s8
 
-    /// What's next and what's been: one card, two rows. The next workout
-    /// after today (only that one — the schedule is the Agenda's), and under
-    /// a hairline the way into every logged workout.
+    /// What's next and what's yours: the next workout after today (only
+    /// that one — the schedule is the Agenda's), your week, your workouts,
+    /// and every logged workout.
     private func planCard(after today: AgendaDay) -> some View {
         VStack(spacing: 0) {
             if let next = nextTraining(after: today.date), next.plannedDay != nil {
                 nextSessionRow(next)
                 SLHairline().padding(.leading, SL.Space.s4 + 44 + SL.Space.s3)
             }
-            plansRow
+            ownWeekRow
+            SLHairline().padding(.leading, SL.Space.s4 + 44 + SL.Space.s3)
+            ownWorkoutsRow
             SLHairline().padding(.leading, SL.Space.s4 + 44 + SL.Space.s3)
             allWorkoutsRow
         }
@@ -511,29 +527,74 @@ struct TrainingHomeView: View {
         .accessibilityHint("Shows the exercises. Nothing starts.")
     }
 
-    /// The way to your own workouts and your plan, named for what it is.
-    private var plansRow: some View {
-        let own = app.customWorkouts.count
-        return Button { sheet = .chooser } label: {
-            HStack(spacing: SL.Space.s3) {
-                Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(SL.Ink.secondary)
-                    .frame(width: 44)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Plan & workouts").slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
-                    Text(own == 0 ? "Create your own workout" : own == 1 ? "1 of your own" : "\(own) of your own")
-                        .slMeta().foregroundStyle(SL.Ink.secondary)
-                }
-                Spacer(minLength: SL.Space.s2)
-                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+    /// Your own week, right under the next workout it decides. User tests
+    /// looked for it here and didn't find it inside "Plan & workouts".
+    private var ownWeekRow: some View {
+        let summary = app.ownWeek.map { ownWeekSummary($0, workouts: app.schedulePlan) }
+        return Button { sheet = .ownWeek } label: {
+            ownRow(symbol: "calendar", title: "Your week",
+                   detail: summary ?? "A workout for each day") {
+                ctaPill(summary == nil ? "Set up" : "Edit")
             }
-            .padding(.horizontal, SL.Space.s4)
-            .frame(minHeight: 60)
-            .contentShape(Rectangle())
         }
         .buttonStyle(SLRowButtonStyle())
-        .accessibilityHint("Build your own workouts, change your plan, or start any workout")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(summary.map { "Your week: \($0)" } ?? "Set up your week")
+        .accessibilityHint("Pick a workout for each day. It repeats every week.")
+    }
+
+    /// Your own workouts. With none yet, the row builds the first one
+    /// straight away; after that it opens them, with every other workout.
+    private var ownWorkoutsRow: some View {
+        let own = app.customWorkouts.count
+        return Button { sheet = own == 0 ? .newWorkout : .chooser } label: {
+            ownRow(symbol: "square.stack.3d.up", title: "Your workouts",
+                   detail: own == 0 ? "Build one from any exercises"
+                       : "\(own == 1 ? "1 of your own" : "\(own) of your own") · start any workout") {
+                if own == 0 {
+                    ctaPill("Create")
+                } else {
+                    SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+                }
+            }
+        }
+        .buttonStyle(SLRowButtonStyle())
+        .accessibilityHint(own == 0 ? "Pick exercises and sets once, start it any time"
+                                    : "Build your own workouts, change your plan, or start any workout")
+    }
+
+    private func ownRow<Trailing: View>(symbol: String, title: String, detail: String,
+                                        @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: SL.Space.s3) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SL.Signal.action)
+                .frame(width: 44)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).slBody(SL.Weight.medium).foregroundStyle(SL.Ink.primary)
+                Text(detail)
+                    .slMeta().foregroundStyle(SL.Ink.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: SL.Space.s2)
+            trailing()
+        }
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
+        .frame(minHeight: 60)
+        .contentShape(Rectangle())
+    }
+
+    /// The row's action, said on the row so it reads as one.
+    private func ctaPill(_ text: String) -> some View {
+        Text(text)
+            .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+            .foregroundStyle(SL.Signal.action)
+            .padding(.horizontal, SL.Space.s3)
+            .frame(minHeight: 30)
+            .background(Capsule().fill(SL.Signal.actionTint))
+            .fixedSize()
     }
 
     /// Every logged workout: the card's quiet second row.
