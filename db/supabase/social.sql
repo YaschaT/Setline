@@ -676,6 +676,7 @@ grant execute on function public.save_push_subscription(text, text, text) to aut
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
 create table if not exists private.settings (key text primary key, value text not null);
+alter table private.settings enable row level security;
 
 -- Browsers the push services no longer know, as /api/chat-push reports them.
 create or replace function public.forget_push_subscriptions(p_secret text, p_endpoints text[])
