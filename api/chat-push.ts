@@ -1,5 +1,4 @@
 import webpush from "web-push";
-import { json } from "./v/_shared";
 
 /**
  * Chat notifications. The database calls this when a message lands (the
@@ -19,6 +18,12 @@ type Message = {
   room?: string | null;
   roomID?: string | null;
 };
+
+// Node resolves imports as written, so this function keeps its own helper
+// rather than reaching into ./v/_shared the way the edge functions do.
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+}
 
 const PUBLIC_KEY = "BCksi0To8y-PNVd8vdshLaMgCA-zaxROL-JxYsbtu7zksJm_ZdWis2AV1A-3c4W_NJLtp7N7yCfjA7xrcCeETKE";
 
