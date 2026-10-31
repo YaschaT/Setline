@@ -67,13 +67,35 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// A chat message, sent by /api/chat-push. Every push shows a notification:
+// Safari takes push away from a site that receives one silently.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Setline", {
+      body: data.body || "New message",
+      tag: data.tag || "setline-chat",
+      renotify: true,
+      icon: "/app-icon.png",
+      badge: "/icons/badge.png",
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       if (windows.length > 0) return windows[0].focus();
-      return self.clients.openWindow("/");
+      return self.clients.openWindow(url);
     })(),
   );
 });

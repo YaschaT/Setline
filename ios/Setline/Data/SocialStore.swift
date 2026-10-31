@@ -1140,6 +1140,20 @@ final class SocialStore {
     private(set) var latestByRoom: [String: ChatMessage] = [:]
     private var demoRoomChat: [String: [ChatMessage]] = [:]
 
+    /// Messages from others since a moment, outside Everyone, with the rooms
+    /// they were written in: what ChatAlerts turns into notifications.
+    func chatSince(_ since: String) async throws -> ([ChatMessage], [ChatRoom]) {
+        let fields = "id,user_id,body,topic,created_at,room_id,image_path,author:profiles!chat_messages_user_id_fkey(\(Self.profileFields))"
+        let after = since.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? since
+        let messages: [ChatMessage] = try await get(
+            "chat_messages?select=\(fields)&created_at=gt.\(after)&user_id=neq.\(myID)&or=(room_id.is.null,room_id.neq.\(ChatRoom.everyoneID))&order=created_at.asc&limit=50"
+        )
+        let ids = Set(messages.compactMap(\.room_id))
+        guard !ids.isEmpty else { return (messages, []) }
+        let rooms: [ChatRoom] = try await get("chat_rooms?select=\(Self.roomFields)&id=in.(\(ids.sorted().joined(separator: ",")))")
+        return (messages, rooms)
+    }
+
     private var messageQuery: String {
         let base = "chat_messages?select=id,user_id,body,topic,created_at,author:profiles!chat_messages_user_id_fkey(\(Self.profileFields))"
         return roomsAvailable ? base + ",room_id,image_path" : base

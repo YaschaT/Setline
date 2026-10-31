@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>be.setline.app.chat</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
@@ -33,10 +37,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Setline uses Face ID to unlock the app when you turn on the app lock, so your log, body weight and photos stay yours.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Setline uses the camera for check-in photos, scanning barcodes and scanning a meal you want to log. Check-in photos stay on this phone.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Setline uses Face ID to unlock the app when you turn on the app lock, so your log, body weight and photos stay yours.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Setline reads your location once, only when you ask, to find gyms near you for a workout you share with friends.</string>
 	<key>NSSupportsLiveActivities</key>
@@ -53,6 +57,10 @@
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

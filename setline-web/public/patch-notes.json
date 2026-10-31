@@ -1,6 +1,16 @@
 {
   "notes": [
     {
+      "id": "2026-10-31-4",
+      "date": "2026-10-31",
+      "title": "Chat notifications",
+      "items": [
+        "Turn on Notifications at the top of Chats and Setline tells you when a friend writes: in Friends, a private chat or one of your rooms. Everyone stays quiet.",
+        "In the browser it's instant, on Android, on a computer, and on iPhone once Setline is on your Home Screen (Share, then Add to Home Screen).",
+        "In the iPhone app, Setline checks in the background, so a notification can come a little after the message."
+      ]
+    },
+    {
       "id": "2026-10-31-3",
       "date": "2026-10-31",
       "title": "Chats: Everyone, private and your own rooms",

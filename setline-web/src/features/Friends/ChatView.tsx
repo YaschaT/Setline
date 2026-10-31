@@ -6,7 +6,7 @@
 // on the server, not this screen.
 import { useEffect, useRef, useState } from "react";
 import { trimmingWhitespacesAndNewlines } from "../../core/Support/nutrition";
-import { ConfirmationDialog, HStack, Menu, Sheet, Spacer, Text, VStack, type MenuEntry } from "../../design/swiftui";
+import { ConfirmationDialog, HStack, Menu, Sheet, Spacer, Text, Toggle, VStack, type MenuEntry } from "../../design/swiftui";
 import { SL, slFont } from "../../design/tokens";
 import { slFixed } from "../../design/SLDynamicType";
 import { SFSymbol } from "../../design/SFSymbol";
@@ -18,6 +18,7 @@ import { SLHairline, slBody, slMeta, slTitle } from "../../design/components/SLT
 import { DashedBorder, PressButton } from "../../design/support";
 import { ChatMessage, ChatRoom, SocialProfile, SocialStore, useSocial, type ChatTopic } from "../../data/SocialStore";
 import { PostCard } from "./FriendsView";
+import { ChatPush, type ChatPushState } from "./ChatPush";
 
 const firstWord = (name: string | undefined) => name?.split(" ").filter((s) => s !== "")[0];
 const lastReadKey = "setline.chat.lastRead";
@@ -72,6 +73,51 @@ type Open = { kind: "friends" } | { kind: "room"; room: ChatRoom };
  * Every conversation, newest first, with the way to start a private chat or
  * a room. Opens straight into the friends' chat while the server has no rooms.
  */
+/** Notifications on this browser: a push when a friend writes, in a private chat or one of your rooms. */
+function ChatNotifyRow() {
+  const [state, setState] = useState<ChatPushState | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void ChatPush.state().then(setState);
+  }, []);
+
+  if (state === undefined || state === "unsupported") return null;
+  const note =
+    state === "homeScreen"
+      ? "On iPhone: tap Share, then Add to Home Screen, and open Setline from there to turn these on."
+      : state === "blocked"
+        ? "Blocked for this site. Allow notifications in your browser's settings, then come back."
+        : "When a friend writes to you, in Friends, a private chat or your rooms. Not for Everyone.";
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    try {
+      setState(on ? await ChatPush.enable() : await ChatPush.disable());
+    } catch {
+      setState(await ChatPush.state());
+    }
+    setBusy(false);
+  };
+
+  return (
+    <HStack
+      spacing={SL.Space.s3}
+      style={{ alignSelf: "stretch", alignItems: "center", padding: SL.Space.s3, marginBottom: SL.Space.s4, background: SL.Surface.raised, borderRadius: SL.Radius.lg, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}` }}
+    >
+      <div style={{ width: 36, height: 36, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <SFSymbol name={state === "on" ? "bell.badge.fill" : "bell.fill"} size={16} weight={600} color={SL.Signal.action} />
+      </div>
+      <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+        <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>Notifications</Text>
+        <Text {...slMeta()} color={SL.Ink.secondary}>{note}</Text>
+      </VStack>
+      {(state === "on" || state === "off") && (
+        <Toggle isOn={state === "on"} onChange={(on) => void toggle(on)} disabled={busy} aria-label="Chat notifications" />
+      )}
+    </HStack>
+  );
+}
+
 export function ChatInbox({ onClose }: { onClose: () => void }) {
   const social = useSocial();
   const [open, setOpen] = useState<Open | undefined>(undefined);
@@ -193,6 +239,7 @@ export function ChatInbox({ onClose }: { onClose: () => void }) {
             Add a friend to message them privately or start a room. Everyone is open to every Setline lifter.
           </Text>
         )}
+        <ChatNotifyRow />
         <VStack spacing={0} style={{ alignSelf: "stretch", background: SL.Surface.raised, borderRadius: SL.Radius.lg, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}`, overflow: "hidden" }}>
           {rows.map((row, index) => {
             const unread = isUnread(row.latest, myID, row.room);

@@ -15,6 +15,46 @@ private func firstWord(_ name: String?) -> String? {
     name?.split(separator: " ").first.map(String.init)
 }
 
+// MARK: - Notifications
+
+/// Chat alerts on this iPhone: a notification when a friend writes, in
+/// Friends, a private chat or one of your rooms (ChatAlerts).
+private struct ChatNotifyRow: View {
+    @State private var isOn = ChatAlerts.isEnabled
+    @State private var denied = false
+
+    var body: some View {
+        HStack(spacing: SL.Space.s3) {
+            Image(systemName: isOn ? "bell.badge.fill" : "bell.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SL.Signal.action)
+                .frame(width: 36, height: 36)
+                .background(SL.Signal.actionTint, in: RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Notifications").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                Text(denied
+                     ? "Notifications are off for Setline. Turn them on in Settings › Setline › Notifications."
+                     : "When a friend writes to you, in Friends, a private chat or your rooms. iPhone checks in the background, so one can come a little later.")
+                    .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle("Chat notifications", isOn: Binding(get: { isOn }, set: { on in
+                isOn = on
+                Task {
+                    let granted = await ChatAlerts.setEnabled(on)
+                    isOn = granted
+                    denied = on && !granted
+                }
+            }))
+            .labelsHidden()
+            .tint(SL.Signal.action)
+        }
+        .padding(SL.Space.s3)
+        .background(SL.Surface.raised, in: RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).strokeBorder(SL.Surface.hairline, lineWidth: 1))
+    }
+}
+
 // MARK: - The list of chats
 
 /// Every conversation, newest first, with the way to start a private chat or
@@ -127,6 +167,7 @@ struct ChatInbox: View {
                         Text("Add a friend to message them privately or start a room. Everyone is open to every Setline lifter.")
                             .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
                     }
+                    ChatNotifyRow()
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                             if index > 0 { SLHairline().padding(.leading, 72) }

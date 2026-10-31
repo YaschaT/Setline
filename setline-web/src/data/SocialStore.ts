@@ -1613,6 +1613,15 @@ export class SocialStore {
     await this.send("reports", { method: "POST", body });
   }
 
+  /** This browser gets a push when someone writes to you (ChatPush.ts). */
+  async savePushSubscription(a: { endpoint: string; p256dh: string; auth: string }): Promise<void> {
+    await this.send("rpc/save_push_subscription", { method: "POST", body: JSON.stringify({ p_endpoint: a.endpoint, p_p256dh: a.p256dh, p_auth: a.auth }) });
+  }
+
+  async forgetPushSubscription(endpoint: string): Promise<void> {
+    await this.send(`push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: "DELETE" });
+  }
+
   // MARK: Plumbing
 
   private async storage(path: string, a: { method?: string; body?: Blob | string; contentType?: string }): Promise<ArrayBuffer> {

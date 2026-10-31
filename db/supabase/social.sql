@@ -626,3 +626,115 @@ create policy "chat photos read when message visible" on storage.objects
     bucket_id = 'post-media'
     and exists (select 1 from public.chat_messages c where c.image_path = storage.objects.name)
   );
+
+-- ================================================================== chat push
+-- A notification when someone writes to you: the browser's own push, free in
+-- every browser and on an iPhone once Setline is on the Home Screen. Each
+-- browser that turns notifications on keeps one row here. When a message
+-- lands, the database hands it with its recipients to /api/chat-push, which
+-- signs and sends the pushes. Everyone is left out: it would buzz every phone.
+-- Safe to re-run.
+create extension if not exists pg_net with schema extensions;
+
+create table if not exists public.push_subscriptions (
+  endpoint   text primary key,
+  user_id    uuid not null references public.profiles (user_id) on delete cascade,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_user on public.push_subscriptions (user_id);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "see own push subscriptions" on public.push_subscriptions;
+create policy "see own push subscriptions" on public.push_subscriptions
+  for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists "remove own push subscriptions" on public.push_subscriptions;
+create policy "remove own push subscriptions" on public.push_subscriptions
+  for delete to authenticated using (user_id = auth.uid());
+
+-- A browser belongs to whoever signed in on it last.
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text)
+returns void language sql security definer set search_path = public as $$
+  insert into public.push_subscriptions (endpoint, user_id, p256dh, auth)
+  values (p_endpoint, auth.uid(), p_p256dh, p_auth)
+  on conflict (endpoint) do update
+    set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, created_at = now();
+$$;
+revoke execute on function public.save_push_subscription(text, text, text) from public, anon;
+grant execute on function public.save_push_subscription(text, text, text) to authenticated;
+
+-- Where to send, and the secret /api/chat-push checks. Not reachable through
+-- the API. Set once in the SQL editor, never in this file:
+--   insert into private.settings values
+--     ('chat_push_url', 'https://youfit-app.vercel.app/api/chat-push'),
+--     ('chat_push_secret', '<CHAT_PUSH_SECRET from Vercel>')
+--   on conflict (key) do update set value = excluded.value;
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+create table if not exists private.settings (key text primary key, value text not null);
+
+-- Browsers the push services no longer know, as /api/chat-push reports them.
+create or replace function public.forget_push_subscriptions(p_secret text, p_endpoints text[])
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_secret is distinct from (select value from private.settings where key = 'chat_push_secret') then
+    return;
+  end if;
+  delete from public.push_subscriptions where endpoint = any (p_endpoints);
+end;
+$$;
+
+create or replace function private.chat_push()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_url    text := (select value from private.settings where key = 'chat_push_url');
+  v_secret text := (select value from private.settings where key = 'chat_push_secret');
+  v_room   public.chat_rooms;
+  v_sender text;
+  v_to     jsonb;
+begin
+  if v_url is null or v_secret is null then
+    return new;
+  end if;
+  if new.room_id is not null then
+    select * into v_room from public.chat_rooms where id = new.room_id;
+    if v_room.kind = 'everyone' then
+      return new;
+    end if;
+  end if;
+  select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth))
+    into v_to
+    from public.push_subscriptions s
+   where s.user_id <> new.user_id
+     and not public.is_blocked(s.user_id, new.user_id)
+     and case
+           when new.room_id is null then public.are_friends(s.user_id, new.user_id)
+           else exists (select 1 from public.chat_members m where m.room_id = new.room_id and m.user_id = s.user_id)
+         end;
+  if v_to is null then
+    return new;
+  end if;
+  select coalesce(nullif(btrim(p.display_name), ''), p.username) into v_sender
+    from public.profiles p where p.user_id = new.user_id;
+  perform net.http_post(
+    url := v_url,
+    body := jsonb_build_object(
+      'to', v_to, 'sender', v_sender, 'body', new.body, 'photo', new.image_path is not null,
+      'kind', coalesce(v_room.kind, 'friends'), 'room', v_room.name, 'roomID', new.room_id
+    ),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-chat-push-secret', v_secret)
+  );
+  return new;
+exception when others then
+  -- A push never stops a message.
+  return new;
+end;
+$$;
+
+drop trigger if exists chat_push on public.chat_messages;
+create trigger chat_push after insert on public.chat_messages
+  for each row execute function private.chat_push();

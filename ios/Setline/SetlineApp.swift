@@ -43,6 +43,10 @@ struct SetlineApp: App {
             // Coming back to the app retries anything still waiting to sync,
             // so a change made offline never simply waits for the next one.
             if phase == .active { Task { await app.syncNow() } }
+            if phase == .background { ChatAlerts.schedule() }
+        }
+        .backgroundTask(.appRefresh(ChatAlerts.taskID)) {
+            await ChatAlerts.check(app: app)
         }
     }
 }
