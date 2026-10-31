@@ -1,6 +1,17 @@
 {
   "notes": [
     {
+      "id": "2026-10-31-3",
+      "date": "2026-10-31",
+      "title": "Chats: Everyone, private and your own rooms",
+      "items": [
+        "The Chat row in Friends is now Chats. Everyone is one conversation with every Setline lifter, for questions anyone can answer.",
+        "Tap Message to talk to one friend in private. Only the two of you see it.",
+        "Start a room on any topic, like Leg day crew or Meal prep, and pick the friends who join. Leave it whenever you like; if you started it, you can delete it.",
+        "Add a photo to any message: your plate, your PR, the gym."
+      ]
+    },
+    {
       "id": "2026-10-31-2",
       "date": "2026-10-31",
       "title": "Your plan and your profile",
