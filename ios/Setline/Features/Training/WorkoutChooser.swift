@@ -33,25 +33,13 @@ struct WorkoutChooserSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // Your own first: it is what this sheet is opened to build.
-                group("Your workouts", note: app.customWorkouts.isEmpty
-                      ? "Pick exercises and sets once; start it any time, or put it in your week below."
-                      : "Send one to a friend with the share button, or put them on days in your week below.") {
-                    Button { creating = true } label: {
-                        HStack(spacing: SL.Space.s3) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(SL.Signal.onAction)
-                                .frame(width: 40, height: 40)
-                                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.action))
-                            Text("Create a workout").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, SL.Space.s4)
-                        .frame(minHeight: 60)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(SLRowButtonStyle())
+                // Making your own is what this sheet is opened for: its own
+                // card at the top, not a row in a list.
+                createCard
+
+                if !app.customWorkouts.isEmpty {
+                group("Your workouts",
+                      note: "Send one to a friend with the share button, or put them on days in your week below.") {
                     ForEach(app.customWorkouts) { workout in
                         row(symbol: { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 16, weight: .semibold)) },
                             title: workout.name,
@@ -62,6 +50,7 @@ struct WorkoutChooserSheet: View {
                             if canStart { onStart?(workout.workoutDay) } else { editing = workout }
                         }
                     }
+                }
                 }
 
                 // A whole week of your own, not one day at a time.
@@ -152,6 +141,50 @@ struct WorkoutChooserSheet: View {
                 Task { await app.removeCustomWorkout(id: workout.id) }
             }, onClose: { editing = nil })
         }
+    }
+
+    private var createCard: some View {
+        Button { creating = true } label: {
+            VStack(alignment: .leading, spacing: SL.Space.s4) {
+                HStack(alignment: .top, spacing: SL.Space.s3) {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(SL.Signal.onAction)
+                        .frame(width: 44, height: 44)
+                        .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.action))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Create your own workout")
+                            .font(.sl(SL.TypeSize.lead, SL.Weight.bold))
+                            .foregroundStyle(SL.Ink.primary)
+                        Text("Pick the exercises, sets and reps once. Start it any time, or put it on a day in your week.")
+                            .slMeta()
+                            .foregroundStyle(SL.Ink.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: "plus").font(.system(size: 14, weight: .bold))
+                    Text("Create workout").slBody(SL.Weight.semibold)
+                }
+                .foregroundStyle(SL.Signal.onAction)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Capsule().fill(SL.Signal.action))
+            }
+            .padding(SL.Space.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Signal.actionTint))
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                    .strokeBorder(SL.Signal.action.opacity(0.35), lineWidth: SL.Metric.border)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.98))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Create your own workout")
+        .accessibilityHint("Pick the exercises, sets and reps once. Start it any time, or put it on a day in your week.")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func detail(_ day: WorkoutDay) -> String {

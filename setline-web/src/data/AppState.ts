@@ -43,6 +43,7 @@ import { NutritionDay } from "../core/Nutrition/NutritionDay";
 import { NutritionHistory } from "../core/Nutrition/NutritionHistory";
 import type { FoodSearchOutcome } from "../core/Nutrition/FoodSearch";
 import { FavoriteFood, type FoodScanRequest } from "../core/Nutrition/FoodLookup";
+import { SavedMeal } from "../core/Nutrition/SavedMeal";
 import { CheckInStore } from "../core/Photos/CheckInStore";
 import { ProfileStore } from "../core/Photos/ProfileStore";
 import { PhotoOwner } from "../core/Photos/PhotoOwner";
@@ -927,6 +928,37 @@ export class AppState {
     else list.unshift(FavoriteFood.make(entry));
     UserDefaults.set(this.favoritesKey, list.map((f) => FavoriteFood.encode(f)));
     this.foodFavoritesRevision += 1;
+    this.changed();
+  }
+
+  // MARK: - Saved meals
+
+  /** Meals of your own, with their ingredients. Kept on this device, per account, like favorites. */
+  savedMealsRevision = 0;
+
+  private get savedMealsKey(): string {
+    return `setline.food.meals.${this.session?.email.toLowerCase() ?? "none"}`;
+  }
+
+  get savedMeals(): SavedMeal[] {
+    const raw = UserDefaults.get<unknown[]>(this.savedMealsKey);
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item) => SavedMeal.decode(item)).filter((meal): meal is SavedMeal => meal !== undefined);
+  }
+
+  saveMeal(meal: SavedMeal): void {
+    const list = this.savedMeals;
+    const index = list.findIndex((m) => m.id === meal.id);
+    if (index >= 0) list[index] = meal;
+    else list.unshift(meal);
+    UserDefaults.set(this.savedMealsKey, list);
+    this.savedMealsRevision += 1;
+    this.changed();
+  }
+
+  removeMeal(id: string): void {
+    UserDefaults.set(this.savedMealsKey, this.savedMeals.filter((m) => m.id !== id));
+    this.savedMealsRevision += 1;
     this.changed();
   }
 

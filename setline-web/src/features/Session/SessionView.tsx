@@ -546,6 +546,13 @@ export function SessionView(p: {
     </HStack>
   );
 
+  const actionLabel = (text: string, symbol: string) => (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <SFSymbol name={symbol} size={13} weight={600} color={SL.Ink.secondary} />
+      {text}
+    </span>
+  );
+
   /**
    * The exercise is its own title; `Wissel` sits beside it, visibly
    * secondary to logging but always on screen. Long-press is a shortcut for
@@ -572,13 +579,18 @@ export function SessionView(p: {
               <Text {...slMeta()} numerals color={SL.Ink.secondary} lineLimit={1} style={{ alignSelf: "stretch" }}>{headSubtitle()}</Text>
             </VStack>
           </LongPressArea>
-          <SLPillButton onPress={() => setShowsSwap(true)} aria-label={`Swap ${current.exercise.name}`}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              Swap
-              <SLGlyph name="chevronRight" size={14} color={SL.Ink.secondary} />
-            </span>
-          </SLPillButton>
         </HStack>
+        {/* The two ways off the plan for this exercise, each saying what it does: changing it opens the alternatives, skipping moves on (with Undo). */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: SL.Space.s2, alignSelf: "stretch" }}>
+          <SLPillButton onPress={() => setShowsSwap(true)} aria-label={`Change ${current.exercise.name}`}>
+            {actionLabel("Change exercise", "arrow.left.arrow.right")}
+          </SLPillButton>
+          {!S.isComplete(current) && (
+            <SLPillButton quiet onPress={() => handle({ kind: "skipExercise" })} aria-label={`Skip ${current.exercise.name}`}>
+              {actionLabel("Skip exercise", "forward.end")}
+            </SLPillButton>
+          )}
+        </div>
         {/* The same kind of exercises, one tap away, until the first set is in. */}
         {!runner.hasLoggedSets({ slotIndex: runner.currentIndex }) && !S.isComplete(current) && (
           <SwapSuggestionStrip
@@ -642,7 +654,7 @@ export function SessionView(p: {
     const origin = runner.substitutedOrigin({ slotIndex: currentIndex });
     const replacement = runner.latestUndo({ slotIndex: currentIndex })?.replacement;
     if (origin) {
-      out.push(<div key="swapped" style={{ alignSelf: "stretch" }}>{undoLine(`Swapped from ${origin.name}${noHistory}`, `Undo the swap from ${origin.name}`)}</div>);
+      out.push(<div key="swapped" style={{ alignSelf: "stretch" }}>{undoLine(`Changed from ${origin.name}${noHistory}`, `Undo the change from ${origin.name}`)}</div>);
     } else if (replacement) {
       // A program change stays reversible here until the workout ends.
       // The toast is the quick way back; this one is still there after

@@ -135,7 +135,7 @@ export function SwapSuggestionStrip(p: { exercise: Exercise; sessionExerciseIDs:
   );
   return (
     <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-      <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.secondary}>Similar · tap to swap</Text>
+      <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.secondary}>Similar exercises · tap one to switch</Text>
       <div
         role="list"
         aria-label={`Exercises like ${p.exercise.name}`}
@@ -148,7 +148,7 @@ export function SwapSuggestionStrip(p: { exercise: Exercise; sessionExerciseIDs:
             <Pressable
               key={RankedAlternative.id(alternative)}
               role="listitem"
-              aria-label={`Swap to ${alternative.exercise.name}, ${SubstitutionCopy.fit(alternative)}`}
+              aria-label={`Switch to ${alternative.exercise.name}, ${SubstitutionCopy.fit(alternative)}`}
               onPress={() => p.onPick(alternative.exercise, reason)}
               style={{ flex: "0 0 148px", scrollSnapAlign: "start", textAlign: "left", padding: SL.Space.s3, borderRadius: SL.Radius.lg, background: SL.Surface.raised, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}`, display: "flex", flexDirection: "column", gap: SL.Space.s2 }}
             >
@@ -481,7 +481,7 @@ export function SwapSheet(p: {
     <VStack alignment="leading" spacing={0} style={{ alignSelf: "stretch" }}>
       {/* 15R: the name at 34 with the way out on its first line. */}
       <HStack alignment="firstTextBaseline" spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
-        <Text {...slDisplay()} lineHeight={SL.LineHeight.display} color={SL.Ink.primary} as="h2">{`Swap ${exercise.name}`}</Text>
+        <Text {...slDisplay()} lineHeight={SL.LineHeight.display} color={SL.Ink.primary} as="h2">{`Change ${exercise.name}`}</Text>
         <Spacer minLength={SL.Space.s2} />
         <Pressable onPress={onClose} style={{ background: "transparent", flexShrink: 0 }}>
           <Text {...slBody()} color={SL.Ink.secondary} style={slHitTarget()}>Close</Text>
@@ -489,7 +489,7 @@ export function SwapSheet(p: {
       </HStack>
 
       <Text {...slMeta()} lineHeight={SL.LineHeight.body} color={SL.Ink.secondary} style={{ paddingTop: SL.Space.s1 }}>
-        Tap one to swap. Sets, reps and RIR stay — the weight starts fresh.
+        Tap one to switch to it. Your sets, reps and RIR stay; the weight starts fresh.
       </Text>
 
       {/* Both contexts, always. "The machine is taken" is the reason this sheet exists, and a pain flag never switches it off. */}

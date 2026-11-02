@@ -10,9 +10,9 @@
 // the server ranked it.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SL, slFont } from "../../design/tokens";
-import { FullScreenCover, HStack, Pressable, ScrollView, Spacer, Text, VStack, type Binding } from "../../design/swiftui";
+import { FullScreenCover, HStack, Pressable, ScrollView, Sheet, Spacer, Text, VStack, type Binding } from "../../design/swiftui";
 import { SFSymbol } from "../../design/SFSymbol";
-import { SLPrimaryButton } from "../../design/SetlineTokens";
+import { SLPrimaryButton, colorOpacity } from "../../design/SetlineTokens";
 import { Presentation } from "../../design/support";
 import { slLineHeight } from "../../design/SLDynamicType";
 import { SLSound } from "../../design/SLSound";
@@ -30,6 +30,8 @@ import { MealRecognition, MealRecognition_Food } from "../../core/Nutrition/Meal
 import { Meal, MealSection, NutritionEntry } from "../../core/Nutrition/NutritionDay";
 import { charCount, trimmingWhitespaces, trimmingWhitespacesAndNewlines } from "../../core/Support/nutrition";
 import { BarcodeScanSheet, FoodPhotoScanSheet } from "./FoodScanViews";
+import { MealBuilderSheet } from "./MealBuilder";
+import { SavedMeal } from "../../core/Nutrition/SavedMeal";
 
 type Scanner = "barcode" | "photo";
 type Field = "query" | "name" | "amount" | "unit" | "calories" | "protein" | "carbs" | "fat";
@@ -81,6 +83,8 @@ export function AddFoodSheet({
 
   const [chosen, setChosen] = useState<Meal>(meal);
   const [scanning, setScanning] = useState<Scanner | undefined>(undefined);
+  const [buildingMeal, setBuildingMeal] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<SavedMeal | undefined>(undefined);
   const lastScanner = useRef<Scanner | undefined>(undefined);
   if (scanning) lastScanner.current = scanning;
   const [query, setQuery] = useState("");
@@ -456,6 +460,59 @@ export function AddFoodSheet({
       ? `${MealSection.title({ of: chosen })} is preselected because it's ${NumberDisplay.clock(display, new Date())}. One tap on ⊕ adds the item with this amount.`
       : `One tap on ⊕ adds the item to ${Meal.spoken(chosen)}, with this amount.`;
 
+  /** Your own meals first: a card to build one, then the ones you saved, each with what goes in it underneath. */
+  const meals = app.savedMeals;
+  const mealsBlock = (
+    <>
+      <SLPress
+        scale={0.98}
+        onPress={() => setBuildingMeal(true)}
+        style={{
+          marginTop: 22,
+          alignSelf: "stretch",
+          display: "flex",
+          alignItems: "center",
+          gap: SL.Space.s3,
+          padding: SL.Space.s3,
+          borderRadius: SL.Radius.lg,
+          background: SL.Signal.actionTint,
+          boxShadow: `inset 0 0 0 1px ${colorOpacity(SL.Signal.action, 0.3)}`,
+          textAlign: "left",
+        }}
+      >
+        <span style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: SL.Signal.action, display: "grid", placeItems: "center", flexShrink: 0 }}>
+          <SFSymbol name="fork.knife" size={16} weight={600} color={SL.Signal.onAction} />
+        </span>
+        <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+          <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>Build a meal</Text>
+          <Text {...slMeta()} color={SL.Ink.secondary}>Spaghetti, a bowl, a shake: add each ingredient, save it, log it again in one tap</Text>
+        </VStack>
+        <SLGlyph name="chevronRight" size={14} color={SL.Ink.tertiary} />
+      </SLPress>
+      {meals.length > 0 &&
+        group(
+          "YOUR MEALS",
+          18,
+          meals.map((meal) => (
+            <HStack key={meal.id} spacing={SL.Space.s1} style={{ alignSelf: "stretch" }}>
+              <Pressable onPress={() => setEditingMeal(meal)} aria-label={`${meal.name}, edit`} style={{ flex: "1 1 0", minWidth: 0, minHeight: 50, background: "transparent", textAlign: "left", display: "flex", flexDirection: "column", justifyContent: "center", gap: 1 }}>
+                <Text {...slLead()} color={SL.Ink.primary}>{meal.name}</Text>
+                <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={2}>{SavedMeal.ingredientLine(meal)}</Text>
+                <Text {...slMeta()} numerals color={SL.Ink.tertiary}>{`${kcal(SavedMeal.calories(meal))} · ${SavedMeal.protein(meal)} g protein`}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onLog(SavedMeal.entry(meal, { id: newID(), on: date, meal: chosen }))}
+                aria-label={`Add ${meal.name} to ${Meal.spoken(chosen)}`}
+                style={{ minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin, background: "transparent", display: "grid", placeItems: "center", flexShrink: 0 }}
+              >
+                <SFSymbol name="plus.circle" size={24} weight={400} color={SL.Ink.secondary} />
+              </Pressable>
+            </HStack>
+          )),
+        )}
+    </>
+  );
+
   /** 42c: what is logged at this meal most often, then what was logged last. */
   const memory = (() => {
     const today = Schedule.dateKey(date);
@@ -467,10 +524,11 @@ export function AddFoodSheet({
     const favorites = app.foodFavorites;
     return (
       <>
+        {mealsBlock}
         {favorites.length > 0 &&
           group(
             "FAVORITES",
-            22,
+            18,
             favorites.map((favorite) =>
               row({
                 key: FavoriteFood.id(favorite),
@@ -639,6 +697,42 @@ export function AddFoodSheet({
           </SLPrimaryButton>
         </div>
       )}
+
+      <Sheet isPresented={buildingMeal} onDismiss={() => setBuildingMeal(false)}>
+        {buildingMeal && (
+          <MealBuilderSheet
+            meal={undefined}
+            mealTime={chosen}
+            onSave={(meal, log) => {
+              app.saveMeal(meal);
+              setBuildingMeal(false);
+              if (log) onLog(SavedMeal.entry(meal, { id: newID(), on: date, meal: chosen }));
+            }}
+            onDelete={undefined}
+            onClose={() => setBuildingMeal(false)}
+          />
+        )}
+      </Sheet>
+
+      <Sheet isPresented={editingMeal !== undefined} onDismiss={() => setEditingMeal(undefined)}>
+        {editingMeal && (
+          <MealBuilderSheet
+            key={editingMeal.id}
+            meal={editingMeal}
+            mealTime={chosen}
+            onSave={(saved, log) => {
+              app.saveMeal(saved);
+              setEditingMeal(undefined);
+              if (log) onLog(SavedMeal.entry(saved, { id: newID(), on: date, meal: chosen }));
+            }}
+            onDelete={() => {
+              app.removeMeal(editingMeal.id);
+              setEditingMeal(undefined);
+            }}
+            onClose={() => setEditingMeal(undefined)}
+          />
+        )}
+      </Sheet>
 
       <FullScreenCover isPresented={scanning !== undefined}>
         {presentedScanner === "barcode" ? (

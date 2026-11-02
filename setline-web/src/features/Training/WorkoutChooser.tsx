@@ -7,8 +7,9 @@ import { useRef, useState, type ReactNode } from "react";
 import { SL } from "../../design/tokens";
 import { Alert, HStack, Menu, Sheet, Spacer, Text, VStack } from "../../design/swiftui";
 import { SFSymbol } from "../../design/SFSymbol";
-import { SLOutlineButton, SLPrimaryButton } from "../../design/SetlineTokens";
+import { SLOutlineButton, SLPrimaryButton, colorOpacity } from "../../design/SetlineTokens";
 import { SLGlyph, SLWorkoutSymbol } from "../../design/components/SLGlyph";
+import { SLPress } from "../../design/components/SLPress";
 import { SLHairline, slBody, slMeta } from "../../design/components/SLText";
 import { SLOverline, SLRowButton } from "../../design/components/SLPieces";
 import { SLSheet } from "../../design/components/SLSheet";
@@ -48,6 +49,55 @@ export function WorkoutChooserSheet({
   const [planningWeek, setPlanningWeek] = useState(false);
   const lastEditing = useRef<CustomWorkout | undefined>(undefined);
   if (editing !== undefined) lastEditing.current = editing;
+
+  const createCard = (
+    <SLPress
+      onPress={() => setCreating(true)}
+      scale={0.98}
+      aria-label="Create your own workout"
+      style={{
+        alignSelf: "stretch",
+        display: "flex",
+        flexDirection: "column",
+        gap: SL.Space.s4,
+        padding: SL.Space.s4,
+        borderRadius: SL.Radius.xl,
+        background: SL.Signal.actionTint,
+        boxShadow: `inset 0 0 0 1px ${colorOpacity(SL.Signal.action, 0.35)}`,
+        textAlign: "left",
+      }}
+    >
+      <HStack alignment="top" spacing={SL.Space.s3}>
+        <div style={{ width: 44, height: 44, borderRadius: SL.Radius.md, background: SL.Signal.action, display: "grid", placeItems: "center", flexShrink: 0 }}>
+          <SFSymbol name="square.stack.3d.up.fill" size={18} weight={600} color={SL.Signal.onAction} />
+        </div>
+        <VStack alignment="leading" spacing={4} style={{ minWidth: 0 }}>
+          <Text size={SL.TypeSize.lead} weight={SL.Weight.bold} color={SL.Ink.primary}>
+            Create your own workout
+          </Text>
+          <Text {...slMeta()} color={SL.Ink.secondary}>
+            Pick the exercises, sets and reps once. Start it any time, or put it on a day in your week.
+          </Text>
+        </VStack>
+      </HStack>
+      <span
+        style={{
+          ...slFont(SL.TypeSize.body, SL.Weight.semibold),
+          color: SL.Signal.onAction,
+          background: SL.Signal.action,
+          borderRadius: 999,
+          minHeight: 48,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+        }}
+      >
+        <SFSymbol name="plus" size={14} weight={700} color={SL.Signal.onAction} />
+        Create workout
+      </span>
+    </SLPress>
+  );
 
   const detail = (day: WorkoutDay): string => {
     const count = day.exercises.length === 1 ? "1 exercise" : `${day.exercises.length} exercises`;
@@ -187,21 +237,12 @@ export function WorkoutChooserSheet({
             </Text>
           )}
 
-          {/* Your own first: it is what this sheet is opened to build. */}
-          {group(
+          {/* Making your own is what this sheet is opened for: its own card at the top, not a row in a list. */}
+          {createCard}
+
+          {(app.customWorkouts.length > 0 || copied !== undefined) && group(
             "Your workouts",
             <>
-              <SLRowButton onPress={() => setCreating(true)}>
-                <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, minHeight: 60 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: SL.Signal.action, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <SFSymbol name="plus" size={15} weight={700} color={SL.Signal.onAction} />
-                  </div>
-                  <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>
-                    Create a workout
-                  </Text>
-                  <Spacer />
-                </HStack>
-              </SLRowButton>
               {app.customWorkouts.map((workout) =>
                 row(
                   workout.id,
@@ -222,9 +263,7 @@ export function WorkoutChooserSheet({
               note:
                 copied !== undefined
                   ? `Link to “${copied}” copied. Paste it in any chat.`
-                  : app.customWorkouts.length === 0
-                    ? "Pick exercises and sets once; start it any time, or put it in your week below."
-                    : "Send one to a friend with the share button, or put them on days in your week below.",
+                  : "Send one to a friend with the share button, or put them on days in your week below.",
             },
           )}
 

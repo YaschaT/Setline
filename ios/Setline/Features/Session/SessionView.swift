@@ -580,16 +580,8 @@ struct SessionView: View {
                 .contentShape(Rectangle())
                 .onLongPressGesture { showsSwap = true }
 
-                Button { showsSwap = true } label: {
-                    HStack(spacing: 6) {
-                        Text("Swap")
-                        SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.secondary)
-                    }
-                }
-                .buttonStyle(SLPillButtonStyle())
-                .accessibilityLabel("Swap \(runner.current.exercise.name)")
-                .accessibilityHint("Alternatives, change the order or report pain")
             }
+            exerciseActions
             // The same kind of exercises, one tap away, until the first set is in.
             if !runner.hasLoggedSets(slotIndex: runner.currentIndex), !runner.current.isComplete {
                 SwapSuggestionStrip(
@@ -599,6 +591,39 @@ struct SessionView: View {
                 )
                 .id(runner.current.exercise.id)
             }
+        }
+    }
+
+    /// The two ways off the plan for this exercise, each saying what it
+    /// does: changing it opens the alternatives, skipping moves on (with Undo).
+    private var exerciseActions: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
+            : AnyLayout(HStackLayout(spacing: SL.Space.s2))
+        return layout {
+            Button { showsSwap = true } label: {
+                actionLabel("Change exercise", symbol: "arrow.left.arrow.right")
+            }
+            .buttonStyle(SLPillButtonStyle())
+            .accessibilityLabel("Change \(runner.current.exercise.name)")
+            .accessibilityHint("Similar exercises, a lighter option, a different order, or report pain")
+            if !runner.current.isComplete {
+                Button { handle(.skipExercise) } label: {
+                    actionLabel("Skip exercise", symbol: "forward.end")
+                }
+                .buttonStyle(SLPillButtonStyle(quiet: true))
+                .accessibilityLabel("Skip \(runner.current.exercise.name)")
+                .accessibilityHint("Moves on to the next exercise. You can undo it.")
+            }
+        }
+    }
+
+    private func actionLabel(_ text: String, symbol: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(SL.Ink.secondary)
+            Text(text)
         }
     }
 
@@ -693,7 +718,7 @@ struct SessionView: View {
         let calibrating = runner.calibrationPrompt(slotIndex: runner.currentIndex) != nil
         let noHistory = calibrating ? " · no history" : ""
         if let origin = runner.substitutedOrigin(slotIndex: runner.currentIndex) {
-            undoLine("Swapped from \(origin.name)\(noHistory)", accessibility: "Undo the swap from \(origin.name)")
+            undoLine("Changed from \(origin.name)\(noHistory)", accessibility: "Undo the change from \(origin.name)")
         } else if let replacement = runner.latestUndo(slotIndex: runner.currentIndex)?.replacement {
             // A program change stays reversible here until the workout ends.
             // The toast is the quick way back; this one is still there after

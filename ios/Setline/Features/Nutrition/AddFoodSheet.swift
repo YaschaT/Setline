@@ -49,6 +49,8 @@ struct AddFoodSheet: View {
     @State private var carbs = ""
     @State private var fat = ""
     @FocusState private var focused: Field?
+    @State private var buildingMeal = false
+    @State private var editingMeal: SavedMeal?
 
     private enum Field: Hashable { case query, name, amount, unit, calories, protein, carbs, fat }
 
@@ -172,6 +174,23 @@ struct AddFoodSheet: View {
                     if let onLogAll { onLogAll(entries) } else { entries.forEach(onLog) }
                 }, onClose: { scanning = nil })
             }
+        }
+        .sheet(isPresented: $buildingMeal) {
+            MealBuilderSheet(meal: nil, mealTime: chosen, onSave: { meal, log in
+                app.saveMeal(meal)
+                buildingMeal = false
+                if log { onLog(meal.entry(id: Self.newID(), on: date, meal: chosen)) }
+            }, onDelete: nil, onClose: { buildingMeal = false })
+        }
+        .sheet(item: $editingMeal) { meal in
+            MealBuilderSheet(meal: meal, mealTime: chosen, onSave: { saved, log in
+                app.saveMeal(saved)
+                editingMeal = nil
+                if log { onLog(saved.entry(id: Self.newID(), on: date, meal: chosen)) }
+            }, onDelete: {
+                app.removeMeal(id: meal.id)
+                editingMeal = nil
+            }, onClose: { editingMeal = nil })
         }
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.fraction(0.94)])
         .presentationDragIndicator(.hidden)
@@ -358,8 +377,9 @@ struct AddFoodSheet: View {
             .filter { entry in !often.contains { $0.name.lowercased() == entry.name.lowercased() } }
 
         let favorites = app.foodFavorites
+        mealsBlock
         if !favorites.isEmpty {
-            group("FAVORITES", top: 22) {
+            group("FAVORITES", top: 18) {
                 ForEach(favorites) { favorite in
                     row(
                         title: favorite.name,
@@ -403,6 +423,80 @@ struct AddFoodSheet: View {
                 .foregroundStyle(SL.Ink.tertiary)
                 .padding(.top, SL.Space.s3)
             ownValuesInvitation.padding(.top, SL.Space.s4)
+        }
+    }
+
+    /// Your own meals first: a card to build one, then the ones you saved,
+    /// each with what goes in it underneath.
+    @ViewBuilder
+    private var mealsBlock: some View {
+        Button { buildingMeal = true } label: {
+            HStack(spacing: SL.Space.s3) {
+                Image(systemName: "fork.knife")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(SL.Signal.onAction)
+                    .frame(width: 40, height: 40)
+                    .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.action))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Build a meal").slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                    Text("Spaghetti, a bowl, a shake: add each ingredient, save it, log it again in one tap")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: SL.Space.s2)
+                SLGlyph(name: .chevronRight, size: 14).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(SL.Space.s3)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Signal.actionTint))
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                    .strokeBorder(SL.Signal.action.opacity(0.3), lineWidth: SL.Metric.border)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.98))
+        .padding(.top, 22)
+        let meals = app.savedMeals
+        if !meals.isEmpty {
+            group("YOUR MEALS", top: 18) {
+                ForEach(meals) { meal in
+                    mealRow(meal)
+                }
+            }
+        }
+    }
+
+    private func mealRow(_ meal: SavedMeal) -> some View {
+        HStack(spacing: SL.Space.s1) {
+            Button { editingMeal = meal } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(meal.name).slLead().foregroundStyle(SL.Ink.primary)
+                    Text(meal.ingredientLine)
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Text("\(app.display.kcal(Decimal(meal.calories))) · \(Int(meal.protein)) g protein")
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.tertiary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Double-tap to edit")
+            Button { onLog(meal.entry(id: Self.newID(), on: date, meal: chosen)) } label: {
+                Image(systemName: "plus.circle")
+                    .font(.sl(24, SL.Weight.regular))
+                    .foregroundStyle(SL.Ink.secondary)
+                    .frame(minWidth: SL.Space.hitMin, minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add \(meal.name) to \(chosen.spoken)")
         }
     }
 

@@ -857,6 +857,33 @@ final class AppState {
         foodFavoritesRevision += 1
     }
 
+    // MARK: - Saved meals
+
+    /// Meals of your own, with their ingredients. Kept on this phone, per
+    /// account, like favorites.
+    private(set) var savedMealsRevision = 0
+
+    private var savedMealsKey: String { "setline.food.meals.\(session?.email.lowercased() ?? "none")" }
+
+    var savedMeals: [SavedMeal] {
+        _ = savedMealsRevision
+        guard let data = UserDefaults.standard.data(forKey: savedMealsKey) else { return [] }
+        return (try? JSONDecoder().decode([SavedMeal].self, from: data)) ?? []
+    }
+
+    func saveMeal(_ meal: SavedMeal) {
+        var list = savedMeals
+        if let index = list.firstIndex(where: { $0.id == meal.id }) { list[index] = meal } else { list.insert(meal, at: 0) }
+        UserDefaults.standard.set(try? JSONEncoder().encode(list), forKey: savedMealsKey)
+        savedMealsRevision += 1
+    }
+
+    func removeMeal(id: String) {
+        let list = savedMeals.filter { $0.id != id }
+        UserDefaults.standard.set(try? JSONEncoder().encode(list), forKey: savedMealsKey)
+        savedMealsRevision += 1
+    }
+
     /// The days before today as eaten, newest first.
     func nutritionHistory(days: Int = 14, before date: Date = Date()) -> NutritionHistory {
         NutritionHistory.make(entries: nutritionEntries, targets: targets, days: days, before: date)

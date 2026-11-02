@@ -197,7 +197,7 @@ struct SwapSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             // 15R: the name at 34 with the way out on its first line.
             HStack(alignment: .firstTextBaseline, spacing: SL.Space.s3) {
-                Text("Swap \(exercise.name)")
+                Text("Change \(exercise.name)")
                     .slDisplay()
                     .slLineHeight(SL.LineHeight.display, size: SL.TypeSize.display)
                     .foregroundStyle(SL.Ink.primary)
@@ -214,7 +214,7 @@ struct SwapSheet: View {
                 .buttonStyle(.plain)
             }
 
-            Text("Tap one to swap. Sets, reps and RIR stay — the weight starts fresh.")
+            Text("Tap one to switch to it. Your sets, reps and RIR stay; the weight starts fresh.")
                 .slMeta()
                 .slLineHeight(SL.LineHeight.body, size: SL.TypeSize.meta)
                 .foregroundStyle(SL.Ink.secondary)
@@ -1222,7 +1222,7 @@ struct SwapSuggestionStrip: View {
                 isOccupied: false, painfulLoadTags: app.painfulLoadTags
             ).reason
             VStack(alignment: .leading, spacing: SL.Space.s2) {
-                Text("Similar · tap to swap")
+                Text("Similar exercises · tap one to switch")
                     .slMeta(SL.Weight.semibold)
                     .foregroundStyle(SL.Ink.secondary)
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1273,6 +1273,6 @@ struct SwapSuggestionStrip: View {
             .contentShape(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous))
         }
         .buttonStyle(SLPressStyle(scale: 0.97))
-        .accessibilityLabel("Swap to \(alternative.exercise.name), \(SubstitutionCopy.fit(alternative))")
+        .accessibilityLabel("Switch to \(alternative.exercise.name), \(SubstitutionCopy.fit(alternative))")
     }
 }
