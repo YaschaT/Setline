@@ -1,6 +1,16 @@
 {
   "notes": [
     {
+      "id": "2026-11-02-2",
+      "date": "2026-11-02",
+      "title": "Your plan, easy to find",
+      "items": [
+        "Training has a Your plan section under your next workout, with a card for Your week and one for Your own workouts.",
+        "Your week shows each day and its workout. Tap Plan my week to choose the workout for each day; it repeats every week.",
+        "Tap Create a workout to make your own from any exercises. Change plan switches the plan your week is built from."
+      ]
+    },
+    {
       "id": "2026-11-02",
       "date": "2026-11-02",
       "title": "Your own meals, and skipping an exercise",
