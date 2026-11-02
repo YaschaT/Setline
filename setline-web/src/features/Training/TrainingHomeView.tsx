@@ -14,7 +14,7 @@ import { Alert, FullScreenCover, HStack, Menu, ScrollView, Sheet, Spacer, Text, 
 import { SFSymbol } from "../../design/SFSymbol";
 import { SLOutlineButton, SLPrimaryButton, SLQuietButton, colorHex, colorOpacity, spring } from "../../design/SetlineTokens";
 import { Presentation, useReduceMotion } from "../../design/support";
-import { slCapped, slFixed, slLineHeight } from "../../design/SLDynamicType";
+import { scaledMetric, slCapped, slFixed, slLineHeight } from "../../design/SLDynamicType";
 import { SLGlyph, SLWorkoutSymbol } from "../../design/components/SLGlyph";
 import { SLPress } from "../../design/components/SLPress";
 import { SLHairline, slBody, slLead, slMeta } from "../../design/components/SLText";
@@ -67,7 +67,8 @@ type Presented =
   | { kind: "history" }
   | { kind: "chooser" }
   | { kind: "ownWeek" }
-  | { kind: "newWorkout" };
+  | { kind: "newWorkout" }
+  | { kind: "editWorkout"; value: CustomWorkout };
 
 const presentedID = (p: Presented): string => {
   switch (p.kind) {
@@ -77,6 +78,8 @@ const presentedID = (p: Presented): string => {
       return `preview-${p.value.key}`;
     case "plan":
       return `plan-${Schedule.dateKey(p.value)}`;
+    case "editWorkout":
+      return `edit-${p.value.id}`;
     default:
       return p.kind;
   }
@@ -537,12 +540,31 @@ export function TrainingHomeView({
   const weekHeader = (streak: TrainingStreak) => {
     const done = Math.min(streak.thisWeekDone, streak.thisWeekGoal);
     return (
-      <HStack alignment="firstTextBaseline" spacing={8} style={{ alignSelf: "stretch", paddingBottom: SL.Space.s2 }}>
-        <SLOverline text="This week" />
+      <HStack alignment="center" spacing={8} style={{ alignSelf: "stretch", paddingBottom: SL.Space.s2 }}>
+        <span aria-label={`This week: ${done} of ${streak.thisWeekGoal} workouts`}>
+          <SLOverline text={`This week · ${done} of ${streak.thisWeekGoal}`} color={TrainingStreak.thisWeekMet(streak) ? SL.Signal.action : SL.Ink.secondary} />
+        </span>
         <Spacer minLength={SL.Space.s2} />
-        <Text {...slMeta(SL.Weight.semibold)} numerals color={TrainingStreak.thisWeekMet(streak) ? SL.Signal.action : SL.Ink.primary}>
-          {`${done} of ${streak.thisWeekGoal} workouts`}
-        </Text>
+        {/* The way to change the week, on the week: user tests looked for it here. */}
+        <SLPress
+          scale={0.94}
+          onPress={() => setSheet({ kind: "ownWeek" })}
+          style={{
+            ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
+            color: SL.Signal.action,
+            background: SL.Signal.actionTint,
+            borderRadius: 999,
+            minHeight: 32,
+            padding: `0 ${SL.Space.s3}px`,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            flexShrink: 0,
+          }}
+        >
+          <SFSymbol name="calendar" size={12} weight={700} color={SL.Signal.action} />
+          {app.ownWeek === undefined ? "Plan week" : "Edit week"}
+        </SLPress>
       </HStack>
     );
   };
@@ -1027,12 +1049,22 @@ export function TrainingHomeView({
   };
 
   /** Today's workout, on its own card: the workout as it was, one action. */
-  const todayCard = (day: AgendaDay) => (
-    <div style={{ position: "relative", alignSelf: "stretch", padding: SL.Space.s5, borderRadius: 28, background: SL.Surface.raised }}>
-      {todayBlock(day)}
-      <StrokeBorder radius={28} color={colorOpacity(SL.Surface.hairlineStrong, 0.6)} />
-    </div>
-  );
+  /** Today, and under a hairline what comes after it: one story, one card. */
+  const todayCard = (day: AgendaDay) => {
+    const next = nextTraining(day.date);
+    return (
+      <div style={{ position: "relative", alignSelf: "stretch", borderRadius: 28, background: SL.Surface.raised, overflow: "hidden" }}>
+        <div style={{ padding: SL.Space.s5 }}>{todayBlock(day)}</div>
+        {next !== undefined && AgendaDay.plannedDay(next) !== undefined && (
+          <>
+            <SLHairline />
+            {nextSessionRow(next)}
+          </>
+        )}
+        <StrokeBorder radius={28} color={colorOpacity(SL.Surface.hairlineStrong, 0.6)} />
+      </div>
+    );
+  };
 
   // MARK: - The plan card
 
@@ -1051,7 +1083,7 @@ export function TrainingHomeView({
         onPress={() => open(day)}
         aria-label={`Next session: ${workout.short}, ${whenLabel(day)}, ${sets} sets, about ${minutes} minutes`}
       >
-        <HStack spacing={SL.Space.s3} style={{ padding: SL.Space.s4 }}>
+        <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s5, paddingRight: SL.Space.s5, paddingTop: SL.Space.s4, paddingBottom: SL.Space.s4 }}>
           <div style={{ width: 44, height: 44, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0 }}>
             <SLWorkoutSymbol dayName={workout.short} size={20} color={SL.Signal.action} />
           </div>
@@ -1073,183 +1105,141 @@ export function TrainingHomeView({
     );
   };
 
-  // MARK: - Your plan
+  // MARK: - Your workouts
 
-  const planCardShell = (children: ReactNode) => (
-    <div style={{ position: "relative", alignSelf: "stretch", display: "flex", flexDirection: "column", gap: SL.Space.s4, padding: SL.Space.s4, borderRadius: SL.Radius.xl, background: SL.Surface.raised }}>
-      {children}
-      <StrokeBorder radius={SL.Radius.xl} color={SL.Surface.hairline} />
-    </div>
-  );
+  const tileWidth = scaledMetric(164);
 
-  const planCardHead = (symbol: string, title: string, detail: string) => (
-    <HStack alignment="top" spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
-      <div style={{ width: 44, height: 44, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0 }}>
-        <SFSymbol name={symbol} size={17} weight={600} color={SL.Signal.action} />
-      </div>
-      <VStack alignment="leading" spacing={2} style={{ minWidth: 0, flex: "1 1 0" }}>
-        <Text as="h3" size={SL.TypeSize.lead} weight={SL.Weight.bold} color={SL.Ink.primary}>
-          {title}
-        </Text>
-        <Text {...slMeta()} color={SL.Ink.secondary}>
-          {detail}
-        </Text>
-      </VStack>
-    </HStack>
-  );
-
-  /** Lime on its tint: clearly a button, still quieter than Start training. */
-  const planButton = (title: string, symbol: string | undefined, action: () => void, quiet = false) => (
+  /** Before there are any: what it is, said once, and the one way in. */
+  const firstWorkoutCard = (
     <SLPress
-      key={title}
-      scale={0.97}
-      onPress={action}
+      scale={0.98}
+      onPress={() => setSheet({ kind: "newWorkout" })}
       style={{
-        ...slFont(SL.TypeSize.body, SL.Weight.semibold),
-        color: quiet ? SL.Ink.primary : SL.Signal.action,
-        background: quiet ? SL.Surface.raised2 : SL.Signal.actionTint,
-        borderRadius: 999,
-        minHeight: 48,
-        padding: `0 ${SL.Space.s4}px`,
+        alignSelf: "stretch",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        flex: quiet ? "0 0 auto" : "1 1 0",
-        whiteSpace: "nowrap",
+        gap: SL.Space.s4,
+        padding: SL.Space.s4,
+        borderRadius: SL.Radius.xl,
+        background: SL.Surface.raised,
+        border: `1px dashed ${colorOpacity(SL.Signal.action, 0.35)}`,
+        textAlign: "left",
       }}
     >
-      {symbol !== undefined && <SFSymbol name={symbol} size={13} weight={700} color={quiet ? SL.Ink.primary : SL.Signal.action} />}
-      {title}
+      <span style={{ width: 52, height: 52, borderRadius: "50%", background: SL.Signal.action, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <SFSymbol name="plus" size={20} weight={700} color={SL.Signal.onAction} />
+      </span>
+      <VStack alignment="leading" spacing={2} style={{ minWidth: 0, flex: "1 1 0" }}>
+        <Text size={SL.TypeSize.lead} weight={SL.Weight.bold} color={SL.Ink.primary}>
+          Create your own workout
+        </Text>
+        <Text {...slMeta()} color={SL.Ink.secondary}>
+          Pick the exercises, sets and reps. Start it any time, or put it on a day in your week.
+        </Text>
+      </VStack>
     </SLPress>
   );
 
-  /** The week as it will be trained: each day and its workout, so "your week" is something you can see before you change it. */
-  const weekCard = (() => {
-    const own = app.ownWeek !== undefined;
-    const thisWeek = days(new Date());
-    return planCardShell(
-      <>
-        {planCardHead("calendar", "Your week", own ? "Your own week. It repeats every week." : "Choose the workout for each day. It repeats every week.")}
-        <div
-          role="img"
-          aria-label={thisWeek.map((day) => `${day.weekday}: ${AgendaDay.plannedDay(day)?.short ?? "rest"}`).join(", ")}
-          style={{ display: "flex", gap: 4, alignSelf: "stretch" }}
-        >
-          {thisWeek.map((day) => {
-            const workout = AgendaDay.plannedDay(day)?.short;
-            return (
-              <div
-                key={day.key}
-                style={{
-                  flex: "1 1 0",
-                  minWidth: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: `${SL.Space.s2}px 2px`,
-                  borderRadius: SL.Radius.md,
-                  background: workout === undefined ? colorOpacity(SL.Surface.raised2, 0.5) : SL.Signal.actionTint,
-                  boxShadow: day.isToday ? `inset 0 0 0 1px ${colorOpacity(SL.Ink.primary, 0.5)}` : undefined,
-                }}
-              >
-                <span style={{ ...slFont(SL.TypeSize.micro, day.isToday ? SL.Weight.bold : SL.Weight.medium), color: day.isToday ? SL.Ink.primary : SL.Ink.tertiary }}>
-                  {day.weekday.slice(0, 2)}
-                </span>
-                <span
-                  style={{
-                    ...slFont(SL.TypeSize.micro, workout === undefined ? SL.Weight.regular : SL.Weight.semibold),
-                    color: workout === undefined ? SL.Ink.tertiary : SL.Signal.action,
-                    maxWidth: "100%",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {workout ?? "Rest"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        {planButton(own ? "Edit my week" : "Plan my week", "calendar", () => setSheet({ kind: "ownWeek" }))}
-      </>,
-    );
-  })();
+  const tileStyle: CSSProperties = {
+    width: tileWidth,
+    minHeight: 156,
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: SL.Space.s2,
+    padding: SL.Space.s4,
+    borderRadius: SL.Radius.xl,
+    textAlign: "left",
+    scrollSnapAlign: "start",
+    scrollMarginLeft: SL.Space.gutterSession,
+  };
 
-  /** Workouts you put together yourself: what they are, the ones you have, and the way to make another. */
-  const workoutsCard = (() => {
-    const own = app.customWorkouts;
-    return planCardShell(
-      <>
-        {planCardHead(
-          "square.stack.3d.up",
-          "Your own workouts",
-          own.length === 0
-            ? "Pick the exercises, sets and reps yourself. Start it any time, or put it on a day in your week."
-            : own.map((w) => w.name).join(" · "),
-        )}
-        <div style={{ display: "flex", gap: SL.Space.s2, alignSelf: "stretch" }}>
-          {planButton("Create a workout", "plus", () => setSheet({ kind: "newWorkout" }))}
-          {own.length > 0 && planButton(`See all ${own.length}`, undefined, () => setSheet({ kind: "chooser" }), true)}
-        </div>
-      </>,
-    );
-  })();
-
-  /**
-   * Your week and your own workouts, as their own topic with a card each. User tests missed them as rows: each card
-   * now says what it is in plain words, shows what it holds, and has one button that does it.
-   */
-  const planSection = () => (
-    <VStack alignment="leading" spacing={insideTopic} style={{ alignSelf: "stretch" }}>
-      {topicHead("Your plan", "Change plan", () => setChoosingProgram(true))}
-      {weekCard}
-      {workoutsCard}
-    </VStack>
+  const newWorkoutTile = (
+    <SLPress
+      key="new"
+      scale={0.96}
+      onPress={() => setSheet({ kind: "newWorkout" })}
+      aria-label="New workout"
+      style={{ ...tileStyle, background: SL.Signal.actionTint, border: `1px dashed ${colorOpacity(SL.Signal.action, 0.4)}` }}
+    >
+      <span style={{ width: 40, height: 40, borderRadius: "50%", background: SL.Signal.action, display: "grid", placeItems: "center" }}>
+        <SFSymbol name="plus" size={17} weight={700} color={SL.Signal.onAction} />
+      </span>
+      <Spacer minLength={SL.Space.s2} />
+      <Text {...slBody(SL.Weight.semibold)} color={SL.Signal.action}>New workout</Text>
+      <Text {...slMeta()} color={SL.Ink.secondary}>Pick the exercises</Text>
+    </SLPress>
   );
 
-  /** Every logged workout: the card's quiet second row. */
-  const allWorkoutsRow = (() => {
-    const count = app.sessions.filter((s) => s.kind === "workout").length;
+  const workoutTile = (workout: CustomWorkout) => {
+    const day = CustomWorkout.workoutDay(workout);
+    const count = day.exercises.length === 1 ? "1 exercise" : `${day.exercises.length} exercises`;
+    const minutes = WeekPlan.minutes({ of: day });
     return (
-      <SLRowButton onPress={() => setSheet({ kind: "history" })} aria-label={`All workouts, ${count}`}>
-        <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, minHeight: 52 }}>
-          <div style={{ width: 44, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-            <SLGlyph name="list" size={16} color={SL.Ink.secondary} />
-          </div>
-          <Text {...slBody(SL.Weight.medium)} color={SL.Ink.primary}>
-            All workouts
-          </Text>
+      <div key={workout.id} style={{ position: "relative", flexShrink: 0, scrollSnapAlign: "start", scrollMarginLeft: SL.Space.gutterSession }}>
+        <SLPress
+          scale={0.96}
+          onPress={() => setSheet({ kind: "editWorkout", value: workout })}
+          aria-label={`${workout.name}, ${count}, about ${minutes} minutes`}
+          style={{ ...tileStyle, background: SL.Surface.raised, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}` }}
+        >
+          <span style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center" }}>
+            <SFSymbol name="square.stack.3d.up.fill" size={16} weight={600} color={SL.Signal.action} />
+          </span>
           <Spacer minLength={SL.Space.s2} />
-          <Text {...slBody()} numerals color={SL.Ink.secondary}>
-            {`${count}`}
-          </Text>
-          <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
-        </HStack>
-      </SLRowButton>
-    );
-  })();
-
-  const rowHairline = <SLHairline style={{ marginLeft: SL.Space.s4 + 44 + SL.Space.s3 }} />;
-
-  /** What's next and what's been: one card. The next workout after today and every logged workout. */
-  const planCard = (day: AgendaDay) => {
-    const next = nextTraining(day.date);
-    return (
-      <div style={{ position: "relative", alignSelf: "stretch", borderRadius: SL.Radius.xl, background: SL.Surface.raised }}>
-        <VStack spacing={0} style={{ alignItems: "stretch", borderRadius: SL.Radius.xl, overflow: "hidden" }}>
-          {next !== undefined && AgendaDay.plannedDay(next) !== undefined && (
-            <>
-              {nextSessionRow(next)}
-              {rowHairline}
-            </>
-          )}
-          {allWorkoutsRow}
-        </VStack>
-        <StrokeBorder radius={SL.Radius.xl} color={SL.Surface.hairline} />
+          <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={2}>{workout.name}</Text>
+          <Text {...slMeta()} numerals color={SL.Ink.secondary} lineLimit={1}>{`${count} · ~${minutes} min`}</Text>
+        </SLPress>
+        {/* A paused workout is finished or ended first, so nothing is overwritten. */}
+        {app.resumableSession === undefined && (
+          <SLPress
+            scale={0.88}
+            bounces
+            onPress={() => onStart(day)}
+            aria-label={`Start ${workout.name}`}
+            style={{ position: "absolute", top: SL.Space.s2, right: SL.Space.s2, width: SL.Space.hitMin, height: SL.Space.hitMin, display: "grid", placeItems: "center", background: "transparent" }}
+          >
+            <span style={{ width: 36, height: 36, borderRadius: "50%", background: SL.Signal.action, display: "grid", placeItems: "center" }}>
+              <SFSymbol name="play.fill" size={13} weight={700} color={SL.Signal.onAction} />
+            </span>
+          </SLPress>
+        )}
       </div>
+    );
+  };
+
+  /**
+   * Workouts you put together yourself, as a shelf: making one comes first, then a tile per workout. Names get two
+   * lines, so "Leg day + abs" fits; ▶ starts it, the tile opens it. Logged workouts are the head's History.
+   */
+  const workoutsShelf = () => {
+    const own = app.customWorkouts;
+    return (
+      <VStack alignment="leading" spacing={insideTopic} style={{ alignSelf: "stretch" }}>
+        {topicHead("Your workouts", "History", () => setSheet({ kind: "history" }))}
+        {own.length === 0 ? (
+          firstWorkoutCard
+        ) : (
+          <div
+            style={{
+              alignSelf: "stretch",
+              display: "flex",
+              gap: SL.Space.s3,
+              overflowX: "auto",
+              scrollSnapType: "x mandatory",
+              scrollbarWidth: "none",
+              marginLeft: -SL.Space.gutterSession,
+              marginRight: -SL.Space.gutterSession,
+              paddingLeft: SL.Space.gutterSession,
+              paddingRight: SL.Space.gutterSession,
+            }}
+          >
+            {newWorkoutTile}
+            {own.map(workoutTile)}
+          </div>
+        )}
+      </VStack>
     );
   };
 
@@ -1481,6 +1471,25 @@ export function TrainingHomeView({
             onClose={() => setSheet(undefined)}
           />
         );
+      case "editWorkout": {
+        const workout = presented.value;
+        return (
+          <CustomWorkoutBuilder
+            workout={workout}
+            onSave={(saved, start) => {
+              setSheet(undefined);
+              void app.saveCustomWorkout(saved).then(() => {
+                if (start && app.resumableSession === undefined) after(() => onStart(CustomWorkout.workoutDay(saved)));
+              });
+            }}
+            onDelete={() => {
+              setSheet(undefined);
+              void app.removeCustomWorkout({ id: workout.id });
+            }}
+            onClose={() => setSheet(undefined)}
+          />
+        );
+      }
       case "plan": {
         const date = presented.value;
         return (
@@ -1520,10 +1529,9 @@ export function TrainingHomeView({
                 <VStack alignment="leading" spacing={insideTopic} style={{ alignSelf: "stretch" }}>
                   {streakCard(today)}
                   {todayCard(today)}
-                  {planCard(today)}
                   {recoveryStatus !== undefined && recoverySection(recoveryStatus)}
                 </VStack>
-                {planSection()}
+                {workoutsShelf()}
                 {badgeSection(today)}
                 {/* Day one has nothing to chart: no empty card. */}
                 {app.sessions.some((s) => s.kind === "workout") && <QuickProgressCard onSeeAll={onProgress} />}

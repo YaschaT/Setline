@@ -67,6 +67,7 @@ struct TrainingHomeView: View {
         case chooser
         case ownWeek
         case newWorkout
+        case editWorkout(CustomWorkout)
 
         var id: String {
             switch self {
@@ -81,6 +82,7 @@ struct TrainingHomeView: View {
             case .chooser: return "chooser"
             case .ownWeek: return "ownWeek"
             case .newWorkout: return "newWorkout"
+            case .editWorkout(let workout): return "edit-\(workout.id)"
             }
         }
     }
@@ -123,10 +125,9 @@ struct TrainingHomeView: View {
                         VStack(alignment: .leading, spacing: Self.insideTopic) {
                             streakCard(today)
                             todayCard(today)
-                            planCard(after: today)
                             if let status = recoveryStatus { recoverySection(status) }
                         }
-                        planSection
+                        workoutsShelf
                         badgeSection(today)
                         // Day one has nothing to chart: no empty card.
                         if app.sessions.contains(where: { $0.kind == .workout }) {
@@ -193,6 +194,17 @@ struct TrainingHomeView: View {
                         if start, app.resumableSession == nil { after(closing: { onStart(saved.workoutDay) }) }
                     }
                 }, onDelete: nil, onClose: { sheet = nil })
+            case .editWorkout(let workout):
+                CustomWorkoutBuilder(workout: workout, onSave: { saved, start in
+                    sheet = nil
+                    Task {
+                        await app.saveCustomWorkout(saved)
+                        if start, app.resumableSession == nil { after(closing: { onStart(saved.workoutDay) }) }
+                    }
+                }, onDelete: {
+                    sheet = nil
+                    Task { await app.removeCustomWorkout(id: workout.id) }
+                }, onClose: { sheet = nil })
             case .plan(let date):
                 DayPlanSheet(
                     plan: dayPlan(for: date),
@@ -444,43 +456,30 @@ struct TrainingHomeView: View {
     }
 
     /// Today's workout, on its own card: the workout as it was, one action.
+    /// Today, and under a hairline what comes after it: one story, one card.
     private func todayCard(_ today: AgendaDay) -> some View {
-        todayBlock(today)
-            .padding(SL.Space.s5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SL.Surface.raised)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(SL.Surface.hairlineStrong.opacity(0.6), lineWidth: SL.Metric.border)
-            )
-            .accessibilityElement(children: .contain)
+        VStack(alignment: .leading, spacing: 0) {
+            todayBlock(today)
+                .padding(SL.Space.s5)
+            if let next = nextTraining(after: today.date), next.plannedDay != nil {
+                SLHairline()
+                nextSessionRow(next)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SL.Surface.raised)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(SL.Surface.hairlineStrong.opacity(0.6), lineWidth: SL.Metric.border)
+        )
+        .accessibilityElement(children: .contain)
     }
 
     private static let insideTopic = SL.Space.s3
     private static let betweenTopics = SL.Space.s8
-
-    /// What's next and what's been: one card, two rows. The next workout
-    /// after today (only that one — the schedule is the Agenda's), and under
-    /// a hairline the way into every logged workout.
-    private func planCard(after today: AgendaDay) -> some View {
-        VStack(spacing: 0) {
-            if let next = nextTraining(after: today.date), next.plannedDay != nil {
-                nextSessionRow(next)
-                SLHairline().padding(.leading, SL.Space.s4 + 44 + SL.Space.s3)
-            }
-            allWorkoutsRow
-        }
-        .background(
-            RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                .strokeBorder(SL.Surface.hairline, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous))
-    }
 
     private func nextSessionRow(_ day: AgendaDay) -> some View {
         let workout = day.plannedDay!
@@ -513,7 +512,7 @@ struct TrainingHomeView: View {
                 Spacer(minLength: SL.Space.s2)
                 SLGlyph(name: .chevronRight, size: 13).foregroundStyle(SL.Ink.tertiary)
             }
-            .padding(.horizontal, SL.Space.s4)
+            .padding(.horizontal, SL.Space.s5)
             .padding(.vertical, SL.Space.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -524,154 +523,156 @@ struct TrainingHomeView: View {
         .accessibilityHint("Shows the exercises. Nothing starts.")
     }
 
-    // MARK: - Your plan
+    // MARK: - Your workouts
 
-    /// Your week and your own workouts, as their own topic with a card each.
-    /// User tests missed them as rows: each card now says what it is in
-    /// plain words, shows what it holds, and has one button that does it.
-    private var planSection: some View {
-        VStack(alignment: .leading, spacing: Self.insideTopic) {
-            topicHead("Your plan", link: "Change plan") { choosingProgram = true }
-            weekCard
-            workoutsCard
-        }
-    }
+    @ScaledMetric(relativeTo: .body) private var tileWidth: CGFloat = 164
 
-    /// The week as it will be trained: each day and its workout, so "your
-    /// week" is something you can see before you change it.
-    private var weekCard: some View {
-        let own = app.ownWeek != nil
-        return planCardShell {
-            planCardHead(symbol: "calendar", title: "Your week",
-                         detail: own ? "Your own week. It repeats every week."
-                             : "Choose the workout for each day. It repeats every week.")
-            HStack(spacing: 4) {
-                ForEach(days(containing: Date())) { day in
-                    let workout = day.plannedDay?.short
-                    VStack(spacing: 4) {
-                        Text(String(day.weekday.prefix(2)))
-                            .font(.sl(SL.TypeSize.micro, day.isToday ? SL.Weight.bold : SL.Weight.medium))
-                            .foregroundStyle(day.isToday ? SL.Ink.primary : SL.Ink.tertiary)
-                        Text(workout ?? "Rest")
-                            .font(.sl(SL.TypeSize.micro, workout == nil ? SL.Weight.regular : SL.Weight.semibold))
-                            .foregroundStyle(workout == nil ? SL.Ink.tertiary : SL.Signal.action)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                    }
-                    .padding(.vertical, SL.Space.s2)
-                    .padding(.horizontal, 2)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                            .fill(workout == nil ? SL.Surface.raised2.opacity(0.5) : SL.Signal.actionTint)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous)
-                            .strokeBorder(day.isToday ? SL.Ink.primary.opacity(0.5) : .clear, lineWidth: SL.Metric.border)
-                    )
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(days(containing: Date())
-                .map { "\($0.weekday): \($0.plannedDay?.short ?? "rest")" }
-                .joined(separator: ", "))
-            planButton(own ? "Edit my week" : "Plan my week", symbol: "calendar") { sheet = .ownWeek }
-        }
-    }
-
-    /// Workouts you put together yourself: what they are, the ones you
-    /// have, and the way to make another.
-    private var workoutsCard: some View {
+    /// Workouts you put together yourself, as a shelf: making one comes
+    /// first, then a tile per workout. Names get two lines, so "Leg day +
+    /// abs" fits; ▶ starts it, the tile opens it. Logged workouts are the
+    /// head's History.
+    private var workoutsShelf: some View {
         let own = app.customWorkouts
-        return planCardShell {
-            planCardHead(symbol: "square.stack.3d.up", title: "Your own workouts",
-                         detail: own.isEmpty
-                             ? "Pick the exercises, sets and reps yourself. Start it any time, or put it on a day in your week."
-                             : own.map(\.name).joined(separator: " · "))
-            HStack(spacing: SL.Space.s2) {
-                planButton("Create a workout", symbol: "plus") { sheet = .newWorkout }
-                if !own.isEmpty {
-                    planButton("See all \(own.count)", symbol: nil, quiet: true) { sheet = .chooser }
+        return VStack(alignment: .leading, spacing: Self.insideTopic) {
+            topicHead("Your workouts", link: "History") { sheet = .history }
+            if own.isEmpty {
+                firstWorkoutCard
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: SL.Space.s3) {
+                        newWorkoutTile
+                        ForEach(own) { workout in
+                            workoutTile(workout)
+                        }
+                    }
+                    .padding(.horizontal, SL.Space.gutterSession)
+                    .scrollTargetLayout()
                 }
+                .scrollTargetBehavior(.viewAligned)
+                .padding(.horizontal, -SL.Space.gutterSession)
             }
         }
     }
 
-    private func planCardShell<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: SL.Space.s4) { content() }
+    /// Before there are any: what it is, said once, and the one way in.
+    private var firstWorkoutCard: some View {
+        Button { sheet = .newWorkout } label: {
+            HStack(alignment: .center, spacing: SL.Space.s4) {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(SL.Signal.onAction)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(SL.Signal.action))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create your own workout")
+                        .font(.sl(SL.TypeSize.lead, SL.Weight.bold))
+                        .foregroundStyle(SL.Ink.primary)
+                    Text("Pick the exercises, sets and reps. Start it any time, or put it on a day in your week.")
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+            }
             .padding(SL.Space.s4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised))
             .overlay(
                 RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
-                    .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+                    .strokeBorder(SL.Signal.action.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [6, 5]))
             )
-    }
-
-    private func planCardHead(symbol: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: SL.Space.s3) {
-            Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(SL.Signal.action)
-                .frame(width: 44, height: 44)
-                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.sl(SL.TypeSize.lead, SL.Weight.bold))
-                    .foregroundStyle(SL.Ink.primary)
-                    .accessibilityAddTraits(.isHeader)
-                Text(detail)
-                    .slMeta()
-                    .foregroundStyle(SL.Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    /// Lime on its tint: clearly a button, still quieter than Start training.
-    private func planButton(_ title: String, symbol: String?, quiet: Bool = false,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let symbol { Image(systemName: symbol).font(.system(size: 13, weight: .bold)) }
-                Text(title).slBody(SL.Weight.semibold).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(quiet ? SL.Ink.primary : SL.Signal.action)
-            .padding(.horizontal, SL.Space.s4)
-            .frame(maxWidth: quiet ? nil : .infinity, minHeight: 48)
-            .background(Capsule().fill(quiet ? SL.Surface.raised2 : SL.Signal.actionTint))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(SLPressStyle(scale: 0.97))
-    }
-
-    /// Every logged workout: the card's quiet second row.
-    private var allWorkoutsRow: some View {
-        let count = app.sessions.filter { $0.kind == .workout }.count
-        return Button { sheet = .history } label: {
-            HStack(spacing: SL.Space.s3) {
-                SLGlyph(name: .list, size: 16)
-                    .foregroundStyle(SL.Ink.secondary)
-                    .frame(width: 44)
-                Text("All workouts")
-                    .slBody(SL.Weight.medium)
-                    .foregroundStyle(SL.Ink.primary)
-                Spacer(minLength: SL.Space.s2)
-                Text("\(count)")
-                    .slBody()
-                    .slNumerals()
-                    .foregroundStyle(SL.Ink.secondary)
-                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
-            }
-            .padding(.horizontal, SL.Space.s4)
-            .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
-        .buttonStyle(SLRowButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("All workouts, \(count)")
-        .accessibilityHint("Opens every logged session")
+        .buttonStyle(SLPressStyle(scale: 0.98))
+    }
+
+    private var newWorkoutTile: some View {
+        Button { sheet = .newWorkout } label: {
+            VStack(alignment: .leading, spacing: SL.Space.s2) {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(SL.Signal.onAction)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(SL.Signal.action))
+                Spacer(minLength: SL.Space.s2)
+                Text("New workout")
+                    .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                    .foregroundStyle(SL.Signal.action)
+                Text("Pick the exercises")
+                    .slMeta()
+                    .foregroundStyle(SL.Ink.secondary)
+            }
+            .padding(SL.Space.s4)
+            .frame(width: tileWidth, alignment: .leading)
+            .frame(minHeight: 156, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Signal.actionTint))
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                    .strokeBorder(SL.Signal.action.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [6, 5]))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.96))
+        .accessibilityLabel("New workout")
+        .accessibilityHint("Pick the exercises, sets and reps")
+    }
+
+    private func workoutTile(_ workout: CustomWorkout) -> some View {
+        let day = workout.workoutDay
+        let count = day.exercises.count == 1 ? "1 exercise" : "\(day.exercises.count) exercises"
+        return ZStack(alignment: .topTrailing) {
+            Button { sheet = .editWorkout(workout) } label: {
+                VStack(alignment: .leading, spacing: SL.Space.s2) {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(width: 40, height: 40)
+                        .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
+                    Spacer(minLength: SL.Space.s2)
+                    Text(workout.name)
+                        .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                        .foregroundStyle(SL.Ink.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(count) · ~\(WeekPlan.minutes(of: day)) min")
+                        .slMeta()
+                        .slNumerals()
+                        .foregroundStyle(SL.Ink.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .padding(SL.Space.s4)
+                .frame(width: tileWidth, alignment: .leading)
+                .frame(minHeight: 156, alignment: .topLeading)
+                .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Surface.raised))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                        .strokeBorder(SL.Surface.hairline, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.96))
+            .accessibilityLabel("\(workout.name), \(count), about \(WeekPlan.minutes(of: day)) minutes")
+            .accessibilityHint("Opens it to change")
+
+            // A paused workout is finished or ended first, so nothing is overwritten.
+            if app.resumableSession == nil {
+                Button { onStart(day) } label: {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SL.Signal.onAction)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(SL.Signal.action))
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.88, bounces: true))
+                .padding(SL.Space.s2)
+                .accessibilityLabel("Start \(workout.name)")
+            }
+        }
     }
 
     /// A badge won today, or the next one to win: compact and secondary.
@@ -865,17 +866,30 @@ struct TrainingHomeView: View {
     }
 
     /// "THIS WEEK · 2 of 4 workouts", over its seven days.
+    /// "This week · 2 of 5", and the way to change the week, on the week:
+    /// user tests looked for it here.
     private func weekHeader(_ streak: TrainingStreak) -> some View {
         let done = min(streak.thisWeekDone, streak.thisWeekGoal)
-        return HStack(alignment: .firstTextBaseline) {
-            SLOverline(text: "This week")
+        return HStack(alignment: .center, spacing: SL.Space.s2) {
+            SLOverline(text: "This week · \(done) of \(streak.thisWeekGoal)",
+                       color: streak.thisWeekMet ? SL.Signal.action : SL.Ink.secondary)
+                .accessibilityLabel("This week: \(done) of \(streak.thisWeekGoal) workouts")
             Spacer(minLength: SL.Space.s2)
-            Text("\(done) of \(streak.thisWeekGoal) workouts")
-                .slMeta(SL.Weight.semibold)
-                .slNumerals()
-                .foregroundStyle(streak.thisWeekMet ? SL.Signal.action : SL.Ink.primary)
+            Button { sheet = .ownWeek } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "calendar").font(.system(size: 12, weight: .bold))
+                    Text(app.ownWeek == nil ? "Plan week" : "Edit week").slMeta(SL.Weight.semibold)
+                }
+                .foregroundStyle(SL.Signal.action)
+                .padding(.horizontal, SL.Space.s3)
+                .frame(minHeight: 32)
+                .background(Capsule().fill(SL.Signal.actionTint))
+                .frame(minHeight: SL.Space.hitMin)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SLPressStyle(scale: 0.94))
+            .accessibilityHint("Choose the workout for each day. It repeats every week.")
         }
-        .accessibilityElement(children: .combine)
     }
 
     /// This week as seven marks: trained days filled, today ringed, rest
