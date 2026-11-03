@@ -617,6 +617,10 @@ final class AppState {
     /// weekday, so the week is wholly yours — or with `nil` hands the week
     /// back to the plan. Days you moved by date keep their change.
     func saveOwnWeek(_ days: [String]?) async {
+        await record(ownWeekChanges(days))
+    }
+
+    private func ownWeekChanges(_ days: [String]?) -> [StateChange] {
         var changes = Self.weekdaysMondayFirst.enumerated().map { position, index in
             let key = "\(programKey):\(Schedule.weekKey(index))"
             if let days {
@@ -630,6 +634,84 @@ final class AppState {
         changes.append(days == nil
             ? StateChange(.removeScheduleOverride(key: fromKey))
             : StateChange(.setScheduleDay(key: fromKey, dayID: from)))
+        return changes
+    }
+
+    // MARK: - Your own plans
+
+    /// A plan of your own: a name and a workout for each day, Monday first.
+    /// Kept in the same synced map as your own week, under `plan-<id>:` the
+    /// way a program keeps its days under its key, so it travels between the
+    /// phone and the web like a moved day does. `plans:active` names the one
+    /// the week was written from.
+    struct OwnPlan: Identifiable, Equatable {
+        let id: String
+        var name: String
+        var days: [String]
+
+        static func newID() -> String { String(UUID().uuidString.prefix(8)).lowercased() }
+    }
+
+    var ownPlans: [OwnPlan] {
+        guard let state, let raw = state["scheduleOverrides"]?.objectValue else { return [] }
+        let ids = Set(raw.keys.compactMap { key -> String? in
+            guard key.hasPrefix("plan-"), let colon = key.firstIndex(of: ":") else { return nil }
+            return String(key[key.index(key.startIndex, offsetBy: 5)..<colon])
+        })
+        return ids.compactMap { id -> OwnPlan? in
+            let values = LegacyAdapter.scheduleOverrides(from: state, programKey: "plan-\(id)")
+            guard let name = values["name"] else { return nil }
+            return OwnPlan(id: id, name: name, days: Self.weekdaysMondayFirst.map { values[Schedule.weekKey($0)] ?? "rest" })
+        }
+        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// The plan of your own the week comes from, while it still does.
+    var activeOwnPlan: OwnPlan? {
+        guard let state, let week = ownWeek,
+              let id = LegacyAdapter.scheduleOverrides(from: state, programKey: "plans")["active"] else { return nil }
+        return ownPlans.first { $0.id == id && $0.days == week }
+    }
+
+    /// What the week follows, said the way the plans list says it.
+    var planName: String {
+        if let plan = activeOwnPlan { return plan.name }
+        if ownWeek != nil { return "Your own week" }
+        return ProgramCatalog.current(in: state ?? LegacyState(raw: [:]), plan: plan).name
+    }
+
+    /// Saves a plan; with `use`, or when it is the plan in use, the week
+    /// follows it from today.
+    func saveOwnPlan(_ plan: OwnPlan, use: Bool) async {
+        var changes = [StateChange(.setScheduleDay(key: "plan-\(plan.id):name", dayID: plan.name))]
+        changes += Self.weekdaysMondayFirst.enumerated().map { position, index in
+            StateChange(.setScheduleDay(key: "plan-\(plan.id):\(Schedule.weekKey(index))",
+                                        dayID: plan.days.indices.contains(position) ? plan.days[position] : "rest"))
+        }
+        if use || activeOwnPlan?.id == plan.id {
+            changes += ownWeekChanges(plan.days)
+            changes.append(StateChange(.setScheduleDay(key: "plans:active", dayID: plan.id)))
+        }
+        await record(changes)
+    }
+
+    /// Deletes a plan; the plan in use hands the week back to the program.
+    func removeOwnPlan(_ plan: OwnPlan) async {
+        var changes = [StateChange(.removeScheduleOverride(key: "plan-\(plan.id):name"))]
+        changes += Self.weekdaysMondayFirst.map { StateChange(.removeScheduleOverride(key: "plan-\(plan.id):\(Schedule.weekKey($0))")) }
+        if activeOwnPlan?.id == plan.id {
+            changes += ownWeekChanges(nil)
+            changes.append(StateChange(.removeScheduleOverride(key: "plans:active")))
+        }
+        await record(changes)
+    }
+
+    /// One of the ready-made plans, with its own week: nothing of yours is
+    /// laid over it. Your plans stay to come back to.
+    func useReadyMadePlan(_ program: Program) async {
+        var changes = ownWeekChanges(nil)
+        changes.append(StateChange(.removeScheduleOverride(key: "plans:active")))
+        changes.append(StateChange(.setProgram(mode: program.mode, sciencePlanID: program.sciencePlanID)))
         await record(changes)
     }
 

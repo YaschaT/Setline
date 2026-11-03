@@ -1961,6 +1961,7 @@ export function SessionView(p: {
             }}
             onStar={(row: ExercisePicker_Row) => void app.setFavorite({ exerciseID: row.exerciseID, isFavorite: !row.isFavorite })}
             onClose={() => setAddingExercise(false)}
+            adds
           />
         )}
       </Sheet>

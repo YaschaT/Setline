@@ -258,7 +258,8 @@ struct SessionView: View {
                 onStar: { row in
                     Task { await app.setFavorite(exerciseID: row.exerciseID, isFavorite: !row.isFavorite) }
                 },
-                onClose: { addingExercise = false }
+                onClose: { addingExercise = false },
+                adds: true
             )
         }
         .alert(

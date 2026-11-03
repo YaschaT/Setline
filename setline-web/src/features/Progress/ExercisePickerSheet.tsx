@@ -31,12 +31,15 @@ export function ExercisePickerSheet({
   onPick,
   onStar,
   onClose,
+  adds = false,
 }: {
   rows: ExercisePicker_Row[];
   selected: string | undefined;
   onPick: (row: ExercisePicker_Row) => void;
   onStar: (row: ExercisePicker_Row) => void;
   onClose: () => void;
+  /** Picking adds the exercise to a workout: each row says so with "+ Add" where the star would be, since a star read as the way to add it. */
+  adds?: boolean;
 }) {
   const app = useApp();
   const [group, setGroup] = useState<MuscleGroup | undefined>(undefined);
@@ -175,6 +178,30 @@ export function ExercisePickerSheet({
 
           {isSelected && <SFSymbol name="checkmark" size={17} weight={600} color={SL.Ink.primary} />}
 
+          {adds ? (
+            <Pressable
+              onPress={() => onPick(row)}
+              aria-label={`Add ${row.name}`}
+              style={{ background: "transparent", padding: 0, minHeight: SL.Space.hitMin, display: "flex", alignItems: "center", flexShrink: 0 }}
+            >
+              <span
+                style={{
+                  ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
+                  color: SL.Signal.action,
+                  background: SL.Signal.actionTint,
+                  borderRadius: 999,
+                  minHeight: 32,
+                  padding: `0 ${SL.Space.s3}px`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <SFSymbol name="plus" size={12} weight={700} color={SL.Signal.action} />
+                Add
+              </span>
+            </Pressable>
+          ) : (
           <Pressable
             onPress={() => onStar(row)}
             aria-label={row.isFavorite ? `Remove star from ${row.name}` : `Star ${row.name}`}
@@ -193,6 +220,7 @@ export function ExercisePickerSheet({
           >
             <SFSymbol name={row.isFavorite ? "star.fill" : "star"} size={starSize} weight={400} color={row.isFavorite ? SL.Ink.primary : SL.Ink.tertiary} />
           </Pressable>
+          )}
         </HStack>
       </div>
     );
@@ -214,7 +242,9 @@ export function ExercisePickerSheet({
     const recent = ExercisePicker.recent({ in: rows });
     return (
       <>
-        {favorites.length === 0 ? (
+        {favorites.length === 0 && adds ? (
+          recent.length > 0 && section("RECENT", 22, recent.map((row) => card(row, standing(row))))
+        ) : favorites.length === 0 ? (
           <>
             {/* 40c: the star's own explanation, where the favourites would be. */}
             <div style={{ paddingTop: 22, alignSelf: "flex-start", maxWidth: "100%" }}>

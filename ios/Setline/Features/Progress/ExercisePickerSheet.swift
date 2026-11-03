@@ -23,6 +23,9 @@ struct ExercisePickerSheet: View {
     let onPick: (ExercisePicker.Row) -> Void
     let onStar: (ExercisePicker.Row) -> Void
     let onClose: () -> Void
+    /// Picking adds the exercise to a workout: each row says so with "+ Add"
+    /// where the star would be, since a star read as the way to add it.
+    var adds = false
 
     @State private var group: MuscleGroup?
     @State private var query = ""
@@ -167,7 +170,14 @@ struct ExercisePickerSheet: View {
     private var start: some View {
         let favorites = ExercisePicker.favorites(in: rows)
 
-        if favorites.isEmpty {
+        if favorites.isEmpty, adds {
+            let recent = ExercisePicker.recent(in: rows)
+            if !recent.isEmpty {
+                section("RECENT", top: 22) {
+                    ForEach(recent) { row in card(row, detail: standing(row)) }
+                }
+            }
+        } else if favorites.isEmpty {
             // 40c: the star's own explanation, where the favourites would be.
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "star")
@@ -306,6 +316,22 @@ struct ExercisePickerSheet: View {
                     .foregroundStyle(SL.Ink.primary)
             }
 
+            if adds {
+                Button { onPick(row) } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .bold))
+                        Text("Add").font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                    }
+                    .foregroundStyle(SL.Signal.action)
+                    .padding(.horizontal, SL.Space.s3)
+                    .frame(minHeight: 32)
+                    .background(Capsule().fill(SL.Signal.actionTint))
+                    .frame(minHeight: SL.Space.hitMin)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add \(row.name)")
+            } else {
             Button { onStar(row) } label: {
                 Image(systemName: row.isFavorite ? "star.fill" : "star")
                     .font(.sl(18, SL.Weight.regular))
@@ -320,6 +346,7 @@ struct ExercisePickerSheet: View {
             // 44, so the hang shrinks with it and the star is never cut off.
             .padding(.trailing, -max(0, (SL.Space.hitMin - starSize) / 2 - 3))
             .accessibilityLabel(row.isFavorite ? "Remove star from \(row.name)" : "Star \(row.name)")
+            }
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 52)

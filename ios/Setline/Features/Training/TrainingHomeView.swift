@@ -30,7 +30,6 @@ struct TrainingHomeView: View {
 
     @State private var confirmsEnd = false
     /// The plan shape, chosen from the workout chooser.
-    @State private var choosingProgram = false
     /// The date the screen is on. `nil` is today, which is where every visit
     /// starts and where `Naar vandaag` returns.
     @State private var selectedDate: Date?
@@ -65,7 +64,7 @@ struct TrainingHomeView: View {
         case plan(Date)
         case history
         case chooser
-        case ownWeek
+        case plans
         case newWorkout
         case editWorkout(CustomWorkout)
 
@@ -80,7 +79,7 @@ struct TrainingHomeView: View {
             case .plan(let date): return "plan-\(Schedule.dateKey(date))"
             case .history: return "history"
             case .chooser: return "chooser"
-            case .ownWeek: return "ownWeek"
+            case .plans: return "plans"
             case .newWorkout: return "newWorkout"
             case .editWorkout(let workout): return "edit-\(workout.id)"
             }
@@ -181,11 +180,10 @@ struct TrainingHomeView: View {
             case .chooser:
                 WorkoutChooserSheet(
                     onStart: { day in after(closing: { onStart(day) }) },
-                    onChangePlan: { after(closing: { choosingProgram = true }) },
                     onClose: { sheet = nil }
                 )
-            case .ownWeek:
-                OwnWeekSheet(onClose: { sheet = nil })
+            case .plans:
+                PlansSheet(onClose: { sheet = nil })
             case .newWorkout:
                 CustomWorkoutBuilder(workout: nil, onSave: { saved, start in
                     sheet = nil
@@ -223,17 +221,6 @@ struct TrainingHomeView: View {
         }
         .fullScreenCover(item: $openedSession) { opened in
             SessionDetailView(sessionID: opened.id, onClose: { openedSession = nil })
-        }
-        .fullScreenCover(isPresented: $choosingProgram) {
-            ProgramSheet(
-                programs: ProgramCatalog.all(personalPlan: app.plan),
-                current: ProgramCatalog.current(in: app.state ?? LegacyState(raw: [:]), plan: app.plan),
-                onSave: { program in
-                    choosingProgram = false
-                    Task { await app.record([StateChange(.setProgram(mode: program.mode, sciencePlanID: program.sciencePlanID))]) }
-                },
-                onClose: { choosingProgram = false }
-            )
         }
         #if DEBUG
         // `-SetlineAgenda` and `-SetlinePreview` open the two sheets, so they
@@ -866,30 +853,48 @@ struct TrainingHomeView: View {
     }
 
     /// "THIS WEEK · 2 of 4 workouts", over its seven days.
-    /// "This week · 2 of 5", and the way to change the week, on the week:
-    /// user tests looked for it here.
+    /// "This week · 2 of 5", and the plan the week follows, on the week:
+    /// user tests looked for it here. Tapping it changes the plan or makes one.
     private func weekHeader(_ streak: TrainingStreak) -> some View {
-        let done = min(streak.thisWeekDone, streak.thisWeekGoal)
-        return HStack(alignment: .center, spacing: SL.Space.s2) {
-            SLOverline(text: "This week · \(done) of \(streak.thisWeekGoal)",
-                       color: streak.thisWeekMet ? SL.Signal.action : SL.Ink.secondary)
-                .accessibilityLabel("This week: \(done) of \(streak.thisWeekGoal) workouts")
-            Spacer(minLength: SL.Space.s2)
-            Button { sheet = .ownWeek } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "calendar").font(.system(size: 12, weight: .bold))
-                    Text(app.ownWeek == nil ? "Plan week" : "Edit week").slMeta(SL.Weight.semibold)
-                }
-                .foregroundStyle(SL.Signal.action)
-                .padding(.horizontal, SL.Space.s3)
-                .frame(minHeight: 32)
-                .background(Capsule().fill(SL.Signal.actionTint))
-                .frame(minHeight: SL.Space.hitMin)
-                .contentShape(Rectangle())
+        // Side by side while the plan's name fits there; at larger text, or
+        // with a long name, the plan takes a line of its own, never cut short.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: SL.Space.s2) {
+                weekOverline(streak).fixedSize()
+                Spacer(minLength: SL.Space.s2)
+                planPill.fixedSize()
             }
-            .buttonStyle(SLPressStyle(scale: 0.94))
-            .accessibilityHint("Choose the workout for each day. It repeats every week.")
+            VStack(alignment: .leading, spacing: SL.Space.s1) {
+                weekOverline(streak)
+                planPill
+            }
         }
+    }
+
+    private func weekOverline(_ streak: TrainingStreak) -> some View {
+        let done = min(streak.thisWeekDone, streak.thisWeekGoal)
+        return SLOverline(text: "This week · \(done) of \(streak.thisWeekGoal)",
+                          color: streak.thisWeekMet ? SL.Signal.action : SL.Ink.secondary)
+            .accessibilityLabel("This week: \(done) of \(streak.thisWeekGoal) workouts")
+    }
+
+    private var planPill: some View {
+        Button { sheet = .plans } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "calendar").font(.system(size: 12, weight: .bold))
+                Text(app.planName).slMeta(SL.Weight.semibold).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(SL.Signal.action)
+            .padding(.horizontal, SL.Space.s3)
+            .frame(minHeight: 32)
+            .background(Capsule().fill(SL.Signal.actionTint))
+            .frame(minHeight: SL.Space.hitMin)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle(scale: 0.94))
+        .accessibilityLabel("Your plan: \(app.planName)")
+        .accessibilityHint("Change it, or make your own plan")
     }
 
     /// This week as seven marks: trained days filled, today ringed, rest

@@ -35,7 +35,6 @@ import { SyncQueue } from "../../core/Sync/SyncQueue";
 import { StateChange } from "../../core/Sync/StateChange";
 import { TrainingStreak, type TrainingStreak_Risk } from "../../core/Progress/TrainingStreak";
 import { Milestone, Milestones } from "../../core/Progress/Milestones";
-import { ProgramCatalog } from "../../core/Catalog/Program";
 import { ActiveSessionSnapshot } from "../../core/Domain/ActiveSession";
 import type { TrainingSession, WorkoutDay } from "../../core/Domain/Model";
 import { AgendaSheet } from "./AgendaSheet";
@@ -45,12 +44,12 @@ import { DeloadCard, type DeloadCard_Status } from "./DeloadCard";
 import { HistorySheet, QuickProgressCard } from "./QuickProgressCard";
 import { EarnedBadgeRow, NextBadgeCard } from "./StreakHero";
 import { TallyMascot, type TallyMascot_Mood } from "./TallyMascot";
-import { CustomWorkoutBuilder, OwnWeekSheet, WorkoutChooserSheet, ownWeekSummary } from "./WorkoutChooser";
+import { CustomWorkoutBuilder, WorkoutChooserSheet } from "./WorkoutChooser";
+import { PlansSheet } from "./PlansSheet";
 import { CustomWorkout } from "../../core/Domain/CustomWorkout";
 import { WorkoutPreviewView } from "./WorkoutPreviewView";
 import { StripDay } from "./WeekStrip";
 import { SessionDetailView } from "../Progress/SessionDetailView";
-import { ProgramSheet } from "../Account/ProgramSheet";
 
 /** What has played once since launch, so a tab switch does not replay it. */
 export const TrainingIntro = { played: false };
@@ -66,7 +65,7 @@ type Presented =
   | { kind: "plan"; value: Date }
   | { kind: "history" }
   | { kind: "chooser" }
-  | { kind: "ownWeek" }
+  | { kind: "plans" }
   | { kind: "newWorkout" }
   | { kind: "editWorkout"; value: CustomWorkout };
 
@@ -126,7 +125,6 @@ export function TrainingHomeView({
 
   const [confirmsEnd, setConfirmsEnd] = useState(false);
   /** The plan shape, chosen from the workout chooser. */
-  const [choosingProgram, setChoosingProgram] = useState(false);
   /** The date the screen is on. `undefined` is today, which is where every visit starts. */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [sheet, setSheet] = useState<Presented | undefined>(undefined);
@@ -539,16 +537,18 @@ export function TrainingHomeView({
   /** "THIS WEEK · 2 of 4 workouts", over its seven days. */
   const weekHeader = (streak: TrainingStreak) => {
     const done = Math.min(streak.thisWeekDone, streak.thisWeekGoal);
+    // Side by side while the plan's name fits there; otherwise the plan takes a line of its own, never cut short.
     return (
-      <HStack alignment="center" spacing={8} style={{ alignSelf: "stretch", paddingBottom: SL.Space.s2 }}>
-        <span aria-label={`This week: ${done} of ${streak.thisWeekGoal} workouts`}>
+      <HStack alignment="center" spacing={8} style={{ alignSelf: "stretch", paddingBottom: SL.Space.s2, flexWrap: "wrap", rowGap: SL.Space.s1 }}>
+        <span aria-label={`This week: ${done} of ${streak.thisWeekGoal} workouts`} style={{ whiteSpace: "nowrap" }}>
           <SLOverline text={`This week · ${done} of ${streak.thisWeekGoal}`} color={TrainingStreak.thisWeekMet(streak) ? SL.Signal.action : SL.Ink.secondary} />
         </span>
         <Spacer minLength={SL.Space.s2} />
-        {/* The way to change the week, on the week: user tests looked for it here. */}
+        {/* The plan the week follows, on the week: user tests looked for it here. Tapping it changes the plan or makes one. */}
         <SLPress
           scale={0.94}
-          onPress={() => setSheet({ kind: "ownWeek" })}
+          onPress={() => setSheet({ kind: "plans" })}
+          aria-label={`Your plan: ${app.planName}. Change it, or make your own plan`}
           style={{
             ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
             color: SL.Signal.action,
@@ -559,11 +559,14 @@ export function TrainingHomeView({
             display: "flex",
             alignItems: "center",
             gap: 5,
-            flexShrink: 0,
+            flexShrink: 1,
+            minWidth: 0,
+            maxWidth: "100%",
           }}
         >
           <SFSymbol name="calendar" size={12} weight={700} color={SL.Signal.action} />
-          {app.ownWeek === undefined ? "Plan week" : "Edit week"}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{app.planName}</span>
+          <SFSymbol name="chevron.down" size={10} weight={700} color={SL.Signal.action} />
         </SLPress>
       </HStack>
     );
@@ -1451,12 +1454,11 @@ export function TrainingHomeView({
         return (
           <WorkoutChooserSheet
             onStart={(day) => after(() => onStart(day))}
-            onChangePlan={() => after(() => setChoosingProgram(true))}
             onClose={() => setSheet(undefined)}
           />
         );
-      case "ownWeek":
-        return <OwnWeekSheet onClose={() => setSheet(undefined)} />;
+      case "plans":
+        return <PlansSheet onClose={() => setSheet(undefined)} />;
       case "newWorkout":
         return (
           <CustomWorkoutBuilder
@@ -1552,18 +1554,6 @@ export function TrainingHomeView({
 
       <FullScreenCover isPresented={openedSession !== undefined}>
         {lastSession.current !== undefined && <SessionDetailView sessionID={lastSession.current} onClose={() => setOpenedSession(undefined)} />}
-      </FullScreenCover>
-
-      <FullScreenCover isPresented={choosingProgram}>
-        <ProgramSheet
-          programs={ProgramCatalog.all({ personalPlan: app.plan })}
-          current={ProgramCatalog.current({ in: app.state ?? { raw: {} }, plan: app.plan })}
-          onSave={(program) => {
-            setChoosingProgram(false);
-            void app.record([StateChange.make({ kind: "setProgram", mode: program.mode, sciencePlanID: program.sciencePlanID })]);
-          }}
-          onClose={() => setChoosingProgram(false)}
-        />
       </FullScreenCover>
 
       <Alert

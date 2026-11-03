@@ -1,12 +1,23 @@
 {
   "notes": [
     {
+      "id": "2026-11-03",
+      "date": "2026-11-03",
+      "title": "Plans of your own",
+      "items": [
+        "Make your own plan: give it a name, like Week 1, and pick a workout for each day. Use your own workouts, ready-made ones, or both.",
+        "Make as many as you like and switch between them, or go back to a ready-made plan, in one list. Tap the plan on This week to find it.",
+        "Training shows the plan you're on, and your week follows it every week.",
+        "Adding exercises to a workout: every exercise now has a + Add button."
+      ]
+    },
+    {
       "id": "2026-11-02-3",
       "date": "2026-11-02",
       "title": "Your week and your workouts, where you look for them",
       "items": [
-        "Plan week sits on This week itself: tap it to choose the workout for each day. It repeats every week.",
-        "Your workouts is a row of tiles on Training. New workout makes one; ▶ starts one; tap a tile to change it. Long names fit.",
+        "Your plan sits on This week itself: tap it to change the plan or make your own.",
+        "Your workouts is a row of tiles on Training. New workout makes one; the play button starts one; tap a tile to change it. Long names fit.",
         "What's next is now at the bottom of the Today card, and History is at the top of Your workouts."
       ]
     },

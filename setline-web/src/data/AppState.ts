@@ -9,6 +9,8 @@ import { addDays, daysBetween, formatEnUS, isSameDay, startOfDay } from "../core
 import { deepEqual, uuid } from "../core/Support/swift";
 import { LegacyState } from "../core/Legacy/LegacyState";
 import { LegacyAdapter } from "../core/Legacy/LegacyAdapter";
+import { JSONValue } from "../core/Legacy/JSONValue";
+import { ProgramCatalog, type Program } from "../core/Catalog/Program";
 import { PlanCatalog } from "../core/Catalog/PlanCatalog";
 import { ExerciseCatalog } from "../core/Catalog/ExerciseCatalog";
 import type { WorkoutDay, TrainingSession, PlannedExercise, Exercise, BodyMetric, NutritionTargets } from "../core/Domain/Model";
@@ -71,6 +73,17 @@ export interface ReadyLift {
   fromKg?: number;
   toKg: number;
 }
+
+/** A plan of your own: a name and a workout for each day, Monday first. */
+export interface OwnPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly days: string[];
+}
+
+export const OwnPlan = {
+  newID: (): string => crypto.randomUUID().slice(0, 8),
+};
 
 export class AppState {
   // MARK: Identity
@@ -735,6 +748,10 @@ export class AppState {
    * back to the plan. Days you moved by date keep their change.
    */
   async saveOwnWeek(days: string[] | undefined): Promise<void> {
+    await this.record(this.ownWeekChanges(days));
+  }
+
+  private ownWeekChanges(days: string[] | undefined): StateChange[] {
     const changes = AppState.weekdaysMondayFirst.map((index, position) => {
       const key = `${this.programKey}:${Schedule.weekKey(index)}`;
       return days === undefined
@@ -749,6 +766,83 @@ export class AppState {
         ? StateChange.make({ kind: "removeScheduleOverride", key: fromKey })
         : StateChange.make({ kind: "setScheduleDay", key: fromKey, dayID: from }),
     );
+    return changes;
+  }
+
+  // MARK: - Your own plans
+
+  /**
+   * Plans of your own: a name and a workout for each day, Monday first. Kept in the same synced map as your own
+   * week, under `plan-<id>:` the way a program keeps its days under its key, so they travel between the phone and
+   * the web like a moved day does. `plans:active` names the one the week was written from.
+   */
+  get ownPlans(): OwnPlan[] {
+    const state = this.state;
+    if (!state) return [];
+    const raw = JSONValue.objectValue(LegacyState.get(state, "scheduleOverrides"));
+    if (!raw) return [];
+    const ids = new Set(
+      Object.keys(raw)
+        .filter((key) => key.startsWith("plan-") && key.includes(":"))
+        .map((key) => key.slice(5, key.indexOf(":"))),
+    );
+    return [...ids]
+      .flatMap((id): OwnPlan[] => {
+        const values = LegacyAdapter.scheduleOverrides({ from: state, programKey: `plan-${id}` });
+        const name = values["name"];
+        if (name === undefined) return [];
+        return [{ id, name, days: AppState.weekdaysMondayFirst.map((index) => values[Schedule.weekKey(index)] ?? "rest") }];
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }
+
+  /** The plan of your own the week comes from, while it still does. */
+  get activeOwnPlan(): OwnPlan | undefined {
+    const week = this.ownWeek;
+    if (!this.state || !week) return undefined;
+    const id = LegacyAdapter.scheduleOverrides({ from: this.state, programKey: "plans" })["active"];
+    return this.ownPlans.find((plan) => plan.id === id && plan.days.every((day, index) => day === week[index]));
+  }
+
+  /** What the week follows, said the way the plans list says it. */
+  get planName(): string {
+    const active = this.activeOwnPlan;
+    if (active) return active.name;
+    if (this.ownWeek) return "Your own week";
+    return ProgramCatalog.current({ in: this.state ?? LegacyState.make({ raw: {} }), plan: this.plan }).name;
+  }
+
+  /** Saves a plan; with `use`, or when it is the plan in use, the week follows it from today. */
+  async saveOwnPlan(plan: OwnPlan, use: boolean): Promise<void> {
+    const changes = [StateChange.make({ kind: "setScheduleDay", key: `plan-${plan.id}:name`, dayID: plan.name })];
+    AppState.weekdaysMondayFirst.forEach((index, position) => {
+      changes.push(StateChange.make({ kind: "setScheduleDay", key: `plan-${plan.id}:${Schedule.weekKey(index)}`, dayID: plan.days[position] ?? "rest" }));
+    });
+    if (use || this.activeOwnPlan?.id === plan.id) {
+      changes.push(...this.ownWeekChanges(plan.days));
+      changes.push(StateChange.make({ kind: "setScheduleDay", key: "plans:active", dayID: plan.id }));
+    }
+    await this.record(changes);
+  }
+
+  /** Deletes a plan; the plan in use hands the week back to the program. */
+  async removeOwnPlan(plan: OwnPlan): Promise<void> {
+    const changes = [StateChange.make({ kind: "removeScheduleOverride", key: `plan-${plan.id}:name` })];
+    AppState.weekdaysMondayFirst.forEach((index) => {
+      changes.push(StateChange.make({ kind: "removeScheduleOverride", key: `plan-${plan.id}:${Schedule.weekKey(index)}` }));
+    });
+    if (this.activeOwnPlan?.id === plan.id) {
+      changes.push(...this.ownWeekChanges(undefined));
+      changes.push(StateChange.make({ kind: "removeScheduleOverride", key: "plans:active" }));
+    }
+    await this.record(changes);
+  }
+
+  /** One of the ready-made plans, with its own week: nothing of yours is laid over it. Your plans stay to come back to. */
+  async useReadyMadePlan(program: Program): Promise<void> {
+    const changes = this.ownWeekChanges(undefined);
+    changes.push(StateChange.make({ kind: "removeScheduleOverride", key: "plans:active" }));
+    changes.push(StateChange.make({ kind: "setProgram", mode: program.mode, sciencePlanID: program.sciencePlanID }));
     await this.record(changes);
   }
 

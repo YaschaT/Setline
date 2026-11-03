@@ -29,7 +29,6 @@ struct AccountView: View {
     @State private var reauthenticating = false
     @State private var planningWeek = false
     @State private var editingTargets = false
-    @State private var choosingProgram = false
     @State private var rirEverySet = RIRPreference.everySet
     @State private var namingProfile = false
     @State private var draftName = ""
@@ -47,7 +46,7 @@ struct AccountView: View {
     @AppStorage(NutritionReminders.mealsKey) private var mealReminders = false
     @AppStorage(WorkoutReminder.minutesKey) private var openWorkoutMinutes = 20
     @State private var managingWorkouts = false
-    @State private var editingOwnWeek = false
+    @State private var choosingPlan = false
     @AppStorage(SLSound.preferenceKey) private var soundsOn = true
     @AppStorage(AppLock.preferenceKey) private var appLock = false
     @State private var showsPolicy = false
@@ -126,38 +125,13 @@ struct AccountView: View {
             Text("Turn them on in Settings › Setline › Notifications, then switch meal reminders on here.")
         }
         .sheet(isPresented: $managingWorkouts) {
-            WorkoutChooserSheet(
-                onStart: nil,
-                onChangePlan: {
-                    managingWorkouts = false
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        choosingProgram = true
-                    }
-                },
-                onClose: { managingWorkouts = false }
-            )
+            WorkoutChooserSheet(onStart: nil, onClose: { managingWorkouts = false })
         }
-        .sheet(isPresented: $editingOwnWeek) {
-            OwnWeekSheet(onClose: { editingOwnWeek = false })
+        .sheet(isPresented: $choosingPlan) {
+            PlansSheet(onClose: { choosingPlan = false })
         }
         .fullScreenCover(isPresented: $planningWeek) {
             WeekPlanView(onClose: { planningWeek = false })
-        }
-        .fullScreenCover(isPresented: $choosingProgram) {
-            ProgramSheet(
-                programs: ProgramCatalog.all(personalPlan: app.plan),
-                current: ProgramCatalog.current(in: app.state ?? LegacyState(raw: [:]), plan: app.plan),
-                onSave: { program in
-                    choosingProgram = false
-                    Task {
-                        await app.record([
-                            StateChange(.setProgram(mode: program.mode, sciencePlanID: program.sciencePlanID))
-                        ])
-                    }
-                },
-                onClose: { choosingProgram = false }
-            )
         }
         .sheet(isPresented: $editingTargets) {
             TargetsSheet(targets: summary.targets) { changes in
@@ -443,16 +417,10 @@ struct AccountView: View {
 
     private var trainingGroup: some View {
         group("Training") {
-            // With your own week, that week is the plan; the shape is where its workouts come from.
-            row("dumbbell.fill", tint: SL.Signal.action, title: "Plan",
-                detail: app.ownWeek != nil ? "Workouts from \(summary.planName)" : nil,
-                action: { choosingProgram = true }) {
-                value(app.ownWeek != nil ? "Your own week" : summary.planName)
-            }
-            row("calendar.badge.checkmark", tint: SL.Signal.action, title: "Your week",
-                detail: app.ownWeek.map { ownWeekSummary($0, workouts: app.schedulePlan) } ?? "A workout for each day, every week",
-                action: { editingOwnWeek = true }) {
-                value(app.ownWeek != nil ? "Edit" : "Set up")
+            // One of ours or one of yours: the plans list holds both.
+            row("calendar", tint: SL.Signal.action, title: "Plan",
+                detail: "Change it, or make your own", action: { choosingPlan = true }) {
+                value(app.planName)
             }
             if !summary.trainingDays.isEmpty {
                 weekRow

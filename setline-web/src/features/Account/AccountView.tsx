@@ -36,7 +36,6 @@ import { slHitTarget } from "../../design/components/SLText";
 import { LegacyState } from "../../core/Legacy/LegacyState";
 import { AccountSummary } from "../../core/Account/AccountSummary";
 import { StateExport } from "../../core/Account/StateExport";
-import { ProgramCatalog } from "../../core/Catalog/Program";
 import { Schedule } from "../../core/Engine/Schedule";
 import { NumberDisplay } from "../../core/Engine/NumberDisplay";
 import { FoodIdeas } from "../../core/Nutrition/FoodIdeas";
@@ -48,14 +47,14 @@ import { PostVisibility, useSocial } from "../../data/SocialStore";
 import { SignInView } from "../Auth/SignInView";
 import { NutritionReminders } from "../Progress/GoalViews";
 import { WorkoutReminder } from "../Session/WorkoutReminder";
-import { OwnWeekSheet, WorkoutChooserSheet, ownWeekSummary } from "../Training/WorkoutChooser";
+import { WorkoutChooserSheet } from "../Training/WorkoutChooser";
+import { PlansSheet } from "../Training/PlansSheet";
 import { WeekPlanView } from "../Training/WeekPlanView";
 import { VisibilitySheet } from "../Friends/PostComposerView";
 import { BlockedPeopleSheet } from "../Friends/InviteViews";
 import { AppLock, PrivacyPolicyView } from "./PrivacyViews";
 import { usePatchNotes } from "./PatchNotes";
 import { PatchNotesView } from "./PatchNotesView";
-import { ProgramSheet } from "./ProgramSheet";
 import { TargetsSheet } from "./TargetsSheet";
 
 const iconSize = 30;
@@ -127,7 +126,6 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
   const [reauthenticating, setReauthenticating] = useState(false);
   const [planningWeek, setPlanningWeek] = useState(false);
   const [editingTargets, setEditingTargets] = useState(false);
-  const [choosingProgram, setChoosingProgram] = useState(false);
   const [rirEverySet, setRirEverySet] = useState(RIRPreference.everySet);
   const [namingProfile, setNamingProfile] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -142,7 +140,7 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
   const [mealReminders, setMealReminders] = useAppStorage<boolean>(NutritionReminders.mealsKey, false);
   const [openWorkoutMinutes, setOpenWorkoutMinutes] = useAppStorage<number>(WorkoutReminder.minutesKey, 20);
   const [managingWorkouts, setManagingWorkouts] = useState(false);
-  const [editingOwnWeek, setEditingOwnWeek] = useState(false);
+  const [choosingPlan, setChoosingPlan] = useState(false);
   const [soundsOn, setSoundsOnStored] = useAppStorage<boolean>(SLSound.preferenceKey, true);
   const [appLock, setAppLock] = useAppStorage<boolean>(AppLock.preferenceKey, false);
   const [showsPolicy, setShowsPolicy] = useState(false);
@@ -625,20 +623,13 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
   });
 
   const trainingGroup = group("Training", [
-    // With your own week, that week is the plan; the shape is where its workouts come from.
-    row("dumbbell.fill", {
+    // One of ours or one of yours: the plans list holds both.
+    row("calendar", {
       tint: SL.Signal.action,
       title: "Plan",
-      detail: app.ownWeek ? `Workouts from ${summary.planName}` : undefined,
-      action: () => setChoosingProgram(true),
-      trailing: value(app.ownWeek ? "Your own week" : summary.planName),
-    }),
-    row("calendar.badge.checkmark", {
-      tint: SL.Signal.action,
-      title: "Your week",
-      detail: app.ownWeek ? ownWeekSummary(app.ownWeek, app.schedulePlan) : "A workout for each day, every week",
-      action: () => setEditingOwnWeek(true),
-      trailing: value(app.ownWeek ? "Edit" : "Set up"),
+      detail: "Change it, or make your own",
+      action: () => setChoosingPlan(true),
+      trailing: value(app.planName),
     }),
     summary.trainingDays.length > 0 ? weekRow : null,
     row("square.stack.3d.up.fill", {
@@ -906,42 +897,21 @@ export function AccountView({ onClose }: { /** Account opens as a sheet from the
         actions={[{ title: "OK", role: "cancel" }]}
       />
 
-      <Sheet isPresented={editingOwnWeek} onDismiss={() => setEditingOwnWeek(false)}>
-        {editingOwnWeek && (
+      <Sheet isPresented={choosingPlan} onDismiss={() => setChoosingPlan(false)}>
+        {choosingPlan && (
           <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <OwnWeekSheet onClose={() => setEditingOwnWeek(false)} />
+            <PlansSheet onClose={() => setChoosingPlan(false)} />
           </div>
         )}
       </Sheet>
 
       <Sheet isPresented={managingWorkouts} onDismiss={() => setManagingWorkouts(false)}>
-        <WorkoutChooserSheet
-          onStart={undefined}
-          onChangePlan={() => {
-            setManagingWorkouts(false);
-            setTimeout(() => setChoosingProgram(true), 350);
-          }}
-          onClose={() => setManagingWorkouts(false)}
-        />
+        <WorkoutChooserSheet onStart={undefined} onClose={() => setManagingWorkouts(false)} />
       </Sheet>
 
       <FullScreenCover isPresented={planningWeek}>
         <CoverSafeArea>
           <WeekPlanView onClose={() => setPlanningWeek(false)} />
-        </CoverSafeArea>
-      </FullScreenCover>
-
-      <FullScreenCover isPresented={choosingProgram}>
-        <CoverSafeArea>
-          <ProgramSheet
-            programs={ProgramCatalog.all({ personalPlan: app.plan })}
-            current={ProgramCatalog.current({ in: app.state ?? LegacyState.make({ raw: {} }), plan: app.plan })}
-            onSave={(program) => {
-              setChoosingProgram(false);
-              void app.record([StateChange.make({ kind: "setProgram", mode: program.mode, sciencePlanID: program.sciencePlanID })]);
-            }}
-            onClose={() => setChoosingProgram(false)}
-          />
         </CoverSafeArea>
       </FullScreenCover>
 
