@@ -134,15 +134,15 @@ StripDay.spokenLabel = (day: AgendaDay): string => {
       parts.push(`${day.content.value.dayLabel}, logged`);
       break;
     case "planned":
-      parts.push(`${day.content.value.short}, gepland`);
+      parts.push(`${day.content.value.short}, planned`);
       break;
     case "missed":
       parts.push(`${day.content.value.short}, not logged`);
       break;
     case "rest":
-      parts.push("rustdag");
+      parts.push("rest day");
       break;
   }
-  if (AgendaDay.isMoved(day) || day.isOverridden) parts.push("door jou gezet");
+  if (AgendaDay.isMoved(day) || day.isOverridden) parts.push("moved by you");
   return parts.join(", ");
 };

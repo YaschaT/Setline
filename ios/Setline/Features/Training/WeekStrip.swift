@@ -90,11 +90,11 @@ struct StripDay: View {
         if day.isToday { parts.append("today") }
         switch day.content {
         case .session(let session): parts.append("\(session.dayLabel), logged")
-        case .planned(let workout): parts.append("\(workout.short), gepland")
+        case .planned(let workout): parts.append("\(workout.short), planned")
         case .missed(let workout): parts.append("\(workout.short), not logged")
-        case .rest: parts.append("rustdag")
+        case .rest: parts.append("rest day")
         }
-        if day.isMoved || day.isOverridden { parts.append("door jou gezet") }
+        if day.isMoved || day.isOverridden { parts.append("moved by you") }
         return parts.joined(separator: ", ")
     }
 
