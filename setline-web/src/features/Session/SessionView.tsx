@@ -27,6 +27,7 @@ import { SLPrimaryButton, colorOpacity } from "../../design/SetlineTokens";
 import { DashedBorder, useReduceMotion } from "../../design/support";
 import { SFSymbol } from "../../design/SFSymbol";
 import { Freestyle } from "../Training/WorkoutChooser";
+import { ExercisePreview } from "./ExercisePreview";
 import { SLSound } from "../../design/SLSound";
 import { SLGlyph } from "../../design/components/SLGlyph";
 import { SLStepper } from "../../design/components/SLStepper";
@@ -550,9 +551,10 @@ export function SessionView(p: {
 
   const freestyle = runner.day.id === Freestyle.dayID;
 
+  /** Quiet on purpose: logging the set is the screen's one loud action, and the similar-exercises strip right under it already offers swaps. */
   const actionLabel = (text: string, symbol: string) => (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <SFSymbol name={symbol} size={13} weight={600} color={SL.Ink.secondary} />
+    <span style={{ ...slFont(SL.TypeSize.meta, SL.Weight.semibold), color: SL.Ink.secondary, display: "inline-flex", alignItems: "center", gap: 5, minHeight: SL.Space.hitMin, padding: `0 ${SL.Space.s1}px` }}>
+      <SFSymbol name={symbol} size={12} weight={600} color={SL.Ink.secondary} />
       {text}
     </span>
   );
@@ -585,7 +587,7 @@ export function SessionView(p: {
           </LongPressArea>
         </HStack>
         {/* The two ways off the plan for this exercise, each saying what it does: changing it opens the alternatives, skipping moves on (with Undo). */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: SL.Space.s2, alignSelf: "stretch" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: `${SL.Space.s2}px ${SL.Space.s4}px`, alignSelf: "stretch" }}>
           {/* In freestyle the next machine is the main action; skipping has no meaning there. */}
           {freestyle && (
             <SLPress
@@ -608,16 +610,19 @@ export function SessionView(p: {
               Add exercise
             </SLPress>
           )}
-          <SLPillButton onPress={() => setShowsSwap(true)} aria-label={`Change ${current.exercise.name}`}>
+          <SLPress scale={0.96} onPress={() => setShowsSwap(true)} aria-label={`Change ${current.exercise.name}`} style={{ background: "transparent" }}>
             {actionLabel("Change exercise", "arrow.left.arrow.right")}
-          </SLPillButton>
+          </SLPress>
           {!S.isComplete(current) && !freestyle && (
-            <SLPillButton quiet onPress={() => handle({ kind: "skipExercise" })} aria-label={`Skip ${current.exercise.name}`}>
+            <SLPress scale={0.96} onPress={() => handle({ kind: "skipExercise" })} aria-label={`Skip ${current.exercise.name}`} style={{ background: "transparent" }}>
               {actionLabel("Skip exercise", "forward.end")}
-            </SLPillButton>
+            </SLPress>
           )}
         </div>
-        {/* The same kind of exercises, one tap away, until the first set is in. */}
+        {/* The exercise moving, and the same kind of exercises one tap away, until the first set is in. A swap shows the new one's photos. */}
+        {!runner.hasLoggedSets({ slotIndex: runner.currentIndex }) && !S.isComplete(current) && (
+          <ExercisePreview key={`preview-${current.exercise.id}`} exerciseID={current.exercise.id} />
+        )}
         {!runner.hasLoggedSets({ slotIndex: runner.currentIndex }) && !S.isComplete(current) && (
           <SwapSuggestionStrip
             key={current.exercise.id}

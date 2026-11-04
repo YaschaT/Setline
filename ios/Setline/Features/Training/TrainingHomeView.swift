@@ -29,6 +29,7 @@ struct TrainingHomeView: View {
     var onNutrition: () -> Void = {}
 
     @State private var confirmsEnd = false
+    @State private var confirmsEndForFreestyle = false
     /// The plan shape, chosen from the workout chooser.
     /// The date the screen is on. `nil` is today, which is where every visit
     /// starts and where `Naar vandaag` returns.
@@ -257,6 +258,17 @@ struct TrainingHomeView: View {
         }
         #endif
         .sensoryFeedback(.success, trigger: celebrates)
+        .alert("End your paused workout?", isPresented: $confirmsEndForFreestyle) {
+            Button("Cancel", role: .cancel) {}
+            Button("End it and go freestyle") {
+                Task {
+                    await app.endActiveSession()
+                    sheet = .freestyle
+                }
+            }
+        } message: {
+            Text("What you logged in it stays. Freestyle starts once it's ended.")
+        }
         .alert("End the session?", isPresented: $confirmsEnd) {
             Button("Cancel", role: .cancel) {}
             Button("End") { Task { await app.endActiveSession() } }
@@ -268,7 +280,9 @@ struct TrainingHomeView: View {
 
     /// No plan, no workout made beforehand: the first machine, then the next.
     private var freestyleButton: some View {
-        Button { sheet = .freestyle } label: {
+        Button {
+            if app.resumableSession != nil { confirmsEndForFreestyle = true } else { sheet = .freestyle }
+        } label: {
             Label("Freestyle", systemImage: "figure.strengthtraining.traditional")
         }
         .buttonStyle(SLOutlineButtonStyle(emphasis: .tertiary))
@@ -1087,8 +1101,10 @@ struct TrainingHomeView: View {
             }
             // Another plan day, a workout of your own, or a new plan shape —
             // quiet under the start, and the card's one action on a rest day.
-            if day.isToday, !isDone, app.resumableSession == nil {
-                if content.isRest {
+            // Always there today — paused or done included: Freestyle with a
+            // paused workout asks to end it first (its sets stay logged).
+            if day.isToday {
+                if content.isRest, !isDone {
                     Button { sheet = .chooser } label: { chevroned("Train anyway") }
                         .buttonStyle(SLOutlineButtonStyle())
                         .padding(.top, SL.Space.s5)

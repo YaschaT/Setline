@@ -127,6 +127,7 @@ export function TrainingHomeView({
   const reduceMotion = useReduceMotion();
 
   const [confirmsEnd, setConfirmsEnd] = useState(false);
+  const [confirmsEndForFreestyle, setConfirmsEndForFreestyle] = useState(false);
   /** The plan shape, chosen from the workout chooser. */
   /** The date the screen is on. `undefined` is today, which is where every visit starts. */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
@@ -1033,8 +1034,9 @@ export function TrainingHomeView({
         {/* A rest day holds no start: the next session is the card below. */}
         {!(day.isToday && content.isRest && !isDone) && cardActions(day)}
         {/* Another plan day, a workout of your own, or a new plan shape — quiet under the start, and the card's one action on a rest day. */}
-        {day.isToday && !isDone && paused === undefined &&
-          (content.isRest ? (
+        {/* Always there today — paused or done included: Freestyle with a paused workout asks to end it first (its sets stay logged). */}
+        {day.isToday &&
+          (content.isRest && !isDone ? (
             <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: SL.Space.s2, marginTop: SL.Space.s5 }}>
               <SLOutlineButton onPress={() => setSheet({ kind: "chooser" })}>{chevroned("Train anyway")}</SLOutlineButton>
               {freestyleButton}
@@ -1074,7 +1076,11 @@ export function TrainingHomeView({
 
   /** No plan, no workout made beforehand: the first machine, then the next. */
   const freestyleButton = (
-    <SLOutlineButton emphasis="tertiary" onPress={() => setSheet({ kind: "freestyle" })} aria-label="Freestyle. Pick each machine as you go">
+    <SLOutlineButton
+      emphasis="tertiary"
+      onPress={() => (app.resumableSession !== undefined ? setConfirmsEndForFreestyle(true) : setSheet({ kind: "freestyle" }))}
+      aria-label="Freestyle. Pick each machine as you go"
+    >
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
         <SFSymbol name="figure.strengthtraining.traditional" size={15} weight={600} />
         Freestyle
@@ -1581,6 +1587,22 @@ export function TrainingHomeView({
       <FullScreenCover isPresented={openedSession !== undefined}>
         {lastSession.current !== undefined && <SessionDetailView sessionID={lastSession.current} onClose={() => setOpenedSession(undefined)} />}
       </FullScreenCover>
+
+      <Alert
+        isPresented={confirmsEndForFreestyle}
+        onDismiss={() => setConfirmsEndForFreestyle(false)}
+        title="End your paused workout?"
+        message="What you logged in it stays. Freestyle starts once it's ended."
+        actions={[
+          { title: "Cancel", role: "cancel" },
+          {
+            title: "End it and go freestyle",
+            action: () => {
+              void app.endActiveSession().then(() => setSheet({ kind: "freestyle" }));
+            },
+          },
+        ]}
+      />
 
       <Alert
         isPresented={confirmsEnd}

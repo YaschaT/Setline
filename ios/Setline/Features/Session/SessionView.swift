@@ -583,8 +583,11 @@ struct SessionView: View {
 
             }
             exerciseActions
-            // The same kind of exercises, one tap away, until the first set is in.
+            // The exercise moving, and the same kind of exercises one tap away,
+            // until the first set is in. A swap shows the new one's photos.
             if !runner.hasLoggedSets(slotIndex: runner.currentIndex), !runner.current.isComplete {
+                ExercisePreview(exerciseID: runner.current.exercise.id)
+                    .id(runner.current.exercise.id)
                 SwapSuggestionStrip(
                     exercise: runner.current.exercise,
                     sessionExerciseIDs: runner.sessionExerciseIDs,
@@ -600,7 +603,7 @@ struct SessionView: View {
     private var exerciseActions: some View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
-            : AnyLayout(HStackLayout(spacing: SL.Space.s2))
+            : AnyLayout(HStackLayout(spacing: SL.Space.s4))
         let freestyle = runner.day.id == Freestyle.dayID
         return layout {
             if freestyle {
@@ -622,27 +625,32 @@ struct SessionView: View {
             Button { showsSwap = true } label: {
                 actionLabel("Change exercise", symbol: "arrow.left.arrow.right")
             }
-            .buttonStyle(SLPillButtonStyle())
+            .buttonStyle(SLPressStyle(scale: 0.96))
             .accessibilityLabel("Change \(runner.current.exercise.name)")
             .accessibilityHint("Similar exercises, a lighter option, a different order, or report pain")
             if !runner.current.isComplete, !freestyle {
                 Button { handle(.skipExercise) } label: {
                     actionLabel("Skip exercise", symbol: "forward.end")
                 }
-                .buttonStyle(SLPillButtonStyle(quiet: true))
+                .buttonStyle(SLPressStyle(scale: 0.96))
                 .accessibilityLabel("Skip \(runner.current.exercise.name)")
                 .accessibilityHint("Moves on to the next exercise. You can undo it.")
             }
         }
     }
 
+    /// Quiet on purpose: logging the set is the screen's one loud action,
+    /// and the similar-exercises strip right under it already offers swaps.
     private func actionLabel(_ text: String, symbol: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SL.Ink.secondary)
-            Text(text)
+                .font(.system(size: 12, weight: .semibold))
+            Text(text).slMeta(SL.Weight.semibold)
         }
+        .foregroundStyle(SL.Ink.secondary)
+        .padding(.horizontal, SL.Space.s1)
+        .frame(minHeight: SL.Space.hitMin)
+        .contentShape(Rectangle())
     }
 
     /// "Next: Incline bench press"
