@@ -61,6 +61,69 @@ private struct ChatNotifyRow: View {
 /// a room: the friends' chat, Everyone (every Setline lifter), private chats
 /// and rooms. Opens straight into the friends' chat while the server has no
 /// rooms.
+/// Each kind of conversation keeps one colour, one symbol and one word for
+/// who reads it, in the list and in the chat: the public lobby is never
+/// mistaken for a private chat.
+enum ChatKindStyle {
+    case everyone, friends, room, direct
+
+    init(_ icon: ChatInbox.RowIcon) {
+        switch icon {
+        case .everyone: self = .everyone
+        case .friends: self = .friends
+        case .room: self = .room
+        case .direct: self = .direct
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .everyone: return SL.Signal.recovery
+        case .friends: return SL.Signal.action
+        case .room: return SL.Signal.attention
+        case .direct: return SL.Ink.secondary
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .everyone: return "globe"
+        case .friends: return "person.2.fill"
+        case .room: return "number"
+        case .direct: return "lock.fill"
+        }
+    }
+
+    var audience: String {
+        switch self {
+        case .everyone: return "Public"
+        case .friends: return "Friends"
+        case .room: return "Members"
+        case .direct: return "Private"
+        }
+    }
+}
+
+/// "🌐 Public", "🔒 Private": who reads along, in the kind's colour.
+struct ChatKindChip: View {
+    let style: ChatKindStyle
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: style.symbol).font(.system(size: 9, weight: .bold))
+            Text(style.audience.uppercased())
+                .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
+                .tracking(0.5)
+        }
+        .foregroundStyle(style.tint)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(style.tint.opacity(0.14)))
+        .fixedSize()
+        .accessibilityLabel(style.audience)
+    }
+}
+
 struct ChatInbox: View {
     @Environment(SocialStore.self) private var social
     let onClose: () -> Void
@@ -71,8 +134,10 @@ struct ChatInbox: View {
 
     enum Open: Hashable { case friends, room(ChatRoom) }
 
+    enum RowIcon { case friends, everyone, room, direct }
+
     private struct Row: Identifiable {
-        enum Icon { case friends, everyone, room, direct }
+        typealias Icon = RowIcon
         let id: String
         let title: String
         let subtitle: String
@@ -117,7 +182,7 @@ struct ChatInbox: View {
         var out: [Row] = []
         if !social.friends.isEmpty {
             let latest = social.latestByRoom[""]
-            out.append(Row(id: "friends", title: "Friends", subtitle: "All your friends", icon: .friends,
+            out.append(Row(id: "friends", title: "All your friends", subtitle: "One chat with every friend", icon: .friends,
                            latest: latest, room: nil, open: .friends, sort: latest?.created_at ?? ""))
         }
         for room in social.rooms {
@@ -145,37 +210,51 @@ struct ChatInbox: View {
     }
 
     private var list: some View {
-        VStack(spacing: 0) {
+        let all = rows
+        let everyone = all.first { $0.icon == .everyone }
+        let friends = all.first { $0.icon == .friends }
+        let rooms = all.filter { $0.icon == .room }
+        let direct = all.filter { $0.icon == .direct }
+        let hasFriends = !social.friends.isEmpty
+        return VStack(spacing: 0) {
             ChatBackBar(label: "Friends", onClose: onClose)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Chats").slTitle().foregroundStyle(SL.Ink.primary).accessibilityAddTraits(.isHeader)
-                Text("Everyone, your friends, private chats and rooms").slMeta().foregroundStyle(SL.Ink.secondary)
+                Text("Who reads along is on every chat").slMeta().foregroundStyle(SL.Ink.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, SL.Space.gutterSession)
             .padding(.bottom, SL.Space.s3)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: SL.Space.s4) {
-                    HStack(spacing: SL.Space.s2) {
-                        action("paperplane.fill", "Message") { newMessage = true }
-                        action("plus", "New room") { newRoom = true }
-                    }
-                    .disabled(social.friends.isEmpty)
-                    .opacity(social.friends.isEmpty ? 0.5 : 1)
-                    if social.friends.isEmpty {
-                        Text("Add a friend to message them privately or start a room. Everyone is open to every Setline lifter.")
-                            .slMeta().foregroundStyle(SL.Ink.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
+                VStack(alignment: .leading, spacing: SL.Space.s6) {
                     ChatNotifyRow()
-                    VStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                            if index > 0 { SLHairline().padding(.leading, 72) }
-                            rowView(row)
+                    if let everyone { lobby(everyone) }
+                    if let friends {
+                        section("Friends") { rowView(friends) }
+                    }
+                    section("Rooms", action: hasFriends ? ("New room", { newRoom = true }) : nil) {
+                        if rooms.isEmpty {
+                            invitation(hasFriends ? "A room on any topic, with the friends you pick: Leg day crew, Meal prep."
+                                                  : "Add a friend to start a room together.")
+                        } else {
+                            ForEach(Array(rooms.enumerated()), id: \.element.id) { index, row in
+                                if index > 0 { SLHairline().padding(.leading, 72) }
+                                rowView(row)
+                            }
                         }
                     }
-                    .slBorderBox()
-                    .slListCard()
+                    section("Private", action: hasFriends ? ("Message", { newMessage = true }) : nil) {
+                        if direct.isEmpty {
+                            invitation(hasFriends ? "Message one friend. Only you two see it."
+                                                  : "Add a friend to message them privately.")
+                        } else {
+                            ForEach(Array(direct.enumerated()), id: \.element.id) { index, row in
+                                if index > 0 { SLHairline().padding(.leading, 72) }
+                                rowView(row)
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, SL.Space.gutterSession)
                 .padding(.bottom, SL.Space.s6)
@@ -202,17 +281,101 @@ struct ChatInbox: View {
         .slRespondsToTextSize()
     }
 
-    private func action(_ icon: String, _ label: String, perform: @escaping () -> Void) -> some View {
-        Button(action: perform) {
-            HStack(spacing: 8) {
-                Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(SL.Signal.action)
-                Text(label).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+    /// The public lobby, set apart: every Setline lifter reads it, so it is
+    /// its own card in its own colour rather than one row among private ones.
+    private func lobby(_ row: Row) -> some View {
+        let isUnread = unread(row)
+        let style = ChatKindStyle.everyone
+        return Button { open = row.open } label: {
+            VStack(alignment: .leading, spacing: SL.Space.s3) {
+                HStack(spacing: SL.Space.s3) {
+                    mark(row)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: SL.Space.s2) {
+                            Text("Everyone")
+                                .font(.sl(SL.TypeSize.lead, SL.Weight.bold))
+                                .foregroundStyle(SL.Ink.primary)
+                                .lineLimit(1)
+                                .layoutPriority(1)
+                            Spacer(minLength: SL.Space.s2)
+                            if let latest = row.latest {
+                                Text(PostCard.when(latest.date))
+                                    .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                                    .foregroundStyle(isUnread ? SL.Signal.action : SL.Ink.tertiary)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
+                        }
+                        HStack(alignment: .firstTextBaseline, spacing: SL.Space.s2) {
+                            ChatKindChip(style: style)
+                            Text("Every Setline lifter")
+                                .slMeta()
+                                .foregroundStyle(SL.Ink.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                }
+                if let line = preview(row.latest) {
+                    HStack(spacing: SL.Space.s2) {
+                        Text(line)
+                            .slMeta(isUnread ? SL.Weight.semibold : SL.Weight.regular)
+                            .foregroundStyle(isUnread ? SL.Ink.primary : SL.Ink.secondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        if isUnread { Circle().fill(SL.Signal.action).frame(width: 9, height: 9) }
+                    }
+                    .padding(.horizontal, SL.Space.s3)
+                    .padding(.vertical, SL.Space.s2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Surface.ground.opacity(0.55)))
+                }
             }
-            .frame(maxWidth: .infinity, minHeight: 46)
-            .background(Capsule().fill(SL.Surface.raised))
-            .overlay(Capsule().strokeBorder(SL.Surface.hairlineStrong, lineWidth: 1))
+            .padding(SL.Space.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(style.tint.opacity(0.10)))
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous)
+                    .strokeBorder(style.tint.opacity(0.35), lineWidth: SL.Metric.border)
+            )
+            .contentShape(Rectangle())
         }
-        .buttonStyle(SLPressStyle(scale: 0.97))
+        .buttonStyle(SLPressStyle(scale: 0.98))
+        .accessibilityLabel(isUnread ? "Everyone, public chat, new message" : "Everyone, public chat")
+    }
+
+    private func section<Content: View>(_ title: String, action: (String, () -> Void)? = nil,
+                                        @ViewBuilder rows: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
+            HStack(alignment: .firstTextBaseline) {
+                SLOverline(text: title).accessibilityAddTraits(.isHeader)
+                Spacer()
+                if let action {
+                    Button(action: action.1) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus").font(.system(size: 12, weight: .bold))
+                            Text(action.0).slMeta(SL.Weight.semibold)
+                        }
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(minHeight: SL.Space.hitMin)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.leading, SL.Space.s1)
+            VStack(spacing: 0) { rows() }
+                .slBorderBox()
+                .slListCard()
+        }
+    }
+
+    private func invitation(_ text: String) -> some View {
+        Text(text)
+            .slMeta()
+            .foregroundStyle(SL.Ink.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(SL.Space.s4)
     }
 
     private func unread(_ row: Row) -> Bool {
@@ -234,12 +397,15 @@ struct ChatInbox: View {
                 mark(row)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: SL.Space.s2) {
+                        // The section and the face already say who reads it.
                         Text(row.title).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).lineLimit(1)
                         Spacer(minLength: SL.Space.s2)
                         if let latest = row.latest {
                             Text(PostCard.when(latest.date))
                                 .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
                                 .foregroundStyle(isUnread ? SL.Signal.action : SL.Ink.tertiary)
+                                .lineLimit(1)
+                                .fixedSize()
                         }
                     }
                     HStack(spacing: SL.Space.s2) {
@@ -259,26 +425,35 @@ struct ChatInbox: View {
         .accessibilityLabel(isUnread ? "\(row.title), new message" : row.title)
     }
 
+    /// The face of a conversation: the friend for a private chat, the
+    /// room's own letter for a room, the kind's symbol for the rest.
     @ViewBuilder
     private func mark(_ row: Row) -> some View {
+        let style = ChatKindStyle(row.icon)
         switch row.icon {
         case .direct:
-            Text(row.person?.initial ?? "?")
-                .font(.slFixed(16, SL.Weight.semibold))
-                .foregroundStyle(SL.Signal.action)
+            SLAvatar(photo: nil, initial: row.person?.initial ?? "?", size: 44)
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(SL.Ink.primary)
+                        .frame(width: 17, height: 17)
+                        .background(Circle().fill(SL.Surface.raised2))
+                        .overlay(Circle().strokeBorder(SL.Surface.ground, lineWidth: 2))
+                        .offset(x: 2, y: 2)
+                }
+        case .room:
+            Text(String(row.title.prefix(1)).uppercased())
+                .font(.slFixed(18, SL.Weight.bold))
+                .foregroundStyle(style.tint)
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(SL.Surface.raised2))
+                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(style.tint.opacity(0.16)))
         default:
-            let (symbol, ink): (String, Color) = switch row.icon {
-            case .everyone: ("globe", SL.Signal.recovery)
-            case .friends: ("person.2.fill", SL.Signal.action)
-            default: ("number", SL.Signal.attention)
-            }
-            Image(systemName: symbol)
+            Image(systemName: style.symbol)
                 .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(ink)
+                .foregroundStyle(style.tint)
                 .frame(width: 44, height: 44)
-                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(ink.opacity(0.16)))
+                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(style.tint.opacity(0.16)))
         }
     }
 }
@@ -497,19 +672,29 @@ struct ChatView: View {
     }
 
     private var myID: String { social.myID }
-    private var title: String { room?.title(myID: myID) ?? "Friends" }
+    private var title: String { room?.title(myID: myID) ?? "All your friends" }
     private var owns: Bool { room?.created_by == myID }
 
+    private var kindStyle: ChatKindStyle {
+        switch room?.kind {
+        case nil: return .friends
+        case .everyone: return .everyone
+        case .direct: return .direct
+        case .room: return .room
+        }
+    }
+
+    /// Who reads along, after the chip that names the kind.
     private var subtitle: String {
         guard let room else {
-            return "You and your \(social.friends.count == 1 ? "friend" : "\(social.friends.count) friends") · only friends see this"
+            return "You and your \(social.friends.count == 1 ? "friend" : "\(social.friends.count) friends")"
         }
         switch room.kind {
-        case .everyone: return "Every Setline lifter · be kind, report what isn't"
-        case .direct: return "Private · only you two see this"
+        case .everyone: return "Every Setline lifter · be kind"
+        case .direct: return "Only you two"
         case .room:
             let names = room.members.map { $0.user_id == myID ? "You" : (firstWord($0.display_name) ?? "") }
-            return "\(names.joined(separator: ", ")) · only members see this"
+            return names.joined(separator: ", ")
         }
     }
 
@@ -542,9 +727,12 @@ struct ChatView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: SL.Space.s1) {
                 Text(title).slTitle().foregroundStyle(SL.Ink.primary).accessibilityAddTraits(.isHeader)
-                Text(subtitle).slMeta().foregroundStyle(SL.Ink.secondary).lineLimit(1)
+                HStack(spacing: SL.Space.s2) {
+                    ChatKindChip(style: kindStyle)
+                    Text(subtitle).slMeta().foregroundStyle(SL.Ink.secondary).lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, SL.Space.gutterSession)

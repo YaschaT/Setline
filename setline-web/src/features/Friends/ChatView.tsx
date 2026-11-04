@@ -118,6 +118,45 @@ function ChatNotifyRow() {
   );
 }
 
+/**
+ * Each kind of conversation keeps one colour, one symbol and one word for who reads it, in the list and in the chat:
+ * the public lobby is never mistaken for a private chat.
+ */
+type ChatKind = "everyone" | "friends" | "room" | "direct";
+const kindStyle: Record<ChatKind, { tint: string; symbol: string; audience: string }> = {
+  everyone: { tint: SL.Signal.recovery, symbol: "globe", audience: "Public" },
+  friends: { tint: SL.Signal.action, symbol: "person.2.fill", audience: "Friends" },
+  room: { tint: SL.Signal.attention, symbol: "number", audience: "Members" },
+  direct: { tint: SL.Ink.secondary, symbol: "lock.fill", audience: "Private" },
+};
+
+/** "Public", "Private": who reads along, in the kind's colour. */
+function ChatKindChip({ kind }: { kind: ChatKind }) {
+  const style = kindStyle[kind];
+  return (
+    <span
+      aria-label={style.audience}
+      style={{
+        ...slFont(SL.TypeSize.micro, SL.Weight.bold),
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        color: style.tint,
+        background: colorOpacity(style.tint, 0.14),
+        borderRadius: 999,
+        padding: "3px 7px",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        flexShrink: 0,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <SFSymbol name={style.symbol} size={9} weight={700} color={style.tint} />
+      {style.audience}
+    </span>
+  );
+}
+
 export function ChatInbox({ onClose }: { onClose: () => void }) {
   const social = useSocial();
   const [open, setOpen] = useState<Open | undefined>(undefined);
@@ -152,8 +191,8 @@ export function ChatInbox({ onClose }: { onClose: () => void }) {
   if (social.friends.length > 0) {
     rows.push({
       key: "friends",
-      title: "Friends",
-      subtitle: "All your friends",
+      title: "All your friends",
+      subtitle: "One chat with every friend",
       icon: "friends",
       latest: social.latestByRoom[""],
       open: { kind: "friends" },
@@ -178,101 +217,183 @@ export function ChatInbox({ onClose }: { onClose: () => void }) {
   // Everyone stays on top; the rest by their newest message.
   rows.sort((a, b) => (a.icon === "everyone" ? -1 : b.icon === "everyone" ? 1 : b.sort.localeCompare(a.sort)));
 
+  /** The face of a conversation: the friend for a private chat, the room's own letter for a room, the kind's symbol for the rest. */
   const mark = (row: Row) => {
-    const box = { width: 44, height: 44, borderRadius: row.icon === "direct" ? "50%" : SL.Radius.md, display: "grid", placeItems: "center", flexShrink: 0 } as const;
+    const style = kindStyle[row.icon];
+    const box = { width: 44, height: 44, borderRadius: SL.Radius.md, display: "grid", placeItems: "center", flexShrink: 0 } as const;
     if (row.icon === "direct") {
       return (
-        <div style={{ ...box, background: SL.Surface.raised2 }}>
-          <Text color={SL.Signal.action} lineHeight={1} style={slFixed(16, SL.Weight.semibold)}>{row.person ? SocialProfile.initial(row.person) : "?"}</Text>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <div style={{ ...box, borderRadius: "50%", background: SL.Surface.raised2, boxShadow: `inset 0 0 0 ${SL.Metric.border}px ${SL.Surface.hairlineStrong}` }}>
+            <Text color={SL.Signal.action} lineHeight={1} style={slFixed(17, SL.Weight.semibold)}>{row.person ? SocialProfile.initial(row.person) : "?"}</Text>
+          </div>
+          <span style={{ position: "absolute", right: -2, bottom: -2, width: 17, height: 17, borderRadius: "50%", background: SL.Surface.raised2, boxShadow: `0 0 0 2px ${SL.Surface.ground}`, display: "grid", placeItems: "center" }}>
+            <SFSymbol name="lock.fill" size={8} weight={700} color={SL.Ink.primary} />
+          </span>
         </div>
       );
     }
-    const [symbol, tint, ink] =
-      row.icon === "everyone"
-        ? ["globe", colorOpacity(SL.Signal.recovery, 0.16), SL.Signal.recovery]
-        : row.icon === "friends"
-          ? ["person.2.fill", SL.Signal.actionTint, SL.Signal.action]
-          : ["number", colorOpacity(SL.Signal.attention, 0.16), SL.Signal.attention];
+    if (row.icon === "room") {
+      return (
+        <div style={{ ...box, background: colorOpacity(style.tint, 0.16) }}>
+          <Text color={style.tint} lineHeight={1} style={slFixed(18, SL.Weight.bold)}>{row.title.slice(0, 1).toUpperCase()}</Text>
+        </div>
+      );
+    }
     return (
-      <div style={{ ...box, background: tint }}>
-        <SFSymbol name={symbol} size={19} weight={600} color={ink} />
+      <div style={{ ...box, background: colorOpacity(style.tint, 0.16) }}>
+        <SFSymbol name={style.symbol} size={19} weight={600} color={style.tint} />
       </div>
     );
   };
 
-  const action = (icon: string, label: string, perform: () => void, disabled: boolean) => (
-    <PressButton
-      onPress={perform}
-      disabled={disabled}
-      style={{
-        flex: "1 1 0",
-        minHeight: 46,
-        borderRadius: 999,
-        background: SL.Surface.raised,
-        boxShadow: `inset 0 0 0 1px ${SL.Surface.hairlineStrong}`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      <SFSymbol name={icon} size={14} weight={600} color={SL.Signal.action} />
-      <Text size={SL.TypeSize.body} weight={SL.Weight.semibold} color={SL.Ink.primary}>{label}</Text>
-    </PressButton>
+  const when = (row: Row, unread: boolean) =>
+    row.latest && (
+      <Text size={SL.TypeSize.micro} weight={SL.Weight.medium} color={unread ? SL.Signal.action : SL.Ink.tertiary} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
+        {PostCard.when(ChatMessage.date(row.latest))}
+      </Text>
+    );
+  const dot = <span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, background: SL.Signal.action, flexShrink: 0 }} />;
+
+  const rowView = (row: Row) => {
+    const unread = isUnread(row.latest, myID, row.room);
+    return (
+      <PressButton
+        key={row.key}
+        onPress={() => setOpen(row.open)}
+        aria-label={`${row.title}, ${kindStyle[row.icon].audience}${unread ? ", new message" : ""}`}
+        style={{ display: "flex", alignItems: "center", gap: SL.Space.s3, width: "100%", padding: SL.Space.s3, background: "transparent", textAlign: "left" }}
+      >
+        {mark(row)}
+        <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+          <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
+            {/* The section and the face already say who reads it. */}
+            <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={1}>{row.title}</Text>
+            <Spacer />
+            {when(row, unread)}
+          </HStack>
+          <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
+            <Text {...slMeta(unread ? SL.Weight.semibold : SL.Weight.regular)} color={unread ? SL.Ink.primary : SL.Ink.secondary} lineLimit={1} style={{ flex: "1 1 0", minWidth: 0 }}>
+              {preview(row.latest, myID) ?? row.subtitle}
+            </Text>
+            {unread && dot}
+          </HStack>
+        </VStack>
+      </PressButton>
+    );
+  };
+
+  /** The public lobby, set apart: every Setline lifter reads it, so it is its own card in its own colour rather than one row among private ones. */
+  const lobby = (row: Row) => {
+    const unread = isUnread(row.latest, myID, row.room);
+    const tint = kindStyle.everyone.tint;
+    const line = preview(row.latest, myID);
+    return (
+      <PressButton
+        onPress={() => setOpen(row.open)}
+        aria-label={`Everyone, public chat${unread ? ", new message" : ""}`}
+        style={{
+          alignSelf: "stretch",
+          display: "flex",
+          flexDirection: "column",
+          gap: SL.Space.s3,
+          padding: SL.Space.s4,
+          borderRadius: SL.Radius.xl,
+          background: colorOpacity(tint, 0.1),
+          boxShadow: `inset 0 0 0 ${SL.Metric.border}px ${colorOpacity(tint, 0.35)}`,
+          textAlign: "left",
+        }}
+      >
+        <HStack spacing={SL.Space.s3} style={{ alignSelf: "stretch" }}>
+          {mark(row)}
+          <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+            <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
+              <Text size={SL.TypeSize.lead} weight={SL.Weight.bold} color={SL.Ink.primary} lineLimit={1}>Everyone</Text>
+              <Spacer />
+              {when(row, unread)}
+            </HStack>
+            <HStack spacing={SL.Space.s2}>
+              <ChatKindChip kind="everyone" />
+              <Text {...slMeta()} color={SL.Ink.secondary}>Every Setline lifter</Text>
+            </HStack>
+          </VStack>
+        </HStack>
+        {line !== undefined && (
+          <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", padding: `${SL.Space.s2}px ${SL.Space.s3}px`, borderRadius: SL.Radius.md, background: colorOpacity(SL.Surface.ground, 0.55) }}>
+            <Text {...slMeta(unread ? SL.Weight.semibold : SL.Weight.regular)} color={unread ? SL.Ink.primary : SL.Ink.secondary} lineLimit={1} style={{ flex: "1 1 0", minWidth: 0 }}>
+              {line}
+            </Text>
+            {unread && dot}
+          </HStack>
+        )}
+      </PressButton>
+    );
+  };
+
+  const section = (title: string, content: React.ReactNode, action?: [string, () => void]) => (
+    <VStack key={title} alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch", alignItems: "stretch" }}>
+      <HStack alignment="firstTextBaseline" style={{ alignSelf: "stretch", paddingLeft: SL.Space.s1 }}>
+        <SLOverline text={title} />
+        <Spacer />
+        {action && (
+          <PressButton onPress={action[1]} style={{ ...slFont(SL.TypeSize.meta, SL.Weight.semibold), color: SL.Signal.action, minHeight: SL.Space.hitMin, display: "flex", alignItems: "center", gap: 4, background: "transparent" }}>
+            <SFSymbol name="plus" size={12} weight={700} color={SL.Signal.action} />
+            {action[0]}
+          </PressButton>
+        )}
+      </HStack>
+      <VStack spacing={0} style={{ alignSelf: "stretch", alignItems: "stretch", background: SL.Surface.raised, borderRadius: SL.Radius.lg, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}`, overflow: "hidden" }}>
+        {content}
+      </VStack>
+    </VStack>
   );
+
+  const invitation = (text: string) => (
+    <Text {...slMeta()} color={SL.Ink.secondary} style={{ display: "block", padding: SL.Space.s4 }}>
+      {text}
+    </Text>
+  );
+
+  const list = (items: Row[]) =>
+    items.map((row, index) => (
+      <div key={row.key} style={{ alignSelf: "stretch" }}>
+        {index > 0 && <SLHairline style={{ marginLeft: 72 }} />}
+        {rowView(row)}
+      </div>
+    ));
+
+  const everyone = rows.find((r) => r.icon === "everyone");
+  const friendsRow = rows.find((r) => r.icon === "friends");
+  const roomRows = rows.filter((r) => r.icon === "room");
+  const directRows = rows.filter((r) => r.icon === "direct");
+  const hasFriends = social.friends.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 0", height: "100%", minHeight: 0, background: SL.Surface.ground }}>
       <BackBar label="Friends" onClose={onClose} />
       <VStack alignment="leading" spacing={2} style={{ flexShrink: 0, paddingLeft: SL.Space.gutterSession, paddingRight: SL.Space.gutterSession, paddingBottom: SL.Space.s3 }}>
         <Text as="h1" {...slTitle()} color={SL.Ink.primary}>Chats</Text>
-        <Text {...slMeta()} color={SL.Ink.secondary}>Everyone, your friends, private chats and rooms</Text>
+        <Text {...slMeta()} color={SL.Ink.secondary}>Who reads along is on every chat</Text>
       </VStack>
       <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", paddingLeft: SL.Space.gutterSession, paddingRight: SL.Space.gutterSession, paddingBottom: SL.Space.s6 }}>
-        <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", paddingBottom: SL.Space.s4 }}>
-          {action("paperplane.fill", "Message", () => setNewMessage(true), social.friends.length === 0)}
-          {action("plus", "New room", () => setNewRoom(true), social.friends.length === 0)}
-        </HStack>
-        {social.friends.length === 0 && (
-          <Text {...slMeta()} color={SL.Ink.secondary} style={{ display: "block", paddingBottom: SL.Space.s3 }}>
-            Add a friend to message them privately or start a room. Everyone is open to every Setline lifter.
-          </Text>
-        )}
-        <ChatNotifyRow />
-        <VStack spacing={0} style={{ alignSelf: "stretch", background: SL.Surface.raised, borderRadius: SL.Radius.lg, boxShadow: `inset 0 0 0 1px ${SL.Surface.hairline}`, overflow: "hidden" }}>
-          {rows.map((row, index) => {
-            const unread = isUnread(row.latest, myID, row.room);
-            return (
-              <div key={row.key} style={{ alignSelf: "stretch" }}>
-                {index > 0 && <SLHairline style={{ marginLeft: 72 }} />}
-                <PressButton
-                  onPress={() => setOpen(row.open)}
-                  aria-label={`${row.title}${unread ? ", new message" : ""}`}
-                  style={{ display: "flex", alignItems: "center", gap: SL.Space.s3, width: "100%", padding: SL.Space.s3, background: "transparent", textAlign: "left" }}
-                >
-                  {mark(row)}
-                  <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
-                    <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-                      <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={1}>{row.title}</Text>
-                      <Spacer />
-                      {row.latest && (
-                        <Text size={SL.TypeSize.micro} weight={SL.Weight.medium} color={unread ? SL.Signal.action : SL.Ink.tertiary}>
-                          {PostCard.when(ChatMessage.date(row.latest))}
-                        </Text>
-                      )}
-                    </HStack>
-                    <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-                      <Text {...slMeta(unread ? SL.Weight.semibold : SL.Weight.regular)} color={unread ? SL.Ink.primary : SL.Ink.secondary} lineLimit={1} style={{ flex: "1 1 0", minWidth: 0 }}>
-                        {preview(row.latest, myID) ?? row.subtitle}
-                      </Text>
-                      {unread && <span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, background: SL.Signal.action, flexShrink: 0 }} />}
-                    </HStack>
-                  </VStack>
-                </PressButton>
-              </div>
-            );
-          })}
+        <VStack alignment="leading" spacing={SL.Space.s6} style={{ alignItems: "stretch" }}>
+          <ChatNotifyRow />
+          {everyone && lobby(everyone)}
+          {friendsRow && section("Friends", rowView(friendsRow))}
+          {section(
+            "Rooms",
+            roomRows.length === 0
+              ? invitation(hasFriends ? "A room on any topic, with the friends you pick: Leg day crew, Meal prep." : "Add a friend to start a room together.")
+              : list(roomRows),
+            hasFriends ? ["New room", () => setNewRoom(true)] : undefined,
+          )}
+          {section(
+            "Private",
+            directRows.length === 0
+              ? invitation(hasFriends ? "Message one friend. Only you two see it." : "Add a friend to message them privately.")
+              : list(directRows),
+            hasFriends ? ["Message", () => setNewMessage(true)] : undefined,
+          )}
         </VStack>
       </div>
 
@@ -520,14 +641,16 @@ export function ChatView({ room, onClose, backLabel = "Friends" }: { room?: Chat
   };
 
   const myID = social.myID;
-  const title = room ? ChatRoom.title(room, myID) : "Friends";
+  const title = room ? ChatRoom.title(room, myID) : "All your friends";
+  const kind: ChatKind = !room ? "friends" : room.kind === "everyone" ? "everyone" : room.kind === "direct" ? "direct" : "room";
+  /** Who reads along, after the chip that names the kind. */
   const subtitle = !room
-    ? `You and your ${social.friends.length === 1 ? "friend" : `${social.friends.length} friends`} · only friends see this`
+    ? `You and your ${social.friends.length === 1 ? "friend" : `${social.friends.length} friends`}`
     : room.kind === "everyone"
-      ? "Every Setline lifter · be kind, report what isn't"
+      ? "Every Setline lifter · be kind"
       : room.kind === "direct"
-        ? "Private · only you two see this"
-        : `${room.members.map((m) => (m.user_id === myID ? "You" : firstWord(m.display_name))).join(", ")} · only members see this`;
+        ? "Only you two"
+        : room.members.map((m) => (m.user_id === myID ? "You" : firstWord(m.display_name))).join(", ");
   const placeholder =
     social.offlineSince !== undefined
       ? "Messages wait for a connection"
@@ -651,7 +774,10 @@ export function ChatView({ room, onClose, backLabel = "Friends" }: { room?: Chat
       />
       <VStack alignment="leading" spacing={2} style={{ flexShrink: 0, paddingLeft: SL.Space.gutterSession, paddingRight: SL.Space.gutterSession, paddingBottom: SL.Space.s2 }}>
         <Text as="h1" {...slTitle()} color={SL.Ink.primary}>{title}</Text>
-        <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={1}>{subtitle}</Text>
+        <HStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", paddingTop: SL.Space.s1 - 2 }}>
+          <ChatKindChip kind={kind} />
+          <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={1} style={{ flex: "1 1 0", minWidth: 0 }}>{subtitle}</Text>
+        </HStack>
       </VStack>
       <div style={{ position: "relative", flexShrink: 0 }}>
         <SLHairline />
