@@ -1069,6 +1069,9 @@ export function ProgressHomeView({ onAccount = () => {} }: { onAccount?: () => v
     );
   };
 
+  const weekAgo = Schedule.dateKey(new Date(Date.now() - 7 * 86_400_000));
+  const weightFirst = goal !== undefined || app.metrics.some((metric) => metric.date >= weekAgo);
+
   const highlightCard = () => {
     const day = highlight;
     const change = day?.changePercent;
@@ -1170,9 +1173,20 @@ export function ProgressHomeView({ onAccount = () => {} }: { onAccount?: () => v
           spacing={SL.Space.s8}
           style={{ paddingLeft: SL.Space.gutterSession, paddingRight: SL.Space.gutterSession, paddingTop: SL.Metric.tabContentTop, paddingBottom: SL.Space.s6 }}
         >
-          {highlightCard()}
-          {strengthSection()}
-          {weightSection()}
+          {/* Most looked-at first. For whoever is watching the scale (a weight goal, or a weigh-in this week) that is the weight; for everyone else the win, then each lift's strength. */}
+          {weightFirst ? (
+            <>
+              {weightSection()}
+              {highlightCard()}
+              {strengthSection()}
+            </>
+          ) : (
+            <>
+              {highlightCard()}
+              {strengthSection()}
+              {weightSection()}
+            </>
+          )}
           {logCard()}
         </VStack>
       </ScrollView>

@@ -44,9 +44,11 @@ import { DeloadCard, type DeloadCard_Status } from "./DeloadCard";
 import { HistorySheet, QuickProgressCard } from "./QuickProgressCard";
 import { EarnedBadgeRow, NextBadgeCard } from "./StreakHero";
 import { TallyMascot, type TallyMascot_Mood } from "./TallyMascot";
-import { CustomWorkoutBuilder, WorkoutChooserSheet } from "./WorkoutChooser";
+import { CustomWorkoutBuilder, Freestyle, WorkoutChooserSheet } from "./WorkoutChooser";
+import { ExercisePickerSheet } from "../Progress/ExercisePickerSheet";
+import { ExercisePicker, type ExercisePicker_Row } from "../../core/Progress/ExercisePicker";
 import { PlansSheet } from "./PlansSheet";
-import { CustomWorkout } from "../../core/Domain/CustomWorkout";
+import { CustomWorkout, CustomWorkout_Item } from "../../core/Domain/CustomWorkout";
 import { WorkoutPreviewView } from "./WorkoutPreviewView";
 import { StripDay } from "./WeekStrip";
 import { SessionDetailView } from "../Progress/SessionDetailView";
@@ -67,7 +69,8 @@ type Presented =
   | { kind: "chooser" }
   | { kind: "plans" }
   | { kind: "newWorkout" }
-  | { kind: "editWorkout"; value: CustomWorkout };
+  | { kind: "editWorkout"; value: CustomWorkout }
+  | { kind: "freestyle" };
 
 const presentedID = (p: Presented): string => {
   switch (p.kind) {
@@ -1032,20 +1035,18 @@ export function TrainingHomeView({
         {/* Another plan day, a workout of your own, or a new plan shape — quiet under the start, and the card's one action on a rest day. */}
         {day.isToday && !isDone && paused === undefined &&
           (content.isRest ? (
-            <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", marginTop: SL.Space.s5 }}>
+            <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: SL.Space.s2, marginTop: SL.Space.s5 }}>
               <SLOutlineButton onPress={() => setSheet({ kind: "chooser" })}>{chevroned("Train anyway")}</SLOutlineButton>
+              {freestyleButton}
             </div>
           ) : (
-            <button
-              type="button"
-              className="sl-pressable"
-              onClick={() => setSheet({ kind: "chooser" })}
-              style={{ alignSelf: "stretch", minHeight: SL.Space.hitMin, marginTop: SL.Space.s1, marginBottom: -SL.Space.s3, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent" }}
-            >
-              <Text {...slMeta(SL.Weight.medium)} color={SL.Ink.secondary}>
-                or choose a different workout
-              </Text>
-            </button>
+            // Another workout, or none at all: pick machines as you go.
+            <div style={{ alignSelf: "stretch", display: "flex", gap: SL.Space.s2, marginTop: SL.Space.s3 }}>
+              <div style={{ flex: "1 1 0", display: "flex", flexDirection: "column" }}>
+                <SLOutlineButton emphasis="tertiary" onPress={() => setSheet({ kind: "chooser" })}>Other workout</SLOutlineButton>
+              </div>
+              <div style={{ flex: "1 1 0", display: "flex", flexDirection: "column" }}>{freestyleButton}</div>
+            </div>
           ))}
       </VStack>
     );
@@ -1070,6 +1071,16 @@ export function TrainingHomeView({
   };
 
   // MARK: - The plan card
+
+  /** No plan, no workout made beforehand: the first machine, then the next. */
+  const freestyleButton = (
+    <SLOutlineButton emphasis="tertiary" onPress={() => setSheet({ kind: "freestyle" })} aria-label="Freestyle. Pick each machine as you go">
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <SFSymbol name="figure.strengthtraining.traditional" size={15} weight={600} />
+        Freestyle
+      </span>
+    </SLOutlineButton>
+  );
 
   /** "Tomorrow", "Tue 13". */
   const whenLabel = (day: AgendaDay): string => {
@@ -1471,6 +1482,21 @@ export function TrainingHomeView({
             }}
             onDelete={undefined}
             onClose={() => setSheet(undefined)}
+          />
+        );
+      case "freestyle":
+        // The first machine you walk up to; the rest are added in the session.
+        return (
+          <ExercisePickerSheet
+            rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises })}
+            selected={undefined}
+            onPick={(row: ExercisePicker_Row) => {
+              const first = CustomWorkout.make({ id: Freestyle.dayID, name: "Freestyle", items: [CustomWorkout_Item.make({ exerciseID: row.exerciseID })] });
+              after(() => onStart(CustomWorkout.workoutDay(first)));
+            }}
+            onStar={(row: ExercisePicker_Row) => void app.setFavorite({ exerciseID: row.exerciseID, isFavorite: !row.isFavorite })}
+            onClose={() => setSheet(undefined)}
+            adds
           />
         );
       case "editWorkout": {

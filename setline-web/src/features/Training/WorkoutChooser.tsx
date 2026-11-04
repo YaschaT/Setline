@@ -559,6 +559,9 @@ CustomWorkoutBuilder.repRanges = [
 
 // MARK: - Your week
 
+/** A workout with nothing planned: the machines are picked in the session. */
+export const Freestyle = { dayID: "freestyle" } as const;
+
 export const weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 /** "Mo Push · We Legs · Fr Upper": the training days of a week, Monday first. */

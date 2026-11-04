@@ -184,15 +184,18 @@ struct ProgressHomeView: View {
             // 24 between sections, 8 from a section's head to its card: the
             // gap says what belongs together.
             VStack(alignment: .leading, spacing: SL.Space.s8) {
-                // Three cards, most looked-at first: the win (with the
-                // week's medals under it), the number that moves every
-                // morning, then what the lifts did (with the work behind
-                // them as one line).
-                // Four things, most looked-at first: the win, each lift's
-                // strength, the scale, and every workout.
-                highlightCard
-                strengthSection
-                weightSection
+                // Most looked-at first. For whoever is watching the scale (a
+                // weight goal, or a weigh-in this week) that is the weight;
+                // for everyone else the win, then each lift's strength.
+                if weightFirst {
+                    weightSection
+                    highlightCard
+                    strengthSection
+                } else {
+                    highlightCard
+                    strengthSection
+                    weightSection
+                }
                 logCard
             }
             .padding(.horizontal, SL.Space.gutterSession)
@@ -204,6 +207,11 @@ struct ProgressHomeView: View {
                 EmptyView()
             }
         }
+    }
+
+    private var weightFirst: Bool {
+        let weekAgo = Schedule.dateKey(Date().addingTimeInterval(-7 * 86_400))
+        return goal != nil || app.metrics.contains { $0.date >= weekAgo }
     }
 
     /// Every logged workout, as a card right under the highlight: how many

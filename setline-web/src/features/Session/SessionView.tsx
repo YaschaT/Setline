@@ -26,6 +26,7 @@ import { SL, slFont, slListCard, slNumerals } from "../../design/tokens";
 import { SLPrimaryButton, colorOpacity } from "../../design/SetlineTokens";
 import { DashedBorder, useReduceMotion } from "../../design/support";
 import { SFSymbol } from "../../design/SFSymbol";
+import { Freestyle } from "../Training/WorkoutChooser";
 import { SLSound } from "../../design/SLSound";
 import { SLGlyph } from "../../design/components/SLGlyph";
 import { SLStepper } from "../../design/components/SLStepper";
@@ -504,7 +505,8 @@ export function SessionView(p: {
   /** "Next: Incline bench press" */
   const headSubtitle = (): string => {
     const next = runner.nextSlotIndex;
-    if (next === undefined) return "Last exercise";
+    // Freestyle has no last exercise: the next one is whatever you walk to.
+    if (next === undefined) return runner.day.id === Freestyle.dayID ? "Freestyle · add the next machine when you're ready" : "Last exercise";
     return `Next: ${runner.slots[next].exercise.name}`;
   };
 
@@ -546,6 +548,8 @@ export function SessionView(p: {
     </HStack>
   );
 
+  const freestyle = runner.day.id === Freestyle.dayID;
+
   const actionLabel = (text: string, symbol: string) => (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       <SFSymbol name={symbol} size={13} weight={600} color={SL.Ink.secondary} />
@@ -582,10 +586,32 @@ export function SessionView(p: {
         </HStack>
         {/* The two ways off the plan for this exercise, each saying what it does: changing it opens the alternatives, skipping moves on (with Undo). */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: SL.Space.s2, alignSelf: "stretch" }}>
+          {/* In freestyle the next machine is the main action; skipping has no meaning there. */}
+          {freestyle && (
+            <SLPress
+              scale={0.96}
+              onPress={() => setAddingExercise(true)}
+              aria-label="Add exercise. The next machine you use"
+              style={{
+                ...slFont(SL.TypeSize.body, SL.Weight.semibold),
+                color: SL.Signal.onAction,
+                background: SL.Signal.action,
+                borderRadius: 999,
+                minHeight: SL.Space.hitMin,
+                padding: "0 14px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <SFSymbol name="plus" size={13} weight={700} color={SL.Signal.onAction} />
+              Add exercise
+            </SLPress>
+          )}
           <SLPillButton onPress={() => setShowsSwap(true)} aria-label={`Change ${current.exercise.name}`}>
             {actionLabel("Change exercise", "arrow.left.arrow.right")}
           </SLPillButton>
-          {!S.isComplete(current) && (
+          {!S.isComplete(current) && !freestyle && (
             <SLPillButton quiet onPress={() => handle({ kind: "skipExercise" })} aria-label={`Skip ${current.exercise.name}`}>
               {actionLabel("Skip exercise", "forward.end")}
             </SLPillButton>

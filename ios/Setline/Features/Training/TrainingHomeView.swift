@@ -67,6 +67,7 @@ struct TrainingHomeView: View {
         case plans
         case newWorkout
         case editWorkout(CustomWorkout)
+        case freestyle
 
         var id: String {
             switch self {
@@ -82,6 +83,7 @@ struct TrainingHomeView: View {
             case .plans: return "plans"
             case .newWorkout: return "newWorkout"
             case .editWorkout(let workout): return "edit-\(workout.id)"
+            case .freestyle: return "freestyle"
             }
         }
     }
@@ -192,6 +194,22 @@ struct TrainingHomeView: View {
                         if start, app.resumableSession == nil { after(closing: { onStart(saved.workoutDay) }) }
                     }
                 }, onDelete: nil, onClose: { sheet = nil })
+            case .freestyle:
+                // The first machine you walk up to; the rest are added in the session.
+                ExercisePickerSheet(
+                    rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises),
+                    selected: nil,
+                    onPick: { row in
+                        let first = CustomWorkout(id: Freestyle.dayID, name: "Freestyle",
+                                                  items: [CustomWorkout.Item(exerciseID: row.exerciseID)])
+                        after(closing: { onStart(first.workoutDay) })
+                    },
+                    onStar: { row in
+                        Task { await app.setFavorite(exerciseID: row.exerciseID, isFavorite: !row.isFavorite) }
+                    },
+                    onClose: { sheet = nil },
+                    adds: true
+                )
             case .editWorkout(let workout):
                 CustomWorkoutBuilder(workout: workout, onSave: { saved, start in
                     sheet = nil
@@ -246,6 +264,15 @@ struct TrainingHomeView: View {
             Text(endMessage)
         }
         .slRespondsToTextSize()
+    }
+
+    /// No plan, no workout made beforehand: the first machine, then the next.
+    private var freestyleButton: some View {
+        Button { sheet = .freestyle } label: {
+            Label("Freestyle", systemImage: "figure.strengthtraining.traditional")
+        }
+        .buttonStyle(SLOutlineButtonStyle(emphasis: .tertiary))
+        .accessibilityHint("Pick each machine as you go. Nothing to set up.")
     }
 
     /// Closes whatever sheet is up, and acts once it has gone: the session and
@@ -1066,18 +1093,17 @@ struct TrainingHomeView: View {
                         .buttonStyle(SLOutlineButtonStyle())
                         .padding(.top, SL.Space.s5)
                         .accessibilityHint("Pick a workout from your plan or your own")
+                    freestyleButton
+                        .padding(.top, SL.Space.s2)
                 } else {
-                    Button { sheet = .chooser } label: {
-                        Text("or choose a different workout")
-                            .slMeta(SL.Weight.medium)
-                            .foregroundStyle(SL.Ink.secondary)
-                            .frame(maxWidth: .infinity, minHeight: SL.Space.hitMin)
-                            .contentShape(Rectangle())
+                    // Another workout, or none at all: pick machines as you go.
+                    HStack(spacing: SL.Space.s2) {
+                        Button { sheet = .chooser } label: { Text("Other workout") }
+                            .buttonStyle(SLOutlineButtonStyle(emphasis: .tertiary))
+                            .accessibilityHint("Any day of your plan or one of your own workouts")
+                        freestyleButton
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, SL.Space.s1)
-                    .padding(.bottom, -SL.Space.s3)
-                    .accessibilityHint("Any day of your plan, your own workouts, or a new plan shape")
+                    .padding(.top, SL.Space.s3)
                 }
             }
         }

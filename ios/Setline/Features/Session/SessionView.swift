@@ -601,14 +601,31 @@ struct SessionView: View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s2))
             : AnyLayout(HStackLayout(spacing: SL.Space.s2))
+        let freestyle = runner.day.id == Freestyle.dayID
         return layout {
+            if freestyle {
+                Button { addingExercise = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus").font(.system(size: 13, weight: .bold))
+                        Text("Add exercise")
+                    }
+                    .foregroundStyle(SL.Signal.onAction)
+                    .font(.sl(SL.TypeSize.body, SL.Weight.semibold))
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: SL.Space.hitMin)
+                    .background(Capsule().fill(SL.Signal.action))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.96))
+                .accessibilityHint("The next machine you use")
+            }
             Button { showsSwap = true } label: {
                 actionLabel("Change exercise", symbol: "arrow.left.arrow.right")
             }
             .buttonStyle(SLPillButtonStyle())
             .accessibilityLabel("Change \(runner.current.exercise.name)")
             .accessibilityHint("Similar exercises, a lighter option, a different order, or report pain")
-            if !runner.current.isComplete {
+            if !runner.current.isComplete, !freestyle {
                 Button { handle(.skipExercise) } label: {
                     actionLabel("Skip exercise", symbol: "forward.end")
                 }
@@ -630,7 +647,10 @@ struct SessionView: View {
 
     /// "Next: Incline bench press"
     private var headSubtitle: String {
-        guard let next = runner.nextSlotIndex else { return "Last exercise" }
+        guard let next = runner.nextSlotIndex else {
+            // Freestyle has no last exercise: the next one is whatever you walk to.
+            return runner.day.id == Freestyle.dayID ? "Freestyle · add the next machine when you're ready" : "Last exercise"
+        }
         return "Next: \(runner.slots[next].exercise.name)"
     }
 

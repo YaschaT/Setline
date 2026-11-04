@@ -431,6 +431,11 @@ struct CustomWorkoutBuilder: View {
 
 // MARK: - Your week
 
+/// A workout with nothing planned: the machines are picked in the session.
+enum Freestyle {
+    static let dayID = "freestyle"
+}
+
 let weekdayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 /// "Mo Push · We Legs · Fr Upper": the training days of a week, Monday first.
