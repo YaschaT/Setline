@@ -98,6 +98,14 @@ export const ExerciseMedia = {
   frames(exerciseID: string): string[] {
     const id = ExerciseMetadata.canonicalID[exerciseID] ?? exerciseID;
     const folder = folders[id];
-    return folder === undefined ? [] : [0, 1].map((i) => `${base}${folder}/${i}.jpg`);
+    return folder === undefined ? [] : ExerciseMedia.framesOfFolder(folder);
   },
+
+  /** The start and end photo of a free-exercise-db folder: for exercises added from the online library. */
+  framesOfFolder(folder: string): string[] {
+    return [0, 1].map((i) => `${base}${folder}/${i}.jpg`);
+  },
+
+  /** The dataset itself, at the same pinned commit as the photos. */
+  libraryURL: `${base.replace(/exercises\/$/, "")}dist/exercises.json`,
 };

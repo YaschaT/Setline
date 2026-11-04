@@ -6,6 +6,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { SL, slFont } from "../../design/tokens";
 import { useReduceMotion } from "../../design/support";
 import { ExerciseMedia } from "../../core/Catalog/ExerciseMedia";
+import { useApp } from "../../data/AppState";
 
 const chip: CSSProperties = {
   position: "absolute",
@@ -16,9 +17,12 @@ const chip: CSSProperties = {
 };
 
 export function ExercisePreview({ exerciseID }: { exerciseID: string }) {
+  const app = useApp();
   const reduceMotion = useReduceMotion();
   const [showsEnd, setShowsEnd] = useState(false);
-  const frames = ExerciseMedia.frames(exerciseID);
+  // An exercise added from the online library brings its own photos.
+  const added = app.customExercises.find((c) => c.id === exerciseID)?.photoFolder;
+  const frames = added !== undefined ? ExerciseMedia.framesOfFolder(added) : ExerciseMedia.frames(exerciseID);
 
   useEffect(() => {
     setShowsEnd(false);

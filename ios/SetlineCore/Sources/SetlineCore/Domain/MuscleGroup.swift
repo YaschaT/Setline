@@ -7,7 +7,7 @@ import Foundation
 /// not: they think "borst" or "benen". This is the one place those nineteen
 /// are folded into six, for choosing and for naming — nothing ranks, balances
 /// or substitutes by it.
-public enum MuscleGroup: String, CaseIterable, Identifiable, Sendable {
+public enum MuscleGroup: String, CaseIterable, Codable, Identifiable, Sendable {
     case borst, rug, schouders, armen, benen, core
 
     public var id: String { rawValue }

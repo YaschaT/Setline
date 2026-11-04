@@ -77,7 +77,7 @@ export function StrengthSegmentView({ opening: openingExercise }: { opening?: st
   };
 
   const reload = (current: string | undefined): StrengthData => {
-    const rows = ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises });
+    const rows = ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises });
     const selected = current === undefined || !rows.some((r) => r.exerciseID === current) ? opening(rows) : current;
     return { selected, rows, ...progressFor(selected, rows) };
   };

@@ -51,7 +51,7 @@ export function QuickProgressCard({ onSeeAll }: { onSeeAll: () => void }) {
     const lifts = [...latest.values()];
     // A main lift only, ranked by percent: an estimated max on a machine
     // fly is a number nobody lifts (`StrengthHeadline`).
-    const rows = ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises });
+    const rows = ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises });
     const picked = StrengthHeadline.pick({ rows, sessions: app.sessions, plan: app.plan });
     const pick: Pick | undefined = picked === undefined ? undefined : { name: picked.name, progress: picked };
 

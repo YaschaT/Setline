@@ -519,7 +519,7 @@ export function CustomWorkoutBuilder({
         {picking && (
           <div style={sheetBody}>
             <ExercisePickerSheet
-              rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises })}
+              rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises })}
               selected={undefined}
               onPick={(row: ExercisePicker_Row) => {
                 setItems([...items, CustomWorkout_Item.make({ exerciseID: row.exerciseID })]);

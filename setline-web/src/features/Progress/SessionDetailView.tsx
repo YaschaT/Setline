@@ -687,7 +687,7 @@ export function SessionDetailView({ sessionID, onClose }: { sessionID: string; o
         {pickingExercise !== undefined && (
           <div style={sheetBody}>
             <ExercisePickerSheet
-              rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises })}
+              rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises })}
               selected={pickedSelected}
               onPick={(picked) => {
                 const index = pickingExercise;

@@ -184,7 +184,7 @@ struct QuickProgressCard: View {
         let lifts = Array(latest.values)
         // A main lift only, ranked by percent: an estimated max on a machine
         // fly is a number nobody lifts (`StrengthHeadline`).
-        let rows = ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises)
+        let rows = ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises)
         pick = StrengthHeadline.pick(rows: rows, sessions: app.sessions, plan: app.plan)
             .map { Pick(name: $0.name, progress: $0) }
 

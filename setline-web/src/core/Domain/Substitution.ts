@@ -3,6 +3,11 @@ import type { JSONValue } from "../Legacy/JSONValue";
 import { KeyedContainer, decodeBool, decodeDate, decodeRaw, decodeString, encodeJSON } from "../Support/codable";
 import { Exercise } from "./Model";
 import { Equipment } from "./Vocabulary";
+import { MuscleGroup } from "./MuscleGroup";
+
+/** A key only when it has a value, so an exercise made by hand encodes exactly as before. */
+const optional = <K extends string, V>(key: K, value: V | undefined): Partial<Record<K, V>> =>
+  value === undefined ? {} : ({ [key]: value } as Record<K, V>);
 
 /**
  * One exercise standing in for another, for one session only.
@@ -159,17 +164,32 @@ export interface CustomExercise {
   equipment: Equipment;
   isCompound: boolean;
   createdAt: Date;
+  /** Where the picker lists it. Set when it came from the online library; an exercise made by hand has none and stays out of the picker. */
+  muscleGroup?: MuscleGroup;
+  /** Its free-exercise-db photos, when it came from there. */
+  photoFolder?: string;
 }
 
 export const CustomExercise = {
-  make(p: { id?: string; name: string; equipment?: Equipment; isCompound?: boolean; createdAt?: Date }): CustomExercise {
-    return {
+  make(p: {
+    id?: string;
+    name: string;
+    equipment?: Equipment;
+    isCompound?: boolean;
+    createdAt?: Date;
+    muscleGroup?: MuscleGroup;
+    photoFolder?: string;
+  }): CustomExercise {
+    const made: CustomExercise = {
       id: p.id ?? CustomExercise.identifier({ for: p.name }),
       name: p.name,
       equipment: p.equipment ?? "machineSelectorised",
       isCompound: p.isCompound ?? false,
       createdAt: p.createdAt ?? new Date(),
     };
+    if (p.muscleGroup !== undefined) made.muscleGroup = p.muscleGroup;
+    if (p.photoFolder !== undefined) made.photoFolder = p.photoFolder;
+    return made;
   },
 
   /**
@@ -207,6 +227,8 @@ export const CustomExercise = {
       equipment: c.decode("equipment", decodeRaw(Equipment.allCases)),
       isCompound: c.decode("isCompound", decodeBool),
       createdAt: c.decode("createdAt", decodeDate),
+      ...optional("muscleGroup", c.decodeIfPresent("muscleGroup", decodeRaw(MuscleGroup.allCases))),
+      ...optional("photoFolder", c.decodeIfPresent("photoFolder", decodeString)),
     };
   },
 };

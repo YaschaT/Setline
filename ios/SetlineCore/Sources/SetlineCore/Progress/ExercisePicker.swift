@@ -61,7 +61,8 @@ public enum ExercisePicker {
     public static func rows(
         sessions: [TrainingSession],
         favorites: Set<String> = [],
-        catalog: [String: Exercise] = ExerciseCatalog.all
+        catalog: [String: Exercise] = ExerciseCatalog.all,
+        custom: [CustomExercise] = []
     ) -> [Row] {
         var last: [String: (date: Date, weightKg: Decimal?, reps: Int?)] = [:]
         for session in sessions where session.kind == .workout {
@@ -75,20 +76,27 @@ public enum ExercisePicker {
             }
         }
 
-        let all: [Row] = offered(catalog: catalog).compactMap { exercise in
-            guard let group = exercise.group else { return nil }
-            let history = last[exercise.id]
+        func row(id: String, name: String, group: MuscleGroup) -> Row {
+            let history = last[id]
             return Row(
-                exerciseID: exercise.id,
-                name: exercise.name,
+                exerciseID: id,
+                name: name,
                 group: group,
                 lastTrained: history?.date,
                 topSetKg: history?.weightKg,
                 topSetReps: history?.reps,
-                isFavorite: favorites.contains(exercise.id)
+                isFavorite: favorites.contains(id)
             )
         }
-        return mergingAliases(all)
+        let all: [Row] = offered(catalog: catalog).compactMap { exercise in
+            exercise.group.map { row(id: exercise.id, name: exercise.name, group: $0) }
+        }
+        // Exercises added from the online library carry their group, so they
+        // are found again like any other.
+        let added = custom.compactMap { exercise in
+            exercise.muscleGroup.map { row(id: exercise.id, name: exercise.name, group: $0) }
+        }
+        return mergingAliases(all) + added.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     /// One row per physical exercise. The catalogue keys some exercises per

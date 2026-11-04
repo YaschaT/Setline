@@ -6,11 +6,14 @@ import SetlineCore
 /// one at once. An exercise without a faithful photo shows nothing.
 struct ExercisePreview: View {
     let exerciseID: String
+    @Environment(AppState.self) private var app
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsEnd = false
 
     var body: some View {
-        let frames = ExerciseMedia.frames(for: exerciseID)
+        // An exercise added from the online library brings its own photos.
+        let added = app.customExercises.first { $0.id == exerciseID }?.photoFolder
+        let frames = added.map(ExerciseMedia.frames(folder:)) ?? ExerciseMedia.frames(for: exerciseID)
         if frames.count == 2 {
             ZStack(alignment: .bottomLeading) {
                 ZStack {

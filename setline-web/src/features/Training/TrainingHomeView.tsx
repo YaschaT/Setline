@@ -1494,7 +1494,7 @@ export function TrainingHomeView({
         // The first machine you walk up to; the rest are added in the session.
         return (
           <ExercisePickerSheet
-            rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises })}
+            rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises })}
             selected={undefined}
             onPick={(row: ExercisePicker_Row) => {
               const first = CustomWorkout.make({ id: Freestyle.dayID, name: "Freestyle", items: [CustomWorkout_Item.make({ exerciseID: row.exerciseID })] });

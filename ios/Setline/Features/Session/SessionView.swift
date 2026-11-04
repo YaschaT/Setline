@@ -247,7 +247,7 @@ struct SessionView: View {
         .sheet(isPresented: $showsPlates) { platesForNextSet }
         .sheet(isPresented: $addingExercise) {
             ExercisePickerSheet(
-                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises),
+                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises),
                 selected: nil,
                 onPick: { row in
                     addingExercise = false

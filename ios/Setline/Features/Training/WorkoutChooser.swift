@@ -344,7 +344,7 @@ struct CustomWorkoutBuilder: View {
         }
         .sheet(isPresented: $picking) {
             ExercisePickerSheet(
-                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises),
+                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises),
                 selected: nil,
                 onPick: { row in
                     items.append(CustomWorkout.Item(exerciseID: row.exerciseID))

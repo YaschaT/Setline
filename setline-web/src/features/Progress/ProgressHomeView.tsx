@@ -202,7 +202,7 @@ export function ProgressHomeView({ onAccount = () => {} }: { onAccount?: () => v
     });
     const volume = ProgressOverview.weeklyVolume({ in: app.sessions });
     const weekWins = computeWeekWins();
-    const exerciseRows = ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises });
+    const exerciseRows = ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises });
     const estimable = ExercisePicker.recent({ in: exerciseRows, limit: 16 })
       .filter((row) => StrengthHeadline.progress({ exerciseID: row.exerciseID, name: row.name, sessions: app.sessions, plan: app.plan }).estimate !== undefined)
       .slice(0, 8);

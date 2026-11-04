@@ -9,7 +9,7 @@
 // and when it was last done. An exercise with nothing logged says so and can
 // still be picked, because a screen that only lists what you already trained
 // cannot tell you what you have not.
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SL, slFont } from "../../design/tokens";
 import { HStack, Pressable, ScrollView, Spacer, Text, VStack } from "../../design/swiftui";
 import { SFSymbol } from "../../design/SFSymbol";
@@ -19,6 +19,9 @@ import { SLHairline, slBody, slHitTarget, slLead, slMeta, slTitle } from "../../
 import { slLineHeight } from "../../design/SLDynamicType";
 import { useApp } from "../../data/AppState";
 import { ExercisePicker, ExercisePicker_Row } from "../../core/Progress/ExercisePicker";
+import { ExerciseLibrary_Entry } from "../../core/Catalog/ExerciseLibrary";
+import { ExerciseMedia } from "../../core/Catalog/ExerciseMedia";
+import { ExerciseLibraryStore } from "../../data/ExerciseLibraryStore";
 import { MuscleGroup } from "../../core/Domain/MuscleGroup";
 import { NumberDisplay } from "../../core/Engine/NumberDisplay";
 
@@ -124,7 +127,7 @@ export function ExercisePickerSheet({
         <Pressable onPress={() => setQuery("")} aria-label="Clear search" style={{ background: "transparent", padding: 0, marginRight: -6 }}>
           <span style={{ minWidth: 40, minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Text {...slMeta(SL.Weight.medium)} color={SL.Ink.tertiary}>
-              Wis
+              Clear
             </Text>
           </span>
         </Pressable>
@@ -306,16 +309,123 @@ export function ExercisePickerSheet({
 
   // MARK: - Search
 
-  const results = () => {
-    const found = ExercisePicker.search(query, { in: rows });
-    if (found.length === 0) {
+  // MARK: - Found online
+
+  /** The online library's answers to the query, in a picker that adds: one request per pause in typing, the library fetched once. */
+  const [online, setOnline] = useState<ExerciseLibrary_Entry[]>([]);
+  const [searchingOnline, setSearchingOnline] = useState(false);
+  const [onlineFailed, setOnlineFailed] = useState(false);
+  useEffect(() => {
+    const asked = query.trim();
+    if (!adds || asked.length < 3) {
+      setOnline([]);
+      setSearchingOnline(false);
+      return;
+    }
+    let cancelled = false;
+    setSearchingOnline(true);
+    const timer = setTimeout(() => {
+      void ExerciseLibraryStore.load().then((library) => {
+        if (cancelled) return;
+        setOnlineFailed(library === undefined);
+        setOnline(library?.search(asked, { excludingNames: new Set(rows.map((r) => r.name)) }) ?? []);
+        setSearchingOnline(false);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, adds, rows]);
+
+  /** Writes it as an exercise of your own first, so whatever picked it can find it, then picks it like any other. */
+  const add = (entry: ExerciseLibrary_Entry) => {
+    const custom = ExerciseLibrary_Entry.customExercise(entry);
+    void app.addCustomExercise(custom).then(() =>
+      onPick(
+        ExercisePicker_Row.make({
+          exerciseID: custom.id,
+          name: custom.name,
+          group: custom.muscleGroup ?? "core",
+          lastTrained: undefined,
+          topSetKg: undefined,
+          topSetReps: undefined,
+          isFavorite: false,
+        }),
+      ),
+    );
+  };
+
+  const onlineRow = (entry: ExerciseLibrary_Entry) => {
+    const group = ExerciseLibrary_Entry.muscleGroup(entry);
+    const detail = [group !== undefined ? MuscleGroup.title(group) : undefined, ExerciseLibrary_Entry.equipmentLabel(entry)].filter((x) => x !== undefined).join(" · ");
+    return (
+      <Pressable
+        key={entry.id}
+        onPress={() => add(entry)}
+        aria-label={`Add ${entry.name}, ${ExerciseLibrary_Entry.equipmentLabel(entry)}`}
+        style={{ alignSelf: "stretch", display: "flex", alignItems: "center", gap: SL.Space.s3, minHeight: 64, padding: "0 12px", background: "transparent", textAlign: "left" }}
+      >
+        <img
+          src={ExerciseMedia.framesOfFolder(entry.id)[0]}
+          alt=""
+          loading="lazy"
+          style={{ width: 48, height: 48, borderRadius: SL.Radius.md, objectFit: "cover", background: SL.Surface.raised2, flexShrink: 0 }}
+        />
+        <VStack alignment="leading" spacing={1} style={{ flex: "1 1 0", minWidth: 0 }}>
+          <Text {...slLead()} color={SL.Ink.primary}>{entry.name}</Text>
+          <Text {...slMeta()} color={SL.Ink.tertiary}>{detail}</Text>
+        </VStack>
+        <span style={{ ...slFont(SL.TypeSize.meta, SL.Weight.semibold), color: SL.Signal.action, background: SL.Signal.actionTint, borderRadius: 999, minHeight: 32, padding: `0 ${SL.Space.s3}px`, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          <SFSymbol name="plus" size={12} weight={700} color={SL.Signal.action} />
+          Add
+        </span>
+      </Pressable>
+    );
+  };
+
+  const onlineResults = () => {
+    if (online.length > 0) {
       return (
-        <Text {...slBody()} color={SL.Ink.secondary} style={{ paddingTop: 22 }}>
-          {`Nothing found for ${query.trim()}.`}
+        <>
+          {section("FOUND ONLINE", 22, <>{online.map(onlineRow)}</>)}
+          <Text {...slMeta()} color={SL.Ink.tertiary} style={{ paddingTop: SL.Space.s2 }}>
+            From free-exercise-db, a free exercise library. Adding one puts it in your own exercises, with its photos.
+          </Text>
+        </>
+      );
+    }
+    if (searchingOnline) {
+      return (
+        <Text {...slMeta()} color={SL.Ink.secondary} style={{ paddingTop: 22 }}>
+          Searching online…
         </Text>
       );
     }
-    return <>{found.map((row) => card(row, standing(row), 6))}</>;
+    if (onlineFailed) {
+      return (
+        <Text {...slMeta()} color={SL.Ink.secondary} style={{ paddingTop: 22 }}>
+          Couldn't search online. Check your connection and try again.
+        </Text>
+      );
+    }
+    return null;
+  };
+
+  const results = () => {
+    const found = ExercisePicker.search(query, { in: rows });
+    return (
+      <>
+        {found.length === 0 ? (
+          <Text {...slBody()} color={SL.Ink.secondary} style={{ paddingTop: 22 }}>
+            {adds ? "Not in Setline yet." : `Nothing found for ${query.trim()}.`}
+          </Text>
+        ) : (
+          found.map((row) => card(row, standing(row), 6))
+        )}
+        {adds && onlineResults()}
+      </>
+    );
   };
 
   return (

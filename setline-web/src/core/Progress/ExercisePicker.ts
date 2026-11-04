@@ -2,6 +2,7 @@ import { ExerciseCatalog } from "../Catalog/ExerciseCatalog";
 import { ExerciseMetadata } from "../Catalog/ExerciseMetadata";
 import { Exercise, type TrainingSession } from "../Domain/Model";
 import { MuscleGroup } from "../Domain/MuscleGroup";
+import type { CustomExercise } from "../Domain/Substitution";
 import {
   localizedCaseInsensitiveCompare,
   localizedCaseInsensitiveContains,
@@ -96,6 +97,7 @@ export const ExercisePicker = {
     sessions: TrainingSession[];
     favorites?: Set<string>;
     catalog?: Record<string, Exercise>;
+    custom?: readonly CustomExercise[];
   }): ExercisePicker_Row[] {
     const favorites = a.favorites ?? new Set<string>();
     const catalog = a.catalog ?? ExerciseCatalog.all;
@@ -114,23 +116,27 @@ export const ExercisePicker = {
       }
     }
 
+    const row = (id: string, name: string, group: MuscleGroup) => {
+      const history = last.get(id);
+      return ExercisePicker_Row.make({
+        exerciseID: id,
+        name,
+        group,
+        lastTrained: history?.date,
+        topSetKg: history?.weightKg,
+        topSetReps: history?.reps,
+        isFavorite: favorites.has(id),
+      });
+    };
     const all = ExercisePicker.offered({ catalog }).flatMap((exercise) => {
       const group = Exercise.group(exercise);
-      if (group === undefined) return [];
-      const history = last.get(exercise.id);
-      return [
-        ExercisePicker_Row.make({
-          exerciseID: exercise.id,
-          name: exercise.name,
-          group,
-          lastTrained: history?.date,
-          topSetKg: history?.weightKg,
-          topSetReps: history?.reps,
-          isFavorite: favorites.has(exercise.id),
-        }),
-      ];
+      return group === undefined ? [] : [row(exercise.id, exercise.name, group)];
     });
-    return ExercisePicker.mergingAliases(all);
+    // Exercises added from the online library carry their group, so they are found again like any other.
+    const added = (a.custom ?? [])
+      .flatMap((exercise) => (exercise.muscleGroup === undefined ? [] : [row(exercise.id, exercise.name, exercise.muscleGroup)]))
+      .sort((x, y) => x.name.localeCompare(y.name, undefined, { sensitivity: "base" }));
+    return [...ExercisePicker.mergingAliases(all), ...added];
   },
 
   /**

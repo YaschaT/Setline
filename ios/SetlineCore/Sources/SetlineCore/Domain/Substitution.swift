@@ -104,19 +104,28 @@ public struct CustomExercise: Codable, Hashable, Identifiable, Sendable {
     public var equipment: Equipment
     public var isCompound: Bool
     public var createdAt: Date
+    /// Where the picker lists it. Set when it came from the online library;
+    /// an exercise made by hand has none and stays out of the picker.
+    public var muscleGroup: MuscleGroup?
+    /// Its free-exercise-db photos, when it came from there.
+    public var photoFolder: String?
 
     public init(
         id: String? = nil,
         name: String,
         equipment: Equipment = .machineSelectorised,
         isCompound: Bool = false,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        muscleGroup: MuscleGroup? = nil,
+        photoFolder: String? = nil
     ) {
         self.id = id ?? Self.identifier(for: name)
         self.name = name
         self.equipment = equipment
         self.isCompound = isCompound
         self.createdAt = createdAt
+        self.muscleGroup = muscleGroup
+        self.photoFolder = photoFolder
     }
 
     /// Namespaced so a custom exercise can never collide with a catalogue id

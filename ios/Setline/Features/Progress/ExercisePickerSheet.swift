@@ -29,6 +29,10 @@ struct ExercisePickerSheet: View {
 
     @State private var group: MuscleGroup?
     @State private var query = ""
+    /// The online library's answers to the query, in a picker that adds.
+    @State private var online: [ExerciseLibrary.Entry] = []
+    @State private var searchingOnline = false
+    @State private var onlineFailed = false
     @FocusState private var searching: Bool
 
     var body: some View {
@@ -62,6 +66,23 @@ struct ExercisePickerSheet: View {
         .presentationDragIndicator(.hidden)
         .presentationBackground(SL.Surface.raised)
         .slRespondsToTextSize()
+        // One request per pause in typing; the library is fetched once.
+        .task(id: query) {
+            let asked = query.trimmingCharacters(in: .whitespaces)
+            guard adds, asked.count >= 3 else {
+                online = []
+                searchingOnline = false
+                return
+            }
+            searchingOnline = true
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            let library = await ExerciseLibraryStore.shared.load()
+            guard !Task.isCancelled else { return }
+            onlineFailed = library == nil
+            online = library?.search(asked, excludingNames: Set(rows.map(\.name))) ?? []
+            searchingOnline = false
+        }
     }
 
     private var isSearching: Bool {
@@ -136,7 +157,7 @@ struct ExercisePickerSheet: View {
             .focused($searching)
             if !query.isEmpty {
                 Button { query = "" } label: {
-                    Text("Wis")
+                    Text("Clear")
                         .slMeta(SL.Weight.medium)
                         .foregroundStyle(SL.Ink.tertiary)
                         .frame(minWidth: 40, minHeight: 40)
@@ -260,7 +281,7 @@ struct ExercisePickerSheet: View {
     private var results: some View {
         let found = ExercisePicker.search(query, in: rows)
         if found.isEmpty {
-            Text("Nothing found for \(query.trimmingCharacters(in: .whitespaces)).")
+            Text(adds ? "Not in Setline yet." : "Nothing found for \(query.trimmingCharacters(in: .whitespaces)).")
                 .slBody()
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(SL.Ink.secondary)
@@ -268,6 +289,85 @@ struct ExercisePickerSheet: View {
         } else {
             ForEach(found) { row in card(row, detail: standing(row)) }
                 .padding(.top, 6)
+        }
+        if adds { onlineResults }
+    }
+
+    // MARK: - Found online
+
+    /// What the online library has for the query: each with its photo, its
+    /// muscle and equipment, and one tap to add it to your exercises.
+    @ViewBuilder
+    private var onlineResults: some View {
+        if !online.isEmpty {
+            section("FOUND ONLINE", top: 22) {
+                ForEach(online) { entry in onlineRow(entry) }
+            }
+            Text("From free-exercise-db, a free exercise library. Adding one puts it in your own exercises, with its photos.")
+                .slMeta()
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(SL.Ink.tertiary)
+                .padding(.top, SL.Space.s2)
+        } else if searchingOnline {
+            HStack(spacing: SL.Space.s2) {
+                ProgressView().controlSize(.small)
+                Text("Searching online…").slMeta().foregroundStyle(SL.Ink.secondary)
+            }
+            .padding(.top, 22)
+        } else if onlineFailed {
+            Text("Couldn't search online. Check your connection and try again.")
+                .slMeta()
+                .foregroundStyle(SL.Ink.secondary)
+                .padding(.top, 22)
+        }
+    }
+
+    private func onlineRow(_ entry: ExerciseLibrary.Entry) -> some View {
+        Button { add(entry) } label: {
+            HStack(spacing: SL.Space.s3) {
+                AsyncImage(url: ExerciseMedia.frames(folder: entry.id).first) { phase in
+                    if let image = phase.image { image.resizable().scaledToFill() } else { SL.Surface.raised2 }
+                }
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(entry.name)
+                        .slLead()
+                        .foregroundStyle(SL.Ink.primary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text([entry.muscleGroup?.title, entry.equipmentLabel].compactMap { $0 }.joined(separator: " · "))
+                        .slMeta()
+                        .foregroundStyle(SL.Ink.tertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 4) {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .bold))
+                    Text("Add").font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
+                }
+                .foregroundStyle(SL.Signal.action)
+                .padding(.horizontal, SL.Space.s3)
+                .frame(minHeight: 32)
+                .background(Capsule().fill(SL.Signal.actionTint))
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 64)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add \(entry.name), \(entry.equipmentLabel)")
+    }
+
+    /// Writes it as an exercise of your own first, so whatever picked it
+    /// can find it, then picks it like any other.
+    private func add(_ entry: ExerciseLibrary.Entry) {
+        let custom = entry.customExercise()
+        Task {
+            await app.addCustomExercise(custom)
+            onPick(ExercisePicker.Row(
+                exerciseID: custom.id, name: custom.name, group: custom.muscleGroup ?? .core,
+                lastTrained: nil, topSetKg: nil, topSetReps: nil, isFavorite: false
+            ))
         }
     }
 

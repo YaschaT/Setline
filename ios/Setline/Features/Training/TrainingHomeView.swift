@@ -198,7 +198,7 @@ struct TrainingHomeView: View {
             case .freestyle:
                 // The first machine you walk up to; the rest are added in the session.
                 ExercisePickerSheet(
-                    rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises),
+                    rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises),
                     selected: nil,
                     onPick: { row in
                         let first = CustomWorkout(id: Freestyle.dayID, name: "Freestyle",

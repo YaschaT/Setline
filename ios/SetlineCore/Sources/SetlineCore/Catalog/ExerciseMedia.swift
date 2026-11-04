@@ -10,6 +10,9 @@ public enum ExerciseMedia {
 
     static let base = "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@f00c92c7dcf1216a928a52c3706c7ce8e2f71ed5/exercises/"
 
+    /// The dataset itself, at the same pinned commit as the photos.
+    public static let libraryURL = URL(string: "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@f00c92c7dcf1216a928a52c3706c7ce8e2f71ed5/dist/exercises.json")!
+
     static let folders: [String: String] = [
         "ab-wheel": "Ab_Roller",
         "assisted-pull-up": "Band_Assisted_Pull-Up",
@@ -98,6 +101,12 @@ public enum ExerciseMedia {
     public static func frames(for exerciseID: String) -> [URL] {
         let id = ExerciseMetadata.canonicalID[exerciseID] ?? exerciseID
         guard let folder = folders[id] else { return [] }
-        return [0, 1].compactMap { URL(string: "\(base)\(folder)/\($0).jpg") }
+        return frames(folder: folder)
+    }
+
+    /// The start and end photo of a free-exercise-db folder: for exercises
+    /// added from the online library.
+    public static func frames(folder: String) -> [URL] {
+        [0, 1].compactMap { URL(string: "\(base)\(folder)/\($0).jpg") }
     }
 }

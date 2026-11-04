@@ -136,7 +136,7 @@ struct ProgressHomeView: View {
                                               counts: { StrengthHeadline.isMainLift($0, plan: app.plan) })
         volume = ProgressOverview.weeklyVolume(in: app.sessions)
         weekWins = computeWeekWins()
-        exerciseRows = ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises)
+        exerciseRows = ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises)
         estimable = ExercisePicker.recent(in: exerciseRows, limit: 16).filter { row in
             StrengthHeadline.progress(exerciseID: row.exerciseID, name: row.name, sessions: app.sessions, plan: app.plan).estimate != nil
         }

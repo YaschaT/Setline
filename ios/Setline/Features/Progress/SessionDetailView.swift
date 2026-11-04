@@ -163,7 +163,7 @@ struct SessionDetailView: View {
         .sheet(item: $correcting) { target in correctionSheet(target) }
         .sheet(isPresented: Binding(get: { pickingExercise != nil }, set: { if !$0 { pickingExercise = nil } })) {
             ExercisePickerSheet(
-                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises),
+                rows: ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises),
                 selected: pickingExercise.flatMap { draft.indices.contains($0) ? draft[$0].exerciseID : nil },
                 onPick: { row in
                     if let index = pickingExercise, draft.indices.contains(index) {

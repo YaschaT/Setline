@@ -463,7 +463,7 @@ struct StrengthSegmentView: View {
     // MARK: - Data
 
     private func reload() {
-        rows = ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises)
+        rows = ExercisePicker.rows(sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises)
         if selected == nil || !rows.contains(where: { $0.exerciseID == selected }) {
             selected = opening()
         }

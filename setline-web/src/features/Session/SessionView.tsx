@@ -1982,7 +1982,7 @@ export function SessionView(p: {
       <Sheet isPresented={addingExercise} onDismiss={() => setAddingExercise(false)}>
         {addingExercise && (
           <ExercisePickerSheet
-            rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises })}
+            rows={ExercisePicker.rowsSessions({ sessions: app.sessions, favorites: app.favoriteExercises, custom: app.customExercises })}
             selected={undefined}
             onPick={(row: ExercisePicker_Row) => {
               setAddingExercise(false);
