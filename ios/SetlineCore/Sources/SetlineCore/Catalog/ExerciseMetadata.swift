@@ -76,6 +76,18 @@ enum V1Heuristics {
         stabilityDemand: 4, fatigueCost: 2, setupCost: 1,
         rationale: "Hanging from a bar is grip- and position-demanding even though the load is bodyweight."
     )
+    static let bodyweightPress = ExerciseHeuristics(
+        stabilityDemand: 3, fatigueCost: 2, setupCost: 1,
+        rationale: "Bodyweight on the floor: the body is the bench, and there is nothing to set up."
+    )
+    static let nordic = ExerciseHeuristics(
+        stabilityDemand: 3, fatigueCost: 4, setupCost: 2,
+        rationale: "The hamstrings lower the whole body alone: hard, sore the first weeks, and the feet need an anchor."
+    )
+    static let floorCore = ExerciseHeuristics(
+        stabilityDemand: 3, fatigueCost: 2, setupCost: 1,
+        rationale: "Bodyweight on a mat or bench; control matters more than load, and there's nothing to set up."
+    )
 }
 
 enum ExerciseMetadata {
@@ -83,19 +95,31 @@ enum ExerciseMetadata {
     /// Every exercise the V1 ranking may recommend. A test asserts that each
     /// of these resolves to an `Exercise` carrying complete attributes.
     static let v1Recommendable: Set<String> = [
+        "ab-wheel",
         "assisted-pull-up",
         "back-extension",
+        "back-squat",
+        "barbell-row",
+        "bayesian-curl",
         "bulgarian",
         "cable-crunch",
         "cable-curl",
+        "cable-rear-delt-fly",
+        "cable-woodchop",
         "chest-press-machine",
         "close-grip-bench",
+        "cs-db-row",
         "db-bench",
+        "db-fly",
         "db-incline",
         "db-lateral",
+        "db-overhead-triceps",
         "db-rdl",
         "db-row",
         "db-shoulder-press",
+        "db-shrug",
+        "deadlift",
+        "decline-crunch",
         "dips",
         "ez-curl",
         "face-pull",
@@ -104,6 +128,8 @@ enum ExerciseMetadata {
         "hack-squat",
         "hammer-curl",
         "hanging-raise",
+        "hip-abduction",
+        "hip-adduction",
         "hip-thrust",
         "hip-thrust-machine",
         "incline-bench",
@@ -115,11 +141,15 @@ enum ExerciseMetadata {
         "leg-press",
         "leg-press-calf",
         "legs-lateral",
+        "low-cable-fly",
         "lying-curl",
         "machine-crunch",
+        "machine-dip",
         "machine-lateral",
+        "neutral-pull-up",
         "neutral-pulldown",
         "neutral-row",
+        "nordic-curl",
         "overhead-press",
         "overhead-triceps",
         "pec-fly",
@@ -127,17 +157,27 @@ enum ExerciseMetadata {
         "pull-up",
         "push-lateral",
         "push-shoulder",
+        "push-up",
         "rdl",
         "rear-delt",
+        "reverse-crunch",
+        "reverse-lunge",
         "reverse-pec",
+        "rope-hammer-curl",
         "science-lateral",
         "science-preacher",
         "seated-cable-row",
         "seated-calf",
         "seated-curl",
+        "single-arm-pressdown",
+        "single-arm-pulldown",
         "skull-crusher",
+        "smith-incline",
+        "smith-shoulder-press",
         "smith-squat",
+        "spider-curl",
         "standing-calf",
+        "straight-arm-pulldown",
         "strict-curl",
         "t-bar-row",
         "upper-fly",
@@ -152,12 +192,15 @@ enum ExerciseMetadata {
 
     static let stations: [String: Station] = [
         "assisted-pull-up": .assistedPullUp,
+        "back-squat": .squatRack,
         "chest-press-machine": .chestPressMachine,
         "close-grip-bench": .flatBenchRack,
         "dips": .dipStation,
         "flat-bench": .flatBenchRack,
         "hack-squat": .hackSquat,
         "hanging-raise": .pullUpBar,
+        "hip-abduction": .hipAbductionMachine,
+        "hip-adduction": .hipAdductionMachine,
         "hip-thrust-machine": .hipThrustMachine,
         "incline-bench": .inclineBenchRack,
         "incline-machine": .inclineChestPress,
@@ -168,6 +211,7 @@ enum ExerciseMetadata {
         "lying-curl": .lyingLegCurl,
         "machine-crunch": .abCrunchMachine,
         "machine-lateral": .lateralRaiseMachine,
+        "neutral-pull-up": .pullUpBar,
         "neutral-pulldown": .latPulldown,
         "neutral-row": .chestSupportedRow,
         "pec-fly": .pecDeck,
@@ -177,6 +221,8 @@ enum ExerciseMetadata {
         "reverse-pec": .pecDeck,
         "seated-calf": .seatedCalf,
         "seated-curl": .seatedLegCurl,
+        "smith-incline": .smithRack,
+        "smith-shoulder-press": .smithRack,
         "smith-squat": .smithRack,
         "standing-calf": .standingCalf,
         "t-bar-row": .tBarRow,
@@ -187,6 +233,15 @@ enum ExerciseMetadata {
     ]
 
     static let attributes: [String: ExerciseAttributes] = [
+        "ab-wheel": ExerciseAttributes(
+            primaryMuscles: [.init(.abs, 0.8), .init(.obliques, 0.2)],
+            jointActions: [.spinalFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            loadTags: [.lumbarFlexion],
+            heuristics: V1Heuristics.floorCore
+        ),
         "assisted-pull-up": ExerciseAttributes(
             primaryMuscles: [.init(.lat, 0.6), .init(.upperBack, 0.2), .init(.biceps, 0.2)],
             jointActions: [.shoulderExtension, .elbowFlexion, .scapularRetraction],
@@ -203,6 +258,31 @@ enum ExerciseMetadata {
             resistanceProfile: .midRangeBias,
             loadTags: [.lumbarFlexion],
             heuristics: V1Heuristics.backExtension
+        ),
+        "back-squat": ExerciseAttributes(
+            primaryMuscles: [.init(.quad, 0.55), .init(.glute, 0.3), .init(.adductor, 0.15)],
+            jointActions: [.kneeExtension, .hipExtension],
+            movementPattern: .squat,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            loadTags: [.deepKneeFlexion, .axialSpinalLoad],
+            heuristics: V1Heuristics.barbellAxial
+        ),
+        "barbell-row": ExerciseAttributes(
+            primaryMuscles: [.init(.upperBack, 0.45), .init(.lat, 0.3), .init(.biceps, 0.15), .init(.rearDelt, 0.1)],
+            jointActions: [.scapularRetraction, .shoulderExtension, .elbowFlexion],
+            movementPattern: .horizontalPull,
+            resistanceProfile: .midRangeBias,
+            loadTags: [.lumbarFlexion, .gripLimited],
+            heuristics: V1Heuristics.barbellAxial
+        ),
+        "bayesian-curl": ExerciseAttributes(
+            primaryMuscles: [.init(.biceps, 0.9), .init(.forearm, 0.1)],
+            jointActions: [.elbowFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            heuristics: V1Heuristics.cableStanding
         ),
         "bulgarian": ExerciseAttributes(
             primaryMuscles: [.init(.quad, 0.5), .init(.glute, 0.35), .init(.adductor, 0.15)],
@@ -229,6 +309,21 @@ enum ExerciseMetadata {
             loadTags: [.elbowCompression],
             heuristics: V1Heuristics.cableIsolation
         ),
+        "cable-rear-delt-fly": ExerciseAttributes(
+            primaryMuscles: [.init(.rearDelt, 0.85), .init(.upperBack, 0.15)],
+            jointActions: [.shoulderHorizontalAbduction],
+            movementPattern: .isolationAbduction,
+            resistanceProfile: .flatCable,
+            lengthenedBiasedROM: true,
+            heuristics: V1Heuristics.cableIsolation
+        ),
+        "cable-woodchop": ExerciseAttributes(
+            primaryMuscles: [.init(.obliques, 0.7), .init(.abs, 0.3)],
+            jointActions: [.spinalRotation],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .flatCable,
+            heuristics: V1Heuristics.cableStanding
+        ),
         "chest-press-machine": ExerciseAttributes(
             primaryMuscles: [.init(.chestMid, 0.6), .init(.triceps, 0.22), .init(.frontDelt, 0.18)],
             jointActions: [.shoulderHorizontalAdduction, .elbowExtension],
@@ -244,6 +339,14 @@ enum ExerciseMetadata {
             loadTags: [.elbowCompression, .wristExtension],
             heuristics: V1Heuristics.barbellPress
         ),
+        "cs-db-row": ExerciseAttributes(
+            primaryMuscles: [.init(.upperBack, 0.45), .init(.lat, 0.3), .init(.biceps, 0.15), .init(.rearDelt, 0.1)],
+            jointActions: [.scapularRetraction, .shoulderExtension, .elbowFlexion],
+            movementPattern: .horizontalPull,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            heuristics: V1Heuristics.dumbbellCompound
+        ),
         "db-bench": ExerciseAttributes(
             primaryMuscles: [.init(.chestMid, 0.6), .init(.triceps, 0.22), .init(.frontDelt, 0.18)],
             jointActions: [.shoulderHorizontalAdduction, .elbowExtension],
@@ -252,6 +355,15 @@ enum ExerciseMetadata {
             lengthenedBiasedROM: true,
             loadTags: [.endRangeShoulder],
             heuristics: V1Heuristics.dumbbellCompound
+        ),
+        "db-fly": ExerciseAttributes(
+            primaryMuscles: [.init(.chestMid, 0.85), .init(.frontDelt, 0.15)],
+            jointActions: [.shoulderHorizontalAdduction],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            loadTags: [.endRangeShoulder],
+            heuristics: V1Heuristics.dumbbellArm
         ),
         "db-incline": ExerciseAttributes(
             primaryMuscles: [.init(.chestUpper, 0.55), .init(.frontDelt, 0.25), .init(.triceps, 0.2)],
@@ -267,6 +379,15 @@ enum ExerciseMetadata {
             jointActions: [.shoulderAbduction],
             movementPattern: .isolationAbduction,
             resistanceProfile: .shortenedBias,
+            heuristics: V1Heuristics.dumbbellArm
+        ),
+        "db-overhead-triceps": ExerciseAttributes(
+            primaryMuscles: [.init(.triceps, 1)],
+            jointActions: [.elbowExtension],
+            movementPattern: .isolationExtension,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            loadTags: [.overheadPosition, .elbowCompression],
             heuristics: V1Heuristics.dumbbellArm
         ),
         "db-rdl": ExerciseAttributes(
@@ -293,6 +414,30 @@ enum ExerciseMetadata {
             resistanceProfile: .midRangeBias,
             loadTags: [.overheadPosition],
             heuristics: V1Heuristics.dumbbellCompound
+        ),
+        "db-shrug": ExerciseAttributes(
+            primaryMuscles: [.init(.trap, 1)],
+            jointActions: [.scapularElevation],
+            movementPattern: .isolationExtension,
+            resistanceProfile: .shortenedBias,
+            loadTags: [.gripLimited],
+            heuristics: V1Heuristics.dumbbellArm
+        ),
+        "deadlift": ExerciseAttributes(
+            primaryMuscles: [.init(.glute, 0.35), .init(.hamstring, 0.3), .init(.lowerBack, 0.2), .init(.quad, 0.15)],
+            jointActions: [.hipExtension, .kneeExtension],
+            movementPattern: .hinge,
+            resistanceProfile: .midRangeBias,
+            loadTags: [.axialSpinalLoad, .lumbarFlexion, .gripLimited],
+            heuristics: V1Heuristics.barbellAxial
+        ),
+        "decline-crunch": ExerciseAttributes(
+            primaryMuscles: [.init(.abs, 0.85), .init(.obliques, 0.15)],
+            jointActions: [.spinalFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .midRangeBias,
+            loadTags: [.lumbarFlexion],
+            heuristics: V1Heuristics.floorCore
         ),
         "dips": ExerciseAttributes(
             primaryMuscles: [.init(.chestMid, 0.45), .init(.triceps, 0.4), .init(.frontDelt, 0.15)],
@@ -359,6 +504,20 @@ enum ExerciseMetadata {
             lengthenedBiasedROM: true,
             loadTags: [.gripLimited],
             heuristics: V1Heuristics.hangingCore
+        ),
+        "hip-abduction": ExerciseAttributes(
+            primaryMuscles: [.init(.glute, 1)],
+            jointActions: [.hipAbduction],
+            movementPattern: .isolationAbduction,
+            resistanceProfile: .midRangeBias,
+            heuristics: V1Heuristics.selectorisedIsolation
+        ),
+        "hip-adduction": ExerciseAttributes(
+            primaryMuscles: [.init(.adductor, 1)],
+            jointActions: [.hipAdduction],
+            movementPattern: .isolationAbduction,
+            resistanceProfile: .midRangeBias,
+            heuristics: V1Heuristics.selectorisedIsolation
         ),
         "hip-thrust": ExerciseAttributes(
             primaryMuscles: [.init(.glute, 0.75), .init(.hamstring, 0.25)],
@@ -444,6 +603,15 @@ enum ExerciseMetadata {
             resistanceProfile: .flatCable,
             heuristics: V1Heuristics.cableIsolation
         ),
+        "low-cable-fly": ExerciseAttributes(
+            primaryMuscles: [.init(.chestUpper, 0.8), .init(.frontDelt, 0.2)],
+            jointActions: [.shoulderHorizontalAdduction, .shoulderFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .flatCable,
+            lengthenedBiasedROM: true,
+            loadTags: [.endRangeShoulder],
+            heuristics: V1Heuristics.cableIsolation
+        ),
         "lying-curl": ExerciseAttributes(
             primaryMuscles: [.init(.hamstring, 1)],
             jointActions: [.kneeFlexion],
@@ -458,12 +626,28 @@ enum ExerciseMetadata {
             resistanceProfile: .midRangeBias,
             heuristics: V1Heuristics.selectorisedIsolation
         ),
+        "machine-dip": ExerciseAttributes(
+            primaryMuscles: [.init(.chestMid, 0.45), .init(.triceps, 0.4), .init(.frontDelt, 0.15)],
+            jointActions: [.shoulderExtension, .elbowExtension],
+            movementPattern: .horizontalPress,
+            resistanceProfile: .midRangeBias,
+            heuristics: V1Heuristics.selectorisedCompound
+        ),
         "machine-lateral": ExerciseAttributes(
             primaryMuscles: [.init(.sideDelt, 0.9), .init(.rearDelt, 0.1)],
             jointActions: [.shoulderAbduction],
             movementPattern: .isolationAbduction,
             resistanceProfile: .midRangeBias,
             heuristics: V1Heuristics.selectorisedIsolation
+        ),
+        "neutral-pull-up": ExerciseAttributes(
+            primaryMuscles: [.init(.lat, 0.62), .init(.upperBack, 0.18), .init(.biceps, 0.2)],
+            jointActions: [.shoulderExtension, .elbowFlexion, .scapularRetraction],
+            movementPattern: .verticalPull,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            loadTags: [.gripLimited],
+            heuristics: V1Heuristics.bodyweightPull
         ),
         "neutral-pulldown": ExerciseAttributes(
             primaryMuscles: [.init(.lat, 0.62), .init(.upperBack, 0.18), .init(.biceps, 0.2)],
@@ -478,6 +662,14 @@ enum ExerciseMetadata {
             movementPattern: .horizontalPull,
             resistanceProfile: .midRangeBias,
             heuristics: V1Heuristics.selectorisedCompound
+        ),
+        "nordic-curl": ExerciseAttributes(
+            primaryMuscles: [.init(.hamstring, 1)],
+            jointActions: [.kneeFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            heuristics: V1Heuristics.nordic
         ),
         "overhead-press": ExerciseAttributes(
             primaryMuscles: [.init(.frontDelt, 0.55), .init(.triceps, 0.25), .init(.sideDelt, 0.2)],
@@ -536,6 +728,13 @@ enum ExerciseMetadata {
             loadTags: [.overheadPosition],
             heuristics: V1Heuristics.selectorisedCompound
         ),
+        "push-up": ExerciseAttributes(
+            primaryMuscles: [.init(.chestMid, 0.55), .init(.triceps, 0.25), .init(.frontDelt, 0.2)],
+            jointActions: [.shoulderHorizontalAdduction, .elbowExtension],
+            movementPattern: .horizontalPress,
+            resistanceProfile: .midRangeBias,
+            heuristics: V1Heuristics.bodyweightPress
+        ),
         "rdl": ExerciseAttributes(
             primaryMuscles: [.init(.hamstring, 0.55), .init(.glute, 0.3), .init(.lowerBack, 0.15)],
             jointActions: [.hipExtension],
@@ -552,12 +751,35 @@ enum ExerciseMetadata {
             resistanceProfile: .shortenedBias,
             heuristics: V1Heuristics.selectorisedIsolation
         ),
+        "reverse-crunch": ExerciseAttributes(
+            primaryMuscles: [.init(.abs, 0.8), .init(.obliques, 0.2)],
+            jointActions: [.hipFlexion, .spinalFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .midRangeBias,
+            heuristics: V1Heuristics.floorCore
+        ),
+        "reverse-lunge": ExerciseAttributes(
+            primaryMuscles: [.init(.quad, 0.45), .init(.glute, 0.4), .init(.adductor, 0.15)],
+            jointActions: [.kneeExtension, .hipExtension],
+            movementPattern: .lunge,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            loadTags: [.deepKneeFlexion],
+            heuristics: V1Heuristics.dumbbellUnilateral
+        ),
         "reverse-pec": ExerciseAttributes(
             primaryMuscles: [.init(.rearDelt, 0.85), .init(.upperBack, 0.15)],
             jointActions: [.shoulderHorizontalAbduction],
             movementPattern: .isolationAbduction,
             resistanceProfile: .shortenedBias,
             heuristics: V1Heuristics.selectorisedIsolation
+        ),
+        "rope-hammer-curl": ExerciseAttributes(
+            primaryMuscles: [.init(.biceps, 0.55), .init(.forearm, 0.45)],
+            jointActions: [.elbowFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .flatCable,
+            heuristics: V1Heuristics.cableIsolation
         ),
         "science-lateral": ExerciseAttributes(
             primaryMuscles: [.init(.sideDelt, 0.9), .init(.rearDelt, 0.1)],
@@ -597,6 +819,21 @@ enum ExerciseMetadata {
             resistanceProfile: .shortenedBias,
             heuristics: V1Heuristics.selectorisedIsolation
         ),
+        "single-arm-pressdown": ExerciseAttributes(
+            primaryMuscles: [.init(.triceps, 1)],
+            jointActions: [.elbowExtension],
+            movementPattern: .isolationExtension,
+            resistanceProfile: .shortenedBias,
+            heuristics: V1Heuristics.cableIsolation
+        ),
+        "single-arm-pulldown": ExerciseAttributes(
+            primaryMuscles: [.init(.lat, 0.7), .init(.upperBack, 0.15), .init(.biceps, 0.15)],
+            jointActions: [.shoulderExtension, .elbowFlexion],
+            movementPattern: .verticalPull,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            heuristics: V1Heuristics.cableStanding
+        ),
         "skull-crusher": ExerciseAttributes(
             primaryMuscles: [.init(.triceps, 1)],
             jointActions: [.elbowExtension],
@@ -605,6 +842,22 @@ enum ExerciseMetadata {
             lengthenedBiasedROM: true,
             loadTags: [.elbowCompression],
             heuristics: V1Heuristics.barbellArm
+        ),
+        "smith-incline": ExerciseAttributes(
+            primaryMuscles: [.init(.chestUpper, 0.55), .init(.frontDelt, 0.25), .init(.triceps, 0.2)],
+            jointActions: [.shoulderHorizontalAdduction, .shoulderFlexion, .elbowExtension],
+            movementPattern: .horizontalPress,
+            resistanceProfile: .midRangeBias,
+            loadTags: [.endRangeShoulder],
+            heuristics: V1Heuristics.smithOrPlate
+        ),
+        "smith-shoulder-press": ExerciseAttributes(
+            primaryMuscles: [.init(.frontDelt, 0.55), .init(.triceps, 0.25), .init(.sideDelt, 0.2)],
+            jointActions: [.shoulderFlexion, .shoulderAbduction, .elbowExtension],
+            movementPattern: .verticalPress,
+            resistanceProfile: .midRangeBias,
+            loadTags: [.overheadPosition],
+            heuristics: V1Heuristics.smithOrPlate
         ),
         "smith-squat": ExerciseAttributes(
             primaryMuscles: [.init(.quad, 0.65), .init(.glute, 0.25), .init(.adductor, 0.1)],
@@ -615,6 +868,13 @@ enum ExerciseMetadata {
             loadTags: [.deepKneeFlexion, .axialSpinalLoad],
             heuristics: V1Heuristics.smithOrPlate
         ),
+        "spider-curl": ExerciseAttributes(
+            primaryMuscles: [.init(.biceps, 0.9), .init(.forearm, 0.1)],
+            jointActions: [.elbowFlexion],
+            movementPattern: .isolationFlexion,
+            resistanceProfile: .shortenedBias,
+            heuristics: V1Heuristics.dumbbellArm
+        ),
         "standing-calf": ExerciseAttributes(
             primaryMuscles: [.init(.calf, 1)],
             jointActions: [.anklePlantarflexion],
@@ -623,6 +883,14 @@ enum ExerciseMetadata {
             lengthenedBiasedROM: true,
             loadTags: [.axialSpinalLoad],
             heuristics: V1Heuristics.selectorisedIsolation
+        ),
+        "straight-arm-pulldown": ExerciseAttributes(
+            primaryMuscles: [.init(.lat, 0.85), .init(.upperBack, 0.15)],
+            jointActions: [.shoulderExtension],
+            movementPattern: .isolationExtension,
+            resistanceProfile: .lengthenedBias,
+            lengthenedBiasedROM: true,
+            heuristics: V1Heuristics.cableStanding
         ),
         "strict-curl": ExerciseAttributes(
             primaryMuscles: [.init(.biceps, 0.85), .init(.forearm, 0.15)],
@@ -702,9 +970,16 @@ enum ExerciseMetadata {
         ),
     ]
 
-    /// The 26 exercises V1 adds purely so that substitution has somewhere to
-    /// go. They are not in any shipped plan; they exist to be recommended.
+    /// The 54 exercises V1 adds beyond the shipped plans: substitution
+    /// targets and the staples a lifter looks for. No plan prescribes them.
     static let additions: [String: Exercise] = [
+        "ab-wheel": Exercise(
+            id: "ab-wheel",
+            name: "Ab wheel rollout",
+            equipment: .bodyweight,
+            isCompound: false,
+            unilateral: false
+        ),
         "assisted-pull-up": Exercise(
             id: "assisted-pull-up",
             name: "Assisted pull-up",
@@ -716,6 +991,41 @@ enum ExerciseMetadata {
             id: "back-extension",
             name: "45° back extension",
             equipment: .bodyweight,
+            isCompound: false,
+            unilateral: false
+        ),
+        "back-squat": Exercise(
+            id: "back-squat",
+            name: "Barbell back squat",
+            equipment: .barbell,
+            isCompound: true,
+            unilateral: false
+        ),
+        "barbell-row": Exercise(
+            id: "barbell-row",
+            name: "Barbell row",
+            equipment: .barbell,
+            isCompound: true,
+            unilateral: false
+        ),
+        "bayesian-curl": Exercise(
+            id: "bayesian-curl",
+            name: "Bayesian cable curl",
+            equipment: .cable,
+            isCompound: false,
+            unilateral: true
+        ),
+        "cable-rear-delt-fly": Exercise(
+            id: "cable-rear-delt-fly",
+            name: "Cable rear-delt fly",
+            equipment: .cable,
+            isCompound: false,
+            unilateral: false
+        ),
+        "cable-woodchop": Exercise(
+            id: "cable-woodchop",
+            name: "Cable woodchop",
+            equipment: .cable,
             isCompound: false,
             unilateral: false
         ),
@@ -733,11 +1043,25 @@ enum ExerciseMetadata {
             isCompound: true,
             unilateral: false
         ),
+        "cs-db-row": Exercise(
+            id: "cs-db-row",
+            name: "Chest-supported dumbbell row",
+            equipment: .dumbbell,
+            isCompound: true,
+            unilateral: false
+        ),
         "db-bench": Exercise(
             id: "db-bench",
             name: "Dumbbell bench press",
             equipment: .dumbbell,
             isCompound: true,
+            unilateral: false
+        ),
+        "db-fly": Exercise(
+            id: "db-fly",
+            name: "Dumbbell fly",
+            equipment: .dumbbell,
+            isCompound: false,
             unilateral: false
         ),
         "db-incline": Exercise(
@@ -750,6 +1074,13 @@ enum ExerciseMetadata {
         "db-lateral": Exercise(
             id: "db-lateral",
             name: "Dumbbell lateral raise",
+            equipment: .dumbbell,
+            isCompound: false,
+            unilateral: false
+        ),
+        "db-overhead-triceps": Exercise(
+            id: "db-overhead-triceps",
+            name: "Overhead dumbbell extension",
             equipment: .dumbbell,
             isCompound: false,
             unilateral: false
@@ -773,6 +1104,27 @@ enum ExerciseMetadata {
             name: "Dumbbell shoulder press",
             equipment: .dumbbell,
             isCompound: true,
+            unilateral: false
+        ),
+        "db-shrug": Exercise(
+            id: "db-shrug",
+            name: "Dumbbell shrug",
+            equipment: .dumbbell,
+            isCompound: false,
+            unilateral: false
+        ),
+        "deadlift": Exercise(
+            id: "deadlift",
+            name: "Deadlift",
+            equipment: .barbell,
+            isCompound: true,
+            unilateral: false
+        ),
+        "decline-crunch": Exercise(
+            id: "decline-crunch",
+            name: "Weighted decline crunch",
+            equipment: .bodyweight,
+            isCompound: false,
             unilateral: false
         ),
         "dips": Exercise(
@@ -803,6 +1155,20 @@ enum ExerciseMetadata {
             isCompound: true,
             unilateral: false
         ),
+        "hip-abduction": Exercise(
+            id: "hip-abduction",
+            name: "Hip abduction machine",
+            equipment: .machineSelectorised,
+            isCompound: false,
+            unilateral: false
+        ),
+        "hip-adduction": Exercise(
+            id: "hip-adduction",
+            name: "Hip adduction machine",
+            equipment: .machineSelectorised,
+            isCompound: false,
+            unilateral: false
+        ),
         "hip-thrust-machine": Exercise(
             id: "hip-thrust-machine",
             name: "Hip thrust machine",
@@ -824,11 +1190,25 @@ enum ExerciseMetadata {
             isCompound: false,
             unilateral: false
         ),
+        "low-cable-fly": Exercise(
+            id: "low-cable-fly",
+            name: "Low-to-high cable fly",
+            equipment: .cable,
+            isCompound: false,
+            unilateral: false
+        ),
         "machine-crunch": Exercise(
             id: "machine-crunch",
             name: "Ab crunch machine",
             equipment: .machineSelectorised,
             isCompound: false,
+            unilateral: false
+        ),
+        "machine-dip": Exercise(
+            id: "machine-dip",
+            name: "Machine dip",
+            equipment: .machineSelectorised,
+            isCompound: true,
             unilateral: false
         ),
         "machine-lateral": Exercise(
@@ -838,11 +1218,25 @@ enum ExerciseMetadata {
             isCompound: false,
             unilateral: false
         ),
+        "neutral-pull-up": Exercise(
+            id: "neutral-pull-up",
+            name: "Neutral-grip pull-up",
+            equipment: .bodyweight,
+            isCompound: true,
+            unilateral: false
+        ),
         "neutral-pulldown": Exercise(
             id: "neutral-pulldown",
             name: "Neutral-grip lat pulldown",
             equipment: .machineSelectorised,
             isCompound: true,
+            unilateral: false
+        ),
+        "nordic-curl": Exercise(
+            id: "nordic-curl",
+            name: "Nordic hamstring curl",
+            equipment: .bodyweight,
+            isCompound: false,
             unilateral: false
         ),
         "overhead-press": Exercise(
@@ -852,12 +1246,54 @@ enum ExerciseMetadata {
             isCompound: true,
             unilateral: false
         ),
+        "push-up": Exercise(
+            id: "push-up",
+            name: "Push-up",
+            equipment: .bodyweight,
+            isCompound: true,
+            unilateral: false
+        ),
+        "reverse-crunch": Exercise(
+            id: "reverse-crunch",
+            name: "Reverse crunch",
+            equipment: .bodyweight,
+            isCompound: false,
+            unilateral: false
+        ),
+        "reverse-lunge": Exercise(
+            id: "reverse-lunge",
+            name: "Reverse lunge",
+            equipment: .dumbbell,
+            isCompound: true,
+            unilateral: true
+        ),
+        "rope-hammer-curl": Exercise(
+            id: "rope-hammer-curl",
+            name: "Rope hammer curl",
+            equipment: .cable,
+            isCompound: false,
+            unilateral: false
+        ),
         "seated-cable-row": Exercise(
             id: "seated-cable-row",
             name: "Seated cable row",
             equipment: .cable,
             isCompound: true,
             unilateral: false
+        ),
+        "single-arm-pressdown": Exercise(
+            id: "single-arm-pressdown",
+            name: "Single-arm cable pressdown",
+            equipment: .cable,
+            isCompound: false,
+            unilateral: true
+        ),
+        "single-arm-pulldown": Exercise(
+            id: "single-arm-pulldown",
+            name: "Single-arm cable pulldown",
+            equipment: .cable,
+            isCompound: true,
+            unilateral: true
         ),
         "skull-crusher": Exercise(
             id: "skull-crusher",
@@ -866,11 +1302,39 @@ enum ExerciseMetadata {
             isCompound: false,
             unilateral: false
         ),
+        "smith-incline": Exercise(
+            id: "smith-incline",
+            name: "Smith incline press",
+            equipment: .smith,
+            isCompound: true,
+            unilateral: false
+        ),
+        "smith-shoulder-press": Exercise(
+            id: "smith-shoulder-press",
+            name: "Smith shoulder press",
+            equipment: .smith,
+            isCompound: true,
+            unilateral: false
+        ),
         "smith-squat": Exercise(
             id: "smith-squat",
             name: "Smith machine squat",
             equipment: .smith,
             isCompound: true,
+            unilateral: false
+        ),
+        "spider-curl": Exercise(
+            id: "spider-curl",
+            name: "Spider curl",
+            equipment: .dumbbell,
+            isCompound: false,
+            unilateral: false
+        ),
+        "straight-arm-pulldown": Exercise(
+            id: "straight-arm-pulldown",
+            name: "Straight-arm pulldown",
+            equipment: .cable,
+            isCompound: false,
             unilateral: false
         ),
         "t-bar-row": Exercise(
@@ -909,10 +1373,14 @@ enum ExerciseMetadata {
     static let curatedNameToID: [String: String] = [
         "45° hip extension": "back-extension",
         "Assisted pull-up": "assisted-pull-up",
+        "Bayesian cable curl": "bayesian-curl",
         "Cable fly": "upper-fly",
+        "Cable rear-delt fly": "cable-rear-delt-fly",
+        "Chest-supported dumbbell row": "cs-db-row",
         "Converging chest press": "chest-press-machine",
         "Dumbbell Romanian deadlift": "db-rdl",
         "Dumbbell bench press": "db-bench",
+        "Dumbbell fly": "db-fly",
         "Dumbbell lateral raise": "db-lateral",
         "EZ-bar skull crusher": "skull-crusher",
         "Flat bench press": "flat-bench",
@@ -925,42 +1393,82 @@ enum ExerciseMetadata {
         "Leg-press calf raise": "leg-press-calf",
         "Lying leg curl": "lying-curl",
         "Machine crunch": "machine-crunch",
+        "Machine dip": "machine-dip",
         "Machine lateral raise": "machine-lateral",
         "Machine preacher curl": "science-preacher",
         "Neutral cable row": "seated-cable-row",
         "Neutral-grip lat pulldown": "neutral-pulldown",
+        "Neutral-grip pull-up": "neutral-pull-up",
         "Neutral-grip pulldown": "neutral-pulldown",
+        "Nordic hamstring curl": "nordic-curl",
+        "Overhead dumbbell extension": "db-overhead-triceps",
         "Pec-deck": "pec-fly",
+        "Reverse crunch": "reverse-crunch",
+        "Reverse lunge": "reverse-lunge",
         "Reverse pec deck": "reverse-pec",
+        "Rope hammer curl": "rope-hammer-curl",
         "Seated dumbbell press": "db-shoulder-press",
         "Seated leg curl": "seated-curl",
+        "Single-arm cable pressdown": "single-arm-pressdown",
+        "Single-arm cable pulldown": "single-arm-pulldown",
+        "Smith shoulder press": "smith-shoulder-press",
+        "Spider curl": "spider-curl",
+        "Weighted decline crunch": "decline-crunch",
     ]
 
     static let additionRoles: [String: ExerciseRole] = [
+        "ab-wheel": .isolation,
         "assisted-pull-up": .secondaryCompound,
         "back-extension": .accessory,
+        "back-squat": .primaryStrength,
+        "barbell-row": .secondaryCompound,
+        "bayesian-curl": .isolation,
+        "cable-rear-delt-fly": .isolation,
+        "cable-woodchop": .isolation,
         "chest-press-machine": .secondaryCompound,
         "close-grip-bench": .secondaryCompound,
+        "cs-db-row": .secondaryCompound,
         "db-bench": .secondaryCompound,
+        "db-fly": .isolation,
         "db-incline": .secondaryCompound,
         "db-lateral": .isolation,
+        "db-overhead-triceps": .isolation,
         "db-rdl": .primaryStrength,
         "db-row": .secondaryCompound,
         "db-shoulder-press": .secondaryCompound,
+        "db-shrug": .isolation,
+        "deadlift": .primaryStrength,
+        "decline-crunch": .isolation,
         "dips": .secondaryCompound,
         "ez-curl": .accessory,
         "face-pull": .isolation,
         "goblet-squat": .secondaryCompound,
+        "hip-abduction": .isolation,
+        "hip-adduction": .isolation,
         "hip-thrust-machine": .secondaryCompound,
         "incline-db-curl": .isolation,
         "leg-press-calf": .isolation,
+        "low-cable-fly": .isolation,
         "machine-crunch": .isolation,
+        "machine-dip": .secondaryCompound,
         "machine-lateral": .isolation,
+        "neutral-pull-up": .secondaryCompound,
         "neutral-pulldown": .secondaryCompound,
+        "nordic-curl": .accessory,
         "overhead-press": .primaryStrength,
+        "push-up": .secondaryCompound,
+        "reverse-crunch": .isolation,
+        "reverse-lunge": .secondaryCompound,
+        "rope-hammer-curl": .isolation,
         "seated-cable-row": .secondaryCompound,
+        "single-arm-pressdown": .isolation,
+        "single-arm-pulldown": .secondaryCompound,
         "skull-crusher": .accessory,
+        "smith-incline": .secondaryCompound,
+        "smith-shoulder-press": .secondaryCompound,
         "smith-squat": .primaryStrength,
+        "spider-curl": .isolation,
+        "straight-arm-pulldown": .isolation,
         "t-bar-row": .secondaryCompound,
         "walking-lunge": .secondaryCompound,
     ]

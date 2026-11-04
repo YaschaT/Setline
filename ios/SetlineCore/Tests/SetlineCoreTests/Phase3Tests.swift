@@ -6,9 +6,9 @@ import XCTest
 final class CatalogueCompletenessTests: XCTestCase {
 
     func testCuratedCatalogueHasSixtyFiveExercises() {
-        XCTAssertEqual(ExerciseCatalog.all.count, 65)
+        XCTAssertEqual(ExerciseCatalog.all.count, 93)
         XCTAssertEqual(GeneratedExerciseCatalog.exercises.count, 39)
-        XCTAssertEqual(ExerciseMetadata.additions.count, 26)
+        XCTAssertEqual(ExerciseMetadata.additions.count, 54)
     }
 
     func testAdditionsDoNotCollideWithPlannedExercises() {
@@ -118,7 +118,7 @@ final class CatalogueCompletenessTests: XCTestCase {
         let names = Set(AlternativesCatalog.byExercise.values.flatMap { $0 }.map(\.name))
         let mapped = names.filter { ExerciseMetadata.curatedNameToID[$0] != nil }
         XCTAssertEqual(names.count, 59)
-        XCTAssertEqual(mapped.count, 27)
+        XCTAssertEqual(mapped.count, 43)
     }
 }
 
@@ -162,17 +162,21 @@ final class SubstitutionRankingTests: XCTestCase {
         let empty = ExerciseCatalog.all.keys
             .filter { SubstitutionRanker.canonical($0) == $0 }
             .filter { rank($0).isEmpty }
-        XCTAssertEqual(Set(empty), ["leg-extension"])
+        // Each of these is the only exercise of its kind in the catalogue.
+        XCTAssertEqual(Set(empty), [
+            "leg-extension", "hip-abduction", "hip-adduction", "db-shrug",
+            "cable-woodchop", "straight-arm-pulldown",
+        ])
     }
 
     func testResultCountsAreHonest() {
         let counts = ExerciseCatalog.all.keys
             .filter { SubstitutionRanker.canonical($0) == $0 }
             .map { rank($0).count }
-        XCTAssertEqual(counts.filter { $0 == 3 }.count, 38)
-        XCTAssertEqual(counts.filter { $0 == 2 }.count, 14)
-        XCTAssertEqual(counts.filter { $0 == 1 }.count, 5)
-        XCTAssertEqual(counts.filter { $0 == 0 }.count, 1)
+        XCTAssertEqual(counts.filter { $0 == 3 }.count, 69)
+        XCTAssertEqual(counts.filter { $0 == 2 }.count, 11)
+        XCTAssertEqual(counts.filter { $0 == 1 }.count, 0)
+        XCTAssertEqual(counts.filter { $0 == 0 }.count, 6)
     }
 
     func testNeverRecommendsItself() {
@@ -248,16 +252,17 @@ final class SubstitutionRankingTests: XCTestCase {
         XCTAssertTrue(results.isEmpty, "leg-extension offered \(results)")
     }
 
-    /// Knee flexion does not fall back to hip extension.
+    /// Knee flexion does not fall back to hip extension: a leg curl gets
+    /// the other leg curl and the Nordic curl, never a hinge.
     func testSeatedCurlReturnsOnlyTheOtherLegCurl() {
-        XCTAssertEqual(ids(rank("seated-curl")), ["lying-curl"])
-        XCTAssertEqual(ids(rank("lying-curl")), ["seated-curl"])
+        XCTAssertEqual(ids(rank("seated-curl")), ["lying-curl", "nordic-curl"])
+        XCTAssertEqual(ids(rank("lying-curl")), ["seated-curl", "nordic-curl"])
     }
 
     /// Isolation elbow extension does not fall back to a press.
     func testPressdownNeverReturnsAPress() {
         let results = ids(rank("pressdown"))
-        XCTAssertEqual(results, ["overhead-triceps", "skull-crusher"])
+        XCTAssertEqual(results, ["single-arm-pressdown", "db-overhead-triceps", "skull-crusher"])
         XCTAssertFalse(results.contains("dips"))
         XCTAssertFalse(results.contains("close-grip-bench"))
     }
@@ -271,16 +276,16 @@ final class SubstitutionRankingTests: XCTestCase {
                 "lat-pulldown fell back to \(result.exercise.id)"
             )
         }
-        XCTAssertEqual(ids(rank("lat-pulldown")), ["neutral-pulldown", "pull-up", "kneeling-lat"])
+        XCTAssertEqual(ids(rank("lat-pulldown")), ["neutral-pulldown", "neutral-pull-up", "single-arm-pulldown"])
     }
 
     /// A related match is only ever used to fill what the exact tier could
-    /// not — the lunge family has one other lunge, then reaches into squats.
+    /// not — the lunge family has two other lunges, then reaches into squats.
     func testRelatedTierOnlyFillsWhatExactCannot() {
         let results = rank("bulgarian")
-        XCTAssertEqual(results.first?.exercise.id, "walking-lunge")
-        XCTAssertEqual(results.first?.match, .exact)
-        XCTAssertTrue(results.dropFirst().allSatisfy { $0.match == .related })
+        XCTAssertEqual(results.prefix(2).map(\.exercise.id), ["reverse-lunge", "walking-lunge"])
+        XCTAssertTrue(results.prefix(2).allSatisfy { $0.match == .exact })
+        XCTAssertTrue(results.dropFirst(2).allSatisfy { $0.match == .related })
     }
 
     func testARelatedMatchAlwaysStaysInTheFamily() {
@@ -296,9 +301,16 @@ final class SubstitutionRankingTests: XCTestCase {
     }
 
     /// The `Muscle` enum splits the chest, so without kinship an incline press
-    /// and a flat press read as unrelated exercises.
+    /// and a flat press read as unrelated exercises. With the incline
+    /// variants out of the way, a flat press still answers an incline one.
     func testRelatedMuscleGroupsCount() {
-        XCTAssertTrue(ids(rank("incline-bench")).contains("chest-press-machine"))
+        var catalog = ExerciseCatalog.all
+        for id in ["incline-machine", "smith-incline", "db-incline"] { catalog[id] = nil }
+        let results = SubstitutionRanker.rank(
+            SwapContext(currentExerciseID: "incline-bench", role: ExerciseCatalog.role("incline-bench")),
+            catalog: catalog
+        )
+        XCTAssertTrue(ids(results).contains("chest-press-machine"))
         XCTAssertTrue(ids(rank("flat-bench")).contains("chest-press-machine"))
     }
 
@@ -318,11 +330,11 @@ final class SubstitutionRankingTests: XCTestCase {
     /// A weighted pull-up and an assisted pull-up are one answer, not two, so
     /// a genuinely different option outranks the twin when one exists.
     func testANearTwinDoesNotTakeASlotFromADifferentAnswer() {
-        // The assisted pull-up is the same answer as the weighted pull-up, so
-        // with both eligible only one of them appears.
+        // The pull-ups (wide, neutral, assisted) are one answer, so with all
+        // three eligible exactly one of them appears.
         let results = ids(rank("lat-pulldown"))
-        XCTAssertTrue(results.contains("pull-up"))
-        XCTAssertFalse(results.contains("assisted-pull-up"), "both pull-ups took a slot: \(results)")
+        let pullUps = results.filter { ["pull-up", "neutral-pull-up", "assisted-pull-up"].contains($0) }
+        XCTAssertEqual(pullUps.count, 1, "more than one pull-up took a slot: \(results)")
     }
 
     func testThinCatalogueCornersReturnFewerRatherThanWorse() {
@@ -340,7 +352,7 @@ final class SubstitutionRankingTests: XCTestCase {
     /// station, not the whole equipment class.
     func testOccupiedExcludesTheSameStationOnly() {
         let results = rank("flat-bench", reason: .occupied)
-        XCTAssertEqual(ids(results), ["chest-press-machine", "db-bench", "incline-machine"])
+        XCTAssertEqual(ids(results), ["chest-press-machine", "db-bench", "push-up"])
         XCTAssertFalse(
             ids(results).contains("close-grip-bench"),
             "close-grip-bench is on the same rack and must be excluded"
@@ -358,7 +370,7 @@ final class SubstitutionRankingTests: XCTestCase {
         )
         // The other pulldown shares the station, so it goes.
         XCTAssertFalse(ids(results).contains("neutral-pulldown"))
-        XCTAssertEqual(ids(results), ["pull-up", "assisted-pull-up", "kneeling-lat"])
+        XCTAssertEqual(ids(results), ["neutral-pull-up", "single-arm-pulldown", "assisted-pull-up"])
     }
 
     /// Pain can legitimately empty the primary surface: every squat pattern in
@@ -463,20 +475,21 @@ final class SubstitutionRankingTests: XCTestCase {
     //
     // These pin the eight examples from the approved proposal. They are the
     // product review surface: if a change to the weights moves one of these,
-    // that is a product decision, not a refactor.
+    // that is a product decision, not a refactor. The November 2026 catalogue
+    // additions moved six of them, each to a closer match: the Smith incline
+    // press for incline, the push-up for flat bench (similar growth at
+    // matched effort), the Bayesian curl, and two more triceps isolations.
 
     func testSampleOutputs() {
         let expected: [String: [String]] = [
-            "flat-bench":    ["chest-press-machine", "db-bench", "close-grip-bench"],
-            "incline-bench": ["incline-machine", "db-incline", "chest-press-machine"],
-            "lat-pulldown":  ["neutral-pulldown", "pull-up", "kneeling-lat"],
-            "neutral-row":   ["t-bar-row", "seated-cable-row", "wide-row"],
+            "flat-bench":    ["chest-press-machine", "db-bench", "push-up"],
+            "incline-bench": ["incline-machine", "smith-incline", "db-incline"],
+            "lat-pulldown":  ["neutral-pulldown", "neutral-pull-up", "single-arm-pulldown"],
+            "neutral-row":   ["t-bar-row", "seated-cable-row", "barbell-row"],
             "leg-press":     ["smith-squat", "hack-squat", "goblet-squat"],
             "rdl":           ["db-rdl", "hip-thrust", "hip-thrust-machine"],
-            "strict-curl":   ["ez-curl", "incline-db-curl", "cable-curl"],
-            // Only four triceps-isolation exercises exist, so this one is
-            // honestly two options rather than a padded three.
-            "pressdown":     ["overhead-triceps", "skull-crusher"],
+            "strict-curl":   ["ez-curl", "bayesian-curl", "incline-db-curl"],
+            "pressdown":     ["single-arm-pressdown", "db-overhead-triceps", "skull-crusher"],
         ]
         for (id, want) in expected.sorted(by: { $0.key < $1.key }) {
             XCTAssertEqual(ids(rank(id)), want, "top 3 for \(id) changed")

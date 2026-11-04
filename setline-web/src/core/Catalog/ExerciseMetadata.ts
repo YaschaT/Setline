@@ -1,12 +1,12 @@
-// Generated from Tools/attributes.py by Tools/gen_v1.py — do not hand-edit.
+// Generated from Tools/attributes.py by Tools/gen_v1_ts.py — do not hand-edit.
 //
 // The curated V1 metadata for exercise substitution (TRAINING_LOGIC §1, §14).
 // Objective fields describe what the exercise physically is. The heuristic
 // triples are product judgement: they order a list, they are never shown to
 // the user, and no copy may present them as measurement.
 //
-// Ported from ios/SetlineCore/Sources/SetlineCore/Catalog/ExerciseMetadata.swift
-// by transforming its literals; every entry is the Swift one.
+// The same table emits ios/SetlineCore/Sources/SetlineCore/Catalog/ExerciseMetadata.swift
+// (Tools/gen_v1.py), so every entry is the Swift one.
 
 import {
   ExerciseAttributes,
@@ -123,6 +123,24 @@ export const V1Heuristics = {
     setupCost: 1,
     rationale: "Hanging from a bar is grip- and position-demanding even though the load is bodyweight.",
   }),
+  bodyweightPress: ExerciseHeuristics.make({
+    stabilityDemand: 3,
+    fatigueCost: 2,
+    setupCost: 1,
+    rationale: "Bodyweight on the floor: the body is the bench, and there is nothing to set up.",
+  }),
+  nordic: ExerciseHeuristics.make({
+    stabilityDemand: 3,
+    fatigueCost: 4,
+    setupCost: 2,
+    rationale: "The hamstrings lower the whole body alone: hard, sore the first weeks, and the feet need an anchor.",
+  }),
+  floorCore: ExerciseHeuristics.make({
+    stabilityDemand: 3,
+    fatigueCost: 2,
+    setupCost: 1,
+    rationale: "Bodyweight on a mat or bench; control matters more than load, and there's nothing to set up.",
+  }),
 };
 
 export const ExerciseMetadata = {
@@ -131,19 +149,31 @@ export const ExerciseMetadata = {
    * of these resolves to an `Exercise` carrying complete attributes.
    */
   v1Recommendable: new Set<string>([
+    "ab-wheel",
     "assisted-pull-up",
     "back-extension",
+    "back-squat",
+    "barbell-row",
+    "bayesian-curl",
     "bulgarian",
     "cable-crunch",
     "cable-curl",
+    "cable-rear-delt-fly",
+    "cable-woodchop",
     "chest-press-machine",
     "close-grip-bench",
+    "cs-db-row",
     "db-bench",
+    "db-fly",
     "db-incline",
     "db-lateral",
+    "db-overhead-triceps",
     "db-rdl",
     "db-row",
     "db-shoulder-press",
+    "db-shrug",
+    "deadlift",
+    "decline-crunch",
     "dips",
     "ez-curl",
     "face-pull",
@@ -152,6 +182,8 @@ export const ExerciseMetadata = {
     "hack-squat",
     "hammer-curl",
     "hanging-raise",
+    "hip-abduction",
+    "hip-adduction",
     "hip-thrust",
     "hip-thrust-machine",
     "incline-bench",
@@ -163,11 +195,15 @@ export const ExerciseMetadata = {
     "leg-press",
     "leg-press-calf",
     "legs-lateral",
+    "low-cable-fly",
     "lying-curl",
     "machine-crunch",
+    "machine-dip",
     "machine-lateral",
+    "neutral-pull-up",
     "neutral-pulldown",
     "neutral-row",
+    "nordic-curl",
     "overhead-press",
     "overhead-triceps",
     "pec-fly",
@@ -175,17 +211,27 @@ export const ExerciseMetadata = {
     "pull-up",
     "push-lateral",
     "push-shoulder",
+    "push-up",
     "rdl",
     "rear-delt",
+    "reverse-crunch",
+    "reverse-lunge",
     "reverse-pec",
+    "rope-hammer-curl",
     "science-lateral",
     "science-preacher",
     "seated-cable-row",
     "seated-calf",
     "seated-curl",
+    "single-arm-pressdown",
+    "single-arm-pulldown",
     "skull-crusher",
+    "smith-incline",
+    "smith-shoulder-press",
     "smith-squat",
+    "spider-curl",
     "standing-calf",
+    "straight-arm-pulldown",
     "strict-curl",
     "t-bar-row",
     "upper-fly",
@@ -200,12 +246,15 @@ export const ExerciseMetadata = {
 
   stations: dictionary({
     "assisted-pull-up": "assistedPullUp",
+    "back-squat": "squatRack",
     "chest-press-machine": "chestPressMachine",
     "close-grip-bench": "flatBenchRack",
     "dips": "dipStation",
     "flat-bench": "flatBenchRack",
     "hack-squat": "hackSquat",
     "hanging-raise": "pullUpBar",
+    "hip-abduction": "hipAbductionMachine",
+    "hip-adduction": "hipAdductionMachine",
     "hip-thrust-machine": "hipThrustMachine",
     "incline-bench": "inclineBenchRack",
     "incline-machine": "inclineChestPress",
@@ -216,6 +265,7 @@ export const ExerciseMetadata = {
     "lying-curl": "lyingLegCurl",
     "machine-crunch": "abCrunchMachine",
     "machine-lateral": "lateralRaiseMachine",
+    "neutral-pull-up": "pullUpBar",
     "neutral-pulldown": "latPulldown",
     "neutral-row": "chestSupportedRow",
     "pec-fly": "pecDeck",
@@ -225,6 +275,8 @@ export const ExerciseMetadata = {
     "reverse-pec": "pecDeck",
     "seated-calf": "seatedCalf",
     "seated-curl": "seatedLegCurl",
+    "smith-incline": "smithRack",
+    "smith-shoulder-press": "smithRack",
     "smith-squat": "smithRack",
     "standing-calf": "standingCalf",
     "t-bar-row": "tBarRow",
@@ -235,6 +287,18 @@ export const ExerciseMetadata = {
   }) as Record<string, Station>,
 
   attributes: dictionary({
+    "ab-wheel": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("abs", 0.8),
+        MuscleContribution.make("obliques", 0.2),
+      ],
+      jointActions: new Set<JointAction>(["spinalFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      loadTags: new Set<LoadTag>(["lumbarFlexion"]),
+      heuristics: V1Heuristics.floorCore,
+    }),
     "assisted-pull-up": ExerciseAttributes.make({
       primaryMuscles: [
         MuscleContribution.make("lat", 0.6),
@@ -260,6 +324,43 @@ export const ExerciseMetadata = {
       loadTags: new Set<LoadTag>(["lumbarFlexion"]),
       heuristics: V1Heuristics.backExtension,
     }),
+    "back-squat": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("quad", 0.55),
+        MuscleContribution.make("glute", 0.3),
+        MuscleContribution.make("adductor", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["kneeExtension", "hipExtension"]),
+      movementPattern: "squat",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      loadTags: new Set<LoadTag>(["deepKneeFlexion", "axialSpinalLoad"]),
+      heuristics: V1Heuristics.barbellAxial,
+    }),
+    "barbell-row": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("upperBack", 0.45),
+        MuscleContribution.make("lat", 0.3),
+        MuscleContribution.make("biceps", 0.15),
+        MuscleContribution.make("rearDelt", 0.1),
+      ],
+      jointActions: new Set<JointAction>(["scapularRetraction", "shoulderExtension", "elbowFlexion"]),
+      movementPattern: "horizontalPull",
+      resistanceProfile: "midRangeBias",
+      loadTags: new Set<LoadTag>(["lumbarFlexion", "gripLimited"]),
+      heuristics: V1Heuristics.barbellAxial,
+    }),
+    "bayesian-curl": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("biceps", 0.9),
+        MuscleContribution.make("forearm", 0.1),
+      ],
+      jointActions: new Set<JointAction>(["elbowFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      heuristics: V1Heuristics.cableStanding,
+    }),
     "bulgarian": ExerciseAttributes.make({
       primaryMuscles: [
         MuscleContribution.make("quad", 0.5),
@@ -274,7 +375,10 @@ export const ExerciseMetadata = {
       heuristics: V1Heuristics.dumbbellUnilateral,
     }),
     "cable-crunch": ExerciseAttributes.make({
-      primaryMuscles: [MuscleContribution.make("abs", 0.85), MuscleContribution.make("obliques", 0.15)],
+      primaryMuscles: [
+        MuscleContribution.make("abs", 0.85),
+        MuscleContribution.make("obliques", 0.15),
+      ],
       jointActions: new Set<JointAction>(["spinalFlexion"]),
       movementPattern: "isolationFlexion",
       resistanceProfile: "midRangeBias",
@@ -291,6 +395,27 @@ export const ExerciseMetadata = {
       resistanceProfile: "flatCable",
       loadTags: new Set<LoadTag>(["elbowCompression"]),
       heuristics: V1Heuristics.cableIsolation,
+    }),
+    "cable-rear-delt-fly": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("rearDelt", 0.85),
+        MuscleContribution.make("upperBack", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["shoulderHorizontalAbduction"]),
+      movementPattern: "isolationAbduction",
+      resistanceProfile: "flatCable",
+      lengthenedBiasedROM: true,
+      heuristics: V1Heuristics.cableIsolation,
+    }),
+    "cable-woodchop": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("obliques", 0.7),
+        MuscleContribution.make("abs", 0.3),
+      ],
+      jointActions: new Set<JointAction>(["spinalRotation"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "flatCable",
+      heuristics: V1Heuristics.cableStanding,
     }),
     "chest-press-machine": ExerciseAttributes.make({
       primaryMuscles: [
@@ -315,6 +440,19 @@ export const ExerciseMetadata = {
       loadTags: new Set<LoadTag>(["elbowCompression", "wristExtension"]),
       heuristics: V1Heuristics.barbellPress,
     }),
+    "cs-db-row": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("upperBack", 0.45),
+        MuscleContribution.make("lat", 0.3),
+        MuscleContribution.make("biceps", 0.15),
+        MuscleContribution.make("rearDelt", 0.1),
+      ],
+      jointActions: new Set<JointAction>(["scapularRetraction", "shoulderExtension", "elbowFlexion"]),
+      movementPattern: "horizontalPull",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      heuristics: V1Heuristics.dumbbellCompound,
+    }),
     "db-bench": ExerciseAttributes.make({
       primaryMuscles: [
         MuscleContribution.make("chestMid", 0.6),
@@ -327,6 +465,18 @@ export const ExerciseMetadata = {
       lengthenedBiasedROM: true,
       loadTags: new Set<LoadTag>(["endRangeShoulder"]),
       heuristics: V1Heuristics.dumbbellCompound,
+    }),
+    "db-fly": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("chestMid", 0.85),
+        MuscleContribution.make("frontDelt", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["shoulderHorizontalAdduction"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      loadTags: new Set<LoadTag>(["endRangeShoulder"]),
+      heuristics: V1Heuristics.dumbbellArm,
     }),
     "db-incline": ExerciseAttributes.make({
       primaryMuscles: [
@@ -349,6 +499,15 @@ export const ExerciseMetadata = {
       jointActions: new Set<JointAction>(["shoulderAbduction"]),
       movementPattern: "isolationAbduction",
       resistanceProfile: "shortenedBias",
+      heuristics: V1Heuristics.dumbbellArm,
+    }),
+    "db-overhead-triceps": ExerciseAttributes.make({
+      primaryMuscles: [MuscleContribution.make("triceps", 1)],
+      jointActions: new Set<JointAction>(["elbowExtension"]),
+      movementPattern: "isolationExtension",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      loadTags: new Set<LoadTag>(["overheadPosition", "elbowCompression"]),
       heuristics: V1Heuristics.dumbbellArm,
     }),
     "db-rdl": ExerciseAttributes.make({
@@ -388,6 +547,38 @@ export const ExerciseMetadata = {
       resistanceProfile: "midRangeBias",
       loadTags: new Set<LoadTag>(["overheadPosition"]),
       heuristics: V1Heuristics.dumbbellCompound,
+    }),
+    "db-shrug": ExerciseAttributes.make({
+      primaryMuscles: [MuscleContribution.make("trap", 1)],
+      jointActions: new Set<JointAction>(["scapularElevation"]),
+      movementPattern: "isolationExtension",
+      resistanceProfile: "shortenedBias",
+      loadTags: new Set<LoadTag>(["gripLimited"]),
+      heuristics: V1Heuristics.dumbbellArm,
+    }),
+    "deadlift": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("glute", 0.35),
+        MuscleContribution.make("hamstring", 0.3),
+        MuscleContribution.make("lowerBack", 0.2),
+        MuscleContribution.make("quad", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["hipExtension", "kneeExtension"]),
+      movementPattern: "hinge",
+      resistanceProfile: "midRangeBias",
+      loadTags: new Set<LoadTag>(["axialSpinalLoad", "lumbarFlexion", "gripLimited"]),
+      heuristics: V1Heuristics.barbellAxial,
+    }),
+    "decline-crunch": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("abs", 0.85),
+        MuscleContribution.make("obliques", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["spinalFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "midRangeBias",
+      loadTags: new Set<LoadTag>(["lumbarFlexion"]),
+      heuristics: V1Heuristics.floorCore,
     }),
     "dips": ExerciseAttributes.make({
       primaryMuscles: [
@@ -462,7 +653,10 @@ export const ExerciseMetadata = {
       heuristics: V1Heuristics.smithOrPlate,
     }),
     "hammer-curl": ExerciseAttributes.make({
-      primaryMuscles: [MuscleContribution.make("biceps", 0.6), MuscleContribution.make("forearm", 0.4)],
+      primaryMuscles: [
+        MuscleContribution.make("biceps", 0.6),
+        MuscleContribution.make("forearm", 0.4),
+      ],
       jointActions: new Set<JointAction>(["elbowFlexion"]),
       movementPattern: "isolationFlexion",
       resistanceProfile: "midRangeBias",
@@ -480,6 +674,20 @@ export const ExerciseMetadata = {
       lengthenedBiasedROM: true,
       loadTags: new Set<LoadTag>(["gripLimited"]),
       heuristics: V1Heuristics.hangingCore,
+    }),
+    "hip-abduction": ExerciseAttributes.make({
+      primaryMuscles: [MuscleContribution.make("glute", 1)],
+      jointActions: new Set<JointAction>(["hipAbduction"]),
+      movementPattern: "isolationAbduction",
+      resistanceProfile: "midRangeBias",
+      heuristics: V1Heuristics.selectorisedIsolation,
+    }),
+    "hip-adduction": ExerciseAttributes.make({
+      primaryMuscles: [MuscleContribution.make("adductor", 1)],
+      jointActions: new Set<JointAction>(["hipAdduction"]),
+      movementPattern: "isolationAbduction",
+      resistanceProfile: "midRangeBias",
+      heuristics: V1Heuristics.selectorisedIsolation,
     }),
     "hip-thrust": ExerciseAttributes.make({
       primaryMuscles: [
@@ -514,7 +722,10 @@ export const ExerciseMetadata = {
       heuristics: V1Heuristics.barbellPress,
     }),
     "incline-db-curl": ExerciseAttributes.make({
-      primaryMuscles: [MuscleContribution.make("biceps", 0.9), MuscleContribution.make("forearm", 0.1)],
+      primaryMuscles: [
+        MuscleContribution.make("biceps", 0.9),
+        MuscleContribution.make("forearm", 0.1),
+      ],
       jointActions: new Set<JointAction>(["elbowFlexion"]),
       movementPattern: "isolationFlexion",
       resistanceProfile: "lengthenedBias",
@@ -594,6 +805,18 @@ export const ExerciseMetadata = {
       resistanceProfile: "flatCable",
       heuristics: V1Heuristics.cableIsolation,
     }),
+    "low-cable-fly": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("chestUpper", 0.8),
+        MuscleContribution.make("frontDelt", 0.2),
+      ],
+      jointActions: new Set<JointAction>(["shoulderHorizontalAdduction", "shoulderFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "flatCable",
+      lengthenedBiasedROM: true,
+      loadTags: new Set<LoadTag>(["endRangeShoulder"]),
+      heuristics: V1Heuristics.cableIsolation,
+    }),
     "lying-curl": ExerciseAttributes.make({
       primaryMuscles: [MuscleContribution.make("hamstring", 1)],
       jointActions: new Set<JointAction>(["kneeFlexion"]),
@@ -602,11 +825,25 @@ export const ExerciseMetadata = {
       heuristics: V1Heuristics.selectorisedIsolation,
     }),
     "machine-crunch": ExerciseAttributes.make({
-      primaryMuscles: [MuscleContribution.make("abs", 0.85), MuscleContribution.make("obliques", 0.15)],
+      primaryMuscles: [
+        MuscleContribution.make("abs", 0.85),
+        MuscleContribution.make("obliques", 0.15),
+      ],
       jointActions: new Set<JointAction>(["spinalFlexion"]),
       movementPattern: "isolationFlexion",
       resistanceProfile: "midRangeBias",
       heuristics: V1Heuristics.selectorisedIsolation,
+    }),
+    "machine-dip": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("chestMid", 0.45),
+        MuscleContribution.make("triceps", 0.4),
+        MuscleContribution.make("frontDelt", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["shoulderExtension", "elbowExtension"]),
+      movementPattern: "horizontalPress",
+      resistanceProfile: "midRangeBias",
+      heuristics: V1Heuristics.selectorisedCompound,
     }),
     "machine-lateral": ExerciseAttributes.make({
       primaryMuscles: [
@@ -617,6 +854,19 @@ export const ExerciseMetadata = {
       movementPattern: "isolationAbduction",
       resistanceProfile: "midRangeBias",
       heuristics: V1Heuristics.selectorisedIsolation,
+    }),
+    "neutral-pull-up": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("lat", 0.62),
+        MuscleContribution.make("upperBack", 0.18),
+        MuscleContribution.make("biceps", 0.2),
+      ],
+      jointActions: new Set<JointAction>(["shoulderExtension", "elbowFlexion", "scapularRetraction"]),
+      movementPattern: "verticalPull",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      loadTags: new Set<LoadTag>(["gripLimited"]),
+      heuristics: V1Heuristics.bodyweightPull,
     }),
     "neutral-pulldown": ExerciseAttributes.make({
       primaryMuscles: [
@@ -640,6 +890,14 @@ export const ExerciseMetadata = {
       movementPattern: "horizontalPull",
       resistanceProfile: "midRangeBias",
       heuristics: V1Heuristics.selectorisedCompound,
+    }),
+    "nordic-curl": ExerciseAttributes.make({
+      primaryMuscles: [MuscleContribution.make("hamstring", 1)],
+      jointActions: new Set<JointAction>(["kneeFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      heuristics: V1Heuristics.nordic,
     }),
     "overhead-press": ExerciseAttributes.make({
       primaryMuscles: [
@@ -716,6 +974,17 @@ export const ExerciseMetadata = {
       loadTags: new Set<LoadTag>(["overheadPosition"]),
       heuristics: V1Heuristics.selectorisedCompound,
     }),
+    "push-up": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("chestMid", 0.55),
+        MuscleContribution.make("triceps", 0.25),
+        MuscleContribution.make("frontDelt", 0.2),
+      ],
+      jointActions: new Set<JointAction>(["shoulderHorizontalAdduction", "elbowExtension"]),
+      movementPattern: "horizontalPress",
+      resistanceProfile: "midRangeBias",
+      heuristics: V1Heuristics.bodyweightPress,
+    }),
     "rdl": ExerciseAttributes.make({
       primaryMuscles: [
         MuscleContribution.make("hamstring", 0.55),
@@ -739,6 +1008,29 @@ export const ExerciseMetadata = {
       resistanceProfile: "shortenedBias",
       heuristics: V1Heuristics.selectorisedIsolation,
     }),
+    "reverse-crunch": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("abs", 0.8),
+        MuscleContribution.make("obliques", 0.2),
+      ],
+      jointActions: new Set<JointAction>(["hipFlexion", "spinalFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "midRangeBias",
+      heuristics: V1Heuristics.floorCore,
+    }),
+    "reverse-lunge": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("quad", 0.45),
+        MuscleContribution.make("glute", 0.4),
+        MuscleContribution.make("adductor", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["kneeExtension", "hipExtension"]),
+      movementPattern: "lunge",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      loadTags: new Set<LoadTag>(["deepKneeFlexion"]),
+      heuristics: V1Heuristics.dumbbellUnilateral,
+    }),
     "reverse-pec": ExerciseAttributes.make({
       primaryMuscles: [
         MuscleContribution.make("rearDelt", 0.85),
@@ -748,6 +1040,16 @@ export const ExerciseMetadata = {
       movementPattern: "isolationAbduction",
       resistanceProfile: "shortenedBias",
       heuristics: V1Heuristics.selectorisedIsolation,
+    }),
+    "rope-hammer-curl": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("biceps", 0.55),
+        MuscleContribution.make("forearm", 0.45),
+      ],
+      jointActions: new Set<JointAction>(["elbowFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "flatCable",
+      heuristics: V1Heuristics.cableIsolation,
     }),
     "science-lateral": ExerciseAttributes.make({
       primaryMuscles: [
@@ -760,7 +1062,10 @@ export const ExerciseMetadata = {
       heuristics: V1Heuristics.cableIsolation,
     }),
     "science-preacher": ExerciseAttributes.make({
-      primaryMuscles: [MuscleContribution.make("biceps", 0.9), MuscleContribution.make("forearm", 0.1)],
+      primaryMuscles: [
+        MuscleContribution.make("biceps", 0.9),
+        MuscleContribution.make("forearm", 0.1),
+      ],
       jointActions: new Set<JointAction>(["elbowFlexion"]),
       movementPattern: "isolationFlexion",
       resistanceProfile: "lengthenedBias",
@@ -795,6 +1100,25 @@ export const ExerciseMetadata = {
       resistanceProfile: "shortenedBias",
       heuristics: V1Heuristics.selectorisedIsolation,
     }),
+    "single-arm-pressdown": ExerciseAttributes.make({
+      primaryMuscles: [MuscleContribution.make("triceps", 1)],
+      jointActions: new Set<JointAction>(["elbowExtension"]),
+      movementPattern: "isolationExtension",
+      resistanceProfile: "shortenedBias",
+      heuristics: V1Heuristics.cableIsolation,
+    }),
+    "single-arm-pulldown": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("lat", 0.7),
+        MuscleContribution.make("upperBack", 0.15),
+        MuscleContribution.make("biceps", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["shoulderExtension", "elbowFlexion"]),
+      movementPattern: "verticalPull",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      heuristics: V1Heuristics.cableStanding,
+    }),
     "skull-crusher": ExerciseAttributes.make({
       primaryMuscles: [MuscleContribution.make("triceps", 1)],
       jointActions: new Set<JointAction>(["elbowExtension"]),
@@ -803,6 +1127,30 @@ export const ExerciseMetadata = {
       lengthenedBiasedROM: true,
       loadTags: new Set<LoadTag>(["elbowCompression"]),
       heuristics: V1Heuristics.barbellArm,
+    }),
+    "smith-incline": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("chestUpper", 0.55),
+        MuscleContribution.make("frontDelt", 0.25),
+        MuscleContribution.make("triceps", 0.2),
+      ],
+      jointActions: new Set<JointAction>(["shoulderHorizontalAdduction", "shoulderFlexion", "elbowExtension"]),
+      movementPattern: "horizontalPress",
+      resistanceProfile: "midRangeBias",
+      loadTags: new Set<LoadTag>(["endRangeShoulder"]),
+      heuristics: V1Heuristics.smithOrPlate,
+    }),
+    "smith-shoulder-press": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("frontDelt", 0.55),
+        MuscleContribution.make("triceps", 0.25),
+        MuscleContribution.make("sideDelt", 0.2),
+      ],
+      jointActions: new Set<JointAction>(["shoulderFlexion", "shoulderAbduction", "elbowExtension"]),
+      movementPattern: "verticalPress",
+      resistanceProfile: "midRangeBias",
+      loadTags: new Set<LoadTag>(["overheadPosition"]),
+      heuristics: V1Heuristics.smithOrPlate,
     }),
     "smith-squat": ExerciseAttributes.make({
       primaryMuscles: [
@@ -817,6 +1165,16 @@ export const ExerciseMetadata = {
       loadTags: new Set<LoadTag>(["deepKneeFlexion", "axialSpinalLoad"]),
       heuristics: V1Heuristics.smithOrPlate,
     }),
+    "spider-curl": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("biceps", 0.9),
+        MuscleContribution.make("forearm", 0.1),
+      ],
+      jointActions: new Set<JointAction>(["elbowFlexion"]),
+      movementPattern: "isolationFlexion",
+      resistanceProfile: "shortenedBias",
+      heuristics: V1Heuristics.dumbbellArm,
+    }),
     "standing-calf": ExerciseAttributes.make({
       primaryMuscles: [MuscleContribution.make("calf", 1)],
       jointActions: new Set<JointAction>(["anklePlantarflexion"]),
@@ -825,6 +1183,17 @@ export const ExerciseMetadata = {
       lengthenedBiasedROM: true,
       loadTags: new Set<LoadTag>(["axialSpinalLoad"]),
       heuristics: V1Heuristics.selectorisedIsolation,
+    }),
+    "straight-arm-pulldown": ExerciseAttributes.make({
+      primaryMuscles: [
+        MuscleContribution.make("lat", 0.85),
+        MuscleContribution.make("upperBack", 0.15),
+      ],
+      jointActions: new Set<JointAction>(["shoulderExtension"]),
+      movementPattern: "isolationExtension",
+      resistanceProfile: "lengthenedBias",
+      lengthenedBiasedROM: true,
+      heuristics: V1Heuristics.cableStanding,
     }),
     "strict-curl": ExerciseAttributes.make({
       primaryMuscles: [
@@ -941,10 +1310,17 @@ export const ExerciseMetadata = {
   }) as Record<string, ExerciseAttributes>,
 
   /**
-   * The 26 exercises V1 adds purely so that substitution has somewhere to
-   * go. They are not in any shipped plan; they exist to be recommended.
+   * The 54 exercises V1 adds beyond the shipped plans: substitution
+   * targets and the staples a lifter looks for. No plan prescribes them.
    */
   additions: dictionary({
+    "ab-wheel": Exercise.make({
+      id: "ab-wheel",
+      name: "Ab wheel rollout",
+      equipment: "bodyweight",
+      isCompound: false,
+      unilateral: false,
+    }),
     "assisted-pull-up": Exercise.make({
       id: "assisted-pull-up",
       name: "Assisted pull-up",
@@ -956,6 +1332,41 @@ export const ExerciseMetadata = {
       id: "back-extension",
       name: "45° back extension",
       equipment: "bodyweight",
+      isCompound: false,
+      unilateral: false,
+    }),
+    "back-squat": Exercise.make({
+      id: "back-squat",
+      name: "Barbell back squat",
+      equipment: "barbell",
+      isCompound: true,
+      unilateral: false,
+    }),
+    "barbell-row": Exercise.make({
+      id: "barbell-row",
+      name: "Barbell row",
+      equipment: "barbell",
+      isCompound: true,
+      unilateral: false,
+    }),
+    "bayesian-curl": Exercise.make({
+      id: "bayesian-curl",
+      name: "Bayesian cable curl",
+      equipment: "cable",
+      isCompound: false,
+      unilateral: true,
+    }),
+    "cable-rear-delt-fly": Exercise.make({
+      id: "cable-rear-delt-fly",
+      name: "Cable rear-delt fly",
+      equipment: "cable",
+      isCompound: false,
+      unilateral: false,
+    }),
+    "cable-woodchop": Exercise.make({
+      id: "cable-woodchop",
+      name: "Cable woodchop",
+      equipment: "cable",
       isCompound: false,
       unilateral: false,
     }),
@@ -973,11 +1384,25 @@ export const ExerciseMetadata = {
       isCompound: true,
       unilateral: false,
     }),
+    "cs-db-row": Exercise.make({
+      id: "cs-db-row",
+      name: "Chest-supported dumbbell row",
+      equipment: "dumbbell",
+      isCompound: true,
+      unilateral: false,
+    }),
     "db-bench": Exercise.make({
       id: "db-bench",
       name: "Dumbbell bench press",
       equipment: "dumbbell",
       isCompound: true,
+      unilateral: false,
+    }),
+    "db-fly": Exercise.make({
+      id: "db-fly",
+      name: "Dumbbell fly",
+      equipment: "dumbbell",
+      isCompound: false,
       unilateral: false,
     }),
     "db-incline": Exercise.make({
@@ -990,6 +1415,13 @@ export const ExerciseMetadata = {
     "db-lateral": Exercise.make({
       id: "db-lateral",
       name: "Dumbbell lateral raise",
+      equipment: "dumbbell",
+      isCompound: false,
+      unilateral: false,
+    }),
+    "db-overhead-triceps": Exercise.make({
+      id: "db-overhead-triceps",
+      name: "Overhead dumbbell extension",
       equipment: "dumbbell",
       isCompound: false,
       unilateral: false,
@@ -1013,6 +1445,27 @@ export const ExerciseMetadata = {
       name: "Dumbbell shoulder press",
       equipment: "dumbbell",
       isCompound: true,
+      unilateral: false,
+    }),
+    "db-shrug": Exercise.make({
+      id: "db-shrug",
+      name: "Dumbbell shrug",
+      equipment: "dumbbell",
+      isCompound: false,
+      unilateral: false,
+    }),
+    "deadlift": Exercise.make({
+      id: "deadlift",
+      name: "Deadlift",
+      equipment: "barbell",
+      isCompound: true,
+      unilateral: false,
+    }),
+    "decline-crunch": Exercise.make({
+      id: "decline-crunch",
+      name: "Weighted decline crunch",
+      equipment: "bodyweight",
+      isCompound: false,
       unilateral: false,
     }),
     "dips": Exercise.make({
@@ -1043,6 +1496,20 @@ export const ExerciseMetadata = {
       isCompound: true,
       unilateral: false,
     }),
+    "hip-abduction": Exercise.make({
+      id: "hip-abduction",
+      name: "Hip abduction machine",
+      equipment: "machineSelectorised",
+      isCompound: false,
+      unilateral: false,
+    }),
+    "hip-adduction": Exercise.make({
+      id: "hip-adduction",
+      name: "Hip adduction machine",
+      equipment: "machineSelectorised",
+      isCompound: false,
+      unilateral: false,
+    }),
     "hip-thrust-machine": Exercise.make({
       id: "hip-thrust-machine",
       name: "Hip thrust machine",
@@ -1064,11 +1531,25 @@ export const ExerciseMetadata = {
       isCompound: false,
       unilateral: false,
     }),
+    "low-cable-fly": Exercise.make({
+      id: "low-cable-fly",
+      name: "Low-to-high cable fly",
+      equipment: "cable",
+      isCompound: false,
+      unilateral: false,
+    }),
     "machine-crunch": Exercise.make({
       id: "machine-crunch",
       name: "Ab crunch machine",
       equipment: "machineSelectorised",
       isCompound: false,
+      unilateral: false,
+    }),
+    "machine-dip": Exercise.make({
+      id: "machine-dip",
+      name: "Machine dip",
+      equipment: "machineSelectorised",
+      isCompound: true,
       unilateral: false,
     }),
     "machine-lateral": Exercise.make({
@@ -1078,11 +1559,25 @@ export const ExerciseMetadata = {
       isCompound: false,
       unilateral: false,
     }),
+    "neutral-pull-up": Exercise.make({
+      id: "neutral-pull-up",
+      name: "Neutral-grip pull-up",
+      equipment: "bodyweight",
+      isCompound: true,
+      unilateral: false,
+    }),
     "neutral-pulldown": Exercise.make({
       id: "neutral-pulldown",
       name: "Neutral-grip lat pulldown",
       equipment: "machineSelectorised",
       isCompound: true,
+      unilateral: false,
+    }),
+    "nordic-curl": Exercise.make({
+      id: "nordic-curl",
+      name: "Nordic hamstring curl",
+      equipment: "bodyweight",
+      isCompound: false,
       unilateral: false,
     }),
     "overhead-press": Exercise.make({
@@ -1092,12 +1587,54 @@ export const ExerciseMetadata = {
       isCompound: true,
       unilateral: false,
     }),
+    "push-up": Exercise.make({
+      id: "push-up",
+      name: "Push-up",
+      equipment: "bodyweight",
+      isCompound: true,
+      unilateral: false,
+    }),
+    "reverse-crunch": Exercise.make({
+      id: "reverse-crunch",
+      name: "Reverse crunch",
+      equipment: "bodyweight",
+      isCompound: false,
+      unilateral: false,
+    }),
+    "reverse-lunge": Exercise.make({
+      id: "reverse-lunge",
+      name: "Reverse lunge",
+      equipment: "dumbbell",
+      isCompound: true,
+      unilateral: true,
+    }),
+    "rope-hammer-curl": Exercise.make({
+      id: "rope-hammer-curl",
+      name: "Rope hammer curl",
+      equipment: "cable",
+      isCompound: false,
+      unilateral: false,
+    }),
     "seated-cable-row": Exercise.make({
       id: "seated-cable-row",
       name: "Seated cable row",
       equipment: "cable",
       isCompound: true,
       unilateral: false,
+    }),
+    "single-arm-pressdown": Exercise.make({
+      id: "single-arm-pressdown",
+      name: "Single-arm cable pressdown",
+      equipment: "cable",
+      isCompound: false,
+      unilateral: true,
+    }),
+    "single-arm-pulldown": Exercise.make({
+      id: "single-arm-pulldown",
+      name: "Single-arm cable pulldown",
+      equipment: "cable",
+      isCompound: true,
+      unilateral: true,
     }),
     "skull-crusher": Exercise.make({
       id: "skull-crusher",
@@ -1106,11 +1643,39 @@ export const ExerciseMetadata = {
       isCompound: false,
       unilateral: false,
     }),
+    "smith-incline": Exercise.make({
+      id: "smith-incline",
+      name: "Smith incline press",
+      equipment: "smith",
+      isCompound: true,
+      unilateral: false,
+    }),
+    "smith-shoulder-press": Exercise.make({
+      id: "smith-shoulder-press",
+      name: "Smith shoulder press",
+      equipment: "smith",
+      isCompound: true,
+      unilateral: false,
+    }),
     "smith-squat": Exercise.make({
       id: "smith-squat",
       name: "Smith machine squat",
       equipment: "smith",
       isCompound: true,
+      unilateral: false,
+    }),
+    "spider-curl": Exercise.make({
+      id: "spider-curl",
+      name: "Spider curl",
+      equipment: "dumbbell",
+      isCompound: false,
+      unilateral: false,
+    }),
+    "straight-arm-pulldown": Exercise.make({
+      id: "straight-arm-pulldown",
+      name: "Straight-arm pulldown",
+      equipment: "cable",
+      isCompound: false,
       unilateral: false,
     }),
     "t-bar-row": Exercise.make({
@@ -1153,10 +1718,14 @@ export const ExerciseMetadata = {
   curatedNameToID: dictionary({
     "45° hip extension": "back-extension",
     "Assisted pull-up": "assisted-pull-up",
+    "Bayesian cable curl": "bayesian-curl",
     "Cable fly": "upper-fly",
+    "Cable rear-delt fly": "cable-rear-delt-fly",
+    "Chest-supported dumbbell row": "cs-db-row",
     "Converging chest press": "chest-press-machine",
     "Dumbbell Romanian deadlift": "db-rdl",
     "Dumbbell bench press": "db-bench",
+    "Dumbbell fly": "db-fly",
     "Dumbbell lateral raise": "db-lateral",
     "EZ-bar skull crusher": "skull-crusher",
     "Flat bench press": "flat-bench",
@@ -1169,42 +1738,82 @@ export const ExerciseMetadata = {
     "Leg-press calf raise": "leg-press-calf",
     "Lying leg curl": "lying-curl",
     "Machine crunch": "machine-crunch",
+    "Machine dip": "machine-dip",
     "Machine lateral raise": "machine-lateral",
     "Machine preacher curl": "science-preacher",
     "Neutral cable row": "seated-cable-row",
     "Neutral-grip lat pulldown": "neutral-pulldown",
+    "Neutral-grip pull-up": "neutral-pull-up",
     "Neutral-grip pulldown": "neutral-pulldown",
+    "Nordic hamstring curl": "nordic-curl",
+    "Overhead dumbbell extension": "db-overhead-triceps",
     "Pec-deck": "pec-fly",
+    "Reverse crunch": "reverse-crunch",
+    "Reverse lunge": "reverse-lunge",
     "Reverse pec deck": "reverse-pec",
+    "Rope hammer curl": "rope-hammer-curl",
     "Seated dumbbell press": "db-shoulder-press",
     "Seated leg curl": "seated-curl",
+    "Single-arm cable pressdown": "single-arm-pressdown",
+    "Single-arm cable pulldown": "single-arm-pulldown",
+    "Smith shoulder press": "smith-shoulder-press",
+    "Spider curl": "spider-curl",
+    "Weighted decline crunch": "decline-crunch",
   }) as Record<string, string>,
 
   additionRoles: dictionary({
+    "ab-wheel": "isolation",
     "assisted-pull-up": "secondaryCompound",
     "back-extension": "accessory",
+    "back-squat": "primaryStrength",
+    "barbell-row": "secondaryCompound",
+    "bayesian-curl": "isolation",
+    "cable-rear-delt-fly": "isolation",
+    "cable-woodchop": "isolation",
     "chest-press-machine": "secondaryCompound",
     "close-grip-bench": "secondaryCompound",
+    "cs-db-row": "secondaryCompound",
     "db-bench": "secondaryCompound",
+    "db-fly": "isolation",
     "db-incline": "secondaryCompound",
     "db-lateral": "isolation",
+    "db-overhead-triceps": "isolation",
     "db-rdl": "primaryStrength",
     "db-row": "secondaryCompound",
     "db-shoulder-press": "secondaryCompound",
+    "db-shrug": "isolation",
+    "deadlift": "primaryStrength",
+    "decline-crunch": "isolation",
     "dips": "secondaryCompound",
     "ez-curl": "accessory",
     "face-pull": "isolation",
     "goblet-squat": "secondaryCompound",
+    "hip-abduction": "isolation",
+    "hip-adduction": "isolation",
     "hip-thrust-machine": "secondaryCompound",
     "incline-db-curl": "isolation",
     "leg-press-calf": "isolation",
+    "low-cable-fly": "isolation",
     "machine-crunch": "isolation",
+    "machine-dip": "secondaryCompound",
     "machine-lateral": "isolation",
+    "neutral-pull-up": "secondaryCompound",
     "neutral-pulldown": "secondaryCompound",
+    "nordic-curl": "accessory",
     "overhead-press": "primaryStrength",
+    "push-up": "secondaryCompound",
+    "reverse-crunch": "isolation",
+    "reverse-lunge": "secondaryCompound",
+    "rope-hammer-curl": "isolation",
     "seated-cable-row": "secondaryCompound",
+    "single-arm-pressdown": "isolation",
+    "single-arm-pulldown": "secondaryCompound",
     "skull-crusher": "accessory",
+    "smith-incline": "secondaryCompound",
+    "smith-shoulder-press": "secondaryCompound",
     "smith-squat": "primaryStrength",
+    "spider-curl": "isolation",
+    "straight-arm-pulldown": "isolation",
     "t-bar-row": "secondaryCompound",
     "walking-lunge": "secondaryCompound",
   }) as Record<string, ExerciseRole>,

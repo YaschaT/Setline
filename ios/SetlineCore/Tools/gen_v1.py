@@ -61,8 +61,8 @@ for eid in sorted(M):
     w('        ),')
 w('    ]')
 w('')
-w('    /// The 26 exercises V1 adds purely so that substitution has somewhere to')
-w('    /// go. They are not in any shipped plan; they exist to be recommended.')
+w(f'    /// The {len(ADDITIONS)} exercises V1 adds beyond the shipped plans: substitution')
+w('    /// targets and the staples a lifter looks for. No plan prescribes them.')
 w('    static let additions: [String: Exercise] = [')
 for eid in sorted(ADDITIONS):
     name, equip, compound, uni, _role = ADDITIONS[eid]

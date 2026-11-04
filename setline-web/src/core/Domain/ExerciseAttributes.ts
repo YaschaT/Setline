@@ -140,7 +140,11 @@ export type JointAction =
   | "kneeExtension"
   | "kneeFlexion"
   | "anklePlantarflexion"
-  | "spinalFlexion";
+  | "spinalFlexion"
+  | "hipAbduction"
+  | "hipAdduction"
+  | "scapularElevation"
+  | "spinalRotation";
 export const JointAction = {
   shoulderHorizontalAdduction: "shoulderHorizontalAdduction" as JointAction,
   shoulderHorizontalAbduction: "shoulderHorizontalAbduction" as JointAction,
@@ -156,6 +160,10 @@ export const JointAction = {
   kneeFlexion: "kneeFlexion" as JointAction,
   anklePlantarflexion: "anklePlantarflexion" as JointAction,
   spinalFlexion: "spinalFlexion" as JointAction,
+  hipAbduction: "hipAbduction" as JointAction,
+  hipAdduction: "hipAdduction" as JointAction,
+  scapularElevation: "scapularElevation" as JointAction,
+  spinalRotation: "spinalRotation" as JointAction,
   allCases: [
     "shoulderHorizontalAdduction",
     "shoulderHorizontalAbduction",
@@ -171,6 +179,10 @@ export const JointAction = {
     "kneeFlexion",
     "anklePlantarflexion",
     "spinalFlexion",
+    "hipAbduction",
+    "hipAdduction",
+    "scapularElevation",
+    "spinalRotation",
   ] as JointAction[],
 };
 
@@ -338,7 +350,10 @@ export type Station =
   | "legExtension"
   | "hipThrustMachine"
   | "standingCalf"
-  | "seatedCalf";
+  | "seatedCalf"
+  | "squatRack"
+  | "hipAbductionMachine"
+  | "hipAdductionMachine";
 export const Station = {
   flatBenchRack: "flatBenchRack" as Station,
   inclineBenchRack: "inclineBenchRack" as Station,
@@ -363,6 +378,9 @@ export const Station = {
   hipThrustMachine: "hipThrustMachine" as Station,
   standingCalf: "standingCalf" as Station,
   seatedCalf: "seatedCalf" as Station,
+  squatRack: "squatRack" as Station,
+  hipAbductionMachine: "hipAbductionMachine" as Station,
+  hipAdductionMachine: "hipAdductionMachine" as Station,
   allCases: [
     "flatBenchRack",
     "inclineBenchRack",
@@ -387,6 +405,9 @@ export const Station = {
     "hipThrustMachine",
     "standingCalf",
     "seatedCalf",
+    "squatRack",
+    "hipAbductionMachine",
+    "hipAdductionMachine",
   ] as Station[],
 };
 

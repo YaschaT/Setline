@@ -22,6 +22,9 @@ HEURISTICS = {
  "cableIsolation":      (2,1,1,"One joint on constant tension; nothing to set up."),
  "seatedIsolation":     (1,1,1,"Seated, single joint, supported — the lowest cost in the catalogue."),
  "hangingCore":         (4,2,1,"Hanging from a bar is grip- and position-demanding even though the load is bodyweight."),
+ "bodyweightPress":     (3,2,1,"Bodyweight on the floor: the body is the bench, and there is nothing to set up."),
+ "nordic":              (3,4,2,"The hamstrings lower the whole body alone: hard, sore the first weeks, and the feet need an anchor."),
+ "floorCore":           (3,2,1,"Bodyweight on a mat or bench; control matters more than load, and there's nothing to set up."),
 }
 
 # id: (pattern, primary, secondary, joints, profile, lengthenedROM, loadTags, station, heuristicGroup)
@@ -101,9 +104,41 @@ M = {
 "cable-crunch":      ("isolationFlexion",[("abs",.85),("obliques",.15)],[],["spinalFlexion"],"midRangeBias",False,["lumbarFlexion"],None,"cableIsolation"),
 "hanging-raise":     ("isolationFlexion",[("abs",.7),("obliques",.2),("quad",.1)],[],["hipFlexion","spinalFlexion"],"lengthenedBias",True,["gripLimited"],"pullUpBar","hangingCore"),
 "machine-crunch":    ("isolationFlexion",[("abs",.85),("obliques",.15)],[],["spinalFlexion"],"midRangeBias",False,[],"abCrunchMachine","selectorisedIsolation"),
+# ── 2026-11 additions: the staples a lifter looks for, and the alternatives
+#    the curated lists already name. Chosen for what the research supports —
+#    a full range under load, and tension where the muscle is long (Maeo 2021,
+#    2023; Pedrosa 2022; Kassiano 2023) — and for what most gyms have.
+"smith-incline":     ("horizontalPress",[("chestUpper",.55),("frontDelt",.25),("triceps",.2)],[],["shoulderHorizontalAdduction","shoulderFlexion","elbowExtension"],"midRangeBias",False,["endRangeShoulder"],"smithRack","smithOrPlate"),
+"db-fly":            ("isolationFlexion",[("chestMid",.85),("frontDelt",.15)],[],["shoulderHorizontalAdduction"],"lengthenedBias",True,["endRangeShoulder"],None,"dumbbellArm"),
+"low-cable-fly":     ("isolationFlexion",[("chestUpper",.8),("frontDelt",.2)],[],["shoulderHorizontalAdduction","shoulderFlexion"],"flatCable",True,["endRangeShoulder"],None,"cableIsolation"),
+"push-up":           ("horizontalPress",[("chestMid",.55),("triceps",.25),("frontDelt",.2)],[],["shoulderHorizontalAdduction","elbowExtension"],"midRangeBias",False,[],None,"bodyweightPress"),
+"machine-dip":       ("horizontalPress",[("chestMid",.45),("triceps",.4),("frontDelt",.15)],[],["shoulderExtension","elbowExtension"],"midRangeBias",False,[],None,"selectorisedCompound"),
+"barbell-row":       ("horizontalPull",[("upperBack",.45),("lat",.3),("biceps",.15),("rearDelt",.1)],[],["scapularRetraction","shoulderExtension","elbowFlexion"],"midRangeBias",False,["lumbarFlexion","gripLimited"],None,"barbellAxial"),
+"cs-db-row":         ("horizontalPull",[("upperBack",.45),("lat",.3),("biceps",.15),("rearDelt",.1)],[],["scapularRetraction","shoulderExtension","elbowFlexion"],"lengthenedBias",True,[],None,"dumbbellCompound"),
+"neutral-pull-up":   ("verticalPull",[("lat",.62),("upperBack",.18),("biceps",.2)],[],["shoulderExtension","elbowFlexion","scapularRetraction"],"lengthenedBias",True,["gripLimited"],"pullUpBar","bodyweightPull"),
+"single-arm-pulldown":("verticalPull",[("lat",.7),("upperBack",.15),("biceps",.15)],[],["shoulderExtension","elbowFlexion"],"lengthenedBias",True,[],None,"cableStanding"),
+"straight-arm-pulldown":("isolationExtension",[("lat",.85),("upperBack",.15)],[],["shoulderExtension"],"lengthenedBias",True,[],None,"cableStanding"),
+"db-shrug":          ("isolationExtension",[("trap",1.0)],[],["scapularElevation"],"shortenedBias",False,["gripLimited"],None,"dumbbellArm"),
+"smith-shoulder-press":("verticalPress",[("frontDelt",.55),("triceps",.25),("sideDelt",.2)],[],["shoulderFlexion","shoulderAbduction","elbowExtension"],"midRangeBias",False,["overheadPosition"],"smithRack","smithOrPlate"),
+"cable-rear-delt-fly":("isolationAbduction",[("rearDelt",.85),("upperBack",.15)],[],["shoulderHorizontalAbduction"],"flatCable",True,[],None,"cableIsolation"),
+"bayesian-curl":     ("isolationFlexion",[("biceps",.9),("forearm",.1)],[],["elbowFlexion"],"lengthenedBias",True,[],None,"cableStanding"),
+"spider-curl":       ("isolationFlexion",[("biceps",.9),("forearm",.1)],[],["elbowFlexion"],"shortenedBias",False,[],None,"dumbbellArm"),
+"rope-hammer-curl":  ("isolationFlexion",[("biceps",.55),("forearm",.45)],[],["elbowFlexion"],"flatCable",False,[],None,"cableIsolation"),
+"db-overhead-triceps":("isolationExtension",[("triceps",1.0)],[],["elbowExtension"],"lengthenedBias",True,["overheadPosition","elbowCompression"],None,"dumbbellArm"),
+"single-arm-pressdown":("isolationExtension",[("triceps",1.0)],[],["elbowExtension"],"shortenedBias",False,[],None,"cableIsolation"),
+"back-squat":        ("squat",[("quad",.55),("glute",.3),("adductor",.15)],[],["kneeExtension","hipExtension"],"lengthenedBias",True,["deepKneeFlexion","axialSpinalLoad"],"squatRack","barbellAxial"),
+"deadlift":          ("hinge",[("glute",.35),("hamstring",.3),("lowerBack",.2),("quad",.15)],[],["hipExtension","kneeExtension"],"midRangeBias",False,["axialSpinalLoad","lumbarFlexion","gripLimited"],None,"barbellAxial"),
+"reverse-lunge":     ("lunge",[("quad",.45),("glute",.4),("adductor",.15)],[],["kneeExtension","hipExtension"],"lengthenedBias",True,["deepKneeFlexion"],None,"dumbbellUnilateral"),
+"nordic-curl":       ("isolationFlexion",[("hamstring",1.0)],[],["kneeFlexion"],"lengthenedBias",True,[],None,"nordic"),
+"hip-abduction":     ("isolationAbduction",[("glute",1.0)],[],["hipAbduction"],"midRangeBias",False,[],"hipAbductionMachine","selectorisedIsolation"),
+"hip-adduction":     ("isolationAbduction",[("adductor",1.0)],[],["hipAdduction"],"midRangeBias",False,[],"hipAdductionMachine","selectorisedIsolation"),
+"ab-wheel":          ("isolationFlexion",[("abs",.8),("obliques",.2)],[],["spinalFlexion"],"lengthenedBias",True,["lumbarFlexion"],None,"floorCore"),
+"decline-crunch":    ("isolationFlexion",[("abs",.85),("obliques",.15)],[],["spinalFlexion"],"midRangeBias",False,["lumbarFlexion"],None,"floorCore"),
+"reverse-crunch":    ("isolationFlexion",[("abs",.8),("obliques",.2)],[],["hipFlexion","spinalFlexion"],"midRangeBias",False,[],None,"floorCore"),
+"cable-woodchop":    ("isolationFlexion",[("obliques",.7),("abs",.3)],[],["spinalRotation"],"flatCable",False,[],None,"cableStanding"),
 }
 
-# The 26 V1 additions: (name, equipment, isCompound, unilateral, role)
+# The V1 additions: (name, equipment, isCompound, unilateral, role)
 ADDITIONS = {
 "db-bench":          ("Dumbbell bench press","dumbbell",True,False,"secondaryCompound"),
 "db-incline":        ("Incline dumbbell press","dumbbell",True,False,"secondaryCompound"),
@@ -131,6 +166,34 @@ ADDITIONS = {
 "ez-curl":           ("EZ-bar curl","barbell",False,False,"accessory"),
 "leg-press-calf":    ("Calf raise on leg press","machinePlate",False,False,"isolation"),
 "machine-crunch":    ("Ab crunch machine","machineSelectorised",False,False,"isolation"),
+"smith-incline":     ("Smith incline press","smith",True,False,"secondaryCompound"),
+"db-fly":            ("Dumbbell fly","dumbbell",False,False,"isolation"),
+"low-cable-fly":     ("Low-to-high cable fly","cable",False,False,"isolation"),
+"push-up":           ("Push-up","bodyweight",True,False,"secondaryCompound"),
+"machine-dip":       ("Machine dip","machineSelectorised",True,False,"secondaryCompound"),
+"barbell-row":       ("Barbell row","barbell",True,False,"secondaryCompound"),
+"cs-db-row":         ("Chest-supported dumbbell row","dumbbell",True,False,"secondaryCompound"),
+"neutral-pull-up":   ("Neutral-grip pull-up","bodyweight",True,False,"secondaryCompound"),
+"single-arm-pulldown":("Single-arm cable pulldown","cable",True,True,"secondaryCompound"),
+"straight-arm-pulldown":("Straight-arm pulldown","cable",False,False,"isolation"),
+"db-shrug":          ("Dumbbell shrug","dumbbell",False,False,"isolation"),
+"smith-shoulder-press":("Smith shoulder press","smith",True,False,"secondaryCompound"),
+"cable-rear-delt-fly":("Cable rear-delt fly","cable",False,False,"isolation"),
+"bayesian-curl":     ("Bayesian cable curl","cable",False,True,"isolation"),
+"spider-curl":       ("Spider curl","dumbbell",False,False,"isolation"),
+"rope-hammer-curl":  ("Rope hammer curl","cable",False,False,"isolation"),
+"db-overhead-triceps":("Overhead dumbbell extension","dumbbell",False,False,"isolation"),
+"single-arm-pressdown":("Single-arm cable pressdown","cable",False,True,"isolation"),
+"back-squat":        ("Barbell back squat","barbell",True,False,"primaryStrength"),
+"deadlift":          ("Deadlift","barbell",True,False,"primaryStrength"),
+"reverse-lunge":     ("Reverse lunge","dumbbell",True,True,"secondaryCompound"),
+"nordic-curl":       ("Nordic hamstring curl","bodyweight",False,False,"accessory"),
+"hip-abduction":     ("Hip abduction machine","machineSelectorised",False,False,"isolation"),
+"hip-adduction":     ("Hip adduction machine","machineSelectorised",False,False,"isolation"),
+"ab-wheel":          ("Ab wheel rollout","bodyweight",False,False,"isolation"),
+"decline-crunch":    ("Weighted decline crunch","bodyweight",False,False,"isolation"),
+"reverse-crunch":    ("Reverse crunch","bodyweight",False,False,"isolation"),
+"cable-woodchop":    ("Cable woodchop","cable",False,False,"isolation"),
 }
 
 # The web app keys some exercises per training day, so the same physical
@@ -148,9 +211,8 @@ CANONICAL = {
 # Curated alternative name -> exercise id, for the `why` copy in
 # AlternativesCatalog. Deliberately conservative: a name is mapped only when it
 # denotes exactly the catalogue entry, never when it names a variation we do
-# not actually have ("Bayesian cable curl", "Spider curl", "Nordic hamstring
-# curl"). An unmapped name simply means that alternative has no curated copy;
-# the computed ranking is unaffected.
+# not actually have. An unmapped name simply means that alternative has no
+# curated copy; the computed ranking is unaffected.
 CURATED_NAMES = {
  "45° hip extension":"back-extension",
  "Assisted pull-up":"assisted-pull-up",
@@ -163,7 +225,7 @@ CURATED_NAMES = {
  "Flat bench press":"flat-bench",
  "Hack squat":"hack-squat",
  "Heel-elevated Smith squat":"smith-squat",
- "Incline chest-pressmachine":"incline-machine",
+ "Incline chest press machine":"incline-machine",
  "Incline dumbbell curl":"incline-db-curl",
  "Incline dumbbell press":"db-incline",
  "Leg press":"leg-press",
@@ -179,4 +241,20 @@ CURATED_NAMES = {
  "Reverse pec deck":"reverse-pec",
  "Seated dumbbell press":"db-shoulder-press",
  "Seated leg curl":"seated-curl",
+ "Bayesian cable curl":"bayesian-curl",
+ "Cable rear-delt fly":"cable-rear-delt-fly",
+ "Chest-supported dumbbell row":"cs-db-row",
+ "Dumbbell fly":"db-fly",
+ "Machine dip":"machine-dip",
+ "Neutral-grip pull-up":"neutral-pull-up",
+ "Nordic hamstring curl":"nordic-curl",
+ "Overhead dumbbell extension":"db-overhead-triceps",
+ "Reverse crunch":"reverse-crunch",
+ "Reverse lunge":"reverse-lunge",
+ "Rope hammer curl":"rope-hammer-curl",
+ "Single-arm cable pressdown":"single-arm-pressdown",
+ "Single-arm cable pulldown":"single-arm-pulldown",
+ "Smith shoulder press":"smith-shoulder-press",
+ "Spider curl":"spider-curl",
+ "Weighted decline crunch":"decline-crunch",
 }

@@ -35,9 +35,9 @@ const between = (x: number, lo: number, hi: number) => lo <= x && x <= hi;
 
 describe("CatalogueCompletenessTests", () => {
   test("testCuratedCatalogueHasSixtyFiveExercises", () => {
-    assertEqual(keys(ExerciseCatalog.all).length, 65);
+    assertEqual(keys(ExerciseCatalog.all).length, 93);
     assertEqual(keys(GeneratedExerciseCatalog.exercises).length, 39);
-    assertEqual(keys(ExerciseMetadata.additions).length, 26);
+    assertEqual(keys(ExerciseMetadata.additions).length, 54);
   });
 
   test("testAdditionsDoNotCollideWithPlannedExercises", () => {
@@ -142,7 +142,7 @@ describe("CatalogueCompletenessTests", () => {
     const names = new Set(Object.values(AlternativesCatalog.byExercise).flat().map((a) => a.name));
     const mapped = [...names].filter((name) => ExerciseMetadata.curatedNameToID[name] !== undefined);
     assertEqual(names.size, 59);
-    assertEqual(mapped.length, 27);
+    assertEqual(mapped.length, 43);
   });
 });
 
@@ -185,17 +185,21 @@ describe("SubstitutionRankingTests", () => {
     const empty = allIDs()
       .filter((id) => SubstitutionRanker.canonical(id) === id)
       .filter((id) => rank(id).length === 0);
-    assertEqual(new Set(empty), new Set(["leg-extension"]));
+    // Each of these is the only exercise of its kind in the catalogue.
+    assertEqual(
+      new Set(empty),
+      new Set(["leg-extension", "hip-abduction", "hip-adduction", "db-shrug", "cable-woodchop", "straight-arm-pulldown"]),
+    );
   });
 
   test("testResultCountsAreHonest", () => {
     const counts = allIDs()
       .filter((id) => SubstitutionRanker.canonical(id) === id)
       .map((id) => rank(id).length);
-    assertEqual(counts.filter((c) => c === 3).length, 38);
-    assertEqual(counts.filter((c) => c === 2).length, 14);
-    assertEqual(counts.filter((c) => c === 1).length, 5);
-    assertEqual(counts.filter((c) => c === 0).length, 1);
+    assertEqual(counts.filter((c) => c === 3).length, 69);
+    assertEqual(counts.filter((c) => c === 2).length, 11);
+    assertEqual(counts.filter((c) => c === 1).length, 0);
+    assertEqual(counts.filter((c) => c === 0).length, 6);
   });
 
   test("testNeverRecommendsItself", () => {
@@ -282,16 +286,16 @@ describe("SubstitutionRankingTests", () => {
     assertTrue(results.length === 0, `leg-extension offered ${results}`);
   });
 
-  /** Knee flexion does not fall back to hip extension. */
+  /** Knee flexion does not fall back to hip extension: a leg curl gets the other leg curl and the Nordic curl, never a hinge. */
   test("testSeatedCurlReturnsOnlyTheOtherLegCurl", () => {
-    assertEqual(ids(rank("seated-curl")), ["lying-curl"]);
-    assertEqual(ids(rank("lying-curl")), ["seated-curl"]);
+    assertEqual(ids(rank("seated-curl")), ["lying-curl", "nordic-curl"]);
+    assertEqual(ids(rank("lying-curl")), ["seated-curl", "nordic-curl"]);
   });
 
   /** Isolation elbow extension does not fall back to a press. */
   test("testPressdownNeverReturnsAPress", () => {
     const results = ids(rank("pressdown"));
-    assertEqual(results, ["overhead-triceps", "skull-crusher"]);
+    assertEqual(results, ["single-arm-pressdown", "db-overhead-triceps", "skull-crusher"]);
     assertFalse(results.includes("dips"));
     assertFalse(results.includes("close-grip-bench"));
   });
@@ -308,18 +312,18 @@ describe("SubstitutionRankingTests", () => {
         `lat-pulldown fell back to ${result.exercise.id}`,
       );
     }
-    assertEqual(ids(rank("lat-pulldown")), ["neutral-pulldown", "pull-up", "kneeling-lat"]);
+    assertEqual(ids(rank("lat-pulldown")), ["neutral-pulldown", "neutral-pull-up", "single-arm-pulldown"]);
   });
 
   /**
    * A related match is only ever used to fill what the exact tier could
-   * not — the lunge family has one other lunge, then reaches into squats.
+   * not — the lunge family has two other lunges, then reaches into squats.
    */
   test("testRelatedTierOnlyFillsWhatExactCannot", () => {
     const results = rank("bulgarian");
-    assertEqual(results[0]?.exercise.id, "walking-lunge");
-    assertEqual(results[0]?.match, "exact");
-    assertTrue(results.slice(1).every((r) => r.match === "related"));
+    assertEqual(results.slice(0, 2).map((r) => r.exercise.id), ["reverse-lunge", "walking-lunge"]);
+    assertTrue(results.slice(0, 2).every((r) => r.match === "exact"));
+    assertTrue(results.slice(2).every((r) => r.match === "related"));
   });
 
   test("testARelatedMatchAlwaysStaysInTheFamily", () => {
@@ -340,10 +344,17 @@ describe("SubstitutionRankingTests", () => {
 
   /**
    * The `Muscle` enum splits the chest, so without kinship an incline press
-   * and a flat press read as unrelated exercises.
+   * and a flat press read as unrelated exercises. With the incline variants
+   * out of the way, a flat press still answers an incline one.
    */
   test("testRelatedMuscleGroupsCount", () => {
-    assertTrue(ids(rank("incline-bench")).includes("chest-press-machine"));
+    const catalog: Record<string, Exercise> = { ...ExerciseCatalog.all };
+    for (const id of ["incline-machine", "smith-incline", "db-incline"]) delete catalog[id];
+    const results = SubstitutionRanker.rank(
+      SwapContext.make({ currentExerciseID: "incline-bench", role: ExerciseCatalog.role("incline-bench") }),
+      { catalog },
+    );
+    assertTrue(ids(results).includes("chest-press-machine"));
     assertTrue(ids(rank("flat-bench")).includes("chest-press-machine"));
   });
 
@@ -364,11 +375,11 @@ describe("SubstitutionRankingTests", () => {
    * a genuinely different option outranks the twin when one exists.
    */
   test("testANearTwinDoesNotTakeASlotFromADifferentAnswer", () => {
-    // The assisted pull-up is the same answer as the weighted pull-up, so
-    // with both eligible only one of them appears.
+    // The pull-ups (wide, neutral, assisted) are one answer, so with all
+    // three eligible exactly one of them appears.
     const results = ids(rank("lat-pulldown"));
-    assertTrue(results.includes("pull-up"));
-    assertFalse(results.includes("assisted-pull-up"), `both pull-ups took a slot: ${results}`);
+    const pullUps = results.filter((id) => ["pull-up", "neutral-pull-up", "assisted-pull-up"].includes(id));
+    assertEqual(pullUps.length, 1, `more than one pull-up took a slot: ${results}`);
   });
 
   test("testThinCatalogueCornersReturnFewerRatherThanWorse", () => {
@@ -388,7 +399,7 @@ describe("SubstitutionRankingTests", () => {
    */
   test("testOccupiedExcludesTheSameStationOnly", () => {
     const results = rank("flat-bench", { reason: "occupied" });
-    assertEqual(ids(results), ["chest-press-machine", "db-bench", "incline-machine"]);
+    assertEqual(ids(results), ["chest-press-machine", "db-bench", "push-up"]);
     assertFalse(ids(results).includes("close-grip-bench"), "close-grip-bench is on the same rack and must be excluded");
     assertFalse(ids(results).length === 0);
   });
@@ -403,7 +414,7 @@ describe("SubstitutionRankingTests", () => {
     );
     // The other pulldown shares the station, so it goes.
     assertFalse(ids(results).includes("neutral-pulldown"));
-    assertEqual(ids(results), ["pull-up", "assisted-pull-up", "kneeling-lat"]);
+    assertEqual(ids(results), ["neutral-pull-up", "single-arm-pulldown", "assisted-pull-up"]);
   });
 
   /**
@@ -506,20 +517,21 @@ describe("SubstitutionRankingTests", () => {
   //
   // These pin the eight examples from the approved proposal. They are the
   // product review surface: if a change to the weights moves one of these,
-  // that is a product decision, not a refactor.
+  // that is a product decision, not a refactor. The November 2026 catalogue
+  // additions moved six of them, each to a closer match: the Smith incline
+  // press for incline, the push-up for flat bench (similar growth at
+  // matched effort), the Bayesian curl, and two more triceps isolations.
 
   test("testSampleOutputs", () => {
     const expected: Record<string, string[]> = {
-      "flat-bench": ["chest-press-machine", "db-bench", "close-grip-bench"],
-      "incline-bench": ["incline-machine", "db-incline", "chest-press-machine"],
-      "lat-pulldown": ["neutral-pulldown", "pull-up", "kneeling-lat"],
-      "neutral-row": ["t-bar-row", "seated-cable-row", "wide-row"],
+      "flat-bench": ["chest-press-machine", "db-bench", "push-up"],
+      "incline-bench": ["incline-machine", "smith-incline", "db-incline"],
+      "lat-pulldown": ["neutral-pulldown", "neutral-pull-up", "single-arm-pulldown"],
+      "neutral-row": ["t-bar-row", "seated-cable-row", "barbell-row"],
       "leg-press": ["smith-squat", "hack-squat", "goblet-squat"],
       rdl: ["db-rdl", "hip-thrust", "hip-thrust-machine"],
-      "strict-curl": ["ez-curl", "incline-db-curl", "cable-curl"],
-      // Only four triceps-isolation exercises exist, so this one is
-      // honestly two options rather than a padded three.
-      pressdown: ["overhead-triceps", "skull-crusher"],
+      "strict-curl": ["ez-curl", "bayesian-curl", "incline-db-curl"],
+      pressdown: ["single-arm-pressdown", "db-overhead-triceps", "skull-crusher"],
     };
     for (const id of Object.keys(expected).sort()) {
       assertEqual(ids(rank(id)), expected[id], `top 3 for ${id} changed`);

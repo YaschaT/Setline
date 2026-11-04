@@ -22,8 +22,9 @@ function enrich(exercise: Exercise): Exercise {
  *
  * Two sources, one table. `GeneratedExerciseCatalog` holds the 39 exercises
  * the shipped plans actually prescribe, transcribed from the web app.
- * `ExerciseMetadata.additions` holds the 26 V1 adds — exercises no plan
- * prescribes, which exist so that substitution has somewhere to go. Both are
+ * `ExerciseMetadata.additions` holds the 54 adds — exercises no plan
+ * prescribes: substitution targets, and the staples a lifter looks for in
+ * the picker (back squat, deadlift, Nordic curl, hip abductor…). Both are
  * enriched here with the station and attribute metadata the ranking needs.
  *
  * The split matters: regenerating the plans must never silently drop curated

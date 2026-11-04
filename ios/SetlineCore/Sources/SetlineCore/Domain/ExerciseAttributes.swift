@@ -67,6 +67,7 @@ public enum JointAction: String, Codable, Sendable, CaseIterable {
     case elbowFlexion, elbowExtension
     case hipExtension, hipFlexion, kneeExtension, kneeFlexion
     case anklePlantarflexion, spinalFlexion
+    case hipAbduction, hipAdduction, scapularElevation, spinalRotation
 }
 
 public enum MovementPattern: String, Codable, Sendable, CaseIterable {
@@ -129,6 +130,7 @@ public enum Station: String, Codable, Sendable, CaseIterable {
     case lateralRaiseMachine, abCrunchMachine
     case hackSquat, legPress, seatedLegCurl, lyingLegCurl, legExtension
     case hipThrustMachine, standingCalf, seatedCalf
+    case squatRack, hipAbductionMachine, hipAdductionMachine
 }
 
 // MARK: - Judgement: useful defaults, not measurements
