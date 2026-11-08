@@ -537,7 +537,7 @@ export function CustomWorkoutBuilder({
         isPresented={confirmsDelete}
         onDismiss={() => setConfirmsDelete(false)}
         title={`Delete ${trimmed === "" ? "this workout" : trimmed}?`}
-        message="Workouts you logged with it stay in your history."
+        message={workout ? app.deleteNote({ forWorkout: workout.id }) : "Workouts you logged with it stay in your history."}
         actions={[
           { title: "Cancel", role: "cancel" },
           { title: "Delete", role: "destructive", action: () => onDelete?.() },

@@ -128,6 +128,7 @@ export function TrainingHomeView({
 
   const [confirmsEnd, setConfirmsEnd] = useState(false);
   const [confirmsEndForFreestyle, setConfirmsEndForFreestyle] = useState(false);
+  const [deleting, setDeleting] = useState<CustomWorkout | undefined>(undefined);
   /** The plan shape, chosen from the workout chooser. */
   /** The date the screen is on. `undefined` is today, which is where every visit starts. */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
@@ -1211,20 +1212,39 @@ export function TrainingHomeView({
           <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={2}>{workout.name}</Text>
           <Text {...slMeta()} numerals color={SL.Ink.secondary} lineLimit={1}>{`${count} · ~${minutes} min`}</Text>
         </SLPress>
-        {/* A paused workout is finished or ended first, so nothing is overwritten. */}
-        {app.resumableSession === undefined && (
-          <SLPress
-            scale={0.88}
-            bounces
-            onPress={() => onStart(day)}
-            aria-label={`Start ${workout.name}`}
-            style={{ position: "absolute", top: SL.Space.s2, right: SL.Space.s2, width: SL.Space.hitMin, height: SL.Space.hitMin, display: "grid", placeItems: "center", background: "transparent" }}
-          >
-            <span style={{ width: 36, height: 36, borderRadius: "50%", background: SL.Signal.action, display: "grid", placeItems: "center" }}>
-              <SFSymbol name="play.fill" size={13} weight={700} color={SL.Signal.onAction} />
-            </span>
-          </SLPress>
-        )}
+        <div style={{ position: "absolute", top: SL.Space.s2, right: SL.Space.s2, display: "flex" }}>
+          {/* Edit and delete, one quiet tap away. */}
+          <Menu
+            aria-label={`More for ${workout.name}`}
+            style={{ width: SL.Space.hitMin, height: SL.Space.hitMin, display: "grid", placeItems: "center" }}
+            entries={[
+              ...(app.resumableSession === undefined
+                ? [{ kind: "button" as const, title: "Start", systemImage: "play.fill", action: () => onStart(day) }]
+                : []),
+              { kind: "button" as const, title: "Edit", systemImage: "pencil", action: () => setSheet({ kind: "editWorkout", value: workout }) },
+              { kind: "button" as const, title: "Delete", systemImage: "trash", role: "destructive" as const, action: () => setDeleting(workout) },
+            ]}
+            label={
+              <span style={{ width: 32, height: 32, borderRadius: "50%", background: SL.Surface.raised2, display: "grid", placeItems: "center" }}>
+                <SFSymbol name="ellipsis" size={14} weight={700} color={SL.Ink.secondary} />
+              </span>
+            }
+          />
+          {/* A paused workout is finished or ended first, so nothing is overwritten. */}
+          {app.resumableSession === undefined && (
+            <SLPress
+              scale={0.88}
+              bounces
+              onPress={() => onStart(day)}
+              aria-label={`Start ${workout.name}`}
+              style={{ width: SL.Space.hitMin, height: SL.Space.hitMin, display: "grid", placeItems: "center", background: "transparent" }}
+            >
+              <span style={{ width: 36, height: 36, borderRadius: "50%", background: SL.Signal.action, display: "grid", placeItems: "center" }}>
+                <SFSymbol name="play.fill" size={13} weight={700} color={SL.Signal.onAction} />
+              </span>
+            </SLPress>
+          )}
+        </div>
       </div>
     );
   };
@@ -1604,6 +1624,22 @@ export function TrainingHomeView({
         ]}
       />
 
+      <Alert
+        isPresented={deleting !== undefined}
+        onDismiss={() => setDeleting(undefined)}
+        title={`Delete ${deleting?.name ?? "this workout"}?`}
+        message={deleting ? app.deleteNote({ forWorkout: deleting.id }) : ""}
+        actions={[
+          { title: "Cancel", role: "cancel" },
+          {
+            title: "Delete",
+            role: "destructive",
+            action: () => {
+              if (deleting) void app.removeCustomWorkout({ id: deleting.id });
+            },
+          },
+        ]}
+      />
       <Alert
         isPresented={confirmsEnd}
         onDismiss={() => setConfirmsEnd(false)}

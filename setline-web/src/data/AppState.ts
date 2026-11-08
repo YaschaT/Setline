@@ -846,8 +846,49 @@ export class AppState {
     await this.record(changes);
   }
 
+  /**
+   * Deletes a workout of yours. Days it filled in your plans and your week become rest days, so no plan points at a
+   * workout that's gone; what you logged with it stays.
+   */
   async removeCustomWorkout(a: { id: string }): Promise<void> {
-    await this.commit([StateChange.make({ kind: "removeCustomWorkout", id: a.id })]);
+    const changes = [StateChange.make({ kind: "removeCustomWorkout", id: a.id })];
+    for (const plan of this.ownPlans) {
+      AppState.weekdaysMondayFirst.forEach((index, position) => {
+        if (plan.days[position] === a.id) {
+          changes.push(StateChange.make({ kind: "setScheduleDay", key: `plan-${plan.id}:${Schedule.weekKey(index)}`, dayID: "rest" }));
+        }
+      });
+    }
+    const week = this.ownWeek;
+    if (week?.includes(a.id)) changes.push(...this.ownWeekChanges(week.map((day) => (day === a.id ? "rest" : day))));
+    await this.commit(changes);
+  }
+
+  /** Where a workout of yours is in your week: each plan (or your unnamed week) with the days it fills, Monday first. */
+  uses(a: { ofWorkout: string }): { name: string; days: number[] }[] {
+    const daysOf = (days: string[]) => days.flatMap((day, index) => (day === a.ofWorkout ? [index] : []));
+    const found = this.ownPlans.flatMap((plan) => {
+      const days = daysOf(plan.days);
+      return days.length > 0 ? [{ name: plan.name, days }] : [];
+    });
+    const week = this.ownWeek;
+    if (this.activeOwnPlan === undefined && week) {
+      const days = daysOf(week);
+      if (days.length > 0) found.unshift({ name: "your week", days });
+    }
+    return found;
+  }
+
+  /** What deleting it does, said before it happens: "It's on Monday and Thursday in Week 1. Those days become rest days." */
+  deleteNote(a: { forWorkout: string }): string {
+    const logged = "Workouts you logged with it stay in your history.";
+    const uses = this.uses({ ofWorkout: a.forWorkout });
+    if (uses.length === 0) return logged;
+    const names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const list = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+    const places = uses.map((use) => `${list(use.days.map((day) => names[day]))} in ${use.name}`);
+    const count = uses.reduce((sum, use) => sum + use.days.length, 0);
+    return `It's on ${places.join(", and on ")}. ${count === 1 ? "That day becomes a rest day" : "Those days become rest days"}. ${logged}`;
   }
 
   /** Ends a paused session from the home screen, keeping what was logged. */

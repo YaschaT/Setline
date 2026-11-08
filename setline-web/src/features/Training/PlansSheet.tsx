@@ -226,7 +226,7 @@ export function PlanEditorSheet({ plan, isNew, onDone }: { plan: OwnPlan; isNew:
     const entry = (w: WorkoutDay) => ({ kind: "button" as const, title: w.short, checked: w.id === id, action: () => pick(w.id) });
     return (
       <div key={index} style={{ position: "relative", display: "flex" }}>
-        <HStack spacing={SL.Space.s3} style={{ flex: "1 1 0", minWidth: 0, minHeight: 56, paddingLeft: SL.Space.s4, paddingRight: SL.Space.s2 }}>
+        <HStack spacing={SL.Space.s3} style={{ flex: "1 1 0", minWidth: 0, minHeight: 56, paddingLeft: SL.Space.s4, paddingRight: SL.Space.s1 }}>
           <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} style={{ width: 104, flexShrink: 0 }}>
             {weekdayNames[index]}
           </Text>
@@ -261,6 +261,21 @@ export function PlanEditorSheet({ plan, isNew, onDone }: { plan: OwnPlan; isNew:
               </HStack>
             }
           />
+          {/* Off this day in one tap; the slot stays, so the days line up. */}
+          {isRest ? (
+            <span style={{ width: SL.Space.hitMin, height: SL.Space.hitMin, flexShrink: 0 }} />
+          ) : (
+            <SLPress
+              scale={0.88}
+              onPress={() => pick("rest")}
+              aria-label={`Take ${label(id)} off ${weekdayNames[index]}`}
+              style={{ width: SL.Space.hitMin, height: SL.Space.hitMin, flexShrink: 0, display: "grid", placeItems: "center", background: "transparent" }}
+            >
+              <span style={{ width: 26, height: 26, borderRadius: "50%", background: SL.Surface.raised, display: "grid", placeItems: "center" }}>
+                <SFSymbol name="xmark" size={11} weight={700} color={SL.Ink.secondary} />
+              </span>
+            </SLPress>
+          )}
         </HStack>
         {index > 0 && (
           <div style={{ position: "absolute", top: 0, left: SL.Space.s4, right: 0, pointerEvents: "none" }}>
@@ -288,7 +303,7 @@ export function PlanEditorSheet({ plan, isNew, onDone }: { plan: OwnPlan; isNew:
           {days.map((_, index) => dayRow(index))}
         </VStack>
         <Text {...slMeta()} numerals color={SL.Ink.secondary} style={{ paddingLeft: SL.Space.s1, paddingRight: SL.Space.s1 }}>
-          {`${count === 1 ? "1 workout" : `${count} workouts`} a week. A day you move in the Agenda still changes just that date.`}
+          {`${count === 1 ? "1 workout" : `${count} workouts`} a week. ✕ makes a day a rest day. A day you move in the Agenda still changes just that date.`}
         </Text>
         <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch", alignItems: "stretch" }}>
           <SLPrimaryButton disabled={trimmed.length === 0} onPress={() => save(true)}>

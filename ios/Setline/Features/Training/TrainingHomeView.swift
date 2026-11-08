@@ -30,6 +30,7 @@ struct TrainingHomeView: View {
 
     @State private var confirmsEnd = false
     @State private var confirmsEndForFreestyle = false
+    @State private var deleting: CustomWorkout?
     /// The plan shape, chosen from the workout chooser.
     /// The date the screen is on. `nil` is today, which is where every visit
     /// starts and where `Naar vandaag` returns.
@@ -268,6 +269,14 @@ struct TrainingHomeView: View {
             }
         } message: {
             Text("What you logged in it stays. Freestyle starts once it's ended.")
+        }
+        .alert("Delete \(deleting?.name ?? "this workout")?",
+               isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+               presenting: deleting) { workout in
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { Task { await app.removeCustomWorkout(id: workout.id) } }
+        } message: { workout in
+            Text(app.deleteNote(forWorkout: workout.id))
         }
         .alert("End the session?", isPresented: $confirmsEnd) {
             Button("Cancel", role: .cancel) {}
@@ -682,25 +691,49 @@ struct TrainingHomeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(SLPressStyle(scale: 0.96))
+            .contextMenu { tileActions(workout) }
             .accessibilityLabel("\(workout.name), \(count), about \(WeekPlan.minutes(of: day)) minutes")
             .accessibilityHint("Opens it to change")
 
-            // A paused workout is finished or ended first, so nothing is overwritten.
-            if app.resumableSession == nil {
-                Button { onStart(day) } label: {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(SL.Signal.onAction)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(SL.Signal.action))
+            HStack(spacing: 0) {
+                // Edit and delete, one quiet tap away; long-press works too.
+                Menu { tileActions(workout) } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(SL.Surface.raised2))
                         .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
                         .contentShape(Circle())
                 }
-                .buttonStyle(SLPressStyle(scale: 0.88, bounces: true))
-                .padding(SL.Space.s2)
-                .accessibilityLabel("Start \(workout.name)")
+                .accessibilityLabel("More for \(workout.name)")
+
+                // A paused workout is finished or ended first, so nothing is overwritten.
+                if app.resumableSession == nil {
+                    Button { onStart(day) } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(SL.Signal.onAction)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(SL.Signal.action))
+                            .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(SLPressStyle(scale: 0.88, bounces: true))
+                    .accessibilityLabel("Start \(workout.name)")
+                }
             }
+            .padding(SL.Space.s2)
         }
+    }
+
+    @ViewBuilder
+    private func tileActions(_ workout: CustomWorkout) -> some View {
+        if app.resumableSession == nil {
+            Button { onStart(workout.workoutDay) } label: { Label("Start", systemImage: "play.fill") }
+        }
+        Button { sheet = .editWorkout(workout) } label: { Label("Edit", systemImage: "pencil") }
+        Button(role: .destructive) { deleting = workout } label: { Label("Delete", systemImage: "trash") }
     }
 
     /// A badge won today, or the next one to win: compact and secondary.

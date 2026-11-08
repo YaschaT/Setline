@@ -259,7 +259,7 @@ struct PlanEditorSheet: View {
                 }
                 .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised2))
 
-                Text("\(count == 1 ? "1 workout" : "\(count) workouts") a week. A day you move in the Agenda still changes just that date.")
+                Text("\(count == 1 ? "1 workout" : "\(count) workouts") a week. ✕ makes a day a rest day. A day you move in the Agenda still changes just that date.")
                     .slMeta()
                     .foregroundStyle(SL.Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -342,9 +342,26 @@ struct PlanEditorSheet: View {
                 .overlay(Capsule().strokeBorder(isRest ? SL.Surface.hairlineStrong : .clear, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
             }
             .accessibilityLabel("\(weekdayNames[index]): \(label(id)). Change")
+
+            // Off this day in one tap; the slot stays, so the days line up.
+            if isRest {
+                Color.clear.frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+            } else {
+                Button { withAnimation(.snappy(duration: 0.25)) { days[index] = "rest" } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(SL.Ink.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(SL.Surface.raised))
+                        .frame(width: SL.Space.hitMin, height: SL.Space.hitMin)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(SLPressStyle(scale: 0.88))
+                .accessibilityLabel("Take \(label(id)) off \(weekdayNames[index])")
+            }
         }
         .padding(.leading, SL.Space.s4)
-        .padding(.trailing, SL.Space.s2)
+        .padding(.trailing, SL.Space.s1)
         .frame(minHeight: 56)
     }
 

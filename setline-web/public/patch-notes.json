@@ -1,6 +1,16 @@
 {
   "notes": [
     {
+      "id": "2026-11-08",
+      "date": "2026-11-08",
+      "title": "Tidy up your workouts",
+      "items": [
+        "Every workout of yours has a ••• button: start it, change it or delete it. Before it goes, Setline tells you which days in your plan it was on; those become rest days.",
+        "In a plan, ✕ takes a workout off that day in one tap.",
+        "Exercise photos start small, beside the sets. Make them bigger to study the form, or hide them once you know it. Setline remembers your choice."
+      ]
+    },
+    {
       "id": "2026-11-05",
       "date": "2026-11-05",
       "title": "Chats, sorted by who reads them",

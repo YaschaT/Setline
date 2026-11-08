@@ -361,7 +361,7 @@ struct CustomWorkoutBuilder: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) { onDelete?() }
         } message: {
-            Text("Workouts you logged with it stay in your history.")
+            Text(workout.map { app.deleteNote(forWorkout: $0.id) } ?? "Workouts you logged with it stay in your history.")
         }
     }
 

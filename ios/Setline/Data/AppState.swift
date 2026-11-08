@@ -715,8 +715,48 @@ final class AppState {
         await record(changes)
     }
 
+    /// Deletes a workout of yours. Days it filled in your plans and your week
+    /// become rest days, so no plan points at a workout that's gone; what you
+    /// logged with it stays.
     func removeCustomWorkout(id: String) async {
-        await commit([StateChange(.removeCustomWorkout(id: id))])
+        var changes = [StateChange(.removeCustomWorkout(id: id))]
+        for plan in ownPlans {
+            for (position, index) in Self.weekdaysMondayFirst.enumerated() where plan.days[position] == id {
+                changes.append(StateChange(.setScheduleDay(key: "plan-\(plan.id):\(Schedule.weekKey(index))", dayID: "rest")))
+            }
+        }
+        if let week = ownWeek, week.contains(id) {
+            changes += ownWeekChanges(week.map { $0 == id ? "rest" : $0 })
+        }
+        await commit(changes)
+    }
+
+    /// Where a workout of yours is in your week: each plan (or your unnamed
+    /// week) with the days it fills, Monday first.
+    func uses(ofWorkout id: String) -> [(name: String, days: [Int])] {
+        var found: [(name: String, days: [Int])] = ownPlans.compactMap { plan in
+            let days = plan.days.indices.filter { plan.days[$0] == id }
+            return days.isEmpty ? nil : (plan.name, days)
+        }
+        if activeOwnPlan == nil, let week = ownWeek {
+            let days = week.indices.filter { week[$0] == id }
+            if !days.isEmpty { found.insert(("your week", days), at: 0) }
+        }
+        return found
+    }
+
+    /// What deleting it does, said before it happens: "It's on Monday and
+    /// Thursday in Week 1. Those days become rest days."
+    func deleteNote(forWorkout id: String) -> String {
+        let logged = "Workouts you logged with it stay in your history."
+        let uses = uses(ofWorkout: id)
+        guard !uses.isEmpty else { return logged }
+        func list(_ items: [String]) -> String {
+            items.count < 2 ? items.joined() : items.dropLast().joined(separator: ", ") + " and " + items[items.count - 1]
+        }
+        let places = uses.map { "\(list($0.days.map { weekdayNames[$0] })) in \($0.name)" }
+        let count = uses.reduce(0) { $0 + $1.days.count }
+        return "It's on \(places.joined(separator: ", and on ")). \(count == 1 ? "That day becomes a rest day" : "Those days become rest days"). \(logged)"
     }
 
     /// Ends a paused session from the home screen, keeping what was logged.
