@@ -57,6 +57,7 @@ import { FoodSearchService } from "./FoodSearchService";
 import { MealScanService, type MealScanService_Outcome } from "./MealScanService";
 import { FoodLookupService, type FoodLookupService_BarcodeOutcome } from "./FoodLookupService";
 import { UserDefaults } from "../design/swiftui";
+import { AccountValues } from "./AccountValues";
 
 export type SyncState =
   | { kind: "idle" }
@@ -148,6 +149,8 @@ export class AppState {
 
   constructor(client: SupabaseClient) {
     this.client = client;
+    // The goal and the body profile are read by helpers next to their screens; their changes come back here.
+    AccountValues.send = (key, value) => void this.commit([StateChange.make({ kind: "setAccountValue", key, value })]);
   }
 
   attach(store: LocalStore): void {
@@ -604,6 +607,8 @@ export class AppState {
           this.store?.markSynced(shown, this.encodePending(), now, session.email);
           this.sync = { kind: "synced", value: now };
           this.changed();
+          // The account has been read: what this device kept on its own can join it.
+          await this.moveDeviceValuesToAccount();
         } catch (error) {
           if (this.session?.userID !== session.userID) return;
           this.sync = error instanceof AuthFailure && error.kind === "expired" ? { kind: "sessionExpired" } : { kind: "offline" };
@@ -648,6 +653,8 @@ export class AppState {
     this.experience = LegacyAdapter.experience({ from: next });
     this.deload = LegacyAdapter.deload({ from: next });
     this.plan = this.applyReplacements(this.plan);
+    // The goal and the body profile, as the account has them, for the screens that read this device's copy.
+    for (const [key, helper] of AccountValues.helpers) helper.mirror(LegacyState.get(next, key));
   }
 
   /** Rewrites the plan wherever a permanent replacement reaches it, on read. */
@@ -1068,33 +1075,58 @@ export class AppState {
 
   // MARK: - Saved meals
 
-  /** Meals of your own, with their ingredients. Kept on this device, per account, like favorites. */
-  savedMealsRevision = 0;
-
-  private get savedMealsKey(): string {
-    return `setline.food.meals.${this.session?.email.toLowerCase() ?? "none"}`;
-  }
-
+  /**
+   * Meals of your own, with their ingredients. Kept with the account (`iosSavedMeals`), so the phone and the web show
+   * the same ones. Before they synced they were kept on this device; those move to the account once.
+   */
   get savedMeals(): SavedMeal[] {
-    const raw = UserDefaults.get<unknown[]>(this.savedMealsKey);
-    if (!Array.isArray(raw)) return [];
+    const stored = this.state ? LegacyAdapter.savedMeals({ from: this.state }) : undefined;
+    const raw: unknown[] = stored ?? this.localSavedMeals;
     return raw.map((item) => SavedMeal.decode(item)).filter((meal): meal is SavedMeal => meal !== undefined);
   }
 
+  private get localSavedMealsKey(): string {
+    return `setline.food.meals.${this.session?.email.toLowerCase() ?? "none"}`;
+  }
+
+  private get localSavedMeals(): unknown[] {
+    const raw = UserDefaults.get<unknown[]>(this.localSavedMealsKey);
+    return Array.isArray(raw) ? raw : [];
+  }
+
   saveMeal(meal: SavedMeal): void {
-    const list = this.savedMeals;
-    const index = list.findIndex((m) => m.id === meal.id);
-    if (index >= 0) list[index] = meal;
-    else list.unshift(meal);
-    UserDefaults.set(this.savedMealsKey, list);
-    this.savedMealsRevision += 1;
-    this.changed();
+    void this.commit([StateChange.make({ kind: "upsertSavedMeal", value: JSON.parse(JSON.stringify(meal)) as JSONValue })]);
   }
 
   removeMeal(id: string): void {
-    UserDefaults.set(this.savedMealsKey, this.savedMeals.filter((m) => m.id !== id));
-    this.savedMealsRevision += 1;
-    this.changed();
+    void this.commit([StateChange.make({ kind: "removeSavedMeal", id })]);
+  }
+
+  /**
+   * What this device kept before saved meals, the goal and the body profile synced, moved to the account once it has
+   * been read — never over a value the account already holds.
+   */
+  private async moveDeviceValuesToAccount(): Promise<void> {
+    const session = this.session;
+    const state = this.state;
+    if (!session || !state) return;
+    const flag = `setline.accountValuesMoved.${session.email.toLowerCase()}`;
+    if (UserDefaults.get<boolean>(flag) === true) return;
+    UserDefaults.set(flag, true);
+    const changes: StateChange[] = [];
+    if (LegacyAdapter.savedMeals({ from: state }) === undefined) {
+      // Oldest first, so each lands on top and the newest ends up first.
+      for (const meal of [...this.localSavedMeals].reverse()) {
+        changes.push(StateChange.make({ kind: "upsertSavedMeal", value: meal as JSONValue }));
+      }
+    }
+    for (const [key, helper] of AccountValues.helpers) {
+      const local = helper.localValue();
+      if (LegacyState.get(state, key) === undefined && local !== undefined) {
+        changes.push(StateChange.make({ kind: "setAccountValue", key, value: local }));
+      }
+    }
+    if (changes.length > 0) await this.commit(changes);
   }
 
   /** The days before today as eaten, newest first. */

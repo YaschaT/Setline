@@ -1,5 +1,7 @@
 // PlanViews.swift — weight, goal and whether the eating fits it, on the
 // Nutrition tab: the card, the full plan, and height, sex and age.
+import { LegacyAdapter } from "../../core/Legacy/LegacyAdapter";
+import { AccountValues } from "../../data/AccountValues";
 import { useState } from "react";
 import { SL } from "../../design/tokens";
 import { slListCard } from "../../design/tokens";
@@ -24,15 +26,29 @@ import { WeighInSheet } from "../Progress/WeighInSheet";
 
 const profileKey = "setline.bodyProfile";
 
-/** Height, sex and age, kept on this device next to the goal. */
+/** Height, sex and age. Kept with the account (`iosBodyProfile`) next to the goal; this device keeps a copy to read at once. */
 export const BodyProfilePreference = {
   get profile(): BodyProfile | undefined {
     return BodyProfile.decode(UserDefaults.get<unknown>(profileKey));
   },
   set profile(newValue: BodyProfile | undefined) {
     UserDefaults.set(profileKey, newValue);
+    AccountValues.send?.(LegacyAdapter.bodyProfileKey, newValue === undefined ? null : { ...newValue });
   },
 };
+
+AccountValues.helpers.set(LegacyAdapter.bodyProfileKey, {
+  mirror(value) {
+    if (value === undefined) return;
+    const profile = value === null ? undefined : BodyProfile.decode(value);
+    if (JSON.stringify(profile) === JSON.stringify(BodyProfilePreference.profile)) return;
+    UserDefaults.set(profileKey, profile);
+  },
+  localValue() {
+    const profile = BodyProfilePreference.profile;
+    return profile === undefined ? undefined : { ...profile };
+  },
+});
 
 /** Everything the plan reads, worked out once per look. */
 export interface NutritionPlan {

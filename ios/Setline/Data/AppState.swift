@@ -104,6 +104,14 @@ final class AppState {
 
     init(client: SupabaseClient) {
         self.client = client
+        // The goal and the body profile are read by static helpers; their
+        // changes come back here to reach the account.
+        GoalPreference.onChange = { [weak self] value in
+            Task { await self?.commit([StateChange(.setAccountValue(key: LegacyAdapter.weightGoalKey, value: value))]) }
+        }
+        BodyProfilePreference.onChange = { [weak self] value in
+            Task { await self?.commit([StateChange(.setAccountValue(key: LegacyAdapter.bodyProfileKey, value: value))]) }
+        }
     }
 
     func attach(context: ModelContext) {
@@ -465,6 +473,8 @@ final class AppState {
                 lastSyncedAt = now
                 store?.markSynced(shown, pending: pendingChanges, at: now, for: session.email)
                 sync = .synced(now)
+                // The account has been read: what this phone kept on its own can join it.
+                await moveDeviceValuesToAccount()
             } catch {
                 guard self.session?.userID == session.userID else { return }
                 sync = (error as? AuthFailure) == .expired ? .sessionExpired : .offline
@@ -503,6 +513,10 @@ final class AppState {
         experience = LegacyAdapter.experience(from: next)
         deload = LegacyAdapter.deload(from: next)
         plan = applyReplacements(to: plan)
+        // The goal and the body profile, as the account has them, for the
+        // screens that read this phone's copy.
+        GoalPreference.mirror(next[LegacyAdapter.weightGoalKey])
+        BodyProfilePreference.mirror(next[LegacyAdapter.bodyProfileKey])
     }
 
     /// Rewrites the plan wherever a permanent replacement reaches it.
@@ -981,29 +995,55 @@ final class AppState {
 
     // MARK: - Saved meals
 
-    /// Meals of your own, with their ingredients. Kept on this phone, per
-    /// account, like favorites.
-    private(set) var savedMealsRevision = 0
-
-    private var savedMealsKey: String { "setline.food.meals.\(session?.email.lowercased() ?? "none")" }
-
+    /// Meals of your own, with their ingredients. Kept with the account
+    /// (`iosSavedMeals`), so the phone and the web show the same ones. Before
+    /// they synced they were kept on this phone; those move to the account
+    /// once (`moveDeviceValuesToAccount`).
     var savedMeals: [SavedMeal] {
-        _ = savedMealsRevision
-        guard let data = UserDefaults.standard.data(forKey: savedMealsKey) else { return [] }
+        if let state, let stored = LegacyAdapter.savedMeals(from: state) {
+            return stored.compactMap { LegacyAdapter.decodeValue($0) }
+        }
+        return localSavedMeals
+    }
+
+    private var localSavedMealsKey: String { "setline.food.meals.\(session?.email.lowercased() ?? "none")" }
+
+    private var localSavedMeals: [SavedMeal] {
+        guard let data = UserDefaults.standard.data(forKey: localSavedMealsKey) else { return [] }
         return (try? JSONDecoder().decode([SavedMeal].self, from: data)) ?? []
     }
 
     func saveMeal(_ meal: SavedMeal) {
-        var list = savedMeals
-        if let index = list.firstIndex(where: { $0.id == meal.id }) { list[index] = meal } else { list.insert(meal, at: 0) }
-        UserDefaults.standard.set(try? JSONEncoder().encode(list), forKey: savedMealsKey)
-        savedMealsRevision += 1
+        guard let value = LegacyAdapter.jsonValue(meal) else { return }
+        Task { await commit([StateChange(.upsertSavedMeal(value))]) }
     }
 
     func removeMeal(id: String) {
-        let list = savedMeals.filter { $0.id != id }
-        UserDefaults.standard.set(try? JSONEncoder().encode(list), forKey: savedMealsKey)
-        savedMealsRevision += 1
+        Task { await commit([StateChange(.removeSavedMeal(id: id))]) }
+    }
+
+    /// What this phone kept before saved meals, the goal and the body profile
+    /// synced, moved to the account once it has been read — never over a
+    /// value the account already holds.
+    private func moveDeviceValuesToAccount() async {
+        guard let session, let state else { return }
+        let flag = "setline.accountValuesMoved.\(session.email.lowercased())"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        UserDefaults.standard.set(true, forKey: flag)
+        var changes: [StateChange] = []
+        if LegacyAdapter.savedMeals(from: state) == nil {
+            // Oldest first, so each lands on top and the newest ends up first.
+            changes += localSavedMeals.reversed().compactMap { meal in
+                LegacyAdapter.jsonValue(meal).map { StateChange(.upsertSavedMeal($0)) }
+            }
+        }
+        if state[LegacyAdapter.weightGoalKey] == nil, let value = GoalPreference.localValue {
+            changes.append(StateChange(.setAccountValue(key: LegacyAdapter.weightGoalKey, value: value)))
+        }
+        if state[LegacyAdapter.bodyProfileKey] == nil, let value = BodyProfilePreference.localValue {
+            changes.append(StateChange(.setAccountValue(key: LegacyAdapter.bodyProfileKey, value: value)))
+        }
+        if !changes.isEmpty { await commit(changes) }
     }
 
     /// The days before today as eaten, newest first.

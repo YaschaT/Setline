@@ -369,6 +369,17 @@ public enum LegacyAdapter {
     public static let replacementsKey = "iosProgramReplacements"
     public static let customExercisesKey = "iosCustomExercises"
     public static let customWorkoutsKey = "iosCustomWorkouts"
+    /// Meals of your own with their ingredients, newest first.
+    public static let savedMealsKey = "iosSavedMeals"
+    public static let weightGoalKey = "iosWeightGoal"
+    public static let bodyProfileKey = "iosBodyProfile"
+    /// The personal values `setAccountValue` may write; anything else is ignored.
+    public static let accountValueKeys: Set<String> = [weightGoalKey, bodyProfileKey]
+
+    /// Saved meals as stored, newest first; `nil` when the account has never held any.
+    public static func savedMeals(from state: LegacyState) -> [JSONValue]? {
+        state[savedMealsKey]?.arrayValue
+    }
 
     /// The lifter's own workouts, oldest first.
     public static func customWorkouts(from state: LegacyState) -> [CustomWorkout] {
@@ -420,14 +431,14 @@ public enum LegacyAdapter {
     }
 
     /// One value as stored JSON, encoded the way every iOS key is.
-    static func jsonValue<T: Encodable>(_ value: T) -> JSONValue? {
+    public static func jsonValue<T: Encodable>(_ value: T) -> JSONValue? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(value) else { return nil }
         return try? JSONDecoder().decode(JSONValue.self, from: data)
     }
 
-    static func decodeValue<T: Decodable>(_ value: JSONValue) -> T? {
+    public static func decodeValue<T: Decodable>(_ value: JSONValue) -> T? {
         guard let data = try? JSONEncoder().encode(value) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

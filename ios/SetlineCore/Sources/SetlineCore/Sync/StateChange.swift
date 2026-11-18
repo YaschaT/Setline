@@ -54,6 +54,13 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case setExperience(String)
         case setEquipment(plates: [Decimal], barKg: Decimal)
         case setDeload(JSONValue)
+        /// A meal of your own with its ingredients, added or changed by its id.
+        case upsertSavedMeal(JSONValue)
+        case removeSavedMeal(id: String)
+        /// One personal value kept with the account — the weight goal, the
+        /// body profile — or `.null` to clear it. Only the keys in
+        /// `LegacyAdapter.accountValueKeys` are written.
+        case setAccountValue(key: String, value: JSONValue)
     }
 
     /// Identifies the change itself, so a sync can clear exactly the changes
@@ -98,6 +105,7 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case id, createdAt, kind, session, snapshot, flag, replacement, exercise, exerciseID, targetID
         case scheduleKey, dayID, entry, metric, field, value, mode, sciencePlanID, experience, plates, barKg, deload
         case sessionID, corrections, isFavorite, removals, workout
+        case meal, accountKey, accountValue
     }
 
     private enum KindName: String, Codable {
@@ -108,6 +116,7 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case setScheduleDay, removeScheduleOverride, upsertNutritionEntry, removeNutritionEntry
         case upsertMetric, setTarget
         case setProgram, setExperience, setEquipment, setDeload
+        case upsertSavedMeal, removeSavedMeal, setAccountValue
     }
 
     public init(from decoder: Decoder) throws {
@@ -184,6 +193,15 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
             )
         case .setDeload:
             kind = .setDeload(try container.decodeIfPresent(JSONValue.self, forKey: .deload) ?? .null)
+        case .upsertSavedMeal:
+            kind = .upsertSavedMeal(try container.decode(JSONValue.self, forKey: .meal))
+        case .removeSavedMeal:
+            kind = .removeSavedMeal(id: try container.decode(String.self, forKey: .targetID))
+        case .setAccountValue:
+            kind = .setAccountValue(
+                key: try container.decode(String.self, forKey: .accountKey),
+                value: try container.decodeIfPresent(JSONValue.self, forKey: .accountValue) ?? .null
+            )
         }
     }
 
@@ -271,6 +289,16 @@ public struct StateChange: Codable, Hashable, Identifiable, Sendable {
         case .setDeload(let deload):
             try container.encode(KindName.setDeload, forKey: .kind)
             try container.encode(deload, forKey: .deload)
+        case .upsertSavedMeal(let meal):
+            try container.encode(KindName.upsertSavedMeal, forKey: .kind)
+            try container.encode(meal, forKey: .meal)
+        case .removeSavedMeal(let id):
+            try container.encode(KindName.removeSavedMeal, forKey: .kind)
+            try container.encode(id, forKey: .targetID)
+        case .setAccountValue(let key, let value):
+            try container.encode(KindName.setAccountValue, forKey: .kind)
+            try container.encode(key, forKey: .accountKey)
+            try container.encode(value, forKey: .accountValue)
         }
     }
 

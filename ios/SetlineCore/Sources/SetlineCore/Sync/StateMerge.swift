@@ -93,6 +93,26 @@ public enum StateMerge {
                 if !list.contains(where: { $0.id == exercise.id }) { list.append(exercise) }
             }
 
+        case .upsertSavedMeal(let meal):
+            // Added at the top, or written again in place by its id.
+            guard let id = meal["id"]?.stringValue else { break }
+            var list = raw[LegacyAdapter.savedMealsKey]?.arrayValue ?? []
+            if let index = list.firstIndex(where: { $0["id"]?.stringValue == id }) {
+                list[index] = meal
+            } else {
+                list.insert(meal, at: 0)
+            }
+            raw[LegacyAdapter.savedMealsKey] = .array(list)
+
+        case .removeSavedMeal(let id):
+            guard let list = raw[LegacyAdapter.savedMealsKey]?.arrayValue else { break }
+            raw[LegacyAdapter.savedMealsKey] = .array(list.filter { $0["id"]?.stringValue != id })
+
+        case .setAccountValue(let key, let value):
+            // The last one written wins; `.null` clears it explicitly.
+            guard LegacyAdapter.accountValueKeys.contains(key) else { break }
+            raw[key] = value
+
         case .upsertCustomWorkout(let workout):
             updateList(&raw, key: LegacyAdapter.customWorkoutsKey, as: CustomWorkout.self) { list in
                 if let index = list.firstIndex(where: { $0.id == workout.id }) {

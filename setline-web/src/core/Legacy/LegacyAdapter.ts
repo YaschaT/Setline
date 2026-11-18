@@ -508,6 +508,17 @@ export const LegacyAdapter = {
   replacementsKey: "iosProgramReplacements",
   customExercisesKey: "iosCustomExercises",
   customWorkoutsKey: "iosCustomWorkouts",
+  /** Meals of your own with their ingredients, newest first. */
+  savedMealsKey: "iosSavedMeals",
+  weightGoalKey: "iosWeightGoal",
+  bodyProfileKey: "iosBodyProfile",
+  /** The personal values `setAccountValue` may write; anything else is ignored. */
+  accountValueKeys: new Set(["iosWeightGoal", "iosBodyProfile"]),
+
+  /** Saved meals as stored, newest first; `undefined` when the account has never held any. */
+  savedMeals(a: { from: LegacyState }): JSONValue[] | undefined {
+    return JSONValue.arrayValue(LegacyState.get(a.from, LegacyAdapter.savedMealsKey));
+  },
 
   /** The lifter's own workouts, oldest first. */
   customWorkouts(a: { from: LegacyState }): CustomWorkout[] {

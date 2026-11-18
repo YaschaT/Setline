@@ -81,7 +81,15 @@ export type StateChange_Kind =
   | { kind: "setProgram"; mode: string; sciencePlanID?: string }
   | { kind: "setExperience"; value: string }
   | { kind: "setEquipment"; plates: number[]; barKg: number }
-  | { kind: "setDeload"; value: JSONValue };
+  | { kind: "setDeload"; value: JSONValue }
+  /** A meal of your own with its ingredients, added or changed by its id. */
+  | { kind: "upsertSavedMeal"; value: JSONValue }
+  | { kind: "removeSavedMeal"; id: string }
+  /**
+   * One personal value kept with the account — the weight goal, the body profile — or `null` to clear it. Only the
+   * keys in `LegacyAdapter.accountValueKeys` are written.
+   */
+  | { kind: "setAccountValue"; key: string; value: JSONValue };
 
 export interface StateChange {
   /**
@@ -128,6 +136,9 @@ const KIND_NAMES = [
   "setExperience",
   "setEquipment",
   "setDeload",
+  "upsertSavedMeal",
+  "removeSavedMeal",
+  "setAccountValue",
 ] as const;
 
 /** A `JSONValue` member: the key must be there; `null` is a value like any other. */
@@ -294,6 +305,15 @@ export const StateChange = {
       case "setDeload":
         kind = { kind: "setDeload", value: decodeJSONValueIfPresent(object, "deload") };
         break;
+      case "upsertSavedMeal":
+        kind = { kind: "upsertSavedMeal", value: decodeJSONValue(object, "meal") };
+        break;
+      case "removeSavedMeal":
+        kind = { kind: "removeSavedMeal", id: container.decode("targetID", decodeString) };
+        break;
+      case "setAccountValue":
+        kind = { kind: "setAccountValue", key: container.decode("accountKey", decodeString), value: decodeJSONValueIfPresent(object, "accountValue") };
+        break;
     }
     return { id, createdAt, kind };
   },
@@ -405,6 +425,19 @@ export const StateChange = {
       case "setDeload":
         object["kind"] = "setDeload";
         object["deload"] = kind.value;
+        break;
+      case "upsertSavedMeal":
+        object["kind"] = "upsertSavedMeal";
+        object["meal"] = kind.value;
+        break;
+      case "removeSavedMeal":
+        object["kind"] = "removeSavedMeal";
+        object["targetID"] = kind.id;
+        break;
+      case "setAccountValue":
+        object["kind"] = "setAccountValue";
+        object["accountKey"] = kind.key;
+        object["accountValue"] = kind.value;
         break;
     }
     return object;

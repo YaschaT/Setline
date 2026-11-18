@@ -321,3 +321,52 @@ extension SharedKeysMergeTests {
         )
     }
 }
+
+// MARK: Saved meals, goal and body profile
+
+extension SharedKeysMergeTests {
+
+    private func meal(_ id: String, _ name: String) -> JSONValue {
+        .object(["id": .string(id), "name": .string(name), "ingredients": .array([])])
+    }
+
+    func testASavedMealGoesOnTopAndIsRewrittenInPlace() {
+        var after = StateMerge.apply(
+            [StateChange(.upsertSavedMeal(meal("a", "Spaghetti")), createdAt: now),
+             StateChange(.upsertSavedMeal(meal("b", "Omelette")), createdAt: now)],
+            to: state([:]), now: now
+        )
+        XCTAssertEqual(after["iosSavedMeals"]?.arrayValue?.compactMap { $0["id"]?.stringValue }, ["b", "a"])
+        after = StateMerge.apply([StateChange(.upsertSavedMeal(meal("a", "Spaghetti bolognese")), createdAt: now)], to: after, now: now)
+        XCTAssertEqual(after["iosSavedMeals"]?.arrayValue?.compactMap { $0["name"]?.stringValue }, ["Omelette", "Spaghetti bolognese"])
+    }
+
+    func testRemovingASavedMealLeavesTheOthers() {
+        let before = state(["iosSavedMeals": .array([meal("a", "Spaghetti"), meal("b", "Omelette")])])
+        let after = StateMerge.apply([StateChange(.removeSavedMeal(id: "a"), createdAt: now)], to: before, now: now)
+        XCTAssertEqual(after["iosSavedMeals"]?.arrayValue?.compactMap { $0["id"]?.stringValue }, ["b"])
+    }
+
+    func testAccountValuesAreWrittenClearedAndLimitedToTheirKeys() {
+        let goal = JSONValue.object(["goal": .string("cut"), "since": .string("2026-11-18T10:00:00Z")])
+        var after = StateMerge.apply(
+            [StateChange(.setAccountValue(key: "iosWeightGoal", value: goal), createdAt: now),
+             StateChange(.setAccountValue(key: "planMode", value: .string("hacked")), createdAt: now)],
+            to: state(["planMode": .string("personal")]), now: now
+        )
+        XCTAssertEqual(after["iosWeightGoal"], goal)
+        XCTAssertEqual(after["planMode"], .string("personal"), "only the account-value keys are written")
+        after = StateMerge.apply([StateChange(.setAccountValue(key: "iosWeightGoal", value: .null), createdAt: now)], to: after, now: now)
+        XCTAssertEqual(after["iosWeightGoal"], .null)
+    }
+
+    func testTheNewChangesSurviveTheTripThroughPendingStorage() throws {
+        let changes = [
+            StateChange(.upsertSavedMeal(meal("a", "Spaghetti")), createdAt: now),
+            StateChange(.removeSavedMeal(id: "a"), createdAt: now),
+            StateChange(.setAccountValue(key: "iosBodyProfile", value: .object(["heightCm": .number(180)])), createdAt: now),
+        ]
+        let data = try StateChange.encoder.encode(changes)
+        XCTAssertEqual(try StateChange.decoder.decode([StateChange].self, from: data), changes)
+    }
+}

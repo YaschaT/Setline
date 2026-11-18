@@ -148,9 +148,17 @@ export const SyncQueue = {
         // A paused workout, a hidden ramp and a starred exercise are
         // preferences, not work waiting to be saved: they sync like
         // everything else, but the list is about what you did.
+        case "upsertSavedMeal":
+        case "removeSavedMeal":
+          if (!rows.some((row) => row.title === "Saved meals")) {
+            rows.push(SyncQueue_Row.make({ title: "Saved meals", detail: "Added or changed" }));
+          }
+          break;
+
         case "setActiveSession":
         case "hideWarmup":
         case "setFavoriteExercise":
+        case "setAccountValue":
           continue;
       }
     }

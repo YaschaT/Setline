@@ -23,16 +23,45 @@ extension AppState {
     }
 }
 
+/// The weight goal. Kept with the account (`iosWeightGoal`), so the phone
+/// and the web follow the same one; this phone keeps a copy to read at once,
+/// written whenever the account's arrives.
 enum GoalPreference {
     private static let key = "setline.weightGoal"
     private static let sinceKey = "setline.weightGoal.since"
 
+    /// AppState's way to send a change to the account.
+    /// Set once at launch and called on the main thread, where the screens change it.
+    nonisolated(unsafe) static var onChange: ((JSONValue) -> Void)?
+
     static var goal: WeightGoal? {
         get { UserDefaults.standard.string(forKey: key).flatMap(WeightGoal.init(rawValue:)) }
         set {
-            UserDefaults.standard.set(newValue?.rawValue, forKey: key)
-            UserDefaults.standard.set(newValue == nil ? nil : Date(), forKey: sinceKey)
+            writeLocal(newValue, since: newValue == nil ? nil : Date())
+            onChange?(localValue ?? .null)
         }
+    }
+
+    /// `{"goal": "cut", "since": "2026-11-18T…"}`, as the account keeps it.
+    static var localValue: JSONValue? {
+        guard let goal else { return nil }
+        let since = self.since.map { JSONValue.string(ISO8601DateFormatter().string(from: $0)) } ?? .null
+        return .object(["goal": .string(goal.rawValue), "since": since])
+    }
+
+    /// The account's value, copied here; `nil` (the account has none yet)
+    /// leaves this phone's own.
+    static func mirror(_ value: JSONValue?) {
+        guard let value else { return }
+        let goal = value["goal"]?.stringValue.flatMap(WeightGoal.init(rawValue:))
+        let since = value["since"]?.stringValue.flatMap { ISO8601DateFormatter().date(from: $0) }
+        guard goal != self.goal || since != self.since else { return }
+        writeLocal(goal, since: since)
+    }
+
+    private static func writeLocal(_ goal: WeightGoal?, since: Date?) {
+        UserDefaults.standard.set(goal?.rawValue, forKey: key)
+        UserDefaults.standard.set(goal == nil ? nil : since, forKey: sinceKey)
     }
 
     static var since: Date? { UserDefaults.standard.object(forKey: sinceKey) as? Date }

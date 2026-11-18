@@ -3,13 +3,36 @@ import SetlineCore
 
 // MARK: - Height, sex and age
 
-/// Height, sex and age, kept on this phone next to the goal.
+/// Height, sex and age. Kept with the account (`iosBodyProfile`) next to the
+/// goal; this phone keeps a copy to read at once.
 enum BodyProfilePreference {
     private static let key = "setline.bodyProfile"
 
+    /// AppState's way to send a change to the account.
+    /// Set once at launch and called on the main thread, where the screens change it.
+    nonisolated(unsafe) static var onChange: ((JSONValue) -> Void)?
+
     static var profile: BodyProfile? {
         get { UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(BodyProfile.self, from: $0) } }
-        set { UserDefaults.standard.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: key) }
+        set {
+            writeLocal(newValue)
+            onChange?(newValue.flatMap { LegacyAdapter.jsonValue($0) } ?? .null)
+        }
+    }
+
+    static var localValue: JSONValue? { profile.flatMap { LegacyAdapter.jsonValue($0) } }
+
+    /// The account's value, copied here; `nil` (the account has none yet)
+    /// leaves this phone's own.
+    static func mirror(_ value: JSONValue?) {
+        guard let value else { return }
+        let profile: BodyProfile? = value == .null ? nil : LegacyAdapter.decodeValue(value)
+        guard profile != self.profile else { return }
+        writeLocal(profile)
+    }
+
+    private static func writeLocal(_ profile: BodyProfile?) {
+        UserDefaults.standard.set(profile.flatMap { try? JSONEncoder().encode($0) }, forKey: key)
     }
 }
 

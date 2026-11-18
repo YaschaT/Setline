@@ -296,6 +296,31 @@ export const StateMerge = {
         raw[LegacyAdapter.deloadKey] = kind.value;
         break;
 
+      case "upsertSavedMeal": {
+        // Added at the top, or written again in place by its id.
+        const id = JSONValue.stringValue(JSONValue.get(kind.value, "id"));
+        if (id === undefined) break;
+        const list = [...(JSONValue.arrayValue(raw[LegacyAdapter.savedMealsKey]) ?? [])];
+        const index = list.findIndex((meal) => JSONValue.stringValue(JSONValue.get(meal, "id")) === id);
+        if (index !== -1) list[index] = kind.value;
+        else list.unshift(kind.value);
+        raw[LegacyAdapter.savedMealsKey] = list;
+        break;
+      }
+
+      case "removeSavedMeal": {
+        const list = JSONValue.arrayValue(raw[LegacyAdapter.savedMealsKey]);
+        if (list === undefined) break;
+        raw[LegacyAdapter.savedMealsKey] = list.filter((meal) => JSONValue.stringValue(JSONValue.get(meal, "id")) !== kind.id);
+        break;
+      }
+
+      case "setAccountValue":
+        // The last one written wins; `null` clears it explicitly.
+        if (!LegacyAdapter.accountValueKeys.has(kind.key)) break;
+        raw[kind.key] = kind.value;
+        break;
+
       case "setTarget": {
         // One field. Targets the app does not model stay as they are.
         const targets: JSONObject = { ...(JSONValue.objectValue(raw["targets"]) ?? {}) };

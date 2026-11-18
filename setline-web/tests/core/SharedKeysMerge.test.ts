@@ -363,4 +363,54 @@ describe("SharedKeysMergeTests", () => {
       ["m1", "m2"],
     );
   });
+
+  // MARK: Saved meals, goal and body profile
+
+  const meal = (id: string, name: string): JSONValue => ({ id, name, ingredients: [] });
+  const ids = (s: LegacyState, key: string, field = "id") =>
+    (JSONValue.arrayValue(get(s, key)) ?? []).map((value) => JSONValue.stringValue(JSONValue.get(value, field)));
+
+  test("testASavedMealGoesOnTopAndIsRewrittenInPlace", () => {
+    let after = StateMerge.apply(
+      [
+        StateChange.make({ kind: "upsertSavedMeal", value: meal("a", "Spaghetti") }, { createdAt: now }),
+        StateChange.make({ kind: "upsertSavedMeal", value: meal("b", "Omelette") }, { createdAt: now }),
+      ],
+      { to: state({}), now },
+    );
+    assertEqual(ids(after, "iosSavedMeals"), ["b", "a"]);
+    after = StateMerge.apply([StateChange.make({ kind: "upsertSavedMeal", value: meal("a", "Spaghetti bolognese") }, { createdAt: now })], { to: after, now });
+    assertEqual(ids(after, "iosSavedMeals", "name"), ["Omelette", "Spaghetti bolognese"]);
+  });
+
+  test("testRemovingASavedMealLeavesTheOthers", () => {
+    const before = state({ iosSavedMeals: [meal("a", "Spaghetti"), meal("b", "Omelette")] });
+    const after = StateMerge.apply([StateChange.make({ kind: "removeSavedMeal", id: "a" }, { createdAt: now })], { to: before, now });
+    assertEqual(ids(after, "iosSavedMeals"), ["b"]);
+  });
+
+  test("testAccountValuesAreWrittenClearedAndLimitedToTheirKeys", () => {
+    const goal: JSONValue = { goal: "cut", since: "2026-11-18T10:00:00Z" };
+    let after = StateMerge.apply(
+      [
+        StateChange.make({ kind: "setAccountValue", key: "iosWeightGoal", value: goal }, { createdAt: now }),
+        StateChange.make({ kind: "setAccountValue", key: "planMode", value: "hacked" }, { createdAt: now }),
+      ],
+      { to: state({ planMode: "personal" }), now },
+    );
+    assertEqual(get(after, "iosWeightGoal"), goal);
+    assertEqual(get(after, "planMode"), "personal");
+    after = StateMerge.apply([StateChange.make({ kind: "setAccountValue", key: "iosWeightGoal", value: null }, { createdAt: now })], { to: after, now });
+    assertEqual(get(after, "iosWeightGoal"), null);
+  });
+
+  test("testTheNewChangesSurviveTheTripThroughPendingStorage", () => {
+    const changes = [
+      StateChange.make({ kind: "upsertSavedMeal", value: meal("a", "Spaghetti") }, { createdAt: now }),
+      StateChange.make({ kind: "removeSavedMeal", id: "a" }, { createdAt: now }),
+      StateChange.make({ kind: "setAccountValue", key: "iosBodyProfile", value: { heightCm: 180 } }, { createdAt: now }),
+    ];
+    const back = changes.map((change) => StateChange.decode(JSON.parse(JSON.stringify(StateChange.encode(change)))));
+    assertEqual(back.map((c) => c.kind), changes.map((c) => c.kind));
+  });
 });

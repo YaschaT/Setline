@@ -1,5 +1,8 @@
 // GoalViews.swift — the body-weight goal kept on this phone, the sheet that
 // picks it, the check as a card, and the meal and goal reminders.
+import { JSONValue } from "../../core/Legacy/JSONValue";
+import { LegacyAdapter } from "../../core/Legacy/LegacyAdapter";
+import { AccountValues } from "../../data/AccountValues";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Circle, Hourglass } from "lucide-react";
 import { SL } from "../../design/tokens";
@@ -58,15 +61,39 @@ const goalKey = "setline.weightGoal";
 const sinceKey = "setline.weightGoal.since";
 const bestKey = "setline.weightGoal.bestWeeks";
 
-/** The body-weight goal, kept on this phone (the web app has no goal yet). */
+const writeGoal = (goal: WeightGoal | undefined, since: string | undefined) => {
+  UserDefaults.set(goalKey, goal);
+  UserDefaults.set(sinceKey, goal === undefined ? undefined : since);
+};
+
+/**
+ * The body-weight goal. Kept with the account (`iosWeightGoal`), so the phone and the web follow the same one; this
+ * device keeps a copy to read at once, written whenever the account's arrives.
+ */
 export const GoalPreference = {
   get goal(): WeightGoal | undefined {
     const raw = UserDefaults.get<unknown>(goalKey);
     return typeof raw === "string" ? WeightGoal.fromRawValue(raw) : undefined;
   },
   set goal(newValue: WeightGoal | undefined) {
-    UserDefaults.set(goalKey, newValue);
-    UserDefaults.set(sinceKey, newValue === undefined ? undefined : new Date().toISOString());
+    writeGoal(newValue, newValue === undefined ? undefined : new Date().toISOString());
+    AccountValues.send?.(LegacyAdapter.weightGoalKey, GoalPreference.localValue() ?? null);
+  },
+
+  /** `{"goal": "cut", "since": "2026-11-18T…"}`, as the account keeps it. */
+  localValue(): JSONValue | undefined {
+    const goal = GoalPreference.goal;
+    if (goal === undefined) return undefined;
+    return { goal, since: GoalPreference.since?.toISOString() ?? null };
+  },
+
+  mirror(value: JSONValue | undefined): void {
+    if (value === undefined) return;
+    const raw = JSONValue.stringValue(JSONValue.get(value, "goal"));
+    const goal = raw === undefined ? undefined : WeightGoal.fromRawValue(raw);
+    const since = JSONValue.stringValue(JSONValue.get(value, "since"));
+    if (goal === GoalPreference.goal && since === GoalPreference.since?.toISOString()) return;
+    writeGoal(goal, since);
   },
 
   get since(): Date | undefined {
@@ -83,6 +110,11 @@ export const GoalPreference = {
     if (weeks > GoalPreference.bestWeeksOnTrack) UserDefaults.set(bestKey, weeks);
   },
 };
+
+AccountValues.helpers.set(LegacyAdapter.weightGoalKey, {
+  mirror: (value) => GoalPreference.mirror(value),
+  localValue: () => GoalPreference.localValue(),
+});
 
 /** `extension GoalCheck` (this file's two extensions): call as `GoalCheckExt.headline(check)`. */
 export const GoalCheckExt = {

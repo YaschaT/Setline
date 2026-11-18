@@ -109,7 +109,12 @@ public enum SyncQueue {
             // A paused workout, a hidden ramp and a starred exercise are
             // preferences, not work waiting to be saved: they sync like
             // everything else, but the list is about what you did.
-            case .setActiveSession, .hideWarmup, .setFavoriteExercise:
+            case .upsertSavedMeal, .removeSavedMeal:
+                if !rows.contains(where: { $0.title == "Saved meals" }) {
+                    rows.append(Row(title: "Saved meals", detail: "Added or changed"))
+                }
+
+            case .setActiveSession, .hideWarmup, .setFavoriteExercise, .setAccountValue:
                 continue
             }
         }
