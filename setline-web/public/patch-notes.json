@@ -1,6 +1,18 @@
 {
   "notes": [
     {
+      "id": "2026-11-18-2",
+      "date": "2026-11-18",
+      "title": "Training, easier to read",
+      "items": [
+        "Today's workout is first. Tap its name to see the exercises; Start, Choose another and Freestyle sit right under it.",
+        "This week is one card: your plan with Change, and under every day what it holds (Push, Rest, done). Agenda and History are at its bottom.",
+        "A missed day is a quiet line now, not a warning, and only once you've trained.",
+        "Your workouts has + New; Progress ends the page with your next badge as one line.",
+        "New here? Setline asks once how you want to train: follow a plan, build your own, or freestyle."
+      ]
+    },
+    {
       "id": "2026-11-18",
       "date": "2026-11-18",
       "title": "Reps you can actually hit",

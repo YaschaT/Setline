@@ -26,7 +26,7 @@ struct QuickProgressCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SL.Space.s2) {
             HStack(alignment: .firstTextBaseline) {
-                SLOverline(text: "Quick progress")
+                SLOverline(text: "Progress")
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button(action: onSeeAll) {

@@ -14,7 +14,7 @@ import { Alert, FullScreenCover, HStack, Menu, ScrollView, Sheet, Spacer, Text, 
 import { SFSymbol } from "../../design/SFSymbol";
 import { SLOutlineButton, SLPrimaryButton, SLQuietButton, colorHex, colorOpacity, spring } from "../../design/SetlineTokens";
 import { Presentation, useReduceMotion } from "../../design/support";
-import { scaledMetric, slCapped, slFixed, slLineHeight } from "../../design/SLDynamicType";
+import { scaledMetric, slFixed, slLineHeight } from "../../design/SLDynamicType";
 import { SLGlyph, SLWorkoutSymbol } from "../../design/components/SLGlyph";
 import { SLPress } from "../../design/components/SLPress";
 import { SLHairline, slBody, slLead, slMeta } from "../../design/components/SLText";
@@ -42,8 +42,7 @@ import { AlertCenterSheet, Alerts } from "./AlertCenterSheet";
 import { DayPlanSheet } from "./DayPlanSheet";
 import { DeloadCard, type DeloadCard_Status } from "./DeloadCard";
 import { HistorySheet, QuickProgressCard } from "./QuickProgressCard";
-import { EarnedBadgeRow, NextBadgeCard } from "./StreakHero";
-import { TallyMascot, type TallyMascot_Mood } from "./TallyMascot";
+import { NextBadgeCard } from "./StreakHero";
 import { CustomWorkoutBuilder, Freestyle, WorkoutChooserSheet } from "./WorkoutChooser";
 import { ExercisePickerSheet } from "../Progress/ExercisePickerSheet";
 import { ExercisePicker, type ExercisePicker_Row } from "../../core/Progress/ExercisePicker";
@@ -146,6 +145,8 @@ export function TrainingHomeView({
   const [breathes, setBreathes] = useState(false);
   /** The date key of the last week-secured moment played, so it plays once. */
   const [celebratedWeek, setCelebratedWeek] = useAppStorage("setline.training.celebratedWeek", "");
+  /** The first-time question was answered (or put off): it never comes back. */
+  const [startChosen, setStartChosen] = useAppStorage("setline.training.startChosen", false);
 
   // Kept through a presentation's exit, so its content does not vanish while it slides away.
   const lastSheet = useRef<Presented | undefined>(undefined);
@@ -394,21 +395,6 @@ export function TrainingHomeView({
 
   const header = <SLTabHeader title={greeting} ring={tierRing} onAccount={onAccount} trailing={alertsBell} />;
 
-  /** The one way to planning and results: a small calendar in the streak card, beside the week it plans. */
-  const agendaButton = (
-    <button
-      type="button"
-      className="sl-pressable"
-      onClick={() => setSheet({ kind: "agenda" })}
-      aria-label="Agenda"
-      style={{ width: SL.Space.hitMin, height: SL.Space.hitMin, borderRadius: "50%", display: "grid", placeItems: "center", background: "transparent", flexShrink: 0 }}
-    >
-      <div style={{ width: 34, height: 34, borderRadius: "50%", background: SL.Surface.raised2, display: "grid", placeItems: "center" }}>
-        <SLGlyph name="calendar" size={15} color={SL.Ink.secondary} />
-      </div>
-    </button>
-  );
-
   // MARK: - The hero
 
   /** Days still open for a workout this week: today while nothing is logged, and every day after it. */
@@ -425,99 +411,6 @@ export function TrainingHomeView({
     return undefined;
   })();
 
-  const mascotMood = (day: AgendaDay, streak: TrainingStreak): TallyMascot_Mood => {
-    if (TrainingStreak.thisWeekMet(streak)) return "struck";
-    if (AgendaDay.isLogged(day)) return "proud";
-    if (AgendaDay.isRest(day)) return "resting";
-    const workout = AgendaDay.plannedDay(day);
-    if (workout !== undefined && app.liftsReady({ in: workout }).length > 0) return "focused";
-    return "ready";
-  };
-
-  const streakRow = (streak: TrainingStreak, secured: boolean, risk: TrainingStreak_Risk) => {
-    const left = Math.max(streak.thisWeekGoal - streak.thisWeekDone, 0);
-    const lit = streak.weeks > 0;
-    const done = Math.min(streak.thisWeekDone, streak.thisWeekGoal);
-    const met = TrainingStreak.thisWeekMet(streak);
-    const nudge = (() => {
-      if (met) return "Week secured";
-      switch (risk) {
-        case "breaks":
-          return "Out of reach this week · streak resets Monday";
-        case "freezeCovers":
-          return "Out of reach · your freeze keeps the streak";
-        case "tight":
-          return left === 1 ? "Last chance: 1 more this week" : `Every day left counts: ${left} to go`;
-        case "none":
-          break;
-      }
-      return !lit
-        ? left === 1
-          ? "1 more workout this week does it"
-          : `${left} workouts this week do it`
-        : left === 1
-          ? "1 more keeps it going"
-          : `${left} more keep it going`;
-    })();
-    // Lime is earned; amber says the streak needs you now.
-    const nudgeInk = met ? SL.Signal.action : risk === "tight" || risk === "breaks" ? SL.Signal.attention : SL.Ink.secondary;
-    const shown = rolledWeeks ?? streak.weeks;
-    return (
-      <SLPress
-        onPress={() => setSheet({ kind: "streak" })}
-        aria-label={`${streak.weeks === 1 ? "1-week streak" : `${streak.weeks}-week streak`}. ${done} of ${streak.thisWeekGoal} workouts this week. ${nudge}.`}
-        style={{ flex: "1 1 0", minWidth: 0, textAlign: "left" }}
-      >
-        <VStack alignment="leading" spacing={2}>
-          <HStack alignment="firstTextBaseline" spacing={6} style={{ maxWidth: "100%" }}>
-            {streak.weeks === 0 && rolledWeeks === undefined ? (
-              // A zero isn't a streak; it's an invitation.
-              <Text size={SL.TypeSize.title} weight={SL.Weight.bold} color={SL.Ink.primary} lineLimit={1} minimumScaleFactor={0.8}>
-                {streak.best === 0 ? "Start your streak" : "Start a new streak"}
-              </Text>
-            ) : (
-              <>
-                <Text
-                  numerals
-                  lineLimit={1}
-                  tracking={-1}
-                  color={risk === "breaks" ? SL.Signal.attention : lit ? SL.Signal.action : SL.Ink.primary}
-                  style={{ ...slCapped(34, SL.Weight.bold, { maxScale: 1.3, relativeTo: "title1" }), flexShrink: 0, overflow: "visible" }}
-                >
-                  {`${shown}`}
-                </Text>
-                <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={1}>
-                  week streak
-                </Text>
-              </>
-            )}
-            {secured && (
-              <span
-                style={{
-                  ...slFixed(11, SL.Weight.bold),
-                  color: SL.Signal.onAction,
-                  padding: "2px 5px",
-                  borderRadius: SL.Radius.pill,
-                  background: SL.Signal.action,
-                  lineHeight: 1.25,
-                  flexShrink: 0,
-                }}
-              >
-                +1
-              </span>
-            )}
-          </HStack>
-          <HStack spacing={4} style={{ color: nudgeInk, maxWidth: "100%" }}>
-            {met && <SLGlyph name="check" size={11} />}
-            <Text {...slMeta(SL.Weight.medium)} color={nudgeInk} lineLimit={1} minimumScaleFactor={0.85}>
-              {nudge}
-            </Text>
-          </HStack>
-        </VStack>
-      </SLPress>
-    );
-  };
-
   /** "Monday wasn't logged · Log it": the missed day, answered where it shows. */
   const missedLine = (missed: { day: AgendaDay; workout: WorkoutDay }) => (
     <button
@@ -525,56 +418,118 @@ export function TrainingHomeView({
       className="sl-pressable"
       onClick={() => onLogPast(missed.workout, missed.day.date)}
       aria-label={`${WeekPlan.fullWeekday(missed.day.date)} wasn't logged. Log ${missed.workout.short}`}
-      style={{ display: "flex", alignItems: "center", gap: SL.Space.s2, minHeight: SL.Space.hitMin, alignSelf: "stretch", background: "transparent", marginTop: SL.Space.s2 }}
+      style={{ display: "flex", alignItems: "center", gap: SL.Space.s2, minHeight: SL.Space.hitMin, alignSelf: "stretch", background: "transparent", textAlign: "left" }}
     >
-      <div style={{ width: 6, height: 6, borderRadius: "50%", background: SL.Signal.attention, flexShrink: 0 }} />
-      <Text {...slMeta()} color={SL.Ink.secondary}>
-        {`${WeekPlan.fullWeekday(missed.day.date)} wasn't logged`}
+      <div style={{ width: 5, height: 5, borderRadius: "50%", background: SL.Ink.tertiary, flexShrink: 0 }} />
+      <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={2}>
+        {`Trained ${WeekPlan.fullWeekday(missed.day.date)}? You can still log it`}
       </Text>
       <Spacer minLength={SL.Space.s2} />
-      <Text {...slMeta(SL.Weight.semibold)} color={SL.Signal.attention}>
+      <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.primary} style={{ flexShrink: 0 }}>
         Log it
       </Text>
-      <SLGlyph name="chevronRight" size={11} color={SL.Signal.attention} />
+      <SLGlyph name="chevronRight" size={11} color={SL.Ink.tertiary} />
     </button>
   );
 
-  /** "THIS WEEK · 2 of 4 workouts", over its seven days. */
-  const weekHeader = (streak: TrainingStreak) => {
-    const done = Math.min(streak.thisWeekDone, streak.thisWeekGoal);
-    // Side by side while the plan's name fits there; otherwise the plan takes a line of its own, never cut short.
+  /** The plan the week follows, on the week, saying it can be changed. */
+  const planPill = (
+    <SLPress
+      scale={0.94}
+      onPress={() => setSheet({ kind: "plans" })}
+      aria-label={`Your plan: ${app.planName}. Change it, or make your own plan`}
+      style={{
+        ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
+        color: SL.Signal.action,
+        background: SL.Signal.actionTint,
+        borderRadius: 999,
+        minHeight: 32,
+        padding: `0 ${SL.Space.s3}px`,
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        alignSelf: "flex-start",
+        minWidth: 0,
+        maxWidth: "100%",
+      }}
+    >
+      <SFSymbol name="calendar" size={12} weight={700} color={SL.Signal.action} />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{app.planName}</span>
+      <span style={{ ...slFont(SL.TypeSize.meta, SL.Weight.medium), opacity: 0.75, flexShrink: 0 }}>· Change</span>
+    </SLPress>
+  );
+
+  const hasTrained = app.sessions.some((s) => s.kind === "workout");
+
+  /** The streak, small: weeks in a row in lime once there is one. Opens the streak sheet. */
+  const streakChip = (streak: TrainingStreak) => {
+    const lit = streak.weeks > 0;
+    const shown = rolledWeeks ?? streak.weeks;
+    const ink = lit ? SL.Signal.action : SL.Ink.secondary;
     return (
-      <HStack alignment="center" spacing={8} style={{ alignSelf: "stretch", paddingBottom: SL.Space.s2, flexWrap: "wrap", rowGap: SL.Space.s1 }}>
-        <span aria-label={`This week: ${done} of ${streak.thisWeekGoal} workouts`} style={{ whiteSpace: "nowrap" }}>
-          <SLOverline text={`This week · ${done} of ${streak.thisWeekGoal}`} color={TrainingStreak.thisWeekMet(streak) ? SL.Signal.action : SL.Ink.secondary} />
+      <SLPress
+        scale={0.94}
+        onPress={() => setSheet({ kind: "streak" })}
+        aria-label={lit ? `${streak.weeks}-week streak. Shows your streak and badges` : "No streak yet. Shows your streak and badges"}
+        style={{ minHeight: SL.Space.hitMin, display: "flex", alignItems: "center", background: "transparent", flexShrink: 0 }}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 30, padding: `0 ${SL.Space.s3}px`, borderRadius: 999, background: lit ? SL.Signal.actionTint : SL.Surface.raised2, color: ink }}>
+          <SFSymbol name="flame.fill" size={11} weight={700} color={ink} />
+          <Text size={SL.TypeSize.meta} weight={SL.Weight.semibold} numerals color={ink} lineLimit={1}>
+            {lit ? `${shown}-week streak` : "Streak"}
+          </Text>
         </span>
-        <Spacer minLength={SL.Space.s2} />
-        {/* The plan the week follows, on the week: user tests looked for it here. Tapping it changes the plan or makes one. */}
-        <SLPress
-          scale={0.94}
-          onPress={() => setSheet({ kind: "plans" })}
-          aria-label={`Your plan: ${app.planName}. Change it, or make your own plan`}
-          style={{
-            ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
-            color: SL.Signal.action,
-            background: SL.Signal.actionTint,
-            borderRadius: 999,
-            minHeight: 32,
-            padding: `0 ${SL.Space.s3}px`,
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            flexShrink: 1,
-            minWidth: 0,
-            maxWidth: "100%",
-          }}
-        >
-          <SFSymbol name="calendar" size={12} weight={700} color={SL.Signal.action} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{app.planName}</span>
-          <SFSymbol name="chevron.down" size={10} weight={700} color={SL.Signal.action} />
-        </SLPress>
-      </HStack>
+      </SLPress>
     );
+  };
+
+  /** One line, only when the week has something to say: done, or the streak needs you. Never before a first workout. */
+  const weekNudge = (streak: TrainingStreak): { text: string; ink: string } | undefined => {
+    if (!hasTrained) return undefined;
+    if (TrainingStreak.thisWeekMet(streak)) return { text: "Week done · your streak is safe", ink: SL.Signal.action };
+    if (streak.weeks === 0) return undefined;
+    const left = Math.max(streak.thisWeekGoal - streak.thisWeekDone, 0);
+    switch (streakRisk(streak)) {
+      case "tight":
+        return { text: left === 1 ? "Last chance: 1 more this week keeps your streak" : `${left} more this week keep your streak`, ink: SL.Signal.attention };
+      case "breaks":
+        return { text: "Out of reach this week · your streak starts again Monday", ink: SL.Ink.secondary };
+      case "freezeCovers":
+        return { text: "Out of reach · your freeze keeps the streak", ink: SL.Ink.secondary };
+      default:
+        return undefined;
+    }
+  };
+
+  const weekLink = (title: string, glyph: "calendar" | "clock", action: () => void) => (
+    <button
+      type="button"
+      className="sl-pressable"
+      onClick={action}
+      style={{ display: "flex", alignItems: "center", gap: 6, minHeight: SL.Space.hitMin, color: SL.Ink.secondary, background: "transparent" }}
+    >
+      <SLGlyph name={glyph} size={13} />
+      <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.secondary}>
+        {title}
+      </Text>
+      <SLGlyph name="chevronRight" size={11} />
+    </button>
+  );
+
+  /** "Push", "Rest", or what was done. */
+  const dayLabel = (day: AgendaDay): string => {
+    const session = AgendaDay.session(day);
+    if (session !== undefined) return session.dayLabel;
+    if (AgendaDay.isRest(day)) return "Rest";
+    return AgendaDay.plannedDay(day)?.short ?? "";
+  };
+
+  const dayLabelInk = (day: AgendaDay): string => {
+    if (AgendaDay.isLogged(day)) return SL.Signal.action;
+    if (day.isToday) return SL.Ink.primary;
+    if (AgendaDay.isRest(day)) return colorOpacity(SL.Signal.recovery, 0.8);
+    if (day.isPast) return SL.Ink.tertiary;
+    return SL.Ink.secondary;
   };
 
   const dayMark = (day: AgendaDay): ReactNode => {
@@ -621,8 +576,8 @@ export function TrainingHomeView({
       return circle({ boxShadow: `inset 0 0 0 1.5px ${colorOpacity(SL.Signal.recovery, 0.25)}` }, <div style={{ width: 5, height: 5, borderRadius: "50%", background: SL.Signal.recovery }} />);
     }
     if (day.isPast && day.content.kind === "missed") {
-      // A planned day that went by: amber, so it reads apart from the days still to come.
-      return circle({ boxShadow: `inset 0 0 0 1.5px ${colorOpacity(SL.Signal.attention, 0.7)}` }, <SFSymbol name="xmark" size={9} weight={700} color={SL.Signal.attention} />);
+      // A planned day that went by: muted, apart from the days still to come, but not a warning.
+      return circle({ boxShadow: `inset 0 0 0 1.5px ${SL.Surface.mute}` }, <SFSymbol name="xmark" size={8} weight={700} color={SL.Ink.tertiary} />);
     }
     if (day.isPast) {
       return circle({ boxShadow: `inset 0 0 0 1.5px ${SL.Surface.mute}` });
@@ -662,6 +617,20 @@ export function TrainingHomeView({
               >
                 {dayMark(day)}
               </div>
+              {/* What the day holds, in words: no legend to learn. */}
+              <span
+                style={{
+                  ...slFixed(10, day.isToday ? SL.Weight.bold : SL.Weight.medium),
+                  color: dayLabelInk(day),
+                  maxWidth: "100%",
+                  padding: "0 1px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {dayLabel(day)}
+              </span>
             </VStack>
           </div>
         </SLPress>
@@ -681,53 +650,113 @@ export function TrainingHomeView({
   };
 
   /**
-   * The streak as one slim card: Tally, the count of weeks in a row, this
-   * week's workouts as a fraction, the seven days, and the Agenda.
+   * This week in plain words: how many of the week's workouts are done, the streak as a small chip, the plan the week
+   * follows with a way to change it, the seven days each saying what they hold, and the agenda and history one tap away.
    */
-  const streakCard = (day: AgendaDay) => {
+  const weekCard = (day: AgendaDay) => {
     const streak = app.streak;
     const secured = securedToday(day, streak);
+    const done = Math.min(streak.thisWeekDone, streak.thisWeekGoal);
+    const nudge = weekNudge(streak);
+    const met = TrainingStreak.thisWeekMet(streak);
     return (
-      <div
-        style={{
-          position: "relative",
-          alignSelf: "stretch",
-          borderRadius: SL.Radius.xl,
-          background: heroBackground(secured, streak),
-          boxShadow: secured ? `0 0 18px ${colorOpacity(SL.Signal.action, 0.12)}` : "none",
-        }}
-      >
+      <div style={{ position: "relative", alignSelf: "stretch", borderRadius: SL.Radius.xl, background: heroBackground(secured, streak) }}>
         <div style={{ borderRadius: SL.Radius.xl, overflow: "hidden" }}>
-          <VStack alignment="leading" spacing={0} style={{ paddingLeft: SL.Space.s5, paddingRight: SL.Space.s5, paddingTop: SL.Space.s5, paddingBottom: SL.Space.s4 }}>
-            <HStack alignment="center" spacing={SL.Space.s4} style={{ alignSelf: "stretch" }}>
-              <div aria-hidden>
-                {/* Tally shows how the day feels, not how many. */}
-                <TallyMascot done={3} goal={3} mood={mascotMood(day, streak)} unit={9} jumps={celebrates} />
-              </div>
-              {streakRow(streak, secured, streakRisk(streak))}
-              {agendaButton}
+          <VStack alignment="leading" spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s5, paddingRight: SL.Space.s5, paddingTop: SL.Space.s4, paddingBottom: SL.Space.s3 }}>
+            <HStack alignment="center" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
+              <span aria-label={`This week: ${done} of ${streak.thisWeekGoal} workouts`} style={{ whiteSpace: "nowrap" }}>
+                <SLOverline text={`This week · ${done} of ${streak.thisWeekGoal}`} color={met ? SL.Signal.action : SL.Ink.secondary} />
+              </span>
+              <Spacer minLength={SL.Space.s2} />
+              {streakChip(streak)}
             </HStack>
-            <div
-              aria-hidden
-              style={{
-                height: SL.Metric.border,
-                alignSelf: "stretch",
-                marginLeft: -SL.Space.s5,
-                marginRight: -SL.Space.s5,
-                marginTop: SL.Space.s5,
-                marginBottom: SL.Space.s5,
-                background: secured ? colorOpacity(SL.Signal.action, 0.18) : SL.Surface.hairline,
-              }}
-            />
-            {weekHeader(streak)}
+            {planPill}
             {weekDots}
-            {lastMissed !== undefined && missedLine(lastMissed)}
+            {nudge !== undefined && (
+              <HStack spacing={4} style={{ color: nudge.ink, alignSelf: "stretch" }}>
+                {met && <SLGlyph name="check" size={11} />}
+                <Text {...slMeta(SL.Weight.medium)} color={nudge.ink}>
+                  {nudge.text}
+                </Text>
+              </HStack>
+            )}
+            {/* New here: nothing to have missed yet. */}
+            {hasTrained && lastMissed !== undefined && missedLine(lastMissed)}
+            <div aria-hidden style={{ height: SL.Metric.border, alignSelf: "stretch", marginLeft: -SL.Space.s5, marginRight: -SL.Space.s5, background: SL.Surface.hairline }} />
+            <HStack spacing={0} style={{ alignSelf: "stretch", marginTop: -SL.Space.s2, marginBottom: -SL.Space.s2 }}>
+              {weekLink("Agenda", "calendar", () => setSheet({ kind: "agenda" }))}
+              <Spacer minLength={SL.Space.s2} />
+              {weekLink("History", "clock", () => setSheet({ kind: "history" }))}
+            </HStack>
           </VStack>
         </div>
         <StrokeBorder radius={SL.Radius.xl} color={secured ? colorOpacity(SL.Signal.action, 0.45) : SL.Surface.hairline} />
       </div>
     );
   };
+
+  // MARK: - Day one
+
+  /** Nothing trained, nothing made, no week of your own: ask once how this person wants to train. */
+  const asksHowToTrain =
+    !startChosen && app.resumableSession === undefined && app.ownWeek === undefined && app.customWorkouts.length === 0 && !hasTrained;
+
+  const choose = (next: Presented) => {
+    setStartChosen(true);
+    setSheet(next);
+  };
+
+  const startOption = (symbol: string, title: string, detail: string, action: () => void) => (
+    <SLPress
+      scale={0.98}
+      onPress={action}
+      aria-label={`${title}. ${detail}`}
+      style={{ alignSelf: "stretch", display: "flex", alignItems: "center", gap: SL.Space.s3, padding: SL.Space.s3, borderRadius: SL.Radius.lg, background: SL.Surface.raised, textAlign: "left" }}
+    >
+      <span style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <SFSymbol name={symbol} size={16} weight={600} color={SL.Signal.action} />
+      </span>
+      <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
+        <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>
+          {title}
+        </Text>
+        <Text {...slMeta()} color={SL.Ink.secondary}>
+          {detail}
+        </Text>
+      </VStack>
+      <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
+    </SLPress>
+  );
+
+  const startQuestion = (
+    <div style={{ position: "relative", alignSelf: "stretch", padding: SL.Space.s5, borderRadius: SL.Radius.xl, background: SL.Signal.actionTint }}>
+      <VStack alignment="leading" spacing={SL.Space.s3}>
+        <HStack alignment="firstTextBaseline" style={{ alignSelf: "stretch" }}>
+          <SLOverline text="Welcome" color={SL.Signal.action} />
+          <Spacer />
+          <button
+            type="button"
+            className="sl-pressable"
+            onClick={() => setStartChosen(true)}
+            style={{ minHeight: SL.Space.hitMin, marginTop: -SL.Space.s3, marginBottom: -SL.Space.s3, background: "transparent" }}
+          >
+            <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.secondary}>
+              Not now
+            </Text>
+          </button>
+        </HStack>
+        <Text as="h2" size={SL.TypeSize.title} weight={SL.Weight.bold} color={SL.Ink.primary}>
+          How do you want to train?
+        </Text>
+        <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
+          {startOption("calendar", "Follow a plan", "One of ours, like Push / Pull / Legs. It fills your week.", () => choose({ kind: "plans" }))}
+          {startOption("square.stack.3d.up.fill", "Build my own", "Your exercises, sets and reps.", () => choose({ kind: "newWorkout" }))}
+          {startOption("figure.strengthtraining.traditional", "Freestyle", "Pick each machine as you go. Nothing to set up.", () => choose({ kind: "freestyle" }))}
+        </VStack>
+      </VStack>
+      <StrokeBorder radius={SL.Radius.xl} color={colorOpacity(SL.Signal.action, 0.35)} />
+    </div>
+  );
 
   // MARK: - What the card says
 
@@ -858,9 +887,9 @@ export function TrainingHomeView({
       }}
     >
       <SLGlyph name="trendUp" size={14} fixed />
-      <Text size={SL.TypeSize.meta} weight={SL.Weight.semibold} numerals color={SL.Signal.action} lineLimit={1} minimumScaleFactor={0.8}>
-        {lifts.length === 1 ? "1 lift can go up today" : `${lifts.length} lifts can go up today`}
-        <span style={{ fontWeight: SL.Weight.regular }}>{` · ${lifts[0].name} ${NumberDisplay.kg(app.display, lifts[0].toKg)}`}</span>
+      <Text size={SL.TypeSize.meta} weight={SL.Weight.semibold} numerals color={SL.Signal.action} lineLimit={2}>
+        {lifts.length === 1 ? "Heavier today: " : `Heavier today on ${lifts.length} lifts, like `}
+        <span style={{ fontWeight: SL.Weight.regular }}>{`${lifts[0].name} ${NumberDisplay.kg(app.display, lifts[0].toKg)}`}</span>
       </Text>
       <Spacer minLength={0} />
     </HStack>
@@ -975,19 +1004,6 @@ export function TrainingHomeView({
           {day.isToday ? (
             paused !== undefined ? (
               moreMenu
-            ) : workout !== undefined && !isDone && !content.isRest ? (
-              // Looking first is its own, named way in; the title is only a title, and the button only starts.
-              <button
-                type="button"
-                className="sl-pressable"
-                onClick={() => setSheet({ kind: "preview", value: day })}
-                style={{ display: "flex", alignItems: "center", gap: 4, minHeight: SL.Space.hitMin, marginTop: -SL.Space.s3, marginBottom: -SL.Space.s3, color: SL.Ink.secondary, background: "transparent", flexShrink: 0 }}
-              >
-                <Text {...slMeta(SL.Weight.semibold)} color={SL.Ink.secondary}>
-                  Exercises
-                </Text>
-                <SLGlyph name="chevronRight" size={11} />
-              </button>
             ) : null
           ) : (
             <button
@@ -1005,18 +1021,33 @@ export function TrainingHomeView({
             </button>
           )}
         </HStack>
-        <Text
-          as="h2"
-          size={SL.TypeSize.display}
-          weight={SL.Weight.bold}
-          tracking={-0.02 * SL.TypeSize.display}
-          color={content.isRest ? SL.Signal.recovery : SL.Ink.primary}
-          lineLimit={1}
-          minimumScaleFactor={0.7}
-          style={{ paddingTop: 2, maxWidth: "100%" }}
-        >
-          {isDone ? (session?.dayLabel ?? content.title) : content.title}
-        </Text>
+        {/* Today's workout, still to do: the name is the way into its exercises, with a chevron to say so. Nothing starts. */}
+        {day.isToday && AgendaDay.plannedDay(day) !== undefined && !isDone && !content.isRest && paused === undefined ? (
+          <SLPress
+            scale={0.98}
+            onPress={() => setSheet({ kind: "preview", value: day })}
+            aria-label={`${content.title}. Shows today's exercises. Nothing starts.`}
+            style={{ alignSelf: "stretch", display: "flex", alignItems: "center", gap: SL.Space.s2, paddingTop: 2, textAlign: "left", background: "transparent" }}
+          >
+            <Text as="h2" size={SL.TypeSize.display} weight={SL.Weight.bold} tracking={-0.02 * SL.TypeSize.display} color={SL.Ink.primary} lineLimit={1} minimumScaleFactor={0.7} style={{ minWidth: 0 }}>
+              {content.title}
+            </Text>
+            <SLGlyph name="chevronRight" size={16} color={SL.Ink.tertiary} />
+          </SLPress>
+        ) : (
+          <Text
+            as="h2"
+            size={SL.TypeSize.display}
+            weight={SL.Weight.bold}
+            tracking={-0.02 * SL.TypeSize.display}
+            color={content.isRest ? SL.Signal.recovery : SL.Ink.primary}
+            lineLimit={1}
+            minimumScaleFactor={0.7}
+            style={{ paddingTop: 2, maxWidth: "100%" }}
+          >
+            {isDone ? (session?.dayLabel ?? content.title) : content.title}
+          </Text>
+        )}
 
         {focus !== undefined && (
           <Text {...slLead(SL.Weight.regular)} color={colorOpacity(SL.Ink.primary, 0.85)} style={{ paddingTop: SL.Space.s2 }}>
@@ -1046,7 +1077,7 @@ export function TrainingHomeView({
             // Another workout, or none at all: pick machines as you go.
             <div style={{ alignSelf: "stretch", display: "flex", gap: SL.Space.s2, marginTop: SL.Space.s3 }}>
               <div style={{ flex: "1 1 0", display: "flex", flexDirection: "column" }}>
-                <SLOutlineButton emphasis="tertiary" onPress={() => setSheet({ kind: "chooser" })}>Other workout</SLOutlineButton>
+                <SLOutlineButton emphasis="tertiary" onPress={() => setSheet({ kind: "chooser" })}>Choose another</SLOutlineButton>
               </div>
               <div style={{ flex: "1 1 0", display: "flex", flexDirection: "column" }}>{freestyleButton}</div>
             </div>
@@ -1176,23 +1207,6 @@ export function TrainingHomeView({
     scrollMarginLeft: SL.Space.gutterSession,
   };
 
-  const newWorkoutTile = (
-    <SLPress
-      key="new"
-      scale={0.96}
-      onPress={() => setSheet({ kind: "newWorkout" })}
-      aria-label="New workout"
-      style={{ ...tileStyle, background: SL.Signal.actionTint, border: `1px dashed ${colorOpacity(SL.Signal.action, 0.4)}` }}
-    >
-      <span style={{ width: 40, height: 40, borderRadius: "50%", background: SL.Signal.action, display: "grid", placeItems: "center" }}>
-        <SFSymbol name="plus" size={17} weight={700} color={SL.Signal.onAction} />
-      </span>
-      <Spacer minLength={SL.Space.s2} />
-      <Text {...slBody(SL.Weight.semibold)} color={SL.Signal.action}>New workout</Text>
-      <Text {...slMeta()} color={SL.Ink.secondary}>Pick the exercises</Text>
-    </SLPress>
-  );
-
   const workoutTile = (workout: CustomWorkout) => {
     const day = CustomWorkout.workoutDay(workout);
     const count = day.exercises.length === 1 ? "1 exercise" : `${day.exercises.length} exercises`;
@@ -1257,10 +1271,31 @@ export function TrainingHomeView({
     const own = app.customWorkouts;
     return (
       <VStack alignment="leading" spacing={insideTopic} style={{ alignSelf: "stretch" }}>
-        {topicHead("Your workouts", "History", () => setSheet({ kind: "history" }))}
         {own.length === 0 ? (
-          firstWorkoutCard
+          <>
+            <div style={{ paddingLeft: SL.Space.s1 }}>
+              <SLOverline text="Your workouts" />
+            </div>
+            {firstWorkoutCard}
+          </>
         ) : (
+          <>
+          <HStack alignment="firstTextBaseline" style={{ paddingLeft: SL.Space.s1, alignSelf: "stretch" }}>
+            <SLOverline text="Your workouts" />
+            <Spacer />
+            <button
+              type="button"
+              className="sl-pressable"
+              onClick={() => setSheet({ kind: "newWorkout" })}
+              aria-label="New workout"
+              style={{ display: "flex", alignItems: "center", gap: 4, minHeight: SL.Space.hitMin, color: SL.Signal.action, background: "transparent", flexShrink: 0 }}
+            >
+              <SFSymbol name="plus" size={12} weight={700} color={SL.Signal.action} />
+              <Text {...slMeta(SL.Weight.semibold)} color={SL.Signal.action}>
+                New
+              </Text>
+            </button>
+          </HStack>
           <div
             style={{
               alignSelf: "stretch",
@@ -1275,9 +1310,9 @@ export function TrainingHomeView({
               paddingRight: SL.Space.gutterSession,
             }}
           >
-            {newWorkoutTile}
             {own.map(workoutTile)}
           </div>
+          </>
         )}
       </VStack>
     );
@@ -1304,29 +1339,16 @@ export function TrainingHomeView({
     </HStack>
   );
 
-  /** A badge won today, or the next one to win: compact and secondary. */
-  const badgeSection = (day: AgendaDay): ReactNode => {
+  /** How it's going, as one block: the lift chart once there is one, and the badge — won today, or the next — as one row under it. */
+  const progressSection = (day: AgendaDay): ReactNode => {
     const isDone = AgendaDay.session(day) !== undefined && app.resumableSession === undefined;
     const badge = earnedToday[0];
-    if (badge !== undefined) {
-      return (
-        <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-          {topicHead("New badge", "All badges", () => setSheet({ kind: "milestones" }))}
-          <SLPress onPress={() => setSheet({ kind: "badge", value: badge })} style={{ alignSelf: "stretch" }}>
-            <div style={{ position: "relative", padding: SL.Space.s4, borderRadius: SL.Radius.xl, background: SL.Surface.raised }}>
-              <EarnedBadgeRow milestone={badge} next={nextMilestone(badge)} />
-              <StrokeBorder radius={SL.Radius.xl} color={colorOpacity(SL.Signal.action, 0.35)} />
-            </div>
-          </SLPress>
-        </VStack>
-      );
-    }
-    const goal = badgeGoal(day, isDone);
-    if (goal === undefined) return null;
+    const goal = badge === undefined ? badgeGoal(day, isDone) : undefined;
     return (
-      <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-        {topicHead(goal.unlocks ? "Unlocks today" : "Next badge", "All badges", () => setSheet({ kind: "milestones" }), goal.unlocks)}
-        <NextBadgeCard milestone={goal.milestone} unlocks={goal.unlocks} onOpen={() => setSheet({ kind: "badge", value: goal.milestone })} />
+      <VStack alignment="leading" spacing={insideTopic} style={{ alignSelf: "stretch" }}>
+        {hasTrained ? <QuickProgressCard onSeeAll={onProgress} /> : topicHead("Progress", "All badges", () => setSheet({ kind: "milestones" }))}
+        {badge !== undefined && <NextBadgeCard milestone={badge} unlocks={false} onOpen={() => setSheet({ kind: "badge", value: badge })} compact won />}
+        {goal !== undefined && <NextBadgeCard milestone={goal.milestone} unlocks={goal.unlocks} onOpen={() => setSheet({ kind: "badge", value: goal.milestone })} compact />}
       </VStack>
     );
   };
@@ -1580,15 +1602,15 @@ export function TrainingHomeView({
             {isOffline && offlineCard}
             {today !== undefined && (
               <>
+                {/* One question per block: what now, what's planned this week, what I've made, how it's going. */}
+                {asksHowToTrain && startQuestion}
                 <VStack alignment="leading" spacing={insideTopic} style={{ alignSelf: "stretch" }}>
-                  {streakCard(today)}
                   {todayCard(today)}
                   {recoveryStatus !== undefined && recoverySection(recoveryStatus)}
                 </VStack>
+                {weekCard(today)}
                 {workoutsShelf()}
-                {badgeSection(today)}
-                {/* Day one has nothing to chart: no empty card. */}
-                {app.sessions.some((s) => s.kind === "workout") && <QuickProgressCard onSeeAll={onProgress} />}
+                {progressSection(today)}
               </>
             )}
             {isOffline && queue.length > 0 && queueSection}

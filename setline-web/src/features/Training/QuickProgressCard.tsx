@@ -198,7 +198,7 @@ export function QuickProgressCard({ onSeeAll }: { onSeeAll: () => void }) {
   return (
     <VStack alignment="leading" spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
       <HStack alignment="firstTextBaseline" style={{ paddingLeft: SL.Space.s1, alignSelf: "stretch" }}>
-        <SLOverline text="Quick progress" />
+        <SLOverline text="Progress" />
         <Spacer />
         <SLPlainLink title="See all" onPress={onSeeAll} />
       </HStack>

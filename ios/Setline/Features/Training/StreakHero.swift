@@ -107,8 +107,52 @@ struct NextBadgeCard: View {
     /// Finishing today's workout wins it.
     let unlocks: Bool
     let onOpen: () -> Void
+    /// One row under the progress chart, not a card of its own.
+    var compact = false
+    /// Won today, not still to win.
+    var won = false
 
     var body: some View {
+        if compact { row } else { card }
+    }
+
+    /// "🏅 Next badge · 2-week streak   0/2 ›" — one line.
+    private var row: some View {
+        Button(action: onOpen) {
+            HStack(spacing: SL.Space.s3) {
+                SLBadge(milestone: milestone, size: 32)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(won ? "New badge" : unlocks ? "Finish today to win" : "Next badge")
+                        .font(.sl(SL.TypeSize.micro, SL.Weight.bold))
+                        .tracking(0.6)
+                        .foregroundStyle(won || unlocks ? SL.Signal.action : SL.Ink.secondary)
+                    Text(milestone.title)
+                        .slBody(SL.Weight.semibold)
+                        .foregroundStyle(SL.Ink.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                Spacer(minLength: SL.Space.s2)
+                if !won {
+                    Text(progressLabel).slMeta().slNumerals().foregroundStyle(SL.Ink.secondary)
+                }
+                SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+            }
+            .padding(.horizontal, SL.Space.s4)
+            .padding(.vertical, SL.Space.s3)
+            .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised))
+            .overlay(
+                RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous)
+                    .strokeBorder(won || unlocks ? SL.Signal.action.opacity(0.35) : SL.Surface.hairline, lineWidth: SL.Metric.border)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SLPressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(won ? "New badge: \(milestone.title)" : unlocks ? "Finishing today unlocks \(milestone.title)" : "Next badge: \(milestone.title), \(progressLabel)")
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: onOpen) {
                 HStack(spacing: SL.Space.s3) {

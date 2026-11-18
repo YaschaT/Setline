@@ -98,8 +98,59 @@ export function ReadyLiftsCard({ lifts, display }: { lifts: ReadyLift[]; display
 // MARK: - The badge in reach
 
 /** The last card: the next badge, what it takes and how far, and the way into the whole collection. */
-export function NextBadgeCard({ milestone, unlocks, onOpen }: { milestone: Milestone; unlocks: boolean; onOpen: () => void }) {
+export function NextBadgeCard({
+  milestone,
+  unlocks,
+  onOpen,
+  compact = false,
+  won = false,
+}: {
+  milestone: Milestone;
+  unlocks: boolean;
+  onOpen: () => void;
+  /** One row under the progress chart, not a card of its own. */
+  compact?: boolean;
+  /** Won today, not still to win. */
+  won?: boolean;
+}) {
   const progressLabel = NextBadgeCard.progressLabel(milestone);
+  if (compact) {
+    const lit = won || unlocks;
+    // "🏅 Next badge · 2-week streak   0/2 ›" — one line.
+    return (
+      <SLPress
+        onPress={onOpen}
+        aria-label={won ? `New badge: ${milestone.title}` : unlocks ? `Finishing today unlocks ${milestone.title}` : `Next badge: ${milestone.title}, ${progressLabel}`}
+        style={{
+          alignSelf: "stretch",
+          display: "flex",
+          alignItems: "center",
+          gap: SL.Space.s3,
+          padding: `${SL.Space.s3}px ${SL.Space.s4}px`,
+          borderRadius: SL.Radius.lg,
+          background: SL.Surface.raised,
+          boxShadow: `inset 0 0 0 ${SL.Metric.border}px ${lit ? colorOpacity(SL.Signal.action, 0.35) : SL.Surface.hairline}`,
+          textAlign: "left",
+        }}
+      >
+        <SLBadge milestone={milestone} size={32} />
+        <VStack alignment="leading" spacing={1} style={{ flex: "1 1 0", minWidth: 0 }}>
+          <Text size={SL.TypeSize.micro} weight={SL.Weight.bold} tracking={0.6} color={lit ? SL.Signal.action : SL.Ink.secondary}>
+            {won ? "New badge" : unlocks ? "Finish today to win" : "Next badge"}
+          </Text>
+          <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={1} minimumScaleFactor={0.85}>
+            {milestone.title}
+          </Text>
+        </VStack>
+        {!won && (
+          <Text {...slMeta()} numerals color={SL.Ink.secondary}>
+            {progressLabel}
+          </Text>
+        )}
+        <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
+      </SLPress>
+    );
+  }
   return (
     <VStack
       alignment="leading"
