@@ -78,21 +78,35 @@ struct QuickProgressCard: View {
                         .minimumScaleFactor(0.8)
                         if let change = pick.progress.change, let shown = pick.progress.shownChange(), shown != 0 {
                             // The pill holds the gain; the date sits beside it,
-                            // and both shrink before they push the chart off.
-                            HStack(spacing: 6) {
-                                Text("\(app.display.signedDelta(shown)) kg\(percentText(pick.progress))")
-                                    .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
-                                    .slNumerals()
-                                    .foregroundStyle(shown > 0 ? SL.Signal.action : SL.Ink.secondary)
-                                    .padding(.horizontal, SL.Space.s2)
-                                    .padding(.vertical, 4)
-                                    .background(Capsule().fill(shown > 0 ? SL.Signal.actionTint : SL.Surface.raised2))
-                                Text("since \(app.display.shortDate(change.since))")
-                                    .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
-                                    .foregroundStyle(SL.Ink.secondary)
+                            // side by side while they fit; the date drops under the
+                            // pill rather than shrinking below 11 pt.
+                            ViewThatFits(in: .horizontal) {
+                                HStack(spacing: 6) {
+                                    Text("\(app.display.signedDelta(shown)) kg\(percentText(pick.progress))")
+                                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                                        .slNumerals()
+                                        .foregroundStyle(shown > 0 ? SL.Signal.action : SL.Ink.secondary)
+                                        .padding(.horizontal, SL.Space.s2)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(shown > 0 ? SL.Signal.actionTint : SL.Surface.raised2))
+                                    Text("since \(app.display.shortDate(change.since))")
+                                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                                        .foregroundStyle(SL.Ink.secondary)
+                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(app.display.signedDelta(shown)) kg\(percentText(pick.progress))")
+                                        .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                                        .slNumerals()
+                                        .foregroundStyle(shown > 0 ? SL.Signal.action : SL.Ink.secondary)
+                                        .padding(.horizontal, SL.Space.s2)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(shown > 0 ? SL.Signal.actionTint : SL.Surface.raised2))
+                                    Text("since \(app.display.shortDate(change.since))")
+                                        .font(.sl(SL.TypeSize.micro, SL.Weight.regular))
+                                        .foregroundStyle(SL.Ink.secondary)
+                                }
                             }
-                            .lineLimit(large ? 2 : 1)
-                            .minimumScaleFactor(0.75)
+                            .lineLimit(1)
                         }
                     }
                     if !large { Spacer(minLength: 0) }

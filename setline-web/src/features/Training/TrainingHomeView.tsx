@@ -440,24 +440,28 @@ export function TrainingHomeView({
       scale={0.94}
       onPress={() => setSheet({ kind: "plans" })}
       aria-label={`Your plan: ${app.planName}. Change it, or make your own plan`}
-      style={{
-        ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
-        color: SL.Signal.action,
-        background: SL.Signal.actionTint,
-        borderRadius: 999,
-        minHeight: 32,
-        padding: `0 ${SL.Space.s3}px`,
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        alignSelf: "flex-start",
-        minWidth: 0,
-        maxWidth: "100%",
-      }}
+      // A 32 px pill in a 44 px tap area, as on the phone.
+      style={{ minHeight: SL.Space.hitMin, display: "flex", alignItems: "center", alignSelf: "flex-start", minWidth: 0, maxWidth: "100%", marginTop: -6, marginBottom: -6, background: "transparent" }}
     >
-      <SFSymbol name="calendar" size={12} weight={700} color={SL.Signal.action} />
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{app.planName}</span>
-      <span style={{ ...slFont(SL.TypeSize.meta, SL.Weight.medium), opacity: 0.75, flexShrink: 0 }}>· Change</span>
+      <span
+        style={{
+          ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
+          color: SL.Signal.action,
+          background: SL.Signal.actionTint,
+          borderRadius: 999,
+          minHeight: 32,
+          padding: `0 ${SL.Space.s3}px`,
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          minWidth: 0,
+          maxWidth: "100%",
+        }}
+      >
+        <SFSymbol name="calendar" size={12} weight={700} color={SL.Signal.action} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{app.planName}</span>
+        <span style={{ ...slFont(SL.TypeSize.meta, SL.Weight.medium), opacity: 0.75, flexShrink: 0 }}>· Change</span>
+      </span>
     </SLPress>
   );
 
@@ -472,13 +476,13 @@ export function TrainingHomeView({
       <SLPress
         scale={0.94}
         onPress={() => setSheet({ kind: "streak" })}
-        aria-label={lit ? `${streak.weeks}-week streak. Shows your streak and badges` : "No streak yet. Shows your streak and badges"}
+        aria-label={lit ? `${streak.weeks}-week streak. Shows your streak and badges` : `No streak now. Best: ${streak.best} weeks. Shows your streak and badges`}
         style={{ minHeight: SL.Space.hitMin, display: "flex", alignItems: "center", background: "transparent", flexShrink: 0 }}
       >
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 30, padding: `0 ${SL.Space.s3}px`, borderRadius: 999, background: lit ? SL.Signal.actionTint : SL.Surface.raised2, color: ink }}>
           <SFSymbol name="flame.fill" size={11} weight={700} color={ink} />
           <Text size={SL.TypeSize.meta} weight={SL.Weight.semibold} numerals color={ink} lineLimit={1}>
-            {lit ? `${shown}-week streak` : "Streak"}
+            {lit ? `${shown}-week streak` : streak.best === 1 ? "Best: 1 week" : `Best: ${streak.best} weeks`}
           </Text>
         </span>
       </SLPress>
@@ -622,7 +626,7 @@ export function TrainingHomeView({
               {/* What the day holds, in words: no legend to learn. */}
               <span
                 style={{
-                  ...slFixed(10, day.isToday ? SL.Weight.bold : SL.Weight.medium),
+                  ...slFixed(11, day.isToday ? SL.Weight.bold : SL.Weight.medium),
                   color: dayLabelInk(day),
                   maxWidth: "100%",
                   padding: "0 1px",
@@ -670,7 +674,8 @@ export function TrainingHomeView({
                 <SLOverline text={`This week · ${done} of ${streak.thisWeekGoal}`} color={met ? SL.Signal.action : SL.Ink.secondary} />
               </span>
               <Spacer minLength={SL.Space.s2} />
-              {streakChip(streak)}
+              {/* Nothing to show before a first streak week. */}
+              {(streak.weeks > 0 || streak.best > 0) && streakChip(streak)}
             </HStack>
             {planPill}
             {weekDots}
@@ -713,16 +718,16 @@ export function TrainingHomeView({
       scale={0.98}
       onPress={action}
       aria-label={`${title}. ${detail}`}
-      style={{ alignSelf: "stretch", display: "flex", alignItems: "center", gap: SL.Space.s3, padding: SL.Space.s3, borderRadius: SL.Radius.lg, background: SL.Surface.raised, textAlign: "left" }}
+      style={{ alignSelf: "stretch", display: "flex", alignItems: "center", gap: SL.Space.s3, padding: `${SL.Space.s2}px ${SL.Space.s3}px`, borderRadius: SL.Radius.lg, background: SL.Surface.raised, textAlign: "left" }}
     >
-      <span style={{ width: 40, height: 40, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0 }}>
-        <SFSymbol name={symbol} size={16} weight={600} color={SL.Signal.action} />
+      <span style={{ width: 34, height: 34, borderRadius: SL.Radius.md, background: SL.Signal.actionTint, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <SFSymbol name={symbol} size={14} weight={600} color={SL.Signal.action} />
       </span>
-      <VStack alignment="leading" spacing={2} style={{ flex: "1 1 0", minWidth: 0 }}>
-        <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary}>
+      <VStack alignment="leading" spacing={0} style={{ flex: "1 1 0", minWidth: 0 }}>
+        <Text {...slBody(SL.Weight.semibold)} color={SL.Ink.primary} lineLimit={1}>
           {title}
         </Text>
-        <Text {...slMeta()} color={SL.Ink.secondary}>
+        <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={1}>
           {detail}
         </Text>
       </VStack>
@@ -731,8 +736,8 @@ export function TrainingHomeView({
   );
 
   const startQuestion = (
-    <div style={{ position: "relative", alignSelf: "stretch", padding: SL.Space.s5, borderRadius: SL.Radius.xl, background: SL.Signal.actionTint }}>
-      <VStack alignment="leading" spacing={SL.Space.s3}>
+    <div style={{ position: "relative", alignSelf: "stretch", padding: `${SL.Space.s3}px ${SL.Space.s4}px`, borderRadius: SL.Radius.xl, background: SL.Signal.actionTint }}>
+      <VStack alignment="leading" spacing={SL.Space.s2}>
         <HStack alignment="firstTextBaseline" style={{ alignSelf: "stretch" }}>
           <SLOverline text="Welcome" color={SL.Signal.action} />
           <Spacer />
@@ -747,13 +752,13 @@ export function TrainingHomeView({
             </Text>
           </button>
         </HStack>
-        <Text as="h2" size={SL.TypeSize.title} weight={SL.Weight.bold} color={SL.Ink.primary}>
+        <Text as="h2" size={SL.TypeSize.lead} weight={SL.Weight.bold} color={SL.Ink.primary}>
           How do you want to train?
         </Text>
         <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-          {startOption("calendar", "Follow a plan", "One of ours, like Push / Pull / Legs. It fills your week.", () => choose({ kind: "followPlan" }))}
-          {startOption("square.stack.3d.up.fill", "Build my own", "Your exercises, sets and reps.", () => choose({ kind: "newWorkout" }))}
-          {startOption("figure.strengthtraining.traditional", "Freestyle", "Pick each machine as you go. Nothing to set up.", () => choose({ kind: "freestyle" }))}
+          {startOption("calendar", "Follow a plan", "Ours, like Push / Pull / Legs", () => choose({ kind: "followPlan" }))}
+          {startOption("square.stack.3d.up.fill", "Build my own", "Your exercises and sets", () => choose({ kind: "newWorkout" }))}
+          {startOption("figure.strengthtraining.traditional", "Freestyle", "Pick machines as you go", () => choose({ kind: "freestyle" }))}
         </VStack>
       </VStack>
       <StrokeBorder radius={SL.Radius.xl} color={colorOpacity(SL.Signal.action, 0.35)} />

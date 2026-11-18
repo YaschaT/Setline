@@ -127,14 +127,15 @@ export function QuickProgressCard({ onSeeAll }: { onSeeAll: () => void }) {
             </HStack>
             {change !== undefined && shown !== undefined && shown !== 0 && (
               // The pill holds the gain; the date sits beside it.
-              <HStack spacing={6} style={{ maxWidth: "100%" }}>
+              // Side by side while they fit; the date wraps under the pill rather than shrinking below 11 px.
+              <HStack spacing={6} style={{ maxWidth: "100%", flexWrap: "wrap", rowGap: 4 }}>
                 <Text
                   size={SL.TypeSize.micro}
                   weight={SL.Weight.semibold}
                   numerals
                   color={shown > 0 ? SL.Signal.action : SL.Ink.secondary}
                   lineLimit={1}
-                  minimumScaleFactor={0.75}
+                 
                   style={{
                     paddingLeft: SL.Space.s2,
                     paddingRight: SL.Space.s2,
@@ -147,7 +148,7 @@ export function QuickProgressCard({ onSeeAll }: { onSeeAll: () => void }) {
                 >
                   {`${NumberDisplay.signedDelta(display, shown)} kg${percentText(pick.progress)}`}
                 </Text>
-                <Text size={SL.TypeSize.micro} weight={SL.Weight.regular} color={SL.Ink.secondary} lineLimit={1} minimumScaleFactor={0.75}>
+                <Text size={SL.TypeSize.micro} weight={SL.Weight.regular} color={SL.Ink.secondary} lineLimit={1}>
                   {`since ${NumberDisplay.shortDate(display, change.since)}`}
                 </Text>
               </HStack>

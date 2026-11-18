@@ -460,7 +460,7 @@ struct TrainingHomeView: View {
     }
 
     private var startQuestion: some View {
-        VStack(alignment: .leading, spacing: SL.Space.s3) {
+        VStack(alignment: .leading, spacing: SL.Space.s2) {
             HStack(alignment: .firstTextBaseline) {
                 SLOverline(text: "Welcome", color: SL.Signal.action)
                 Spacer()
@@ -475,17 +475,18 @@ struct TrainingHomeView: View {
                 .padding(.vertical, -SL.Space.s3)
             }
             Text("How do you want to train?")
-                .font(.sl(SL.TypeSize.title, SL.Weight.bold))
+                .font(.sl(SL.TypeSize.lead, SL.Weight.bold))
                 .foregroundStyle(SL.Ink.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             VStack(spacing: SL.Space.s2) {
-                startOption("calendar", "Follow a plan", "One of ours, like Push / Pull / Legs. It fills your week.") { choose(.followPlan) }
-                startOption("square.stack.3d.up.fill", "Build my own", "Your exercises, sets and reps.") { choose(.newWorkout) }
-                startOption("figure.strengthtraining.traditional", "Freestyle", "Pick each machine as you go. Nothing to set up.") { choose(.freestyle) }
+                startOption("calendar", "Follow a plan", "Ours, like Push / Pull / Legs") { choose(.followPlan) }
+                startOption("square.stack.3d.up.fill", "Build my own", "Your exercises and sets") { choose(.newWorkout) }
+                startOption("figure.strengthtraining.traditional", "Freestyle", "Pick machines as you go") { choose(.freestyle) }
             }
         }
-        .padding(SL.Space.s5)
+        .padding(.horizontal, SL.Space.s4)
+        .padding(.vertical, SL.Space.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: SL.Radius.xl, style: .continuous).fill(SL.Signal.actionTint))
         .overlay(
@@ -503,22 +504,19 @@ struct TrainingHomeView: View {
         Button(action: action) {
             HStack(spacing: SL.Space.s3) {
                 Image(systemName: symbol)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(SL.Signal.action)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 34, height: 34)
                     .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
-                    Text(detail)
-                        .slMeta()
-                        .foregroundStyle(SL.Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary).lineLimit(1)
+                    Text(detail).slMeta().foregroundStyle(SL.Ink.secondary).lineLimit(1)
                 }
                 Spacer(minLength: SL.Space.s2)
                 SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
             }
-            .padding(SL.Space.s3)
+            .padding(.horizontal, SL.Space.s3)
+            .padding(.vertical, SL.Space.s2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: SL.Radius.lg, style: .continuous).fill(SL.Surface.raised))
             .contentShape(Rectangle())
@@ -543,7 +541,8 @@ struct TrainingHomeView: View {
             HStack(alignment: .center, spacing: SL.Space.s2) {
                 weekOverline(streak)
                 Spacer(minLength: SL.Space.s2)
-                streakChip(streak)
+                // Nothing to show before a first streak week.
+                if streak.weeks > 0 || streak.best > 0 { streakChip(streak) }
             }
             planPill
             weekDots
@@ -602,7 +601,7 @@ struct TrainingHomeView: View {
         return Button { sheet = .streak } label: {
             HStack(spacing: 4) {
                 Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold))
-                Text(lit ? "\(shown)-week streak" : "Streak")
+                Text(lit ? "\(shown)-week streak" : streak.best == 1 ? "Best: 1 week" : "Best: \(streak.best) weeks")
                     .font(.sl(SL.TypeSize.meta, SL.Weight.semibold))
                     .slNumerals()
                     .contentTransition(.numericText(value: Double(shown)))
@@ -617,7 +616,7 @@ struct TrainingHomeView: View {
         }
         .buttonStyle(SLPressStyle(scale: 0.94))
         .fixedSize()
-        .accessibilityLabel(lit ? "\(streak.weeks)-week streak" : "No streak yet")
+        .accessibilityLabel(lit ? "\(streak.weeks)-week streak" : "No streak now. Best: \(streak.best) weeks")
         .accessibilityHint("Shows your streak and badges")
     }
 
@@ -1157,10 +1156,10 @@ struct TrainingHomeView: View {
                             .animation(.spring(response: 0.38, dampingFraction: 0.55).delay(0.12 + Double(index) * 0.045), value: dotsIn)
                         // What the day holds, in words: no legend to learn.
                         Text(dayLabel(day))
-                            .font(.slFixed(10, day.isToday ? SL.Weight.bold : SL.Weight.medium))
+                            .font(.slFixed(11, day.isToday ? SL.Weight.bold : SL.Weight.medium))
                             .foregroundStyle(dayLabelInk(day))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.75)
+                            .truncationMode(.tail)
                             .padding(.horizontal, 1)
                     }
                     .padding(.vertical, SL.Space.s1)

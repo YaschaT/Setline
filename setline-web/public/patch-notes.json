@@ -1,6 +1,16 @@
 {
   "notes": [
     {
+      "id": "2026-11-18-4",
+      "date": "2026-11-18",
+      "title": "Small things, easier to read",
+      "items": [
+        "The streak chip shows once you have a streak (or your best, after one ends), not as an empty “Streak”.",
+        "The first-time question is shorter, so today's workout is still on the first screen.",
+        "The day labels and the date under your progress are bigger, and every button is easy to tap."
+      ]
+    },
+    {
       "id": "2026-11-18-3",
       "date": "2026-11-18",
       "title": "Fewer dead ends on Training",
