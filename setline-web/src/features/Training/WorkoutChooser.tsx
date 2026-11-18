@@ -220,24 +220,8 @@ export function WorkoutChooserSheet({
     if (start && canStart) onStart?.(CustomWorkout.workoutDay(saved));
   };
 
-  return (
-    <>
-      <SLSheet
-        title="Plan & workouts"
-        subtitle={onStart === undefined ? "Build your own workouts or change your plan" : "Start any workout, build your own, or change your plan"}
-        onClose={onClose}
-      >
-        <VStack alignment="leading" spacing={SL.Space.s6} style={{ paddingTop: SL.Space.s2 }}>
-          {blocked && onStart !== undefined && (
-            <Text {...slMeta()} color={SL.Signal.attention}>
-              You have a paused workout. Resume or end it on Training before starting another.
-            </Text>
-          )}
-
-          {/* Making your own is what this sheet is opened for: its own card at the top, not a row in a list. */}
-          {createCard}
-
-          {(app.customWorkouts.length > 0 || copied !== undefined) && group(
+  // Your own, the plan's days, and the plan itself: one list each.
+  const ownGroup = (app.customWorkouts.length > 0 || copied !== undefined) && group(
             "Your workouts",
             <>
               {app.customWorkouts.map((workout) =>
@@ -262,10 +246,9 @@ export function WorkoutChooserSheet({
                   ? `Link to “${copied}” copied. Paste it in any chat.`
                   : "Send one to a friend with the share button, or put them on days in your week below.",
             },
-          )}
+          );
 
-          {/* The week you train: one of ours or one of yours, all in one list. */}
-          {group(
+  const planGroup = group(
             "Your plan",
             <SLRowButton onPress={() => setPlanningWeek(true)} aria-label={`Your plan: ${app.planName}. Change it, or make your own plan`}>
               <HStack spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, minHeight: 64 }}>
@@ -283,10 +266,9 @@ export function WorkoutChooserSheet({
                 <SLGlyph name="chevronRight" size={12} color={SL.Ink.tertiary} />
               </HStack>
             </SLRowButton>,
-          )}
+          );
 
-          {/* Every ready-made workout, to start one on any day. */}
-          {onStart !== undefined &&
+  const readyMadeGroup = onStart !== undefined &&
             group(
               "Ready-made workouts",
               <>
@@ -294,7 +276,37 @@ export function WorkoutChooserSheet({
                   row(day.id, <SLWorkoutSymbol dayName={day.short} size={18} />, day.short, detail(day), day.id === app.todayDay?.id, () => onStart?.(day)),
                 )}
               </>,
-            )}
+            );
+
+  return (
+    <>
+      <SLSheet
+        title={onStart === undefined ? "Plan & workouts" : "Choose a workout"}
+        subtitle={onStart === undefined ? "Build your own workouts or change your plan" : "Pick one to start now. Making your own and changing your plan are at the bottom."}
+        onClose={onClose}
+      >
+        <VStack alignment="leading" spacing={SL.Space.s6} style={{ paddingTop: SL.Space.s2 }}>
+          {blocked && onStart !== undefined && (
+            <Text {...slMeta()} color={SL.Signal.attention}>
+              You have a paused workout. Resume or end it on Training before starting another.
+            </Text>
+          )}
+
+          {onStart !== undefined ? (
+            // Choosing is what this was opened for: the workouts first, then making one, then the plan.
+            <>
+              {ownGroup}
+              {readyMadeGroup}
+              {createCard}
+              {planGroup}
+            </>
+          ) : (
+            <>
+              {createCard}
+              {ownGroup}
+              {planGroup}
+            </>
+          )}
         </VStack>
       </SLSheet>
 

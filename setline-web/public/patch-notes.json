@@ -1,6 +1,17 @@
 {
   "notes": [
     {
+      "id": "2026-11-18-3",
+      "date": "2026-11-18",
+      "title": "Fewer dead ends on Training",
+      "items": [
+        "Choose another now opens “Choose a workout”: your workouts and the plan's days first; making one and changing your plan at the bottom.",
+        "Looking at a day later this week? Do it today starts it now; that day stays planned.",
+        "Tap “7 exercises” on today's card to see them, as well as the name.",
+        "The whole week fits on the first screen: the Next row only shows on a rest day or once today is done."
+      ]
+    },
+    {
       "id": "2026-11-18-2",
       "date": "2026-11-18",
       "title": "Training, easier to read",

@@ -21,8 +21,8 @@ struct WorkoutChooserSheet: View {
     @State private var planningWeek = false
 
     var body: some View {
-        SLSheet(title: "Plan & workouts",
-                subtitle: onStart == nil ? "Build your own workouts or change your plan" : "Start any workout, build your own, or change your plan",
+        SLSheet(title: onStart == nil ? "Plan & workouts" : "Choose a workout",
+                subtitle: onStart == nil ? "Build your own workouts or change your plan" : "Pick one to start now. Making your own and changing your plan are at the bottom.",
                 onClose: onClose) {
             VStack(alignment: .leading, spacing: SL.Space.s6) {
                 if blocked, onStart != nil {
@@ -32,65 +32,17 @@ struct WorkoutChooserSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // Making your own is what this sheet is opened for: its own
-                // card at the top, not a row in a list.
-                createCard
-
-                if !app.customWorkouts.isEmpty {
-                group("Your workouts",
-                      note: "Send one to a friend with the share button, or put them on days in your week below.") {
-                    ForEach(app.customWorkouts) { workout in
-                        row(symbol: { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 16, weight: .semibold)) },
-                            title: workout.name,
-                            detail: detail(workout.workoutDay),
-                            isToday: false,
-                            onEdit: { editing = workout },
-                            sharing: workout) {
-                            if canStart { onStart?(workout.workoutDay) } else { editing = workout }
-                        }
-                    }
-                }
-                }
-
-                // The week you train: one of ours or one of yours, all in one list.
-                group("Your plan") {
-                    Button { planningWeek = true } label: {
-                        HStack(spacing: SL.Space.s3) {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(SL.Signal.action)
-                                .frame(width: 40, height: 40)
-                                .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(app.planName)
-                                    .slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                Text("Change it, or make your own plan")
-                                    .slMeta().foregroundStyle(SL.Ink.secondary)
-                            }
-                            Spacer(minLength: SL.Space.s2)
-                            SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
-                        }
-                        .padding(.horizontal, SL.Space.s4)
-                        .frame(minHeight: 64)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(SLRowButtonStyle())
-                    .accessibilityLabel("Your plan: \(app.planName)")
-                    .accessibilityHint("Change it, or make your own plan")
-                }
-
-                // Every ready-made workout, to start one on any day.
                 if onStart != nil {
-                    group("Ready-made workouts") {
-                        ForEach(app.plan) { day in
-                            row(symbol: { SLWorkoutSymbol(dayName: day.short, size: 18) },
-                                title: day.short,
-                                detail: detail(day),
-                                isToday: day.id == app.todayDay?.id) { onStart?(day) }
-                        }
-                    }
+                    // Choosing is what this was opened for: the workouts
+                    // first, then making one, then the plan.
+                    ownGroup
+                    readyMadeGroup
+                    createCard
+                    planGroup
+                } else {
+                    createCard
+                    ownGroup
+                    planGroup
                 }
             }
             .padding(.top, SL.Space.s2)
@@ -118,6 +70,72 @@ struct WorkoutChooserSheet: View {
                 editing = nil
                 Task { await app.removeCustomWorkout(id: workout.id) }
             }, onClose: { editing = nil })
+        }
+    }
+
+    @ViewBuilder
+    private var ownGroup: some View {
+        if !app.customWorkouts.isEmpty {
+        group("Your workouts",
+              note: "Send one to a friend with the share button, or put them on days in your week below.") {
+            ForEach(app.customWorkouts) { workout in
+                row(symbol: { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 16, weight: .semibold)) },
+                    title: workout.name,
+                    detail: detail(workout.workoutDay),
+                    isToday: false,
+                    onEdit: { editing = workout },
+                    sharing: workout) {
+                    if canStart { onStart?(workout.workoutDay) } else { editing = workout }
+                }
+            }
+        }
+        }
+    }
+
+    @ViewBuilder
+    private var planGroup: some View {
+        // The week you train: one of ours or one of yours, all in one list.
+        group("Your plan") {
+            Button { planningWeek = true } label: {
+                HStack(spacing: SL.Space.s3) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(SL.Signal.action)
+                        .frame(width: 40, height: 40)
+                        .background(RoundedRectangle(cornerRadius: SL.Radius.md, style: .continuous).fill(SL.Signal.actionTint))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(app.planName)
+                            .slBody(SL.Weight.semibold).foregroundStyle(SL.Ink.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Text("Change it, or make your own plan")
+                            .slMeta().foregroundStyle(SL.Ink.secondary)
+                    }
+                    Spacer(minLength: SL.Space.s2)
+                    SLGlyph(name: .chevronRight, size: 12).foregroundStyle(SL.Ink.tertiary)
+                }
+                .padding(.horizontal, SL.Space.s4)
+                .frame(minHeight: 64)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(SLRowButtonStyle())
+            .accessibilityLabel("Your plan: \(app.planName)")
+            .accessibilityHint("Change it, or make your own plan")
+        }
+    }
+
+    @ViewBuilder
+    private var readyMadeGroup: some View {
+        // Every ready-made workout, to start one on any day.
+        if onStart != nil {
+            group("Ready-made workouts") {
+                ForEach(app.plan) { day in
+                    row(symbol: { SLWorkoutSymbol(dayName: day.short, size: 18) },
+                        title: day.short,
+                        detail: detail(day),
+                        isToday: day.id == app.todayDay?.id) { onStart?(day) }
+                }
+            }
         }
     }
 

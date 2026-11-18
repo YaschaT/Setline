@@ -27,7 +27,7 @@ interface Editing {
   isNew: boolean;
 }
 
-export function PlansSheet({ onClose }: { onClose: () => void }) {
+export function PlansSheet({ onClose, readyMadeFirst = false }: { onClose: () => void; /** Opened to follow a plan: ours first, making one after. */ readyMadeFirst?: boolean }) {
   const app = useApp();
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const current = ProgramCatalog.current({ in: app.state ?? LegacyState.make({ raw: {} }), plan: app.plan });
@@ -164,13 +164,7 @@ export function PlansSheet({ onClose }: { onClose: () => void }) {
     );
   }
 
-  return (
-    <>
-      <SLSheet title="Your plan" subtitle="The week you train, every week. Use one of ours or make your own." onClose={onClose}>
-        <VStack alignment="leading" spacing={SL.Space.s6} style={{ alignSelf: "stretch", alignItems: "stretch", paddingTop: SL.Space.s2, paddingBottom: SL.Space.s6 }}>
-          {createCard}
-          {yourRows.length > 0 && section("Your plans", yourRows)}
-          {section(
+  const readyMade = section(
             "Ready-made plans",
             ProgramCatalog.all({ personalPlan: app.plan }).map((program) =>
               planRow({
@@ -183,6 +177,24 @@ export function PlansSheet({ onClose }: { onClose: () => void }) {
                 },
               }),
             ),
+          );
+
+  return (
+    <>
+      <SLSheet title="Your plan" subtitle="The week you train, every week. Use one of ours or make your own." onClose={onClose}>
+        <VStack alignment="leading" spacing={SL.Space.s6} style={{ alignSelf: "stretch", alignItems: "stretch", paddingTop: SL.Space.s2, paddingBottom: SL.Space.s6 }}>
+          {readyMadeFirst ? (
+            <>
+              {readyMade}
+              {createCard}
+              {yourRows.length > 0 && section("Your plans", yourRows)}
+            </>
+          ) : (
+            <>
+              {createCard}
+              {yourRows.length > 0 && section("Your plans", yourRows)}
+              {readyMade}
+            </>
           )}
         </VStack>
       </SLSheet>

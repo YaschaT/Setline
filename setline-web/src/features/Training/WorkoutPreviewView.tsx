@@ -31,6 +31,7 @@ export function WorkoutPreviewView({
   onLogPast,
   onChangeDay,
   onClose,
+  onDoToday,
 }: {
   day: AgendaDay;
   workout: WorkoutDay;
@@ -40,6 +41,8 @@ export function WorkoutPreviewView({
   onLogPast: (() => void) | undefined;
   onChangeDay: () => void;
   onClose: () => void;
+  /** A day still to come: do its workout today instead. That day stays planned; "Change this day" moves it. */
+  onDoToday?: () => void;
 }) {
   const app = useApp();
   const display = app.display;
@@ -188,10 +191,10 @@ export function WorkoutPreviewView({
       lines.push("No sets saved. SETLINE doesn't catch up or shift anything — your plan for next week stays.");
     } else if (day.isToday) {
       lines.push("Weights come from your last session. Everything can be changed during the session.");
-    } else if (lastSession !== undefined) {
-      lines.push(`Expected weights, worked out from your session on ${NumberDisplay.shortDate(display, lastSession.date)}. You can start on the day itself.`);
     } else {
-      lines.push("You can start on the day itself.");
+      if (lastSession !== undefined) lines.push(`Expected weights, worked out from your session on ${NumberDisplay.shortDate(display, lastSession.date)}.`);
+      // A day to come: today, if you like, or on the day itself.
+      lines.push(onDoToday !== undefined ? `Doing it today? ${WeekPlan.fullWeekday(day.date)} stays planned; change it below if you like.` : "You can start on the day itself.");
     }
     return lines.join(" ");
   })();
@@ -208,12 +211,20 @@ export function WorkoutPreviewView({
           </span>
         </SLPrimaryButton>
       )}
+      {onDoToday !== undefined && (
+        <SLPrimaryButton onPress={onDoToday} aria-label={`Do it today. Starts ${workout.short} now`}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <SLGlyph name="play" size={16} />
+            <span>Do it today</span>
+          </span>
+        </SLPrimaryButton>
+      )}
       {onLogPast !== undefined && (
         <div style={{ display: "flex", flexDirection: "column", paddingBottom: SL.Space.s1 }}>
           <SLOutlineButton onPress={onLogPast}>Log afterwards</SLOutlineButton>
         </div>
       )}
-      <div style={{ display: "flex", flexDirection: "column", paddingTop: onStart === undefined ? 0 : SL.Space.s1 }}>
+      <div style={{ display: "flex", flexDirection: "column", paddingTop: onStart === undefined && onDoToday === undefined ? 0 : SL.Space.s1 }}>
         <SLOutlineButton onPress={onChangeDay}>Change this day</SLOutlineButton>
       </div>
       <SLQuietButton onPress={onClose}>Back to overview</SLQuietButton>

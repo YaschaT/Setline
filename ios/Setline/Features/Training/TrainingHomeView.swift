@@ -69,6 +69,8 @@ struct TrainingHomeView: View {
         case history
         case chooser
         case plans
+        /// The plans list opened to follow one: ready-made first.
+        case followPlan
         case newWorkout
         case editWorkout(CustomWorkout)
         case freestyle
@@ -85,6 +87,7 @@ struct TrainingHomeView: View {
             case .history: return "history"
             case .chooser: return "chooser"
             case .plans: return "plans"
+            case .followPlan: return "followPlan"
             case .newWorkout: return "newWorkout"
             case .editWorkout(let workout): return "edit-\(workout.id)"
             case .freestyle: return "freestyle"
@@ -191,6 +194,8 @@ struct TrainingHomeView: View {
                 )
             case .plans:
                 PlansSheet(onClose: { sheet = nil })
+            case .followPlan:
+                PlansSheet(onClose: { sheet = nil }, readyMadeFirst: true)
             case .newWorkout:
                 CustomWorkoutBuilder(workout: nil, onSave: { saved, start in
                     sheet = nil
@@ -328,7 +333,11 @@ struct TrainingHomeView: View {
                     ? { after(closing: { onLogPast(workout, day.date) }) }
                     : nil,
                 onChangeDay: { sheet = .plan(day.date) },
-                onClose: { sheet = nil }
+                onClose: { sheet = nil },
+                // A day still to come, done today instead: the gym is open now.
+                onDoToday: !day.isToday && !day.isPast && day.session == nil && app.resumableSession == nil
+                    ? { after(closing: { onStart(workout) }) }
+                    : nil
             )
         }
     }
@@ -471,7 +480,7 @@ struct TrainingHomeView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             VStack(spacing: SL.Space.s2) {
-                startOption("calendar", "Follow a plan", "One of ours, like Push / Pull / Legs. It fills your week.") { choose(.plans) }
+                startOption("calendar", "Follow a plan", "One of ours, like Push / Pull / Legs. It fills your week.") { choose(.followPlan) }
                 startOption("square.stack.3d.up.fill", "Build my own", "Your exercises, sets and reps.") { choose(.newWorkout) }
                 startOption("figure.strengthtraining.traditional", "Freestyle", "Pick each machine as you go. Nothing to set up.") { choose(.freestyle) }
             }
@@ -648,7 +657,10 @@ struct TrainingHomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             todayBlock(today)
                 .padding(SL.Space.s5)
-            if let next = nextTraining(after: today.date), next.plannedDay != nil {
+            // What comes next, only once today has nothing left to do (a rest
+            // day, or done): otherwise the week card right below says it.
+            if today.isRest || (today.session != nil && app.resumableSession == nil),
+               let next = nextTraining(after: today.date), next.plannedDay != nil {
                 SLHairline()
                 nextSessionRow(next)
             }
@@ -1257,10 +1269,10 @@ struct TrainingHomeView: View {
                 }
             }
             .foregroundStyle(content.isRest ? SL.Signal.recovery : isDone || day.isToday ? SL.Signal.action : SL.Ink.secondary)
+            let opensExercises = day.isToday && day.plannedDay != nil && !isDone && !content.isRest
+                && app.resumableSession == nil
             todayTitle(day, title: isDone ? (day.session?.dayLabel ?? content.title) : content.title,
-                       isRest: content.isRest,
-                       opensExercises: day.isToday && day.plannedDay != nil && !isDone && !content.isRest
-                           && app.resumableSession == nil)
+                       isRest: content.isRest, opensExercises: opensExercises)
                 .padding(.top, 2)
 
             if let focus = isDone ? nil : content.focus {
@@ -1271,8 +1283,16 @@ struct TrainingHomeView: View {
                     .padding(.top, SL.Space.s2)
             }
             if let stats = stats(for: day, workout: workout, isDone: isDone), !stats.isEmpty {
-                statRow(stats)
-                    .padding(.top, SL.Space.s4)
+                if opensExercises {
+                    // Where people look for the exercises: "7 exercises ›".
+                    Button { sheet = .preview(day) } label: { statRow(stats, linked: true).contentShape(Rectangle()) }
+                        .buttonStyle(SLPressStyle(scale: 0.98))
+                        .accessibilityHint("Shows today's exercises. Nothing starts.")
+                        .padding(.top, SL.Space.s4)
+                } else {
+                    statRow(stats)
+                        .padding(.top, SL.Space.s4)
+                }
             } else if let meta = content.meta {
                 Text(meta.text.slUnbroken)
                     .slBody()
@@ -1373,7 +1393,7 @@ struct TrainingHomeView: View {
     }
 
     /// Big number over a small word, columns split by hairlines.
-    private func statRow(_ items: [(value: String, label: String)]) -> some View {
+    private func statRow(_ items: [(value: String, label: String)], linked: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 HStack(spacing: 0) {
@@ -1388,11 +1408,14 @@ struct TrainingHomeView: View {
                             .foregroundStyle(SL.Ink.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                        Text(item.label)
-                            .slMeta()
-                            .foregroundStyle(SL.Ink.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
+                        HStack(spacing: 3) {
+                            Text(item.label)
+                                .slMeta(linked && index == 0 ? SL.Weight.semibold : SL.Weight.regular)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                            if linked && index == 0 { SLGlyph(name: .chevronRight, size: 10) }
+                        }
+                        .foregroundStyle(SL.Ink.secondary)
                     }
                     Spacer(minLength: SL.Space.s2)
                 }

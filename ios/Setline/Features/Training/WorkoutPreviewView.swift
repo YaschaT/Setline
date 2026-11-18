@@ -22,6 +22,9 @@ struct WorkoutPreviewView: View {
     let onLogPast: (() -> Void)?
     let onChangeDay: () -> Void
     let onClose: () -> Void
+    /// A day still to come: do its workout today instead. That day stays
+    /// planned; "Change this day" moves it.
+    var onDoToday: (() -> Void)? = nil
 
     var body: some View {
         SLSheet(title: title.slUnbroken, subtitle: subtitle, onClose: onClose) {
@@ -207,10 +210,14 @@ struct WorkoutPreviewView: View {
             lines.append("No sets saved. SETLINE doesn't catch up or shift anything — your plan for next week stays.")
         } else if day.isToday {
             lines.append("Weights come from your last session. Everything can be changed during the session.")
-        } else if let reference = lastSession {
-            lines.append("Expected weights, worked out from your session on \(app.display.shortDate(reference.date)). You can start on the day itself.")
         } else {
-            lines.append("You can start on the day itself.")
+            if let reference = lastSession {
+                lines.append("Expected weights, worked out from your session on \(app.display.shortDate(reference.date)).")
+            }
+            // A day to come: today, if you like, or on the day itself.
+            lines.append(onDoToday != nil
+                ? "Doing it today? \(WeekPlan.fullWeekday(day.date)) stays planned; change it below if you like."
+                : "You can start on the day itself.")
         }
         return lines.joined(separator: " ")
     }
@@ -228,6 +235,16 @@ struct WorkoutPreviewView: View {
                 }
                 .buttonStyle(SLPrimaryButtonStyle())
             }
+            if let onDoToday {
+                Button(action: onDoToday) {
+                    HStack(spacing: 10) {
+                        SLGlyph(name: .play, size: 16)
+                        Text("Do it today")
+                    }
+                }
+                .buttonStyle(SLPrimaryButtonStyle())
+                .accessibilityHint("Starts \(workout.short) now")
+            }
             if let onLogPast {
                 Button(action: onLogPast) { Text("Log afterwards") }
                     .buttonStyle(SLOutlineButtonStyle())
@@ -236,7 +253,7 @@ struct WorkoutPreviewView: View {
             }
             Button(action: onChangeDay) { Text("Change this day") }
                 .buttonStyle(SLOutlineButtonStyle())
-                .padding(.top, onStart == nil ? 0 : SL.Space.s1)
+                .padding(.top, onStart == nil && onDoToday == nil ? 0 : SL.Space.s1)
                 .accessibilityHint("Puts another session or rest on this date")
             Button(action: onClose) { Text("Back to overview") }
                 .buttonStyle(SLQuietButtonStyle())

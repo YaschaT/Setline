@@ -8,6 +8,8 @@ import SetlineCore
 struct PlansSheet: View {
     @Environment(AppState.self) private var app
     let onClose: () -> Void
+    /// Opened to follow a plan: ours first, making one after.
+    var readyMadeFirst = false
 
     /// The plan being made or changed: a new one, one of yours, or the week
     /// you already made, still without a name.
@@ -26,41 +28,14 @@ struct PlansSheet: View {
     var body: some View {
         SLSheet(title: "Your plan", subtitle: "The week you train, every week. Use one of ours or make your own.", onClose: onClose) {
             VStack(alignment: .leading, spacing: SL.Space.s6) {
-                createCard
-
-                let own = app.ownPlans
-                let active = app.activeOwnPlan
-                if !own.isEmpty || (app.ownWeek != nil && active == nil) {
-                    section("Your plans") {
-                        // A week made before plans had names: in use, waiting for one.
-                        if let week = app.ownWeek, active == nil {
-                            planRow(title: "Your own week", detail: ownWeekSummary(week, workouts: app.schedulePlan),
-                                    inUse: true, use: {}) {
-                                editing = Editing(plan: .init(id: AppState.OwnPlan.newID(), name: "", days: week), isNew: true)
-                            }
-                        }
-                        ForEach(own) { plan in
-                            planRow(title: plan.name, detail: ownWeekSummary(plan.days, workouts: app.schedulePlan),
-                                    inUse: plan.id == active?.id,
-                                    use: {
-                                        Task { await app.saveOwnPlan(plan, use: true) }
-                                        onClose()
-                                    }) {
-                                editing = Editing(plan: plan, isNew: false)
-                            }
-                        }
-                    }
-                }
-
-                section("Ready-made plans") {
-                    ForEach(ProgramCatalog.all(personalPlan: app.plan)) { program in
-                        planRow(title: program.name, detail: program.shape,
-                                inUse: app.ownWeek == nil && program.id == current.id,
-                                use: {
-                                    Task { await app.useReadyMadePlan(program) }
-                                    onClose()
-                                }, edit: nil)
-                    }
+                if readyMadeFirst {
+                    readyMadeSection
+                    createCard
+                    ownSection
+                } else {
+                    createCard
+                    ownSection
+                    readyMadeSection
                 }
             }
             .padding(.top, SL.Space.s2)
@@ -68,6 +43,46 @@ struct PlansSheet: View {
         }
         .sheet(item: $editing) { item in
             PlanEditorSheet(plan: item.plan, isNew: item.isNew, onDone: { editing = nil })
+        }
+    }
+
+    @ViewBuilder
+    private var ownSection: some View {
+        let own = app.ownPlans
+        let active = app.activeOwnPlan
+        if !own.isEmpty || (app.ownWeek != nil && active == nil) {
+            section("Your plans") {
+                // A week made before plans had names: in use, waiting for one.
+                if let week = app.ownWeek, active == nil {
+                    planRow(title: "Your own week", detail: ownWeekSummary(week, workouts: app.schedulePlan),
+                            inUse: true, use: {}) {
+                        editing = Editing(plan: .init(id: AppState.OwnPlan.newID(), name: "", days: week), isNew: true)
+                    }
+                }
+                ForEach(own) { plan in
+                    planRow(title: plan.name, detail: ownWeekSummary(plan.days, workouts: app.schedulePlan),
+                            inUse: plan.id == active?.id,
+                            use: {
+                                Task { await app.saveOwnPlan(plan, use: true) }
+                                onClose()
+                            }) {
+                        editing = Editing(plan: plan, isNew: false)
+                    }
+                }
+            }
+        }
+    }
+
+    private var readyMadeSection: some View {
+        section("Ready-made plans") {
+            ForEach(ProgramCatalog.all(personalPlan: app.plan)) { program in
+                planRow(title: program.name, detail: program.shape,
+                        inUse: app.ownWeek == nil && program.id == current.id,
+                        use: {
+                            Task { await app.useReadyMadePlan(program) }
+                            onClose()
+                        }, edit: nil)
+            }
         }
     }
 

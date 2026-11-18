@@ -67,6 +67,8 @@ type Presented =
   | { kind: "history" }
   | { kind: "chooser" }
   | { kind: "plans" }
+  /** The plans list opened to follow one: ready-made first. */
+  | { kind: "followPlan" }
   | { kind: "newWorkout" }
   | { kind: "editWorkout"; value: CustomWorkout }
   | { kind: "freestyle" };
@@ -749,7 +751,7 @@ export function TrainingHomeView({
           How do you want to train?
         </Text>
         <VStack spacing={SL.Space.s2} style={{ alignSelf: "stretch" }}>
-          {startOption("calendar", "Follow a plan", "One of ours, like Push / Pull / Legs. It fills your week.", () => choose({ kind: "plans" }))}
+          {startOption("calendar", "Follow a plan", "One of ours, like Push / Pull / Legs. It fills your week.", () => choose({ kind: "followPlan" }))}
           {startOption("square.stack.3d.up.fill", "Build my own", "Your exercises, sets and reps.", () => choose({ kind: "newWorkout" }))}
           {startOption("figure.strengthtraining.traditional", "Freestyle", "Pick each machine as you go. Nothing to set up.", () => choose({ kind: "freestyle" }))}
         </VStack>
@@ -854,7 +856,7 @@ export function TrainingHomeView({
   };
 
   /** Big number over a small word, columns split by hairlines. */
-  const statRow = (items: Stat[]) => (
+  const statRow = (items: Stat[], linked = false) => (
     <HStack alignment="top" spacing={0} aria-label={items.map((s) => `${s.value} ${s.label}`).join(", ")} style={{ alignSelf: "stretch", paddingTop: SL.Space.s4 }}>
       {items.map((item, index) => (
         <HStack key={index} spacing={0} style={{ flex: "1 1 0", minWidth: 0 }}>
@@ -863,9 +865,12 @@ export function TrainingHomeView({
             <Text size={SL.TypeSize.title} weight={SL.Weight.semibold} numerals color={SL.Ink.primary} lineLimit={1} minimumScaleFactor={0.8} style={{ maxWidth: "100%" }}>
               {item.value}
             </Text>
-            <Text {...slMeta()} color={SL.Ink.secondary} lineLimit={1} minimumScaleFactor={0.6} style={{ maxWidth: "100%" }}>
-              {item.label}
-            </Text>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, maxWidth: "100%", color: SL.Ink.secondary }}>
+              <Text {...slMeta(linked && index === 0 ? SL.Weight.semibold : SL.Weight.regular)} color={SL.Ink.secondary} lineLimit={1} minimumScaleFactor={0.6} style={{ maxWidth: "100%" }}>
+                {item.label}
+              </Text>
+              {linked && index === 0 && <SLGlyph name="chevronRight" size={10} />}
+            </span>
           </VStack>
           <Spacer minLength={SL.Space.s2} />
         </HStack>
@@ -993,6 +998,7 @@ export function TrainingHomeView({
     const focus = isDone ? undefined : content.focus;
     const statItems = stats(day, workout, isDone);
     const lifts = day.isToday && !isDone && workout !== undefined && !content.isRest ? app.liftsReady({ in: workout }) : [];
+    const opensExercises = day.isToday && AgendaDay.plannedDay(day) !== undefined && !isDone && !content.isRest && paused === undefined;
     return (
       <VStack alignment="leading" spacing={0}>
         <HStack spacing={4} style={{ alignSelf: "stretch", color: headInk }}>
@@ -1022,7 +1028,7 @@ export function TrainingHomeView({
           )}
         </HStack>
         {/* Today's workout, still to do: the name is the way into its exercises, with a chevron to say so. Nothing starts. */}
-        {day.isToday && AgendaDay.plannedDay(day) !== undefined && !isDone && !content.isRest && paused === undefined ? (
+        {opensExercises ? (
           <SLPress
             scale={0.98}
             onPress={() => setSheet({ kind: "preview", value: day })}
@@ -1055,7 +1061,19 @@ export function TrainingHomeView({
           </Text>
         )}
         {statItems !== undefined && statItems.length > 0
-          ? statRow(statItems)
+          ? opensExercises
+            ? (
+                // Where people look for the exercises: "7 exercises ›".
+                <SLPress
+                  scale={0.98}
+                  onPress={() => setSheet({ kind: "preview", value: day })}
+                  aria-label={`${statItems.map((s) => `${s.value} ${s.label}`).join(", ")}. Shows today's exercises. Nothing starts.`}
+                  style={{ alignSelf: "stretch", textAlign: "left", background: "transparent" }}
+                >
+                  {statRow(statItems, true)}
+                </SLPress>
+              )
+            : statRow(statItems)
           : content.meta !== undefined && (
               <Text {...slBody()} numerals color={SL.Ink.secondary} style={{ paddingTop: SL.Space.s2 }}>
                 {slUnbroken(content.meta.text)}
@@ -1089,7 +1107,9 @@ export function TrainingHomeView({
   /** Today's workout, on its own card: the workout as it was, one action. */
   /** Today, and under a hairline what comes after it: one story, one card. */
   const todayCard = (day: AgendaDay) => {
-    const next = nextTraining(day.date);
+    // What comes next, only once today has nothing left to do (a rest day, or done): otherwise the week card says it.
+    const todayDone = AgendaDay.session(day) !== undefined && app.resumableSession === undefined;
+    const next = AgendaDay.isRest(day) || todayDone ? nextTraining(day.date) : undefined;
     return (
       <div style={{ position: "relative", alignSelf: "stretch", borderRadius: 28, background: SL.Surface.raised, overflow: "hidden" }}>
         <div style={{ padding: SL.Space.s5 }}>{todayBlock(day)}</div>
@@ -1455,6 +1475,12 @@ export function TrainingHomeView({
         onLogPast={isMissed ? () => after(() => onLogPast(workout, day.date)) : undefined}
         onChangeDay={() => setSheet({ kind: "plan", value: day.date })}
         onClose={() => setSheet(undefined)}
+        // A day still to come, done today instead: the gym is open now.
+        onDoToday={
+          !day.isToday && !day.isPast && AgendaDay.session(day) === undefined && app.resumableSession === undefined
+            ? () => after(() => onStart(workout))
+            : undefined
+        }
       />
     );
   };
@@ -1518,6 +1544,8 @@ export function TrainingHomeView({
         );
       case "plans":
         return <PlansSheet onClose={() => setSheet(undefined)} />;
+      case "followPlan":
+        return <PlansSheet onClose={() => setSheet(undefined)} readyMadeFirst />;
       case "newWorkout":
         return (
           <CustomWorkoutBuilder
