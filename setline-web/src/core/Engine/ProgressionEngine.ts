@@ -238,14 +238,25 @@ export const ProgressionEngine = {
       });
     }
 
+    // Building towards the top: one rep more than each set did last time at this weight, never past the top of its
+    // range, never under the bottom. Aiming straight at the top (15 after a set of 9) is a number nobody hits; one
+    // more rep is.
+    const latest = ExerciseHistory.mostRecent(history);
+    const last = latest ? ProgressionEngine.prescribedSlots(latest, { planned }) : [];
+    const targets = planned.sets.map((prescription, index) => {
+      const range = prescription.repRange;
+      const set = last[index];
+      if (set === undefined || set.weightKg !== load) return range.lowerBound;
+      return Math.min(range.upperBound, Math.max(range.lowerBound, set.reps + 1));
+    });
     return ProgressionProposal.make({
       tone: "neutral",
       weightKg: load,
-      targetReps: topTarget,
+      targetReps: targets[0] ?? topTarget,
       label: undefined,
       headline: `Keep building at ${kg(load)}`,
-      body: `Suggestion: ${kg(load)}, aim for ${ProgressionEngine.repsLabel(tops)}. No reason yet to go up or down.`,
-      setTargets: tops,
+      body: `Suggestion: ${kg(load)}, aim for ${ProgressionEngine.repsLabel(targets)}: one rep more than last time, up to ${ProgressionEngine.repsLabel(tops)}.`,
+      setTargets: targets,
     });
   },
 

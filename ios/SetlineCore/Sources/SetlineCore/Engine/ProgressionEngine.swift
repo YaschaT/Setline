@@ -211,14 +211,24 @@ public enum ProgressionEngine {
             )
         }
 
+        // Building towards the top: one rep more than each set did last
+        // time at this weight, never past the top of its range, never under
+        // the bottom. Aiming straight at the top (15 after a set of 9) is a
+        // number nobody hits; one more rep is.
+        let last = history.mostRecent.map { prescribedSlots($0, planned: planned) } ?? []
+        let targets = planned.sets.indices.map { index -> Int in
+            let range = planned.sets[index].repRange
+            guard last.indices.contains(index), let set = last[index], set.weightKg == load else { return range.lowerBound }
+            return min(range.upperBound, max(range.lowerBound, set.reps + 1))
+        }
         return ProgressionProposal(
             tone: .neutral,
             weightKg: load,
-            targetReps: topTarget,
+            targetReps: targets.first ?? topTarget,
             label: nil,
             headline: "Keep building at \(formatter.kg(load))",
-            body: "Suggestion: \(formatter.kg(load)), aim for \(repsLabel(tops)). No reason yet to go up or down.",
-            setTargets: tops
+            body: "Suggestion: \(formatter.kg(load)), aim for \(repsLabel(targets)): one rep more than last time, up to \(repsLabel(tops)).",
+            setTargets: targets
         )
     }
 

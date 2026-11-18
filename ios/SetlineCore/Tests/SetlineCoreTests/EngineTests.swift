@@ -78,6 +78,9 @@ final class ProgressionEngineTests: XCTestCase {
         )
         XCTAssertEqual(proposal.tone, .neutral)
         XCTAssertEqual(proposal.headline, "Keep building at 100 kg")
+        // One rep more than last time (6 → 7), not straight to the top (8).
+        XCTAssertEqual(proposal.setTargets, [7, 7, 7])
+        XCTAssertTrue(proposal.body.contains("aim for 7: one rep more than last time, up to 8"), proposal.body)
     }
 
     /// §3.1: a session where every set hit the top of the range at RIR 4 is

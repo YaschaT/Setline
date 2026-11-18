@@ -89,6 +89,9 @@ describe("ProgressionEngineTests", () => {
     });
     assertEqual(proposal.tone, "neutral");
     assertEqual(proposal.headline, "Keep building at 100 kg");
+    // One rep more than last time (6 → 7), not straight to the top (8).
+    assertEqual(proposal.setTargets, [7, 7, 7]);
+    assertEqual(proposal.body.includes("aim for 7: one rep more than last time, up to 8"), true);
   });
 
   /**
