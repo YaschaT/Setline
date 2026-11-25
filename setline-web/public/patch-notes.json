@@ -1,6 +1,15 @@
 {
   "notes": [
     {
+      "id": "2026-11-25",
+      "date": "2026-11-25",
+      "title": "Always the newest version",
+      "items": [
+        "The web app updates itself: open it from your home screen or an old tab and it loads the newest version. During a workout it waits and offers it instead.",
+        "Each set shows what you did last time as a label — “Last time 85 kg × 5 · 13 Oct” — so you know the numbers to beat."
+      ]
+    },
+    {
       "id": "2026-11-18-5",
       "date": "2026-11-18",
       "title": "Your meals and goal, everywhere",

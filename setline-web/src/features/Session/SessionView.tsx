@@ -1485,7 +1485,27 @@ export function SessionView(p: {
         <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: SL.Signal.action, flexShrink: 0 }} />
         <VStack alignment="leading" spacing={2} style={{ minWidth: 0 }}>
           <Text {...slLead()} numerals color={SL.Ink.primary} lineLimit={1} minimumScaleFactor={0.8} style={{ maxWidth: "100%" }}>{`Set ${setIndex + 1} of ${S.sets(current).length}`}</Text>
-          <Text {...slMeta()} numerals color={SL.Ink.secondary} lineLimit={1} minimumScaleFactor={0.8} style={{ maxWidth: "100%" }}>{status(setIndex, set)}</Text>
+          {/* What this set was last time, as a label of its own: the numbers to beat, not just the date they came from. */}
+          {(() => {
+            const last = runner.previousLoggedSet({ slotIndex: runner.currentIndex, setIndex });
+            const calibrating = setIndex === 0 && runner.needsCalibration({ slotIndex: runner.currentIndex });
+            if (last === undefined || last.set.weightKg === undefined || calibrating) {
+              return <Text {...slMeta()} numerals color={SL.Ink.secondary} lineLimit={1} minimumScaleFactor={0.8} style={{ maxWidth: "100%" }}>{status(setIndex, set)}</Text>;
+            }
+            const sets = `${NumberDisplay.kg(app.display, last.set.weightKg)} × ${last.set.reps}`;
+            const when = NumberDisplay.shortDate(app.display, last.date);
+            return (
+              <span
+                aria-label={`Last time ${sets}, ${when}`}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, maxWidth: "100%", whiteSpace: "nowrap", padding: `4px ${SL.Space.s2}px`, borderRadius: 999, background: SL.Surface.raised2, marginTop: 2 }}
+              >
+                <SFSymbol name="clock.arrow.circlepath" size={11} weight={600} color={SL.Ink.secondary} />
+                <span style={{ ...slFont(SL.TypeSize.micro, SL.Weight.semibold), color: SL.Ink.secondary }}>Last time</span>
+                <span style={{ ...slFont(SL.TypeSize.meta, SL.Weight.bold), color: SL.Ink.primary, fontVariantNumeric: "tabular-nums" }}>{sets}</span>
+                <span style={{ ...slFont(SL.TypeSize.micro, SL.Weight.medium), color: SL.Ink.secondary }}>{`· ${when}`}</span>
+              </span>
+            );
+          })()}
         </VStack>
       </HStack>
       {moreMenu(setIndex)}

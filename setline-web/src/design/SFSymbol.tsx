@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import {
   Activity, ArrowDown, ArrowUp, ArrowUpRight, BadgeCheck, Bell, BellRing, Camera, ChartColumn, ChartScatter, Check,
   ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, CircleCheck, CirclePlus, CircleUser, CircleX,
-  CloudUpload, CornerDownRight, Maximize2, Minimize2, Dumbbell, Ellipsis, Eye, EyeOff, Flame, Footprints, Gauge, Globe, Grid2x2, Hand,
+  CloudUpload, CornerDownRight, Maximize2, Minimize2, History, Dumbbell, Ellipsis, Eye, EyeOff, Flame, Footprints, Gauge, Globe, Grid2x2, Hand,
   HeartPulse, House, Image, Images, Info, ListMusic, Lock, LocateFixed, MapPin, Medal, MessageCircle,
   MessageSquareWarning, Minus, Moon, Mountain, Music, Music2, Pause, Pencil, PersonStanding, Play, Plus, QrCode, Rabbit,
   Redo2, RefreshCw, RotateCcw, RotateCw, Scale, ScanBarcode, ScanFace, ScanLine, Search, Server, Share, Shield,
@@ -111,6 +111,7 @@ const MAP: Record<string, LucideIcon> = {
   "photo.on.rectangle": Images,
   "play.fill": Play,
   "arrow.up.left.and.arrow.down.right": Maximize2,
+  "clock.arrow.circlepath": History,
   "arrow.down.right.and.arrow.up.left": Minimize2,
   plus: Plus,
   "plus.circle": CirclePlus,

@@ -1358,6 +1358,13 @@ export class SessionRunner {
 
   /** What the same set was last time: "82,5 × 8". */
   previousSet(a: { slotIndex: number; setIndex: number }): string | undefined {
+    const last = this.previousLoggedSet(a);
+    if (last === undefined || last.set.weightKg === undefined) return undefined;
+    return NumberDisplay.setReference(this.display, { weightKg: last.set.weightKg, reps: last.set.reps });
+  }
+
+  /** The same set the last time this exercise was done, and that day — when it had a weight. */
+  previousLoggedSet(a: { slotIndex: number; setIndex: number }): { set: LoggedSet; date: Date } | undefined {
     if (!this.hasSlot(a.slotIndex)) return undefined;
     const slot = this._slots[a.slotIndex];
     const reference = ExerciseHistory.mostRecent(slot.history);
@@ -1368,7 +1375,7 @@ export class SessionRunner {
       reference.sets.find((s) => s.index === row?.index) ??
       (a.setIndex >= 0 && a.setIndex < reference.sets.length ? reference.sets[a.setIndex] : undefined);
     if (!prior || prior.weightKg === undefined) return undefined;
-    return NumberDisplay.setReference(this.display, { weightKg: prior.weightKg, reps: prior.reps });
+    return { set: prior, date: reference.date };
   }
 
   get columnHeaderDate(): string {

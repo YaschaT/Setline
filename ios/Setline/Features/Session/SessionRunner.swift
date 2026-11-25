@@ -1003,14 +1003,21 @@ final class SessionRunner {
 
     /// What the same set was last time: "82,5 × 8".
     func previousSet(slotIndex: Int, setIndex: Int) -> String? {
+        guard let last = previousLoggedSet(slotIndex: slotIndex, setIndex: setIndex), let weight = last.set.weightKg else { return nil }
+        return display.setReference(weightKg: weight, reps: last.set.reps)
+    }
+
+    /// The same set the last time this exercise was done, and that day — when
+    /// it had a weight.
+    func previousLoggedSet(slotIndex: Int, setIndex: Int) -> (set: LoggedSet, date: Date)? {
         guard slots.indices.contains(slotIndex) else { return nil }
         let slot = slots[slotIndex]
         guard let reference = slot.history.mostRecent else { return nil }
         let row = slot.sets.indices.contains(setIndex) ? slot.sets[setIndex] : nil
         let prior = reference.sets.first { $0.index == row?.index }
             ?? (reference.sets.indices.contains(setIndex) ? reference.sets[setIndex] : nil)
-        guard let prior, let weight = prior.weightKg else { return nil }
-        return display.setReference(weightKg: weight, reps: prior.reps)
+        guard let prior, prior.weightKg != nil else { return nil }
+        return (prior, reference.date)
     }
 
     var columnHeaderDate: String {

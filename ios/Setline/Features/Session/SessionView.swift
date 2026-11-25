@@ -1418,10 +1418,18 @@ struct SessionView: View {
                         .slLead()
                         .slNumerals()
                         .foregroundStyle(SL.Ink.primary)
-                    Text(status(setIndex: setIndex, set: set))
-                        .slMeta()
-                        .slNumerals()
-                        .foregroundStyle(SL.Ink.secondary)
+                    // What this set was last time, as a label of its own: the
+                    // numbers to beat, not just the date they came from.
+                    if let last = runner.previousLoggedSet(slotIndex: runner.currentIndex, setIndex: setIndex),
+                       let weight = last.set.weightKg,
+                       !(setIndex == 0 && runner.needsCalibration(slotIndex: runner.currentIndex)) {
+                        lastTimeChip(weight: weight, reps: last.set.reps, date: last.date)
+                    } else {
+                        Text(status(setIndex: setIndex, set: set))
+                            .slMeta()
+                            .slNumerals()
+                            .foregroundStyle(SL.Ink.secondary)
+                    }
                 }
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 .minimumScaleFactor(0.8)
@@ -1572,6 +1580,31 @@ struct SessionView: View {
         guard let typed = typingRest else { return }
         typingRest = nil
         if let seconds = RestTimerState.parseLength(typed) { runner.setRestLength(seconds) }
+    }
+
+    /// "↺ Last time  85 kg × 5  · 13 Oct": the set to beat, readable at a glance.
+    private func lastTimeChip(weight: Decimal, reps: Int, date: Date) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(SL.Ink.secondary)
+            Text("Last time")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.semibold))
+                .foregroundStyle(SL.Ink.secondary)
+            Text("\(app.display.kg(weight)) × \(reps)")
+                .font(.sl(SL.TypeSize.meta, SL.Weight.bold))
+                .slNumerals()
+                .foregroundStyle(SL.Ink.primary)
+            Text("· \(app.display.shortDate(date))")
+                .font(.sl(SL.TypeSize.micro, SL.Weight.medium))
+                .foregroundStyle(SL.Ink.secondary)
+        }
+        .lineLimit(1)
+        .padding(.horizontal, SL.Space.s2)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(SL.Surface.raised2))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Last time \(app.display.kg(weight)) times \(reps), \(app.display.shortDate(date))")
     }
 
     /// Where the numbers in the card came from, in the design's own words.

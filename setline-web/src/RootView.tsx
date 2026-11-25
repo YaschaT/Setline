@@ -6,8 +6,9 @@
 // never shows), haptics, and the DEBUG launch arguments other than the
 // development-only URL switches noted below.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { SL } from "./design/tokens";
+import { SL, slFont } from "./design/tokens";
 import { FullScreenCover, Sheet, useAppStorage, useScenePhase } from "./design/swiftui";
+import { useAppUpdate } from "./data/AppUpdate";
 import { SLTabBar, SLTab } from "./design/components/SLTabBar";
 import { SLCelebration, Celebration } from "./design/components/SLCelebration";
 import { maxBy } from "./core/Support/swift";
@@ -314,10 +315,42 @@ export function RootView() {
     setShowsUpdates(true);
   }, [hasUnseenUpdate, signedInShell, tab, running, sharedWorkout, invite, app.sessions.length]);
 
+  // A newer version deployed while this one stayed open: reloads itself when
+  // it comes back on screen; during a workout it waits and offers it here.
+  const update = useAppUpdate(running !== undefined);
+
   return (
     <div style={{ height: "100%", background: SL.Surface.ground, color: SL.Ink.primary }}>
       <style>{"@keyframes slRootFade { from { opacity: 0 } to { opacity: 1 } }"}</style>
       {content}
+
+      {update.ready && running === undefined && (
+        <div style={{ position: "fixed", top: `calc(env(safe-area-inset-top) + ${SL.Space.s2}px)`, left: 0, right: 0, zIndex: 46, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+          <button
+            type="button"
+            className="sl-pressable"
+            onClick={update.reload}
+            style={{
+              pointerEvents: "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              minHeight: SL.Space.hitMin,
+              padding: `0 ${SL.Space.s4}px`,
+              borderRadius: 999,
+              background: SL.Surface.raised2,
+              boxShadow: `inset 0 0 0 1px ${SL.Surface.hairlineStrong}, 0 8px 24px rgba(0,0,0,0.4)`,
+              color: SL.Ink.primary,
+              ...slFont(SL.TypeSize.meta, SL.Weight.semibold),
+              animation: "slRootFade 0.3s ease-out",
+            }}
+          >
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: SL.Signal.action }} />
+            Setline has an update
+            <span style={{ color: SL.Signal.action }}>Reload</span>
+          </button>
+        </div>
+      )}
 
       {/* `.slCelebration($habitBadge)`, under the status bar. */}
       <div style={{ position: "fixed", top: "env(safe-area-inset-top)", left: 0, right: 0, zIndex: 45, pointerEvents: "none" }}>
