@@ -397,7 +397,7 @@ struct TrainingHomeView: View {
                 .overlay(Circle().strokeBorder(SL.Surface.hairline, lineWidth: SL.Metric.border))
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
-                        Text("\(min(count, 9))")
+                        Text(count > 9 ? "9+" : "\(count)")
                             .font(.slFixed(11, SL.Weight.bold))
                             .foregroundStyle(SL.Signal.onAction)
                             .frame(minWidth: 18, minHeight: 18)

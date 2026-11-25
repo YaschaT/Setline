@@ -1,6 +1,17 @@
 {
   "notes": [
     {
+      "id": "2026-11-25-2",
+      "date": "2026-11-25",
+      "title": "Small fixes",
+      "items": [
+        "Dates read “Tue 24 Nov” everywhere, where a few still said “tu 24 Nov”: in Alerts and on a workout you log afterwards.",
+        "On a computer, Esc closes the sheet on top, like a badge's details, which had no close button.",
+        "A badge with more than nine things says 9+.",
+        "The web app never reloads itself right after you finish a workout; it waits until you open it again."
+      ]
+    },
+    {
       "id": "2026-11-25",
       "date": "2026-11-25",
       "title": "Always the newest version",

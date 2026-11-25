@@ -239,7 +239,7 @@ export function AlertCenterSheet({
   );
 
   const missedRow = (day: AgendaDay, workout: WorkoutDay) => {
-    const when = `${WeekPlan.fullWeekday(day.date).slice(0, 2).toLowerCase()} ${NumberDisplay.shortDate(app.display, day.date)}`;
+    const when = `${WeekPlan.fullWeekday(day.date).slice(0, 3)} ${NumberDisplay.shortDate(app.display, day.date)}`;
     return (
       <HStack alignment="center" spacing={SL.Space.s3} style={{ paddingLeft: SL.Space.s4, paddingRight: SL.Space.s4, paddingTop: SL.Space.s2, paddingBottom: SL.Space.s2 }}>
         <HStack

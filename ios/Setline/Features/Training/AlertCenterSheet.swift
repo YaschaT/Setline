@@ -232,7 +232,7 @@ struct AlertCenterSheet: View {
     }
 
     private func missedRow(_ day: AgendaDay, _ workout: WorkoutDay) -> some View {
-        let when = "\(WeekPlan.fullWeekday(day.date).prefix(2).lowercased()) \(app.display.shortDate(day.date))"
+        let when = "\(WeekPlan.fullWeekday(day.date).prefix(3)) \(app.display.shortDate(day.date))"
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SL.Space.s3))
             : AnyLayout(HStackLayout(alignment: .center, spacing: SL.Space.s3))

@@ -283,12 +283,37 @@ function usePresence(isPresented: boolean, exitMs: number) {
   return { mounted, shown };
 }
 
+/**
+ * Escape closes the sheet on top, as a swipe down does on the phone: on a
+ * computer a sheet without a close button (a badge's detail) could otherwise
+ * only be left by clicking beside it. An open alert takes the key first.
+ */
+const escapeStack: Array<() => void> = [];
+if (typeof window !== "undefined") {
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || escapeStack.length === 0) return;
+    if (document.querySelector('[role="alertdialog"]')) return;
+    event.preventDefault();
+    escapeStack[escapeStack.length - 1]();
+  });
+}
+
 /** `.sheet(isPresented:)` — the large detent: slides up, the screen behind dims. */
 export function Sheet(p: { isPresented: boolean; onDismiss: () => void; children?: ReactNode; dragIndicator?: boolean; background?: string; interactiveDismissDisabled?: boolean }) {
   const { mounted, shown } = usePresence(p.isPresented, SL.Motion.sheetOut * 1000 + 60);
   const zIndex = useStackLevel(mounted);
   const drag = useRef<{ y: number; dy: number } | null>(null);
   const [dy, setDy] = useState(0);
+  const { isPresented, interactiveDismissDisabled, onDismiss } = p;
+  useEffect(() => {
+    if (!isPresented || interactiveDismissDisabled) return;
+    const handler = () => onDismiss();
+    escapeStack.push(handler);
+    return () => {
+      const index = escapeStack.lastIndexOf(handler);
+      if (index !== -1) escapeStack.splice(index, 1);
+    };
+  }, [isPresented, interactiveDismissDisabled, onDismiss]);
   if (!mounted) return null;
   const close = () => !p.interactiveDismissDisabled && p.onDismiss();
   return (

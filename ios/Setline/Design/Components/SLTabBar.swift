@@ -69,7 +69,7 @@ struct SLTabBar: View {
                             .frame(width: 22, height: 22)
                             .overlay(alignment: .topTrailing) {
                                 if let count = badges[tab], count > 0 {
-                                    Text("\(min(count, 9))")
+                                    Text(count > 9 ? "9+" : "\(count)")
                                         .font(.slFixed(10, SL.Weight.bold))
                                         .foregroundStyle(SL.Signal.onAction)
                                         .frame(minWidth: 16, minHeight: 16)

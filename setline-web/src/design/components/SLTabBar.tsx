@@ -129,7 +129,7 @@ export function SLTabBar({ selection, badges = {} }: { selection: Binding<SLTab>
                     }}
                   >
                     <Text color={SL.Signal.onAction} lineHeight={1} style={slFixed(10, SL.Weight.bold)}>
-                      {`${Math.min(count, 9)}`}
+                      {count > 9 ? "9+" : `${count}`}
                     </Text>
                   </div>
                 )}

@@ -632,7 +632,7 @@ struct PhotosHomeView: View {
         failure = nil
         picking = nil
         // Kept for the signed-in account only; nobody signed in, nowhere to keep it.
-        guard let photos = app.photos else { return }
+        guard app.photos != nil else { return }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else {
                 failure = "That photo couldn't be read. Try another one."

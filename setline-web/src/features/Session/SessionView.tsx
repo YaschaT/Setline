@@ -48,7 +48,7 @@ import { ExerciseHistory } from "../../core/Engine/ExerciseHistory";
 import { NumberDisplay } from "../../core/Engine/NumberDisplay";
 import { PlateMath } from "../../core/Engine/PlateMath";
 import { RestPrescription, RestTimerState } from "../../core/Engine/RestPrescription";
-import { Schedule } from "../../core/Engine/Schedule";
+import { WeekPlan } from "../../core/Engine/WeekPlan";
 import { type SetRowPresentation, SetRowPresenter } from "../../core/Engine/SetRowPresentation";
 import { WarmupPlanner } from "../../core/Engine/WarmupPlanner";
 import { ExercisePicker, type ExercisePicker_Row } from "../../core/Progress/ExercisePicker";
@@ -452,7 +452,7 @@ export function SessionView(p: {
   const sessionLine = (): string => {
     const count = `${runner.completedSetCount} of ${runner.plannedSetCount} sets`;
     if (runner.isLoggedAfterwards) {
-      return `${Schedule.weekdayLabel(runner.startedAt).toLowerCase()} ${NumberDisplay.shortDate(app.display, runner.startedAt)} · ${count}`;
+      return `${WeekPlan.fullWeekday(runner.startedAt).slice(0, 3)} ${NumberDisplay.shortDate(app.display, runner.startedAt)} · ${count}`;
     }
     return `session ${SLRestPill.clockLabel(runner.elapsedSeconds)} · ${count}`;
   };

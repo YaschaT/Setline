@@ -6,7 +6,7 @@
 // ten minutes while it is — and compares it with the build it is running.
 // A newer one reloads the app at once when that is safe (back on screen, no
 // workout open); during a workout it waits, and a small banner offers it.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const everyMs = 10 * 60 * 1000;
 const backOnScreenGapMs = 30 * 1000;
@@ -25,6 +25,12 @@ async function newestBuild(): Promise<string | undefined> {
 /** `true` once a newer version is deployed than the one running. `busy`: a workout is open, so no reload now. */
 export function useAppUpdate(busy: boolean): { ready: boolean; reload: () => void } {
   const [ready, setReady] = useState(false);
+  // Read when a check lands, never a reason to check: a workout ending is not
+  // the app coming back on screen, and must not reload it under someone.
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   useEffect(() => {
     // Only a deployed build has a /version.json to compare with.
@@ -34,7 +40,7 @@ export function useAppUpdate(busy: boolean): { ready: boolean; reload: () => voi
       lastCheck = Date.now();
       const newest = await newestBuild();
       if (newest === undefined || newest === __SETLINE_BUILD__) return;
-      if (backOnScreen && !busy) {
+      if (backOnScreen && !busyRef.current) {
         window.location.reload();
         return;
       }
@@ -53,7 +59,7 @@ export function useAppUpdate(busy: boolean): { ready: boolean; reload: () => voi
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("pageshow", onVisible);
     };
-  }, [busy]);
+  }, []);
 
   return { ready, reload: () => window.location.reload() };
 }

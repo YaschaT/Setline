@@ -384,7 +384,7 @@ export function TrainingHomeView({
                 lineHeight: 1,
               }}
             >
-              {`${Math.min(count, 9)}`}
+              {count > 9 ? "9+" : `${count}`}
             </span>
           ) : newWins ? (
             // Good news waiting: a lime dot, never a number.

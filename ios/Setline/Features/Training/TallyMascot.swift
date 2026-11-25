@@ -39,7 +39,7 @@ struct TallyMascot: View {
     @State private var blink = false
 
     // The mark, in bar widths, from the loader's artwork (bar 1 at the origin).
-    private static let barPoints: [CGPoint] = [.init(x: 0.349, y: 0.354), .init(x: 1, y: 0), .init(x: 0.651, y: 2.531), .init(x: 0, y: 2.828)]
+    nonisolated private static let barPoints: [CGPoint] = [.init(x: 0.349, y: 0.354), .init(x: 1, y: 0), .init(x: 0.651, y: 2.531), .init(x: 0, y: 2.828)]
     private static let step = CGSize(width: 1.112, height: -0.401)
     private static let slope: CGFloat = -0.295
 

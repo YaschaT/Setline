@@ -474,7 +474,7 @@ struct SessionView: View {
     private var sessionLine: String {
         let count = "\(runner.completedSetCount) of \(runner.plannedSetCount) sets"
         if runner.isLoggedAfterwards {
-            return "\(Schedule.weekdayLabel(runner.startedAt).lowercased()) \(app.display.shortDate(runner.startedAt)) · \(count)"
+            return "\(WeekPlan.fullWeekday(runner.startedAt).prefix(3)) \(app.display.shortDate(runner.startedAt)) · \(count)"
         }
         return "session \(SLRestPill.clockLabel(runner.elapsedSeconds)) · \(count)"
     }
