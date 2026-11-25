@@ -5,7 +5,7 @@ import { defineConfig, type Plugin } from "vite";
 // Every build gets its own id, baked into the code and written next to it as
 // /version.json. An app left open — a tab, or the home-screen app iOS keeps
 // alive in the background — compares the two and updates itself.
-const build = `${Date.now().toString(36)}-${(process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 7)}`;
+const build = `${Date.now().toString(36)}-${(process.env.VERCEL_GIT_COMMIT_SHA || "local").slice(0, 7)}`;
 const versionFile = (): Plugin => ({
   name: "setline-version",
   generateBundle() {
